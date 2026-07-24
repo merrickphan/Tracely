@@ -1,0 +1,74 @@
+import { useEffect, useState } from 'react'
+import type { Claim } from '@shared/types'
+import ClaimCard from './components/ClaimCard'
+import Button from './components/Button'
+import Spinner from './components/Spinner'
+import TextArea from './components/TextArea'
+import { folioApi } from './lib/api'
+
+export default function FloatingApp(): JSX.Element {
+  const [text, setText] = useState('')
+  const [claims, setClaims] = useState<Claim[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    return folioApi.onClipboardCaptured(({ text: captured }) => {
+      setText(captured)
+      setClaims(null)
+      setError(null)
+      analyze(captured)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function analyze(input: string): Promise<void> {
+    if (!input.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await folioApi.detectClaims(input, 'floating')
+      setClaims(res.claims)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function close(): void {
+    folioApi.hideWindow('floating')
+  }
+
+  function openInMain(): void {
+    folioApi.showWindow('main')
+  }
+
+  return (
+    <div className="floating-app">
+      <div className="floating-drag-region">
+        <span>Folio</span>
+        <div className="floating-controls">
+          <button onClick={openInMain} title="Open in main window">
+            ⤢
+          </button>
+          <button onClick={close} title="Close">
+            ×
+          </button>
+        </div>
+      </div>
+      <div className="floating-body">
+        <TextArea rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+        <Button variant="primary" onClick={() => analyze(text)} disabled={loading || !text.trim()}>
+          Analyze
+        </Button>
+        {loading ? <Spinner label="Detecting claims…" /> : null}
+        {error ? <p className="error-text">{error}</p> : null}
+        {claims && claims.length === 0 ? <p className="muted">No checkable claims found.</p> : null}
+        <div className="floating-results">
+          {claims?.map((claim) => <ClaimCard key={claim.id} claim={claim} />)}
+        </div>
+      </div>
+    </div>
+  )
+}

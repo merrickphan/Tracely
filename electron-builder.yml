@@ -1,0 +1,29 @@
+appId: com.folio.app
+productName: Folio
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: node_modules/sql.js/dist/sql-wasm.wasm
+    to: sql-wasm.wasm
+  - from: build/icon.png
+    to: icon.png
+asarUnpack:
+  - '**/*.node'
+  - '**/*.wasm'
+npmRebuild: false
+win:
+  target: nsis
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+mac:
+  target: dmg
+  icon: build/icon.icns
+  category: public.app-category.productivity
