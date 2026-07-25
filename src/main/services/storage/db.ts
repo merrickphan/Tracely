@@ -24,7 +24,7 @@ export async function initDb(): Promise<void> {
   ) as ArrayBuffer
   const SQL = await initSqlJs({ wasmBinary })
 
-  dbPath = join(app.getPath('userData'), 'folio.db')
+  dbPath = join(app.getPath('userData'), 'tracely.db')
   mkdirSync(dirname(dbPath), { recursive: true })
 
   if (existsSync(dbPath)) {

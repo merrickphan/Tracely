@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Folio is a private, local-first Electron desktop app (React + TypeScript) that checks the *credibility* of user-written text: it detects factual claims, finds academic evidence (OpenAlex, Crossref, Semantic Scholar, PubMed), scores how well-supported each claim is, critiques weak arguments, and generates citations (APA/MLA/Chicago). All user data lives in a local SQLite (`sql.js`, WASM — no native module compilation needed) database under Electron's per-OS user-data dir. The only network calls are to academic search APIs and to the **Folio Relay**, a separate sibling project (`../Folio-relay`) that holds the real OpenAI key server-side — this app has no API-key field and never talks to OpenAI directly.
+Tracely is a private, local-first Electron desktop app (React + TypeScript) that checks the *credibility* of user-written text: it detects factual claims, finds academic evidence (OpenAlex, Crossref, Semantic Scholar, PubMed), scores how well-supported each claim is, critiques weak arguments, and generates citations (APA/MLA/Chicago). All user data lives in a local SQLite (`sql.js`, WASM — no native module compilation needed) database under Electron's per-OS user-data dir. The only network calls are to academic search APIs and to the **Tracely Relay**, a separate sibling project (`../Tracely-relay`) that holds the real OpenAI key server-side — this app has no API-key field and never talks to OpenAI directly.
 
 ## Commands
 
@@ -21,7 +21,7 @@ There is no test suite and no lint script currently configured. `npm run typeche
 
 ### Relay setup for AI features
 
-Claim detection and critique require a deployed Folio Relay. Copy `.env.example` to `.env` and set `RELAY_URL` / `RELAY_TOKEN`. These are read once by `electron.vite.config.ts` and compiled directly into the main-process bundle via the `define` block (`__RELAY_URL__` / `__RELAY_TOKEN__`) — there's no runtime/user-facing way to change them; changing the relay means editing `.env` and rebuilding. Evidence search, scoring, citations, and the library all work with no relay configured.
+Claim detection and critique require a deployed Tracely Relay. Copy `.env.example` to `.env` and set `RELAY_URL` / `RELAY_TOKEN`. These are read once by `electron.vite.config.ts` and compiled directly into the main-process bundle via the `define` block (`__RELAY_URL__` / `__RELAY_TOKEN__`) — there's no runtime/user-facing way to change them; changing the relay means editing `.env` and rebuilding. Evidence search, scoring, citations, and the library all work with no relay configured.
 
 ### Windows packaging gotcha
 
@@ -36,7 +36,7 @@ src/shared/         Types (types.ts) and IPC contract (ipc-contract.ts request/r
                      ipc-channels.ts channel name constants) — the only import shared across all
                      three processes. Import via the `@shared` alias.
 src/main/           Node.js main process — all business logic lives here, nothing in the renderer.
-src/preload/        contextBridge surface exposed as `window.folio` (typed `FolioApi`).
+src/preload/        contextBridge surface exposed as `window.tracely` (typed `TracelyApi`).
 src/renderer/       React UI, two entry points (index.html main window, floating.html popup)
                      sharing components. Import via the `@renderer` alias.
 ```
@@ -46,7 +46,7 @@ src/renderer/       React UI, two entry points (index.html main window, floating
 1. Define request/response types in `src/shared/ipc-contract.ts` and a channel constant in `src/shared/ipc-channels.ts`.
 2. Add a handler in `src/main/ipc/<feature>Handlers.ts`: parse `raw` with a zod schema, call into a `services/` module, return the typed response. Register it in `src/main/ipc/index.ts`.
 3. Expose it on the `api` object in `src/preload/index.ts` as a typed `ipcRenderer.invoke` wrapper.
-4. Call it from the renderer via `window.folio.<namespace>.<method>(...)`.
+4. Call it from the renderer via `window.tracely.<namespace>.<method>(...)`.
 
 Every handler validates its input with zod before touching a service — there is no untrusted input path into `services/`.
 
@@ -67,7 +67,7 @@ Single-instance lock (second launch just refocuses the main window). Boots in or
 
 ### Where user data lives at runtime
 
-- Windows: `%APPDATA%\Folio\folio.db` (SQLite: analyses, claims, evidence, citations, library, request cache) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
+- Windows: `%APPDATA%\Tracely\tracely.db` (SQLite: analyses, claims, evidence, citations, library, request cache) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
 - Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`).
 
 ## Known MVP simplifications (intentional, not bugs)

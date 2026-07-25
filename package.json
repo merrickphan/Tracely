@@ -1,9 +1,9 @@
 {
-  "name": "folio",
+  "name": "tracely",
   "version": "0.1.0",
-  "description": "Folio — a private, local AI writing and research assistant that strengthens the credibility of what you write.",
+  "description": "Tracely — a private, local AI writing and research assistant that strengthens the credibility of what you write.",
   "main": "./out/main/index.js",
-  "author": "Folio",
+  "author": "Tracely",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",

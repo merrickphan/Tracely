@@ -1,16 +1,16 @@
-# Folio
+# Tracely
 
-Folio is a private, local AI writing and research assistant. Instead of fixing grammar, it checks the *credibility* of what you write: it detects factual claims, finds academic evidence for them (OpenAlex, Crossref, Semantic Scholar, PubMed), scores how well-supported each claim is, critiques weak arguments, generates citations (APA/MLA/Chicago), and keeps a local library of sources you've used.
+Tracely is a private, local AI writing and research assistant. Instead of fixing grammar, it checks the *credibility* of what you write: it detects factual claims, finds academic evidence for them (OpenAlex, Crossref, Semantic Scholar, PubMed), scores how well-supported each claim is, critiques weak arguments, generates citations (APA/MLA/Chicago), and keeps a local library of sources you've used.
 
-It's a desktop app (Electron + React + TypeScript), not a website. Everything — your text, your source library, your settings — stays on your machine in a local SQLite database. The only network calls are to the **Folio relay** (a small backend you deploy and control — see below) for claim detection/critique, and to the academic search APIs, and only when you explicitly click Analyze, Find Evidence, or Critique.
+It's a desktop app (Electron + React + TypeScript), not a website. Everything — your text, your source library, your settings — stays on your machine in a local SQLite database. The only network calls are to the **Tracely relay** (a small backend you deploy and control — see below) for claim detection/critique, and to the academic search APIs, and only when you explicitly click Analyze, Find Evidence, or Critique.
 
 ## Requirements
 
 - Windows 10/11 (primary, tested target). macOS packaging config is included but untested — see [Building for macOS](#building-for-macos).
 - [Node.js](https://nodejs.org) 22+ (developed against Node 24).
-- A deployed [Folio Relay](../Folio-relay/README.md) for the AI features (claim detection, argument critique). Everything else — evidence search, citations, the library — works without one.
+- A deployed [Tracely Relay](../Tracely-relay/README.md) for the AI features (claim detection, argument critique). Everything else — evidence search, citations, the library — works without one.
 
-No Python or C++ build tools are required: Folio's local database uses `sql.js` (SQLite compiled to WebAssembly), so there's no native module to compile.
+No Python or C++ build tools are required: Tracely's local database uses `sql.js` (SQLite compiled to WebAssembly), so there's no native module to compile.
 
 ## Install
 
@@ -18,17 +18,17 @@ No Python or C++ build tools are required: Folio's local database uses `sql.js` 
 npm install
 ```
 
-## Connecting Folio to the relay
+## Connecting Tracely to the relay
 
-Folio never talks to OpenAI directly and has no API-key field anywhere in its UI. Instead it calls a backend you deploy once — the [Folio Relay](../Folio-relay/README.md) — which holds the real OpenAI key server-side. This means end users who download the built app cannot see or change which AI provider/key/model is in use; only whoever builds the app controls that.
+Tracely never talks to OpenAI directly and has no API-key field anywhere in its UI. Instead it calls a backend you deploy once — the [Tracely Relay](../Tracely-relay/README.md) — which holds the real OpenAI key server-side. This means end users who download the built app cannot see or change which AI provider/key/model is in use; only whoever builds the app controls that.
 
-1. Deploy the relay first — follow [`../Folio-relay/README.md`](../Folio-relay/README.md). You'll end up with a URL (e.g. `https://folio-relay-yourname.vercel.app`) and a shared token.
+1. Deploy the relay first — follow [`../Tracely-relay/README.md`](../Tracely-relay/README.md). You'll end up with a URL (e.g. `https://tracely-relay-yourname.vercel.app`) and a shared token.
 2. In this folder, copy `.env.example` to `.env` and fill in:
    ```
-   RELAY_URL=https://folio-relay-yourname.vercel.app
+   RELAY_URL=https://tracely-relay-yourname.vercel.app
    RELAY_TOKEN=<the same APP_SHARED_TOKEN you set on the relay>
    ```
-3. These two values are read once, at build time, by `electron.vite.config.ts` and compiled directly into the app — `npm run dev` and `npm run dist:win` both pick them up automatically from `.env`. There is no `.env` shipped inside the built app and no Settings field for these; changing which relay Folio talks to means editing `.env` and rebuilding.
+3. These two values are read once, at build time, by `electron.vite.config.ts` and compiled directly into the app — `npm run dev` and `npm run dist:win` both pick them up automatically from `.env`. There is no `.env` shipped inside the built app and no Settings field for these; changing which relay Tracely talks to means editing `.env` and rebuilding.
 
 `SEMANTIC_SCHOLAR_API_KEY` in `.env.example` is optional and works differently — it's a free-tier rate-limit key, not a cost/security concern, and it's still editable per-user from in-app Settings. OpenAlex, Crossref, and PubMed all work without any key at MVP-scale usage.
 
@@ -58,10 +58,10 @@ npm run dist:mac
 
 ## Where your data lives
 
-Everything is local, under Electron's per-OS user-data directory for the app (`Folio`):
+Everything is local, under Electron's per-OS user-data directory for the app (`Tracely`):
 
-- Windows: `%APPDATA%\Folio\`
-  - `folio.db` — SQLite database: analyses, claims, evidence, citations, your saved library, and a request cache (so repeated identical AI/search calls don't re-hit the network).
+- Windows: `%APPDATA%\Tracely\`
+  - `tracely.db` — SQLite database: analyses, claims, evidence, citations, your saved library, and a request cache (so repeated identical AI/search calls don't re-hit the network).
   - `config.json` — your optional Semantic Scholar API key. The AI relay URL/token are compiled into the app, not stored here.
 
 **Settings → Privacy** has two destructive actions:
@@ -79,15 +79,15 @@ src/
     tray.ts           System tray icon (keeps the hotkey alive when the main window is closed).
     ipc/              One ipcMain.handle registrar per feature area; validates payloads with zod.
     services/
-      ai/             Relay client — claim detection and critique both call the Folio Relay (see
-                       ../Folio-relay) over HTTPS instead of OpenAI directly, behind an explicit
+      ai/             Relay client — claim detection and critique both call the Tracely Relay (see
+                       ../Tracely-relay) over HTTPS instead of OpenAI directly, behind an explicit
                        user action and a SQLite-backed cache. No OpenAI key ever exists in this app.
       search/         OpenAlex / Crossref / Semantic Scholar / PubMed clients, a parallel aggregator with
                        DOI-based dedup, and a deterministic (non-AI) evidence-strength scoring function.
       citations/       Pure APA/MLA/Chicago formatters from source metadata — no AI call.
       storage/         sql.js-backed SQLite access: schema, one repo module per table, request cache,
                        and the app-data config.json (Semantic Scholar key only).
-  preload/            contextBridge surface exposed to the renderer as `window.folio`.
+  preload/            contextBridge surface exposed to the renderer as `window.tracely`.
   renderer/           React UI — two entry points (main window `index.html`, floating window `floating.html`)
                        sharing the same components (ClaimCard, EvidenceCard, CitationBlock, etc.).
 ```
@@ -112,7 +112,7 @@ src/
 - Claim detection uses a cheap model (`gpt-4.1-mini` by default); critique uses a stronger model (`gpt-4.1` by default) only when explicitly requested, and reuses evidence already fetched rather than searching again. Both models are chosen server-side by the relay (`CHEAP_MODEL`/`REASONING_MODEL` env vars) — end users have no control over this.
 - Every AI and evidence-search call is cached locally in SQLite keyed by a hash of its normalized input, so repeating the same analysis or evidence lookup costs nothing on subsequent runs (no relay/OpenAI call at all).
 - Evidence-strength scoring is a deterministic formula (source count, venue quality, recency, relevance) — it does not make an additional AI call.
-- The relay itself re-enforces input-size limits server-side (see `../Folio-relay/lib/limits.ts`) rather than trusting the app to behave, since the app is running on machines you don't control. Set a hard monthly budget limit on your OpenAI account (Billing → Limits) as the real backstop against runaway usage.
+- The relay itself re-enforces input-size limits server-side (see `../Tracely-relay/lib/limits.ts`) rather than trusting the app to behave, since the app is running on machines you don't control. Set a hard monthly budget limit on your OpenAI account (Billing → Limits) as the real backstop against runaway usage.
 
 ### Troubleshooting `npm run dist:win`
 

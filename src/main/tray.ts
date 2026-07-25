@@ -7,11 +7,11 @@ let tray: Tray | null = null
 export function createTray(): Tray {
   const icon = nativeImage.createFromPath(getAppIconPath()).resize({ width: 32, height: 32 })
   tray = new Tray(icon)
-  tray.setToolTip('Folio')
+  tray.setToolTip('Tracely')
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show Folio', click: () => showMainWindow() },
+      { label: 'Show Tracely', click: () => showMainWindow() },
       { type: 'separator' },
       {
         label: 'Quit',

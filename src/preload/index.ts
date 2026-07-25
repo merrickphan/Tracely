@@ -108,6 +108,6 @@ const api = {
   }
 }
 
-export type FolioApi = typeof api
+export type TracelyApi = typeof api
 
-contextBridge.exposeInMainWorld('folio', api)
+contextBridge.exposeInMainWorld('tracely', api)

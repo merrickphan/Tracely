@@ -20,7 +20,7 @@ export async function callRelay<T>(endpoint: 'detect-claims' | 'critique', body:
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-folio-token': __RELAY_TOKEN__
+      'x-tracely-token': __RELAY_TOKEN__
     },
     body: JSON.stringify(body)
   })

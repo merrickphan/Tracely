@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { EvidenceItem } from '@shared/types'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 import Button from './Button'
 import CitationBlock from './CitationBlock'
 
@@ -26,7 +26,7 @@ export default function EvidenceCard({
   async function saveToLibrary(): Promise<void> {
     setSaving(true)
     try {
-      await folioApi.saveToLibrary(item.source.id, claimId)
+      await tracelyApi.saveToLibrary(item.source.id, claimId)
       setSaved(true)
     } finally {
       setSaving(false)

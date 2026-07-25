@@ -1,5 +1,5 @@
-appId: com.folio.app
-productName: Folio
+appId: com.tracely.app
+productName: Tracely
 directories:
   output: release
   buildResources: build

@@ -1,9 +1,9 @@
-import type { FolioApi } from './index'
+import type { TracelyApi } from './index'
 
 export {}
 
 declare global {
   interface Window {
-    folio: FolioApi
+    tracely: TracelyApi
   }
 }

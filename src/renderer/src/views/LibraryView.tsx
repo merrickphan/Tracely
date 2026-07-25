@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { LibraryItem } from '@shared/types'
 import SourceListItem from '../components/SourceListItem'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 
 export default function LibraryView(): JSX.Element {
   const [items, setItems] = useState<LibraryItem[] | null>(null)
@@ -10,7 +10,7 @@ export default function LibraryView(): JSX.Element {
 
   async function load(): Promise<void> {
     try {
-      const res = await folioApi.listLibrary(search || undefined)
+      const res = await tracelyApi.listLibrary(search || undefined)
       setItems(res.items)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

@@ -17,7 +17,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Folio</h1>
+        <h1>Tracely</h1>
         <nav className="tab-nav">
           {TABS.map((t) => (
             <button

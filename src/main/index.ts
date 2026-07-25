@@ -17,7 +17,7 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
-    electronApp.setAppUserModelId('com.folio.app')
+    electronApp.setAppUserModelId('com.tracely.app')
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
@@ -39,7 +39,7 @@ if (!gotLock) {
   })
 
   app.on('window-all-closed', () => {
-    // Folio keeps running in the tray so the global hotkey stays live even
+    // Tracely keeps running in the tray so the global hotkey stays live even
     // if the main window is closed.
   })
 

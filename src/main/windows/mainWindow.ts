@@ -18,7 +18,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 560,
     show: false,
     autoHideMenuBar: true,
-    title: 'Folio',
+    title: 'Tracely',
     icon: getAppIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

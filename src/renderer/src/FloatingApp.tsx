@@ -4,7 +4,7 @@ import ClaimCard from './components/ClaimCard'
 import Button from './components/Button'
 import Spinner from './components/Spinner'
 import TextArea from './components/TextArea'
-import { folioApi } from './lib/api'
+import { tracelyApi } from './lib/api'
 
 export default function FloatingApp(): JSX.Element {
   const [text, setText] = useState('')
@@ -13,7 +13,7 @@ export default function FloatingApp(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    return folioApi.onClipboardCaptured(({ text: captured }) => {
+    return tracelyApi.onClipboardCaptured(({ text: captured }) => {
       setText(captured)
       setClaims(null)
       setError(null)
@@ -27,7 +27,7 @@ export default function FloatingApp(): JSX.Element {
     setLoading(true)
     setError(null)
     try {
-      const res = await folioApi.detectClaims(input, 'floating')
+      const res = await tracelyApi.detectClaims(input, 'floating')
       setClaims(res.claims)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -37,17 +37,17 @@ export default function FloatingApp(): JSX.Element {
   }
 
   function close(): void {
-    folioApi.hideWindow('floating')
+    tracelyApi.hideWindow('floating')
   }
 
   function openInMain(): void {
-    folioApi.showWindow('main')
+    tracelyApi.showWindow('main')
   }
 
   return (
     <div className="floating-app">
       <div className="floating-drag-region">
-        <span>Folio</span>
+        <span>Tracely</span>
         <div className="floating-controls">
           <button onClick={openInMain} title="Open in main window">
             ⤢

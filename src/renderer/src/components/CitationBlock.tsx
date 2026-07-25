@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CitationStyle } from '@shared/types'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 import Button from './Button'
 
 const STYLES: CitationStyle[] = ['APA', 'MLA', 'Chicago']
@@ -18,7 +18,7 @@ export default function CitationBlock({ sourceId }: { sourceId: string }): JSX.E
     setError(null)
     setCopied(false)
     try {
-      const res = await folioApi.generateCitation(sourceId, nextStyle)
+      const res = await tracelyApi.generateCitation(sourceId, nextStyle)
       setCitation(res.citation)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -29,7 +29,7 @@ export default function CitationBlock({ sourceId }: { sourceId: string }): JSX.E
 
   async function copy(): Promise<void> {
     if (!citation) return
-    await folioApi.writeClipboard(citation)
+    await tracelyApi.writeClipboard(citation)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }

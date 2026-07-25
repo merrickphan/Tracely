@@ -4,7 +4,7 @@ import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import Spinner from '../components/Spinner'
 import TextArea from '../components/TextArea'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 
 export default function AnalyzeView(): JSX.Element {
   const [text, setText] = useState('')
@@ -17,7 +17,7 @@ export default function AnalyzeView(): JSX.Element {
     setLoading(true)
     setError(null)
     try {
-      const res = await folioApi.detectClaims(text, 'main')
+      const res = await tracelyApi.detectClaims(text, 'main')
       setClaims(res.claims)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

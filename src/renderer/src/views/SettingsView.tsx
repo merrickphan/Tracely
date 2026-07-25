@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AppSettings, CitationStyle } from '@shared/types'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 
 export default function SettingsView(): JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -13,17 +13,17 @@ export default function SettingsView(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    folioApi
+    tracelyApi
       .getSettings()
       .then(setSettings)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
 
-  async function save(patch: Parameters<typeof folioApi.setSettings>[0]): Promise<void> {
+  async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
     setSaving(true)
     setError(null)
     try {
-      const updated = await folioApi.setSettings(patch)
+      const updated = await tracelyApi.setSettings(patch)
       setSettings(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -39,7 +39,7 @@ export default function SettingsView(): JSX.Element {
   }
 
   async function clearHistory(includeLibrary: boolean): Promise<void> {
-    await folioApi.clearHistory(includeLibrary)
+    await tracelyApi.clearHistory(includeLibrary)
     setConfirmClear(null)
     setClearedMessage(includeLibrary ? 'History and library cleared.' : 'History cleared.')
     setTimeout(() => setClearedMessage(null), 3000)
@@ -54,7 +54,7 @@ export default function SettingsView(): JSX.Element {
       <section className="settings-section">
         <h3>AI</h3>
         <p className="muted">
-          Folio's AI provider and models are configured by the app developer and can't be changed
+          Tracely's AI provider and models are configured by the app developer and can't be changed
           here.
         </p>
       </section>
@@ -112,7 +112,7 @@ export default function SettingsView(): JSX.Element {
       <section className="settings-section">
         <h3>Privacy</h3>
         <p className="muted">
-          Folio only sends text to the Folio relay or academic search APIs when you click Analyze,
+          Tracely only sends text to the Tracely relay or academic search APIs when you click Analyze,
           Find Evidence, or Critique. Nothing is uploaded automatically or in the background.
         </p>
         <div className="input-row">

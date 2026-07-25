@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LibraryItem } from '@shared/types'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 import Button from './Button'
 import CitationBlock from './CitationBlock'
 
@@ -17,7 +17,7 @@ export default function SourceListItem({
   async function remove(): Promise<void> {
     setRemoving(true)
     try {
-      await folioApi.removeLibraryItem(item.id)
+      await tracelyApi.removeLibraryItem(item.id)
       onRemoved(item.id)
     } finally {
       setRemoving(false)

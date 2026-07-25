@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Claim, EvidenceItem, ScoreBreakdown } from '@shared/types'
-import { folioApi } from '../lib/api'
+import { tracelyApi } from '../lib/api'
 import Button from './Button'
 import EvidenceCard from './EvidenceCard'
 import ScoreBadge from './ScoreBadge'
@@ -25,7 +25,7 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
     setLoadingEvidence(true)
     setError(null)
     try {
-      const res = await folioApi.findEvidence(claim.id)
+      const res = await tracelyApi.findEvidence(claim.id)
       setEvidence(res.evidence)
       setClaim((c) => ({ ...c, strengthScore: res.strengthScore, scoreBreakdown: res.scoreBreakdown as ScoreBreakdown }))
     } catch (err) {
@@ -39,7 +39,7 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
     setLoadingCritique(true)
     setError(null)
     try {
-      const res = await folioApi.generateCritique(claim.id)
+      const res = await tracelyApi.generateCritique(claim.id)
       setClaim((c) => ({ ...c, critique: res.critique, critiqueVerdict: res.verdict }))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

@@ -7,7 +7,7 @@
   --border: #e0dfdb;
   --text: #1c1c1a;
   --muted: #6b6a66;
-  --primary: #2f6f4f;
+  --primary: #1c1c1a;
   --primary-contrast: #ffffff;
   --danger: #b3441f;
   --score-good: #2f7d3f;
@@ -23,6 +23,8 @@
     --text: #e9e9e7;
     --muted: #9a9a97;
     --surface-2: #26272b;
+    --primary: #e9e9e7;
+    --primary-contrast: #17181a;
   }
 }
 
