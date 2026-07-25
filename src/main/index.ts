@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc'
 import { initDb, persist } from './services/storage/db'
 import { getSetting } from './services/storage/settingsRepo'
 import { createTray } from './tray'
+import { initAutoUpdater } from './updater'
 import { createFloatingWindow } from './windows/floatingWindow'
 import { createMainWindow, setQuitting, showMainWindow } from './windows/mainWindow'
 
@@ -30,6 +31,7 @@ if (!gotLock) {
     createTray()
     registerIpcHandlers()
     registerGlobalHotkey(getSetting('hotkeyAccelerator'))
+    initAutoUpdater()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

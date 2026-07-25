@@ -27,3 +27,8 @@ mac:
   target: dmg
   icon: build/icon.icns
   category: public.app-category.productivity
+publish:
+  provider: github
+  owner: merrickphan
+  repo: Tracely
+  releaseType: release

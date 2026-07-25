@@ -1,5 +1,6 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
 import { getAppIconPath } from './icon'
+import { checkForUpdatesNow } from './updater'
 import { showMainWindow } from './windows/mainWindow'
 
 let tray: Tray | null = null
@@ -12,6 +13,8 @@ export function createTray(): Tray {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show Tracely', click: () => showMainWindow() },
+      { type: 'separator' },
+      { label: 'Check for Updates…', click: () => checkForUpdatesNow() },
       { type: 'separator' },
       {
         label: 'Quit',

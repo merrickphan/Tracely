@@ -1,6 +1,6 @@
 {
   "name": "tracely",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tracely — a private, local AI writing and research assistant that strengthens the credibility of what you write.",
   "main": "./out/main/index.js",
   "author": "Tracely",
@@ -11,19 +11,21 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "start": "electron-vite preview",
     "dist:win": "electron-vite build && electron-builder --win",
-    "dist:mac": "electron-vite build && electron-builder --mac"
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "release:win": "electron-vite build && electron-builder --win --publish always"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
+    "electron-updater": "^6.8.9",
     "sql.js": "^1.11.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@electron-toolkit/utils": "^3.0.0",
     "@types/node": "^22.7.4",
-    "@types/sql.js": "^1.4.9",
     "@types/react": "^18.3.9",
     "@types/react-dom": "^18.3.0",
+    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.3.1",
     "electron": "^32.1.2",
     "electron-builder": "^25.0.5",
