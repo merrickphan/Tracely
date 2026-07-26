@@ -2,7 +2,7 @@ import { createHash } from 'crypto'
 import type { Claim, CritiqueVerdict, EvidenceItem } from '@shared/types'
 import { getCached, setCached } from '../storage/cacheRepo'
 import { callRelay } from './client'
-import { MAX_CRITIQUE_EVIDENCE_ITEMS } from './costGuard'
+import { MAX_CRITIQUE_ABSTRACT_CHARS, MAX_CRITIQUE_EVIDENCE_ITEMS } from './costGuard'
 
 export interface CritiqueResult {
   critique: string
@@ -29,7 +29,10 @@ export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): 
   const topEvidence = evidence.slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
   const evidenceSummary = topEvidence.length
     ? topEvidence
-        .map((e, i) => `${i + 1}. ${e.source.title}${e.source.abstract ? ` — ${e.source.abstract.slice(0, 300)}` : ''}`)
+        .map(
+          (e, i) =>
+            `${i + 1}. ${e.source.title}${e.source.abstract ? ` — ${e.source.abstract.slice(0, MAX_CRITIQUE_ABSTRACT_CHARS)}` : ''}`
+        )
         .join('\n')
     : 'No supporting evidence was found.'
 

@@ -1,9 +1,11 @@
 import { clipboard, globalShortcut } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { FloatingClipboardCapturedEvent } from '@shared/ipc-contract'
+import { isScreenWatchEnabled, startScreenWatch, stopScreenWatch } from './services/screenWatch/screenWatchService'
 import { getFloatingWindow, showFloatingWindowNearCursor } from './windows/floatingWindow'
 
 let registeredAccelerator: string | null = null
+let registeredScreenWatchAccelerator: string | null = null
 
 function onHotkeyPressed(): void {
   const text = clipboard.readText().trim()
@@ -33,6 +35,31 @@ export function unregisterGlobalHotkey(): void {
   if (registeredAccelerator) {
     globalShortcut.unregister(registeredAccelerator)
     registeredAccelerator = null
+  }
+}
+
+function onScreenWatchHotkeyPressed(): void {
+  if (isScreenWatchEnabled()) stopScreenWatch()
+  else startScreenWatch()
+}
+
+export function registerScreenWatchHotkey(accelerator: string): boolean {
+  if (registeredScreenWatchAccelerator) {
+    globalShortcut.unregister(registeredScreenWatchAccelerator)
+    registeredScreenWatchAccelerator = null
+  }
+
+  const ok = globalShortcut.register(accelerator, onScreenWatchHotkeyPressed)
+  if (ok) {
+    registeredScreenWatchAccelerator = accelerator
+  }
+  return ok
+}
+
+export function unregisterScreenWatchHotkey(): void {
+  if (registeredScreenWatchAccelerator) {
+    globalShortcut.unregister(registeredScreenWatchAccelerator)
+    registeredScreenWatchAccelerator = null
   }
 }
 

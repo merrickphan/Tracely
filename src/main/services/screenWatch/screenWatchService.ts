@@ -56,7 +56,24 @@ let lastStatus: ScreenWatchStatus = {
   processName: null,
   supportsUnderlines: false,
   claimCount: 0,
-  lastError: null
+  lastError: null,
+  blockedApp: null
+}
+
+function getAllowedApps(): string[] {
+  return getSetting('screenWatchAllowedApps')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// Fail closed: an empty/unset allowlist means Screen Watch runs nowhere,
+// rather than defaulting to "everywhere" — this is the guard against
+// scanning apps like Discord that the user never asked it to read, and it's
+// also what keeps relay token usage bounded to only the apps picked.
+function isProcessAllowed(processName: string): boolean {
+  const allowed = getAllowedApps()
+  return allowed.some((name) => name.toLowerCase() === processName.toLowerCase())
 }
 
 function emitStatus(status: ScreenWatchStatus): void {
@@ -92,7 +109,8 @@ async function tick(): Promise<void> {
         processName: null,
         supportsUnderlines: false,
         claimCount: 0,
-        lastError
+        lastError,
+        blockedApp: null
       })
       return
     }
@@ -106,7 +124,27 @@ async function tick(): Promise<void> {
         processName: 'processName' in snapshot ? (snapshot.processName ?? null) : null,
         supportsUnderlines: false,
         claimCount: 0,
-        lastError
+        lastError,
+        blockedApp: null
+      })
+      return
+    }
+
+    if (!isProcessAllowed(snapshot.processName)) {
+      // Not an error — the user just hasn't put this app on the allowlist.
+      // Bail out before any text ever reaches detectClaims: this is the
+      // actual token-usage and privacy boundary, not just a UI filter.
+      hideOverlay()
+      resetTrackingState()
+      logScreenWatch(`focused app ${snapshot.processName} is not in the allowlist, skipping`)
+      emitStatus({
+        enabled,
+        active: false,
+        processName: null,
+        supportsUnderlines: false,
+        claimCount: 0,
+        lastError,
+        blockedApp: snapshot.processName
       })
       return
     }
@@ -175,7 +213,8 @@ async function tick(): Promise<void> {
       processName: snapshot.processName,
       supportsUnderlines: snapshot.supportsTextPattern,
       claimCount: currentClaims.length,
-      lastError
+      lastError,
+      blockedApp: null
     })
   } finally {
     ticking = false
@@ -264,7 +303,8 @@ export function stopScreenWatch(): void {
     processName: null,
     supportsUnderlines: false,
     claimCount: 0,
-    lastError: null
+    lastError: null,
+    blockedApp: null
   })
 }
 

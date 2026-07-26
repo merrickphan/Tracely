@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { registerGlobalHotkey, unregisterGlobalHotkey } from './hotkey'
+import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey, unregisterScreenWatchHotkey } from './hotkey'
 import { registerIpcHandlers } from './ipc'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { initDb, persist } from './services/storage/db'
@@ -32,6 +32,7 @@ if (!gotLock) {
     createTray()
     registerIpcHandlers()
     registerGlobalHotkey(getSetting('hotkeyAccelerator'))
+    registerScreenWatchHotkey(getSetting('screenWatchHotkeyAccelerator'))
     initAutoUpdater()
     initScreenWatch()
 
@@ -54,6 +55,7 @@ if (!gotLock) {
 
   app.on('will-quit', () => {
     unregisterGlobalHotkey()
+    unregisterScreenWatchHotkey()
     shutdownScreenWatch()
   })
 }

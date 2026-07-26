@@ -7,7 +7,8 @@ import type {
   CritiqueVerdict,
   EvidenceItem,
   LibraryItem,
-  ScoreBreakdown
+  ScoreBreakdown,
+  Theme
 } from './types'
 
 export interface AnalyzeDetectClaimsRequest {
@@ -114,9 +115,10 @@ export type SettingsGetResponse = AppSettings
 export interface SettingsSetRequest {
   defaultCitationStyle?: CitationStyle
   hotkeyAccelerator?: string
-  crossrefMailto?: string
   enableStrengthSummaries?: boolean
-  semanticScholarApiKey?: string
+  theme?: Theme
+  screenWatchHotkeyAccelerator?: string
+  screenWatchAllowedApps?: string
 }
 export type SettingsSetResponse = AppSettings
 
@@ -167,6 +169,7 @@ export interface ScreenWatchStatus {
   supportsUnderlines: boolean
   claimCount: number
   lastError: string | null
+  blockedApp: string | null
 }
 export type ScreenWatchSetEnabledResponse = ScreenWatchStatus
 export type ScreenWatchGetStatusRequest = Record<string, never>

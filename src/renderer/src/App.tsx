@@ -1,20 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AnalyzeView from './views/AnalyzeView'
 import LibraryView from './views/LibraryView'
-import LiveView from './views/LiveView'
 import SettingsView from './views/SettingsView'
+import { applyTheme } from './lib/theme'
+import { tracelyApi } from './lib/api'
 
-type Tab = 'live' | 'analyze' | 'library' | 'settings'
+type Tab = 'analyze' | 'library' | 'settings'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'live', label: 'Live' },
   { id: 'analyze', label: 'Analyze' },
   { id: 'library', label: 'Library' },
   { id: 'settings', label: 'Settings' }
 ]
 
 export default function App(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('live')
+  const [tab, setTab] = useState<Tab>('analyze')
+
+  useEffect(() => {
+    tracelyApi.getSettings().then((s) => applyTheme(s.theme))
+  }, [])
 
   return (
     <div className="app-shell">
@@ -33,7 +37,6 @@ export default function App(): JSX.Element {
         </nav>
       </header>
       <main className="app-main">
-        {tab === 'live' ? <LiveView /> : null}
         {tab === 'analyze' ? <AnalyzeView /> : null}
         {tab === 'library' ? <LibraryView /> : null}
         {tab === 'settings' ? <SettingsView /> : null}

@@ -88,10 +88,13 @@ export interface LibraryItem {
   source: Source
 }
 
+export type Theme = 'light' | 'dark' | 'system'
+
 export interface AppSettings {
   defaultCitationStyle: CitationStyle
   hotkeyAccelerator: string
-  crossrefMailto: string
   enableStrengthSummaries: boolean
-  hasSemanticScholarKey: boolean
+  theme: Theme
+  screenWatchHotkeyAccelerator: string
+  screenWatchAllowedApps: string
 }

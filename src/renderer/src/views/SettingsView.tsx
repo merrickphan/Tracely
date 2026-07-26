@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, CitationStyle } from '@shared/types'
+import type { AppSettings, CitationStyle, Theme } from '@shared/types'
 import type { ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { tracelyApi } from '../lib/api'
+import { applyTheme } from '../lib/theme'
 
 export default function SettingsView(): JSX.Element {
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [semanticScholarKey, setSemanticScholarKey] = useState('')
-  const [saving, setSaving] = useState(false)
   const [confirmClear, setConfirmClear] = useState<null | 'history' | 'all'>(null)
   const [clearedMessage, setClearedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -32,22 +31,19 @@ export default function SettingsView(): JSX.Element {
   }
 
   async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
-    setSaving(true)
     setError(null)
     try {
       const updated = await tracelyApi.setSettings(patch)
       setSettings(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSaving(false)
     }
   }
 
-  async function saveSemanticScholarKey(): Promise<void> {
-    if (!semanticScholarKey) return
-    await save({ semanticScholarApiKey: semanticScholarKey })
-    setSemanticScholarKey('')
+  function changeTheme(theme: Theme): void {
+    applyTheme(theme)
+    setSettings((s) => (s ? { ...s, theme } : s))
+    void save({ theme })
   }
 
   async function clearHistory(includeLibrary: boolean): Promise<void> {
@@ -64,36 +60,14 @@ export default function SettingsView(): JSX.Element {
   return (
     <div className="settings-view">
       <section className="settings-section">
-        <h3>AI</h3>
-        <p className="muted">
-          Tracely's AI provider and models are configured by the app developer and can't be changed
-          here.
-        </p>
-      </section>
-
-      <section className="settings-section">
-        <h3>Evidence Search</h3>
+        <h3>Appearance</h3>
         <label>
-          Semantic Scholar API key (optional) {settings.hasSemanticScholarKey ? <span className="muted">(saved)</span> : null}
-          <div className="input-row">
-            <input
-              type="password"
-              value={semanticScholarKey}
-              onChange={(e) => setSemanticScholarKey(e.target.value)}
-            />
-            <Button variant="primary" onClick={saveSemanticScholarKey} disabled={!semanticScholarKey}>
-              Save
-            </Button>
-          </div>
-        </label>
-        <label>
-          Crossref contact email (polite pool)
-          <input
-            type="email"
-            value={settings.crossrefMailto}
-            onChange={(e) => setSettings({ ...settings, crossrefMailto: e.target.value })}
-            onBlur={(e) => save({ crossrefMailto: e.target.value })}
-          />
+          Theme
+          <select value={settings.theme} onChange={(e) => changeTheme(e.target.value as Theme)}>
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
         </label>
       </section>
 
@@ -122,14 +96,13 @@ export default function SettingsView(): JSX.Element {
       </section>
 
       <section className="settings-section">
-        <h3>Screen Watch (experimental)</h3>
+        <h3>Screen Watch</h3>
         <p className="muted">
-          When on, Tracely reads the text of whatever field is currently focused in other apps
-          (via Windows accessibility APIs — not a screenshot) and underlines flagged claims directly
-          on your screen, like a real-time grammar checker. This sends that text to the Tracely relay
-          automatically as you write, without you clicking Analyze. Off by default. Works in apps that
-          expose their text to accessibility tools (Word, WordPad, most native Windows apps) — it
-          won't see text in apps that render it as pixels instead, such as Google Docs.
+          When on, Tracely reads the text of whatever field is focused in other apps (via Windows
+          accessibility APIs, not a screenshot) and underlines flagged claims directly on your
+          screen. To keep this from reading things you don&apos;t want it to — like a Discord chat —
+          it only ever runs in the apps you list below; anywhere else, it does nothing and sends no
+          text anywhere.
         </p>
         <label className="checkbox-row">
           <input
@@ -139,11 +112,37 @@ export default function SettingsView(): JSX.Element {
           />
           Enable Screen Watch
         </label>
+        <label>
+          Toggle hotkey
+          <input
+            type="text"
+            value={settings.screenWatchHotkeyAccelerator}
+            onChange={(e) => setSettings({ ...settings, screenWatchHotkeyAccelerator: e.target.value })}
+            onBlur={(e) => save({ screenWatchHotkeyAccelerator: e.target.value })}
+          />
+        </label>
+        <label>
+          Allowed apps (process names, comma-separated)
+          <input
+            type="text"
+            value={settings.screenWatchAllowedApps}
+            onChange={(e) => setSettings({ ...settings, screenWatchAllowedApps: e.target.value })}
+            onBlur={(e) => save({ screenWatchAllowedApps: e.target.value })}
+            placeholder="WINWORD.EXE, notepad.exe, msedge.exe, chrome.exe"
+          />
+        </label>
+        <p className="muted">
+          Defaults cover Word, Notepad, and Chromium browsers (Chrome/Edge). This can&apos;t
+          distinguish tabs or sites within a browser, and it won&apos;t work in apps like Google
+          Docs that render text as pixels instead of exposing it to accessibility tools.
+        </p>
         {screenWatch?.enabled ? (
           <p className="muted">
             {screenWatch.active
               ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
-              : 'No supported text field is currently focused.'}
+              : screenWatch.blockedApp
+                ? `${screenWatch.blockedApp} isn't in your allowed apps list, so it's not being read.`
+                : 'No supported text field is currently focused.'}
           </p>
         ) : null}
         {screenWatch?.lastError ? <p className="error-text">Screen Watch error: {screenWatch.lastError}</p> : null}
@@ -152,10 +151,10 @@ export default function SettingsView(): JSX.Element {
       <section className="settings-section">
         <h3>Privacy</h3>
         <p className="muted">
-          Tracely sends text to the Tracely relay when you click Analyze, Find Evidence, or Critique;
-          in the Live tab, automatically after a pause in typing; and, if Screen Watch is on, from
-          whatever other app is focused. It's never sent anywhere else, and evidence search only ever
-          queries academic APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
+          Tracely sends text to the Tracely relay when you click Analyze, Find Evidence, or
+          Critique, and — only in apps on the Screen Watch allowlist above — automatically while
+          you write. It's never sent anywhere else, and evidence search only ever queries academic
+          APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
         </p>
         <div className="input-row">
           <Button variant="danger" onClick={() => setConfirmClear('history')}>

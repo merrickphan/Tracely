@@ -5,7 +5,15 @@ const DEFAULTS: Record<string, string> = {
   hotkeyAccelerator: 'CommandOrControl+Shift+F',
   crossrefMailto: '',
   enableStrengthSummaries: 'false',
-  screenWatchEnabled: 'false'
+  screenWatchEnabled: 'false',
+  theme: 'system',
+  screenWatchHotkeyAccelerator: 'CommandOrControl+Shift+S',
+  // Process image names (e.g. "WINWORD.EXE") Screen Watch is allowed to read
+  // text from. Comma-separated, case-insensitive. Empty means "nowhere" —
+  // fail closed rather than silently watching whatever app happens to be
+  // focused, since that's exactly the "scanning my Discord DMs" problem this
+  // allowlist exists to prevent.
+  screenWatchAllowedApps: 'WINWORD.EXE,notepad.exe,msedge.exe,chrome.exe'
 }
 
 export function getSetting(key: string): string {

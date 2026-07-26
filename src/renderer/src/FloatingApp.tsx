@@ -5,12 +5,17 @@ import Button from './components/Button'
 import Spinner from './components/Spinner'
 import TextArea from './components/TextArea'
 import { tracelyApi } from './lib/api'
+import { applyTheme } from './lib/theme'
 
 export default function FloatingApp(): JSX.Element {
   const [text, setText] = useState('')
   const [claims, setClaims] = useState<Claim[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    tracelyApi.getSettings().then((s) => applyTheme(s.theme))
+  }, [])
 
   useEffect(() => {
     return tracelyApi.onClipboardCaptured(({ text: captured }) => {
