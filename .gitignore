@@ -2,6 +2,7 @@ node_modules/
 out/
 release/
 .env
+.env.release
 *.db
 *.db-journal
 *.db-wal
