@@ -58,7 +58,7 @@ export default function FloatingApp(): JSX.Element {
         </div>
       </div>
       <div className="floating-body">
-        <TextArea rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+        <TextArea size="sm" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
         <Button variant="primary" onClick={() => analyze(text)} disabled={loading || !text.trim()}>
           Analyze
         </Button>

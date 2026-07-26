@@ -1,5 +1,11 @@
 import type { TextareaHTMLAttributes } from 'react'
 
-export default function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): JSX.Element {
-  return <textarea {...props} className={`textarea ${props.className ?? ''}`.trim()} />
+export type TextAreaSize = 'sm' | 'md' | 'lg'
+
+export default function TextArea({
+  size = 'md',
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { size?: TextAreaSize }): JSX.Element {
+  return <textarea {...props} className={`textarea textarea-${size} ${className ?? ''}`.trim()} />
 }

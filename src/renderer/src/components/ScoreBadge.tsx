@@ -27,11 +27,11 @@ export default function ScoreBadge({
     return (
       <span
         className="score-badge score-contradicted"
-        title={`This score only measures the quality/relevance of retrieved sources, not factual accuracy. ${
+        title={`Fact-checked and found false. This score only measures the quality/relevance of retrieved sources, not factual accuracy. ${
           breakdownText ?? ''
         }`}
       >
-        Contradicted by fact-check — 0/100
+        0% confidence — false
       </span>
     )
   }

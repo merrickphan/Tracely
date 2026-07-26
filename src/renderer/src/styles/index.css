@@ -13,6 +13,7 @@
   --score-good: #2f7d3f;
   --score-mid: #b08600;
   --score-low: #b3441f;
+  --ring: rgba(28, 28, 26, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
     --surface-2: #26272b;
     --primary: #e9e9e7;
     --primary-contrast: #17181a;
+    --ring: rgba(233, 233, 231, 0.22);
   }
 }
 
@@ -106,6 +108,47 @@ textarea {
   background: var(--surface);
   color: var(--text);
   resize: vertical;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.textarea::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.textarea:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.textarea:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.textarea-sm {
+  padding: 7px 9px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+
+.textarea-md {
+  padding: 10px 11px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.textarea-lg {
+  padding: 14px 15px;
+  font-size: 15px;
+  border-radius: 7px;
 }
 
 .live-view {
@@ -250,6 +293,11 @@ textarea {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.claim-confidence-false {
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .claim-text {

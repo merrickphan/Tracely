@@ -30,6 +30,7 @@ export default function AnalyzeView(): JSX.Element {
     <div className="analyze-view">
       <section className="analyze-input">
         <TextArea
+          size="lg"
           placeholder="Paste a paragraph, essay, or argument to check its credibility…"
           value={text}
           onChange={(e) => setText(e.target.value)}
