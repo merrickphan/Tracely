@@ -13,6 +13,31 @@ const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
 
 const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
+const TOOLTIP_WIDTH = 320
+// Estimated, not measured — the tooltip's real height varies with claim
+// text length, but we need a number before it's rendered to decide whether
+// there's room below. Deliberately generous (most tooltips are shorter)
+// so it flips above a bit more readily than strictly necessary rather than
+// risk clipping against the bottom edge.
+const TOOLTIP_EST_HEIGHT = 150
+const TOOLTIP_GAP = 8
+
+function tooltipPosition(anchor: { x: number; y: number; width: number; height: number }): {
+  left: number
+  top: number
+} {
+  const spaceBelow = window.innerHeight - (anchor.y + anchor.height)
+  const spaceAbove = anchor.y
+  const placeAbove = spaceBelow < TOOLTIP_EST_HEIGHT + TOOLTIP_GAP && spaceAbove > spaceBelow
+
+  return {
+    left: Math.min(Math.max(8, anchor.x), window.innerWidth - TOOLTIP_WIDTH - 8),
+    top: placeAbove
+      ? Math.max(8, anchor.y - TOOLTIP_EST_HEIGHT - TOOLTIP_GAP)
+      : anchor.y + anchor.height + TOOLTIP_GAP
+  }
+}
+
 export default function OverlayApp(): JSX.Element {
   const [underlines, setUnderlines] = useState<ScreenWatchOverlayUpdateEvent['underlines']>([])
   const [widget, setWidget] = useState<ScreenWatchWidget | null>(null)
@@ -124,60 +149,61 @@ export default function OverlayApp(): JSX.Element {
         </button>
       ) : null}
 
-      {claimHovered ? (
-        <div
-          style={{
-            position: 'absolute',
-            left: Math.min(Math.max(8, claimHovered.anchor.x), window.innerWidth - 328),
-            top: Math.min(claimHovered.anchor.y + claimHovered.anchor.height + 6, window.innerHeight - 140),
-            maxWidth: 320,
-            background: '#17171b',
-            border: '1px solid #2b2b31',
-            borderRadius: 12,
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
-            padding: '10px 12px',
-            fontFamily: FONT_STACK,
-            color: '#f6f6f8',
-            // Short, linear transition smooths out the discrete 40ms position
-            // updates into what reads as continuous cursor-following instead
-            // of the tooltip visibly stepping/jumping between poll ticks.
-            transition: 'left 0.06s linear, top 0.06s linear'
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              color: '#ffab3d',
-              marginBottom: 4
-            }}
-          >
-            {CLAIM_TYPE_LABEL[claimHovered.claimType]} flagged
-          </div>
-          <div style={{ fontSize: 13, lineHeight: 1.4, marginBottom: 10 }}>
-            {claimHovered.text.length > 160 ? `${claimHovered.text.slice(0, 160)}…` : claimHovered.text}
-          </div>
-          <button
-            onClick={() => analyzeText(claimHovered.text)}
-            disabled={sending}
-            style={{
-              border: 'none',
-              borderRadius: 999,
-              padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 700,
-              color: '#fff',
-              cursor: sending ? 'default' : 'pointer',
-              opacity: sending ? 0.6 : 1,
-              background: 'linear-gradient(135deg, #ffab3d, #ff5a36)'
-            }}
-          >
-            {sending ? 'Opening…' : 'Check in Tracely'}
-          </button>
-        </div>
-      ) : null}
+      {claimHovered
+        ? (() => {
+            const pos = tooltipPosition(claimHovered.anchor)
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: pos.left,
+                  top: pos.top,
+                  width: TOOLTIP_WIDTH,
+                  background: '#17171b',
+                  border: '1px solid #2b2b31',
+                  borderRadius: 12,
+                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+                  padding: '10px 12px',
+                  fontFamily: FONT_STACK,
+                  color: '#f6f6f8'
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                    color: '#ffab3d',
+                    marginBottom: 4
+                  }}
+                >
+                  {CLAIM_TYPE_LABEL[claimHovered.claimType]} flagged
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.4, marginBottom: 10 }}>
+                  {claimHovered.text.length > 160 ? `${claimHovered.text.slice(0, 160)}…` : claimHovered.text}
+                </div>
+                <button
+                  onClick={() => analyzeText(claimHovered.text)}
+                  disabled={sending}
+                  style={{
+                    border: 'none',
+                    borderRadius: 999,
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#fff',
+                    cursor: sending ? 'default' : 'pointer',
+                    opacity: sending ? 0.6 : 1,
+                    background: 'linear-gradient(135deg, #ffab3d, #ff5a36)'
+                  }}
+                >
+                  {sending ? 'Opening…' : 'Check in Tracely'}
+                </button>
+              </div>
+            )
+          })()
+        : null}
     </div>
   )
 }
