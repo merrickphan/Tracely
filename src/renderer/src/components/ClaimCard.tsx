@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Claim, EvidenceItem, ScoreBreakdown } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import Button from './Button'
@@ -52,6 +52,15 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
       setLoadingCritique(false)
     }
   }
+
+  // Fact-check as soon as the claim appears, not just after Find Evidence —
+  // the fact-check pass checks the claim against the model's own knowledge
+  // and doesn't need evidence, so there's no reason to make a false claim
+  // wait behind an extra click before showing 0% confidence.
+  useEffect(() => {
+    void critique()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="claim-card">
