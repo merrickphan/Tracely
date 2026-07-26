@@ -86,6 +86,7 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
     )
 
     let stdout = ''
+    let stderr = ''
     let settled = false
 
     const finish = (result: UiaSnapshot): void => {
@@ -102,6 +103,9 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString()
     })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString()
+    })
     child.on('error', (err) => {
       clearTimeout(timer)
       finish({ ok: false, error: err.message })
@@ -111,7 +115,20 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
       try {
         finish(JSON.parse(stdout.trim()) as UiaSnapshot)
       } catch {
-        finish({ ok: false, error: 'Unparseable output from uia-watch.ps1' })
+        // Was previously just "Unparseable output from uia-watch.ps1" with no
+        // way to tell what actually went wrong — the two live candidates are
+        // (a) the script hit a terminating error before its own catch could
+        // run (rare, since almost everything is wrapped), which lands on
+        // stderr, not stdout, or (b) PowerShell's transcript/verbose/warning
+        // streams leaking non-JSON text onto stdout ahead of our own output.
+        // Truncated snippets of both let a future occurrence actually be
+        // diagnosed from the log instead of hitting this same dead end again.
+        const stdoutSnippet = stdout.trim().slice(0, 300)
+        const stderrSnippet = stderr.trim().slice(0, 300)
+        finish({
+          ok: false,
+          error: `Unparseable output from uia-watch.ps1 (stdout: ${JSON.stringify(stdoutSnippet)}, stderr: ${JSON.stringify(stderrSnippet)})`
+        })
       }
     })
   })
