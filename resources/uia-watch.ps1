@@ -112,6 +112,7 @@ try {
 
     foreach ($span in $spans) {
       $rects = @()
+      $flat = @()
       try {
         # Collapse-then-expand: the standard UIA idiom for getting a text
         # range from a character offset + length rather than a text search.
@@ -120,6 +121,12 @@ try {
         $range.MoveEndpointByUnit($Endp::End, $Unit::Character, -($text.Length + 10)) | Out-Null
         $range.MoveEndpointByUnit($Endp::Start, $Unit::Character, $span.start) | Out-Null
         $range.MoveEndpointByUnit($Endp::End, $Unit::Character, $span.length) | Out-Null
+
+        # Some providers (confirmed with the current Windows 11 Notepad) never
+        # compute layout/bounding rects for a range unless it's been scrolled
+        # into view first, even when the text is already visible on screen —
+        # GetBoundingRectangles otherwise comes back completely empty.
+        try { $range.ScrollIntoView($true) | Out-Null } catch {}
 
         $flat = $range.GetBoundingRectangles()
         for ($i = 0; $i -lt $flat.Length; $i += 4) {
@@ -132,7 +139,7 @@ try {
           }
         }
       } catch {}
-      $claimRects += @{ id = $span.id; rects = $rects }
+      $claimRects += @{ id = $span.id; rects = $rects; rawRectCount = [int]($flat.Length / 4) }
     }
   }
 

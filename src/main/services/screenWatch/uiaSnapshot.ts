@@ -19,6 +19,10 @@ export interface ClaimSpanRequest {
 export interface ClaimRectResult {
   id: string
   rects: ScreenRect[]
+  // Count of rects UIA returned before filtering out degenerate (off-screen)
+  // ones — diagnostic only, lets us tell "provider returned nothing at all"
+  // apart from "returned rects but they were all off-screen".
+  rawRectCount?: number
 }
 
 export type UiaSnapshot =
