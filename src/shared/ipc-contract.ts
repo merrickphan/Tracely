@@ -156,3 +156,27 @@ export interface ShellOpenExternalResponse {
 export interface FloatingClipboardCapturedEvent {
   text: string
 }
+
+export interface ScreenWatchSetEnabledRequest {
+  enabled: boolean
+}
+export interface ScreenWatchStatus {
+  enabled: boolean
+  active: boolean
+  processName: string | null
+  supportsUnderlines: boolean
+  claimCount: number
+}
+export type ScreenWatchSetEnabledResponse = ScreenWatchStatus
+export type ScreenWatchGetStatusRequest = Record<string, never>
+export type ScreenWatchGetStatusResponse = ScreenWatchStatus
+
+export interface ScreenRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+export interface ScreenWatchOverlayUpdateEvent {
+  underlines: { id: string; rects: ScreenRect[] }[]
+}

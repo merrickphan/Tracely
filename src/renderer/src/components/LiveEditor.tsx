@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { ClaimSpan } from '../lib/claimSpans'
+import type { ClaimSpan } from '@shared/claimSpans'
 
 export default function LiveEditor({
   text,

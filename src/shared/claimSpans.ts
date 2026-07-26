@@ -1,4 +1,4 @@
-import type { Claim } from '@shared/types'
+import type { Claim } from './types'
 
 export interface ClaimSpan {
   claim: Claim

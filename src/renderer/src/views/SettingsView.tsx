@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppSettings, CitationStyle } from '@shared/types'
+import type { ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { tracelyApi } from '../lib/api'
@@ -11,6 +12,7 @@ export default function SettingsView(): JSX.Element {
   const [confirmClear, setConfirmClear] = useState<null | 'history' | 'all'>(null)
   const [clearedMessage, setClearedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
 
   useEffect(() => {
     tracelyApi
@@ -18,6 +20,16 @@ export default function SettingsView(): JSX.Element {
       .then(setSettings)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
+
+  useEffect(() => {
+    tracelyApi.getScreenWatchStatus().then(setScreenWatch)
+    return tracelyApi.onScreenWatchStatus(setScreenWatch)
+  }, [])
+
+  async function toggleScreenWatch(enabled: boolean): Promise<void> {
+    const status = await tracelyApi.setScreenWatchEnabled(enabled)
+    setScreenWatch(status)
+  }
 
   async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
     setSaving(true)
@@ -110,10 +122,39 @@ export default function SettingsView(): JSX.Element {
       </section>
 
       <section className="settings-section">
+        <h3>Screen Watch (experimental)</h3>
+        <p className="muted">
+          When on, Tracely reads the text of whatever field is currently focused in other apps
+          (via Windows accessibility APIs — not a screenshot) and underlines flagged claims directly
+          on your screen, like a real-time grammar checker. This sends that text to the Tracely relay
+          automatically as you write, without you clicking Analyze. Off by default. Works in apps that
+          expose their text to accessibility tools (Word, WordPad, most native Windows apps) — it
+          won't see text in apps that render it as pixels instead, such as Google Docs.
+        </p>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={screenWatch?.enabled ?? false}
+            onChange={(e) => toggleScreenWatch(e.target.checked)}
+          />
+          Enable Screen Watch
+        </label>
+        {screenWatch?.enabled ? (
+          <p className="muted">
+            {screenWatch.active
+              ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
+              : 'No supported text field is currently focused.'}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="settings-section">
         <h3>Privacy</h3>
         <p className="muted">
-          Tracely only sends text to the Tracely relay or academic search APIs when you click Analyze,
-          Find Evidence, or Critique. Nothing is uploaded automatically or in the background.
+          Tracely sends text to the Tracely relay when you click Analyze, Find Evidence, or Critique;
+          in the Live tab, automatically after a pause in typing; and, if Screen Watch is on, from
+          whatever other app is focused. It's never sent anywhere else, and evidence search only ever
+          queries academic APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
         </p>
         <div className="input-row">
           <Button variant="danger" onClick={() => setConfirmClear('history')}>

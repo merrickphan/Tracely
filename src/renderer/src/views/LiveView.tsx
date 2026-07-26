@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Claim } from '@shared/types'
 import ClaimCard from '../components/ClaimCard'
 import LiveEditor from '../components/LiveEditor'
-import { computeClaimSpans } from '../lib/claimSpans'
+import { computeClaimSpans } from '@shared/claimSpans'
 import { tracelyApi } from '../lib/api'
 
 const DEBOUNCE_MS = 1400

@@ -11,6 +11,8 @@ extraResources:
     to: sql-wasm.wasm
   - from: build/icon.png
     to: icon.png
+  - from: resources/uia-watch.ps1
+    to: uia-watch.ps1
 asarUnpack:
   - '**/*.node'
   - '**/*.wasm'

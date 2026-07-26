@@ -50,5 +50,10 @@ export const tracelyApi = {
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
 
   onClipboardCaptured: (cb: (payload: { text: string }) => void) =>
-    window.tracely.onClipboardCaptured(cb)
+    window.tracely.onClipboardCaptured(cb),
+
+  getScreenWatchStatus: () => call(window.tracely.screenWatch.getStatus()),
+  setScreenWatchEnabled: (enabled: boolean) => call(window.tracely.screenWatch.setEnabled({ enabled })),
+  onScreenWatchStatus: (cb: Parameters<typeof window.tracely.onScreenWatchStatus>[0]) =>
+    window.tracely.onScreenWatchStatus(cb)
 }

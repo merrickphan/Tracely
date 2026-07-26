@@ -54,7 +54,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          floating: resolve(__dirname, 'src/renderer/floating.html')
+          floating: resolve(__dirname, 'src/renderer/floating.html'),
+          overlay: resolve(__dirname, 'src/renderer/overlay.html')
         }
       }
     }

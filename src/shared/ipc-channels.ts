@@ -28,11 +28,16 @@ export const IPC = {
   WINDOW_SHOW: 'window:show',
   WINDOW_CLOSE: 'window:close',
 
-  SHELL_OPEN_EXTERNAL: 'shell:openExternal'
+  SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+
+  SCREENWATCH_SET_ENABLED: 'screenWatch:setEnabled',
+  SCREENWATCH_GET_STATUS: 'screenWatch:getStatus'
 } as const
 
 export const IPC_EVENTS = {
-  FLOATING_CLIPBOARD_CAPTURED: 'floating:clipboardCaptured'
+  FLOATING_CLIPBOARD_CAPTURED: 'floating:clipboardCaptured',
+  SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
+  SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

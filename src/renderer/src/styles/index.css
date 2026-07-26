@@ -455,6 +455,19 @@ textarea {
   margin-bottom: 14px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
 .input-row {
   display: flex;
   gap: 8px;

@@ -4,7 +4,8 @@ const DEFAULTS: Record<string, string> = {
   defaultCitationStyle: 'APA',
   hotkeyAccelerator: 'CommandOrControl+Shift+F',
   crossrefMailto: '',
-  enableStrengthSummaries: 'false'
+  enableStrengthSummaries: 'false',
+  screenWatchEnabled: 'false'
 }
 
 export function getSetting(key: string): string {
