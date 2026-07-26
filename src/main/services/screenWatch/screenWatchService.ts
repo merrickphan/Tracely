@@ -188,7 +188,9 @@ function updateOverlay(
   claimRects: { id: string; rects: ScreenRect[] }[],
   claims: Claim[]
 ): void {
-  const underlines = claimRects.filter((r) => r.rects.length > 0)
+  const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
+    (r) => Array.isArray(r.rects) && r.rects.length > 0
+  )
 
   if (underlines.length === 0) {
     if (claims.length > 0) {

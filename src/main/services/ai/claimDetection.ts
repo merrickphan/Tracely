@@ -27,6 +27,10 @@ function cacheKey(text: string): string {
 }
 
 function reconstructClaim(candidate: RelayClaim, sentences: SentenceSpan[], text: string): DetectedClaim | null {
+  // The relay is an external boundary — validate its shape rather than trust
+  // it, e.g. a mid-deploy race could briefly serve the previous response
+  // format.
+  if (!Array.isArray(candidate.sentenceIndices)) return null
   const indices = candidate.sentenceIndices.filter(
     (i) => Number.isInteger(i) && i >= 1 && i <= sentences.length
   )
@@ -66,7 +70,7 @@ export async function detectClaims(rawText: string): Promise<DetectedClaim[]> {
 
   const { claims } = await callRelay<{ claims: RelayClaim[] }>('detect-claims', { text: numberedText })
 
-  const detected = claims
+  const detected = (Array.isArray(claims) ? claims : [])
     .map((c) => reconstructClaim(c, sentences, text))
     .filter((c): c is DetectedClaim => c !== null)
     .slice(0, MAX_CLAIMS_PER_ANALYSIS)

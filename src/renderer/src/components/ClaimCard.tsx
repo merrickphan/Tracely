@@ -57,7 +57,12 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
     <div className="claim-card">
       <div className="claim-header">
         <span className="claim-type">{CLAIM_TYPE_LABEL[claim.claimType]}</span>
-        <span className="claim-confidence">Confidence: {Math.round(claim.confidence * 100)}%</span>
+        <span
+          className="claim-confidence"
+          title="How confident Tracely is that this sentence is a checkable factual claim (vs. opinion) — not whether the claim itself is true. Click Find Evidence to fact-check it."
+        >
+          Detected as claim: {Math.round(claim.confidence * 100)}%
+        </span>
       </div>
       <p className="claim-text">&ldquo;{claim.text}&rdquo;</p>
 
