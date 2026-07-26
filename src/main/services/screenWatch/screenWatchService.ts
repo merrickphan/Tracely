@@ -207,6 +207,10 @@ async function tick(): Promise<void> {
 
     if (currentClaims.length > 0) {
       logScreenWatch(
+        `provider layout check: wholeDocRects=${snapshot.wholeDocRectCount ?? '?'} ` +
+          `visibleRanges=${snapshot.visibleRangeCount ?? '?'} visibleRangeRects=${snapshot.visibleRangeRectCount ?? '?'}`
+      )
+      logScreenWatch(
         `located ${claimSpans.length}/${currentClaims.length} claim(s) in text this tick; ` +
           `claimRects from snapshot: ${snapshot.claimRects
             .map(

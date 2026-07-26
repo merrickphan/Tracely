@@ -82,12 +82,35 @@ try {
   $supportsTextPattern = $false
   $docRange = $null
 
+  # Diagnostic: does this provider compute bounding rects for ANYTHING via
+  # TextPattern, independent of how we built our range? If the whole
+  # DocumentRange and the control's own visible ranges also return zero
+  # rects, that rules out our range-construction method as the cause —
+  # the provider just doesn't implement layout for TextPattern ranges here.
+  $wholeDocRectCount = -1
+  $visibleRangeCount = -1
+  $visibleRangeRectCount = -1
+
   $textPatternObj = $null
   if ($focused.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$textPatternObj)) {
     $textPattern = $textPatternObj -as [System.Windows.Automation.TextPattern]
     $docRange = $textPattern.DocumentRange
     $text = $docRange.GetText(-1)
     $supportsTextPattern = $true
+
+    try {
+      $wholeFlat = $docRange.GetBoundingRectangles()
+      $wholeDocRectCount = [int]($wholeFlat.Length / 4)
+    } catch {}
+
+    try {
+      $visible = $textPattern.GetVisibleRanges()
+      $visibleRangeCount = if ($visible) { $visible.Length } else { 0 }
+      if ($visibleRangeCount -gt 0) {
+        $visFlat = $visible[0].GetBoundingRectangles()
+        $visibleRangeRectCount = [int]($visFlat.Length / 4)
+      }
+    } catch {}
   } else {
     $valuePatternObj = $null
     if ($focused.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePatternObj)) {
@@ -169,13 +192,16 @@ try {
   }
 
   Write-Result @{
-    ok                   = $true
-    skip                 = $false
-    processName          = $processName
-    text                 = $text
-    supportsTextPattern  = $supportsTextPattern
-    controlRect          = $controlRect
-    claimRects           = $claimRects
+    ok                     = $true
+    skip                   = $false
+    processName            = $processName
+    text                   = $text
+    supportsTextPattern    = $supportsTextPattern
+    controlRect            = $controlRect
+    claimRects             = $claimRects
+    wholeDocRectCount      = $wholeDocRectCount
+    visibleRangeCount      = $visibleRangeCount
+    visibleRangeRectCount  = $visibleRangeRectCount
   }
 } catch {
   Write-Result @{ ok = $false; error = $_.Exception.Message }

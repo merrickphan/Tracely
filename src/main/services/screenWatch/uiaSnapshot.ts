@@ -43,6 +43,10 @@ export type UiaSnapshot =
       supportsTextPattern: boolean
       controlRect: ScreenRect
       claimRects: ClaimRectResult[]
+      // Diagnostic-only, see the comment on ClaimRectResult.
+      wholeDocRectCount?: number
+      visibleRangeCount?: number
+      visibleRangeRectCount?: number
     }
   | { ok: false; error: string }
 
