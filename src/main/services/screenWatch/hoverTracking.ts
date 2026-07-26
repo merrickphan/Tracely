@@ -12,20 +12,16 @@ import { getHoverTargets } from './screenWatchService'
 // from the main process (which works regardless of window focus) and toggle
 // click-through on/off depending on whether the cursor is over a claim's
 // underline — the same technique Grammarly's desktop overlay uses.
-// Polled faster than the claim-detection tick (POLL_INTERVAL_MS in
-// screenWatchService.ts) specifically so the tooltip can track the cursor
-// smoothly while hovering — 80ms read choppy/disconnected for that.
-const POLL_MS = 40
+const POLL_MS = 80
 // Rects are padded past the underline itself, mainly downward, so the hit
 // zone also covers the space the tooltip renders into — otherwise moving
 // the mouse from the underline down to the tooltip's button would cross a
 // gap with no hit zone and the tooltip would vanish before you get there.
-// Now that the tooltip follows the cursor instead of sitting at a fixed
-// offset from the underline, it stays close to wherever the mouse actually
-// is, so this doesn't need to be as large as before.
+// The tooltip is anchored directly under the underline (not the cursor),
+// so this needs to comfortably cover that fixed gap.
 const PAD_SIDE = 6
 const PAD_TOP = 4
-const PAD_BOTTOM = 60
+const PAD_BOTTOM = 90
 // The widget badge has no tooltip growing below it (its label is a native
 // OS title tooltip, not part of our DOM), so it only needs a small uniform
 // pad — the claim's generous PAD_BOTTOM would otherwise create a dead zone
@@ -39,7 +35,7 @@ const LEAVE_GRACE_MS = 200
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
-let hoveredClaimId: string | null = null
+let hoveredKey: string | null = null
 let mouseEventsCaptured = false
 
 function setCaptureMouseEvents(capture: boolean): void {
@@ -65,8 +61,8 @@ function clearHover(): void {
     clearTimeout(leaveTimer)
     leaveTimer = null
   }
-  if (hoveredClaimId === null) return
-  hoveredClaimId = null
+  if (hoveredKey === null) return
+  hoveredKey = null
   setCaptureMouseEvents(false)
   sendHover(null)
 }
@@ -79,44 +75,50 @@ function poll(): void {
   }
 
   const cursor = screen.getCursorScreenPoint()
-  const match = targets.find((t) => {
+  let match: (typeof targets)[number] | null = null
+  let matchedRectIndex = 0
+  for (const t of targets) {
     const padBottom = t.kind === 'widget' ? WIDGET_PAD : PAD_BOTTOM
     const padSide = t.kind === 'widget' ? WIDGET_PAD : PAD_SIDE
     const padTop = t.kind === 'widget' ? WIDGET_PAD : PAD_TOP
-    return t.rectsAbsolute.some(
+    const idx = t.rectsAbsolute.findIndex(
       (r) =>
         cursor.x >= r.x - padSide &&
         cursor.x <= r.x + r.width + padSide &&
         cursor.y >= r.y - padTop &&
         cursor.y <= r.y + r.height + padBottom
     )
-  })
+    if (idx !== -1) {
+      match = t
+      matchedRectIndex = idx
+      break
+    }
+  }
 
   if (match) {
     if (leaveTimer) {
       clearTimeout(leaveTimer)
       leaveTimer = null
     }
-    if (hoveredClaimId !== match.claimId) {
-      hoveredClaimId = match.claimId
+    // Only re-send on an actual target (or matched line, for a claim that
+    // wraps multiple lines) change — the tooltip is anchored to that rect,
+    // not the cursor, so it has no reason to move on every tick.
+    const hoverKey = `${match.claimId}:${matchedRectIndex}`
+    if (hoveredKey !== hoverKey) {
+      hoveredKey = hoverKey
       setCaptureMouseEvents(true)
+      sendHover({
+        claimId: match.claimId,
+        kind: match.kind,
+        text: match.text,
+        claimType: match.claimType,
+        anchor: match.rectsWindowLocal[matchedRectIndex] ?? match.rectsWindowLocal[0]
+      })
     }
-    // Sent every tick (not just on target change) with a fresh cursor
-    // position, so the tooltip visually tracks the mouse instead of
-    // snapping to wherever the underline happens to be.
-    const win = getOverlayWindow()
-    const bounds = win?.getBounds()
-    sendHover({
-      claimId: match.claimId,
-      kind: match.kind,
-      text: match.text,
-      claimType: match.claimType,
-      cursor: bounds ? { x: cursor.x - bounds.x, y: cursor.y - bounds.y } : { x: 0, y: 0 }
-    })
     return
   }
 
-  if (hoveredClaimId !== null && !leaveTimer) {
+  if (hoveredKey !== null && !leaveTimer) {
     leaveTimer = setTimeout(() => {
       leaveTimer = null
       clearHover()
@@ -138,6 +140,6 @@ export function stopHoverTracking(): void {
     clearTimeout(leaveTimer)
     leaveTimer = null
   }
-  hoveredClaimId = null
+  hoveredKey = null
   setCaptureMouseEvents(false)
 }

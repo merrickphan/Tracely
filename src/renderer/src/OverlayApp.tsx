@@ -121,8 +121,8 @@ export default function OverlayApp(): JSX.Element {
         <div
           style={{
             position: 'absolute',
-            left: Math.min(Math.max(8, claimHovered.cursor.x + 16), window.innerWidth - 328),
-            top: Math.min(claimHovered.cursor.y + 20, window.innerHeight - 140),
+            left: Math.min(Math.max(8, claimHovered.anchor.x), window.innerWidth - 328),
+            top: Math.min(claimHovered.anchor.y + claimHovered.anchor.height + 6, window.innerHeight - 140),
             maxWidth: 320,
             background: '#17171b',
             border: '1px solid #2b2b31',

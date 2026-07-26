@@ -219,12 +219,11 @@ export interface ScreenWatchHoverEvent {
   kind: 'claim' | 'widget'
   text: string
   claimType: ClaimType
-  // Window-local cursor position (same coordinate space as
-  // ScreenWatchOverlayUpdateEvent rects), refreshed on every poll tick while
-  // hovering so the tooltip can track the cursor directly instead of being
-  // pinned to the underline's rect regardless of where the mouse actually is
-  // within the (deliberately generous) hover hit zone.
-  cursor: { x: number; y: number }
+  // Window-local (same coordinate space as ScreenWatchOverlayUpdateEvent
+  // rects) — the specific rect the cursor was actually over, so a claim
+  // that wraps multiple lines anchors under the right line rather than
+  // always the first one.
+  anchor: ScreenRect
 }
 
 export interface ScreenWatchAnalyzeClaimRequest {

@@ -15,6 +15,13 @@ import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSn
 const POLL_INTERVAL_MS = 1200
 const STABLE_MS = 1200
 const MIN_TEXT_LENGTH = 20
+// Screen Watch underlines passively, without the user asking about any one
+// sentence — a borderline/low-confidence call here is far more annoying
+// (flagging ordinary descriptive sentences) than it would be in Analyze,
+// where the user explicitly asked for a full pass and can just ignore a
+// weak one. Filtering to higher-confidence claims only is a second,
+// independent guard on top of the detection prompt itself.
+const MIN_CLAIM_CONFIDENCE = 0.6
 
 let enabled = false
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -29,6 +36,7 @@ let currentSpans: ClaimSpanRequest[] = []
 let retryAfter = 0
 let lastError: string | null = null
 const RETRY_COOLDOWN_MS = 5000
+let lastSkipReason: string | null = null
 
 export interface HoverTarget {
   claimId: string
@@ -139,6 +147,15 @@ async function tick(): Promise<void> {
     }
 
     if (snapshot.skip) {
+      // Logged only on change, not every tick — "not-editable-control-type"
+      // in particular would otherwise spam the log constantly while just
+      // browsing a normal webpage.
+      if (snapshot.reason !== lastSkipReason) {
+        lastSkipReason = snapshot.reason
+        logScreenWatch(
+          `skipping (${snapshot.reason}) on ${'processName' in snapshot ? (snapshot.processName ?? 'unknown') : 'unknown'}`
+        )
+      }
       hideOverlay()
       resetTrackingState()
       emitStatus({
@@ -152,6 +169,7 @@ async function tick(): Promise<void> {
       })
       return
     }
+    lastSkipReason = null
 
     if (isProcessBlocked(snapshot.processName)) {
       // Not an error — the user's blocklist just excludes this app. Bail
@@ -193,10 +211,12 @@ async function tick(): Promise<void> {
           // Only mark this text "done" on success — a failure must stay
           // retryable rather than being silently marked as already-tried.
           lastAnalyzedText = textAtRequestTime
-          currentClaims = detected.map(synthesizeClaim)
+          const confident = detected.filter((c) => c.confidence >= MIN_CLAIM_CONFIDENCE)
+          currentClaims = confident.map(synthesizeClaim)
           lastError = null
           logScreenWatch(
-            `detected ${currentClaims.length} claim(s): ${currentClaims.map((c) => JSON.stringify(c.text)).join(', ')}`
+            `detected ${detected.length} claim(s), ${confident.length} above confidence threshold: ` +
+              `${currentClaims.map((c) => JSON.stringify(c.text)).join(', ')}`
           )
           // Compute spans against the text we just analyzed *now*, rather
           // than leaving currentSpans at whatever they were before this

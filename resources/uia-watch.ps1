@@ -112,6 +112,33 @@ try {
     exit 0
   }
 
+  # Only read/underline text the user can actually edit — not arbitrary
+  # focusable text on a webpage or elsewhere. UIA has no single universal
+  # "is this editable" flag, so this combines two checks:
+  #  1. ControlType: real editors report Edit or Document; plain readable
+  #     text on a page is typically Text/Pane/Group/Custom, even when it
+  #     happens to be focusable (e.g. a tabindex'd element).
+  #  2. ValuePattern.IsReadOnly, when that pattern is exposed — catches
+  #     things that report an editable-looking ControlType but are actually
+  #     read-only (a <textarea readonly>, a locked form field, etc).
+  $controlTypeName = $focused.Current.ControlType.ProgrammaticName
+  $editableControlTypes = @('ControlType.Edit', 'ControlType.Document')
+  if ($editableControlTypes -notcontains $controlTypeName) {
+    Write-Result @{ ok = $true; skip = $true; reason = "not-editable-control-type"; processName = $processName }
+    exit 0
+  }
+
+  try {
+    $roCheckObj = $null
+    if ($focused.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$roCheckObj)) {
+      $roCheckPattern = $roCheckObj -as [System.Windows.Automation.ValuePattern]
+      if ($roCheckPattern.Current.IsReadOnly) {
+        Write-Result @{ ok = $true; skip = $true; reason = "read-only"; processName = $processName }
+        exit 0
+      }
+    }
+  } catch {}
+
   $rect = $focused.Current.BoundingRectangle
   $controlRect = @{ x = $rect.X; y = $rect.Y; width = $rect.Width; height = $rect.Height }
 
