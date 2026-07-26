@@ -175,6 +175,13 @@ async function tick(): Promise<void> {
           logScreenWatch(
             `detected ${currentClaims.length} claim(s): ${currentClaims.map((c) => JSON.stringify(c.text)).join(', ')}`
           )
+          // Compute spans against the text we just analyzed *now*, rather
+          // than leaving currentSpans at whatever they were before this
+          // detection (usually empty). Without this, the immediate redraw
+          // below asks the OS for bounding rects using stale/empty offsets,
+          // draws nothing, and only catches up a full poll cycle later.
+          const freshSpans = computeClaimSpans(textAtRequestTime, currentClaims)
+          currentSpans = freshSpans.map((s) => ({ id: s.claim.id, start: s.start, length: s.end - s.start }))
           // Don't wait for the next scheduled poll tick to show results —
           // that adds up to POLL_INTERVAL_MS of dead time on top of the
           // relay round-trip for no reason.
