@@ -1,4 +1,4 @@
-import type { ScoreBreakdown } from '@shared/types'
+import type { CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 
 function scoreClass(score: number): string {
   if (score >= 70) return 'score-good'
@@ -8,12 +8,14 @@ function scoreClass(score: number): string {
 
 export default function ScoreBadge({
   score,
-  breakdown
+  breakdown,
+  verdict
 }: {
   score: number
   breakdown?: ScoreBreakdown | null
+  verdict?: CritiqueVerdict | null
 }): JSX.Element {
-  const title = breakdown
+  const breakdownText = breakdown
     ? `Sources ${Math.round(breakdown.sourceCount * 100)}% · Quality ${Math.round(
         breakdown.quality * 100
       )}% · Recency ${Math.round(breakdown.recency * 100)}% · Relevance ${Math.round(
@@ -21,8 +23,26 @@ export default function ScoreBadge({
       )}%`
     : undefined
 
+  if (verdict === 'contradicted') {
+    return (
+      <span
+        className="score-badge score-contradicted"
+        title={`This score only measures the quality/relevance of retrieved sources, not factual accuracy. ${
+          breakdownText ?? ''
+        }`}
+      >
+        Contradicted by fact-check — 0/100
+      </span>
+    )
+  }
+
   return (
-    <span className={`score-badge ${scoreClass(score)}`} title={title}>
+    <span
+      className={`score-badge ${scoreClass(score)}`}
+      title={`Evidence coverage, not a truth check — run Critique to fact-check this claim. ${
+        breakdownText ?? ''
+      }`}
+    >
       Evidence Score: {score}/100
     </span>
   )

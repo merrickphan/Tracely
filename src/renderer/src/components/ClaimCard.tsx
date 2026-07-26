@@ -30,9 +30,14 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
       setClaim((c) => ({ ...c, strengthScore: res.strengthScore, scoreBreakdown: res.scoreBreakdown as ScoreBreakdown }))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      return
     } finally {
       setLoadingEvidence(false)
     }
+    // A high evidence score only means "good sources on this topic were found" —
+    // it says nothing about whether they actually back the claim's exact wording.
+    // Always fact-check immediately rather than leaving that score to stand alone.
+    await critique()
   }
 
   async function critique(): Promise<void> {
@@ -61,19 +66,23 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
           {evidence ? 'Refresh Evidence' : 'Find Evidence'}
         </Button>
         <Button variant="secondary" onClick={critique} disabled={loadingCritique}>
-          Critique Argument
+          {claim.critique ? 'Re-check Argument' : 'Critique Argument'}
         </Button>
         {claim.strengthScore !== null ? (
-          <ScoreBadge score={claim.strengthScore} breakdown={claim.scoreBreakdown} />
+          <ScoreBadge
+            score={claim.strengthScore}
+            breakdown={claim.scoreBreakdown}
+            verdict={claim.critiqueVerdict}
+          />
         ) : null}
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
       {loadingEvidence ? <Spinner label="Searching OpenAlex, Crossref, Semantic Scholar, PubMed…" /> : null}
-      {loadingCritique ? <Spinner label="Evaluating argument strength…" /> : null}
+      {loadingCritique ? <Spinner label="Fact-checking claim & evaluating argument strength…" /> : null}
 
       {claim.critique ? (
-        <div className="claim-critique">
+        <div className={`claim-critique${claim.critiqueVerdict === 'contradicted' ? ' claim-critique-contradicted' : ''}`}>
           <strong>{claim.critiqueVerdict}</strong>
           <p>{claim.critique}</p>
         </div>

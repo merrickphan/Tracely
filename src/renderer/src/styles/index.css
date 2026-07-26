@@ -197,6 +197,9 @@ textarea {
 .score-low {
   background: var(--score-low);
 }
+.score-contradicted {
+  background: var(--danger);
+}
 
 .claim-critique {
   margin-top: 12px;
@@ -204,6 +207,12 @@ textarea {
   border-left: 3px solid var(--primary);
   background: var(--bg);
   border-radius: 4px;
+}
+.claim-critique-contradicted {
+  border-left-color: var(--danger);
+}
+.claim-critique-contradicted strong {
+  color: var(--danger);
 }
 
 .evidence-list {

@@ -2,7 +2,12 @@ export type ClaimType = 'statistic' | 'causal' | 'factual' | 'prediction' | 'opi
 
 export type CitationStyle = 'APA' | 'MLA' | 'Chicago'
 
-export type CritiqueVerdict = 'well-supported' | 'partially-supported' | 'weak' | 'unsupported'
+export type CritiqueVerdict =
+  | 'contradicted'
+  | 'well-supported'
+  | 'partially-supported'
+  | 'weak'
+  | 'unsupported'
 
 export type VenueType = 'journal' | 'conference' | 'preprint' | 'book' | 'other'
 

@@ -15,7 +15,9 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
     .map((e) => e.source.id)
     .sort()
     .join(',')
-  return createHash('sha256').update(`ai:critique::v1::${claim.id}::${evidenceIds}`).digest('hex')
+  // v2: prompt now fact-checks the claim's specific assertions and can return
+  // a "contradicted" verdict — bump so stale v1 results aren't served for old claims.
+  return createHash('sha256').update(`ai:critique::v2::${claim.id}::${evidenceIds}`).digest('hex')
 }
 
 export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): Promise<CritiqueResult> {
