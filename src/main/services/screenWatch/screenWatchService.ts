@@ -8,6 +8,7 @@ import { detectClaims } from '../ai/claimDetection'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnDisplay } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
+import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { takeUiaSnapshot, type ScreenRect } from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
@@ -83,7 +84,7 @@ async function tick(): Promise<void> {
 
     if (!snapshot.ok) {
       lastError = snapshot.error
-      console.error('[screenWatch] snapshot failed:', snapshot.error)
+      logScreenWatch(`snapshot failed: ${snapshot.error}`)
       emitStatus({
         enabled,
         active: false,
@@ -112,6 +113,9 @@ async function tick(): Promise<void> {
     if (snapshot.text !== pendingText) {
       pendingText = snapshot.text
       pendingSince = Date.now()
+      logScreenWatch(
+        `text changed on ${snapshot.processName} (len ${pendingText.length}, supportsTextPattern=${snapshot.supportsTextPattern})`
+      )
     } else if (
       pendingText.trim().length >= MIN_TEXT_LENGTH &&
       pendingText !== lastAnalyzedText &&
@@ -121,6 +125,7 @@ async function tick(): Promise<void> {
     ) {
       detecting = true
       const textAtRequestTime = pendingText
+      logScreenWatch(`text stable, triggering detectClaims (len ${textAtRequestTime.length})`)
       detectClaims(textAtRequestTime)
         .then((detected) => {
           // Only mark this text "done" on success — a failure must stay
@@ -128,7 +133,9 @@ async function tick(): Promise<void> {
           lastAnalyzedText = textAtRequestTime
           currentClaims = detected.map(synthesizeClaim)
           lastError = null
-          console.log(`[screenWatch] detected ${currentClaims.length} claim(s)`)
+          logScreenWatch(
+            `detected ${currentClaims.length} claim(s): ${currentClaims.map((c) => JSON.stringify(c.text)).join(', ')}`
+          )
           // Don't wait for the next scheduled poll tick to show results —
           // that adds up to POLL_INTERVAL_MS of dead time on top of the
           // relay round-trip for no reason.
@@ -137,11 +144,17 @@ async function tick(): Promise<void> {
         .catch((err) => {
           retryAfter = Date.now() + RETRY_COOLDOWN_MS
           lastError = err instanceof Error ? err.message : String(err)
-          console.error('[screenWatch] detectClaims failed:', lastError)
+          logScreenWatch(`detectClaims failed: ${lastError}`)
         })
         .finally(() => {
           detecting = false
         })
+    }
+
+    if (currentClaims.length > 0) {
+      logScreenWatch(
+        `claimRects from snapshot: ${snapshot.claimRects.map((r) => `"${r.query.slice(0, 40)}"=${r.rects.length}rect(s)`).join(', ')}`
+      )
     }
 
     updateOverlay(snapshot.controlRect, snapshot.claimRects, currentClaims)
@@ -176,14 +189,11 @@ function updateOverlay(
 
   if (underlines.length === 0) {
     if (claims.length > 0) {
-      console.log(
-        `[screenWatch] ${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`
-      )
+      logScreenWatch(`${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`)
     }
     hideOverlay()
     return
   }
-  console.log(`[screenWatch] showing ${underlines.length} underline(s)`)
 
   const center = {
     x: controlRect.x + controlRect.width / 2,
@@ -192,15 +202,29 @@ function updateOverlay(
   const display = screen.getDisplayNearestPoint(center)
   const win = showOverlayOnDisplay(display)
 
+  // UI Automation returns physical screen pixels; Electron window bounds are
+  // logical (DPI-scaled) pixels. On anything other than 100% display scaling
+  // (125%/150% are the common Windows defaults on modern laptops) these are
+  // different units — divide by scaleFactor or every rect lands in the wrong
+  // place, usually off the visible overlay window entirely. This assumes the
+  // display's physical top-left aligns with its logical (0,0), which holds
+  // for the primary display; a true secondary-display-with-different-scale
+  // fix would need each display's physical origin, which Electron doesn't
+  // expose — still a known gap for that specific case.
+  const scale = display.scaleFactor || 1
   const localized = underlines.map((u) => ({
     id: u.id,
     rects: u.rects.map((r) => ({
-      x: r.x - display.bounds.x,
-      y: r.y - display.bounds.y,
-      width: r.width,
-      height: r.height
+      x: r.x / scale - display.bounds.x,
+      y: r.y / scale - display.bounds.y,
+      width: r.width / scale,
+      height: r.height / scale
     }))
   }))
+
+  logScreenWatch(
+    `showing ${underlines.length} underline(s) on display ${display.id} (bounds ${JSON.stringify(display.bounds)}, scaleFactor=${display.scaleFactor}), overlay window bounds=${JSON.stringify(win.getBounds())}, visible=${win.isVisible()}, rects=${JSON.stringify(localized)}`
+  )
 
   win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, { underlines: localized })
 }
@@ -214,6 +238,7 @@ export function startScreenWatch(): void {
   enabled = true
   setSetting('screenWatchEnabled', 'true')
   resetTrackingState()
+  resetScreenWatchLog()
   lastError = null
   lastStatus = { ...lastStatus, enabled: true, lastError: null }
   void tick()
