@@ -90,11 +90,20 @@ export interface LibraryItem {
 
 export type Theme = 'light' | 'dark' | 'system'
 
+export type AccentColor = 'orange' | 'blue' | 'green' | 'purple'
+
+export type Density = 'comfortable' | 'compact'
+
 export interface AppSettings {
   defaultCitationStyle: CitationStyle
   hotkeyAccelerator: string
   enableStrengthSummaries: boolean
   theme: Theme
+  accentColor: AccentColor
+  density: Density
+  // 0-1, higher = fewer/more-confident-only claims underlined. Exposed to
+  // the user instead of a value we keep re-tuning ourselves in code.
+  claimSensitivity: number
   screenWatchHotkeyAccelerator: string
   screenWatchBlockedApps: string
 }

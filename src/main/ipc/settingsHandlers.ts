@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
-import type { AppSettings, CitationStyle, Theme } from '@shared/types'
+import type { AccentColor, AppSettings, CitationStyle, Density, Theme } from '@shared/types'
 import { scanInstalledAppExeNames } from '../services/appScan'
 import { registerGlobalHotkey, registerScreenWatchHotkey } from '../hotkey'
 import { getAllSettingsRaw, setSetting } from '../services/storage/settingsRepo'
@@ -12,6 +12,9 @@ const setSchema = z.object({
   hotkeyAccelerator: z.string().optional(),
   enableStrengthSummaries: z.boolean().optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
+  accentColor: z.enum(['orange', 'blue', 'green', 'purple']).optional(),
+  density: z.enum(['comfortable', 'compact']).optional(),
+  claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
   screenWatchBlockedApps: z.string().optional()
 })
@@ -23,6 +26,9 @@ function buildSettings(): AppSettings {
     hotkeyAccelerator: raw.hotkeyAccelerator,
     enableStrengthSummaries: raw.enableStrengthSummaries === 'true',
     theme: raw.theme as Theme,
+    accentColor: raw.accentColor as AccentColor,
+    density: raw.density as Density,
+    claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
     screenWatchBlockedApps: raw.screenWatchBlockedApps
   }
@@ -39,6 +45,9 @@ export function registerSettingsHandlers(): void {
       setSetting('enableStrengthSummaries', String(patch.enableStrengthSummaries))
     }
     if (patch.theme !== undefined) setSetting('theme', patch.theme)
+    if (patch.accentColor !== undefined) setSetting('accentColor', patch.accentColor)
+    if (patch.density !== undefined) setSetting('density', patch.density)
+    if (patch.claimSensitivity !== undefined) setSetting('claimSensitivity', String(patch.claimSensitivity))
     if (patch.hotkeyAccelerator !== undefined) {
       setSetting('hotkeyAccelerator', patch.hotkeyAccelerator)
       registerGlobalHotkey(patch.hotkeyAccelerator)

@@ -19,7 +19,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
   const blockedAppCount = settings?.screenWatchBlockedApps
     ? settings.screenWatchBlockedApps.split(',').map((s) => s.trim()).filter(Boolean).length
     : 0
-  const recentItems = libraryItems?.slice(0, 3) ?? []
+  const recentItems = libraryItems?.slice(0, 2) ?? []
 
   return (
     <div className="home-view">
@@ -29,8 +29,8 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
             Tracely is <span className="home-accent-text">up and running.</span>
           </h2>
           <p className="muted">
-            Paste text into Analyze to check it, or turn on Screen Watch to catch claims as you
-            write anywhere on your computer.
+            Paste text into Analyze to check it, or turn Tracely on to catch claims as you write
+            anywhere on your computer.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
 
       <div className="home-stats-row">
         <button className="home-stat-card" onClick={() => onNavigate('settings')}>
-          <span className="home-stat-label">Screen Watch</span>
+          <span className="home-stat-label">Tracely</span>
           <span className={`home-stat-value ${screenWatch?.enabled ? 'home-stat-value-on' : ''}`}>
             {screenWatch?.enabled ? 'On' : 'Off'}
           </span>
@@ -113,7 +113,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
           </button>
         </div>
         <button className="home-action-link home-action-link-muted" onClick={() => onNavigate('settings')}>
-          You choose where Screen Watch works <span className="home-action-icon">↗</span>
+          You choose where Tracely works <span className="home-action-icon">↗</span>
         </button>
       </div>
     </div>

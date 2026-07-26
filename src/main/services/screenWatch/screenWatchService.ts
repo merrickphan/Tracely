@@ -15,18 +15,19 @@ import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSn
 const POLL_INTERVAL_MS = 1200
 const STABLE_MS = 1200
 const MIN_TEXT_LENGTH = 20
-// Screen Watch underlines passively, without the user asking about any one
-// sentence — a borderline/low-confidence call here is far more annoying
-// (flagging ordinary descriptive sentences) than it would be in Analyze,
-// where the user explicitly asked for a full pass and can just ignore a
-// weak one. Filtering to higher-confidence claims only is a second,
-// independent guard on top of the detection prompt itself.
-// 0.8 combined with the relay prompt's calibration guidance (which
-// deliberately deflates scores for anything not unambiguous) turned out to
-// compound too far — real claims stopped clearing the bar at all, so
-// nothing ever underlined. Settled lower, still well above the original
-// "flag everything" baseline.
-const MIN_CLAIM_CONFIDENCE = 0.55
+// User-configurable now (Settings > General > sensitivity) rather than a
+// value we keep re-tuning in code — Screen Watch underlines passively,
+// without the user asking about any one sentence, so a borderline call
+// here is far more annoying (flagging ordinary descriptive sentences) than
+// it would be in Analyze, where the user asked for a full pass and can
+// just ignore a weak one. Default (0.55) sits below the relay prompt's own
+// confidence calibration for unambiguous claims (0.8+) since the two
+// compound — a high threshold on top of deliberately deflated scores for
+// borderline claims suppressed real claims entirely in testing.
+function getMinClaimConfidence(): number {
+  const raw = Number(getSetting('claimSensitivity'))
+  return Number.isFinite(raw) ? raw : 0.55
+}
 
 let enabled = false
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -216,7 +217,7 @@ async function tick(): Promise<void> {
           // Only mark this text "done" on success — a failure must stay
           // retryable rather than being silently marked as already-tried.
           lastAnalyzedText = textAtRequestTime
-          const confident = detected.filter((c) => c.confidence >= MIN_CLAIM_CONFIDENCE)
+          const confident = detected.filter((c) => c.confidence >= getMinClaimConfidence())
           currentClaims = confident.map(synthesizeClaim)
           lastError = null
           logScreenWatch(

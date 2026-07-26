@@ -6,6 +6,7 @@ import Spinner from './components/Spinner'
 import TextArea from './components/TextArea'
 import { tracelyApi } from './lib/api'
 import { applyTheme } from './lib/theme'
+import Logo from './components/Logo'
 
 export default function FloatingApp(): JSX.Element {
   const [text, setText] = useState('')
@@ -52,7 +53,10 @@ export default function FloatingApp(): JSX.Element {
   return (
     <div className="floating-app">
       <div className="floating-drag-region">
-        <span>Tracely</span>
+        <div className="floating-brand">
+          <Logo size={16} />
+          <span>Tracely</span>
+        </div>
         <div className="floating-controls">
           <button onClick={openInMain} title="Open in main window">
             ⤢

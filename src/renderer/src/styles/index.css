@@ -80,6 +80,32 @@
   --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.55);
 }
 
+/* Accent color presets (Settings > Appearance) — deliberately after the
+   theme blocks above so they win on the accent-related properties
+   regardless of light/dark, without needing to duplicate every other
+   token per color. 'orange' is the default and needs no override. */
+:root[data-accent='blue'] {
+  --accent: #3b82f6;
+  --accent-2: #60a5fa;
+  --accent-gradient: linear-gradient(135deg, #60a5fa, #3b82f6);
+  --accent-wash: rgba(59, 130, 246, 0.14);
+  --ring: rgba(59, 130, 246, 0.32);
+}
+:root[data-accent='green'] {
+  --accent: #22c55e;
+  --accent-2: #4ade80;
+  --accent-gradient: linear-gradient(135deg, #4ade80, #22c55e);
+  --accent-wash: rgba(34, 197, 94, 0.14);
+  --ring: rgba(34, 197, 94, 0.32);
+}
+:root[data-accent='purple'] {
+  --accent: #a855f7;
+  --accent-2: #c084fc;
+  --accent-gradient: linear-gradient(135deg, #c084fc, #a855f7);
+  --accent-wash: rgba(168, 85, 247, 0.14);
+  --ring: rgba(168, 85, 247, 0.32);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -108,6 +134,159 @@ button {
   color: inherit;
 }
 
+/* Custom scrollbar (replaces the OS-default one everywhere) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Custom <select> — appearance:none + a hand-drawn chevron so it doesn't
+   fall back to the OS-themed dropdown control. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9aa4' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px !important;
+  cursor: pointer;
+}
+
+/* Custom checkbox — a filled/checked square instead of the OS control. */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+  flex-shrink: 0;
+}
+input[type='checkbox']:hover {
+  border-color: var(--accent);
+}
+input[type='checkbox']:checked {
+  background: var(--accent-gradient);
+  border-color: transparent;
+}
+input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Custom range slider */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  margin-top: -6px;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+/* Toggle switch (see components/ToggleSwitch.tsx) */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.toggle-switch-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+input[type='checkbox'].toggle-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  border: none;
+  background: none;
+  pointer-events: none;
+}
+.toggle-switch-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+.toggle-switch-input:checked + .toggle-switch-track {
+  background: var(--accent-gradient);
+}
+.toggle-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.toggle-switch-input:checked + .toggle-switch-track .toggle-switch-thumb {
+  transform: translateX(18px);
+}
+.toggle-switch-input:focus-visible + .toggle-switch-track {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.toggle-switch-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -129,14 +308,7 @@ button {
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.app-logo {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: block;
+  gap: 9px;
 }
 
 .app-header h1 {
@@ -188,11 +360,24 @@ button {
   margin: 0 auto;
 }
 
+/* Home is a fixed, single, full-height screen — no outer scroll, ever.
+   Content below is sized to fit comfortably at the app's default window
+   size; at smaller sizes it clips rather than scrolls (no scrollbar
+   appears either way), since a data-driven dashboard can't guarantee an
+   exact fit at every arbitrary window height. */
+.app-main-fixed {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .home-view {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  padding: 8px 0 24px;
+  justify-content: center;
+  gap: clamp(12px, 3vh, 24px);
+  height: 100%;
+  min-height: 0;
 }
 
 .home-hero {
@@ -208,9 +393,9 @@ button {
 }
 
 .home-copy h2 {
-  font-size: 32px;
+  font-size: clamp(22px, 4vh, 32px);
   line-height: 1.12;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
 .home-accent-text {
@@ -859,6 +1044,57 @@ textarea:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+.settings-power-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+
+.settings-power-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-power-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.settings-slider-caption {
+  margin: -8px 0 14px;
+  font-size: 12px;
+}
+
+.accent-swatch-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.12s ease;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.08);
+}
+
+.accent-swatch-active {
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--text);
+}
+
 .settings-section label {
   display: block;
   font-size: 13px;
@@ -967,6 +1203,12 @@ textarea:disabled {
   font-weight: 700;
 }
 
+.floating-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .floating-controls {
   -webkit-app-region: no-drag;
   display: flex;
@@ -1030,4 +1272,42 @@ textarea:disabled {
 .window-control-btn.window-control-close:hover {
   background: var(--danger);
   color: #fff;
+}
+
+/* Density mode (Settings > Appearance) — scopes to the most visibly dense
+   surfaces rather than trying to rescale every padding value in the sheet. */
+.density-compact .app-main {
+  padding: 12px 16px;
+}
+.density-compact .settings-section {
+  padding: 12px 14px;
+}
+.density-compact .settings-section h3 {
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+}
+.density-compact .settings-section label {
+  margin-bottom: 8px;
+}
+.density-compact .claim-card {
+  padding: 10px 12px;
+}
+.density-compact .results-panel {
+  gap: 10px;
+}
+.density-compact .home-view {
+  gap: 18px;
+}
+.density-compact .home-stats-row {
+  gap: 8px;
+}
+.density-compact .app-checklist {
+  padding: 6px 8px;
+  gap: 0 10px;
+}
+.density-compact .library-list {
+  gap: 6px;
+}
+.density-compact .source-list-item {
+  padding: 8px 10px;
 }

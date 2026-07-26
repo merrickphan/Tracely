@@ -11,7 +11,7 @@ function buildMenu(): Menu {
     { label: 'Show Tracely', click: () => showMainWindow() },
     { type: 'separator' },
     {
-      label: isScreenWatchEnabled() ? 'Screen Watch: On (click to turn off)' : 'Screen Watch: Off (click to turn on)',
+      label: isScreenWatchEnabled() ? 'Tracely: On (click to turn off)' : 'Tracely: Off (click to turn on)',
       click: () => {
         if (isScreenWatchEnabled()) stopScreenWatch()
         else startScreenWatch()

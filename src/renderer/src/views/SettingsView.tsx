@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react'
-import type { AppSettings, CitationStyle, Theme } from '@shared/types'
+import type { AccentColor, AppSettings, CitationStyle, Density, Theme } from '@shared/types'
 import type { ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ToggleSwitch from '../components/ToggleSwitch'
 import { tracelyApi } from '../lib/api'
 import { applyTheme } from '../lib/theme'
+import { applyAccentColor, applyDensity } from '../lib/appearance'
 
 // Only real desktop apps (their own process, own .exe) can be individually
-// blocked — Screen Watch identifies apps by process name. Google Docs,
-// Google Drive, Notion's web app, etc. all run inside a browser process, so
+// blocked — Tracely identifies apps by process name. Google Docs, Google
+// Drive, Notion's web app, etc. all run inside a browser process, so
 // there's no way to block just one of them without blocking the whole
 // browser; that limitation is called out in the copy below rather than
 // pretending a checkbox for "Google Docs" would do anything.
 //
 // Broader than just "apps to block" — this is every writing/document/
-// reference app Tracely knows the process name for, since Screen Watch is
-// meant to work in exactly these, so a bigger list here means more of what
-// people actually use shows up as a recognizable option instead of an
-// unlabeled "Other apps" entry. Which ones actually render as checked
-// (found on this machine) is determined by scanInstalledApps() at runtime.
+// reference app Tracely knows the process name for, since it's meant to
+// work in exactly these, so a bigger list here means more of what people
+// actually use shows up as a recognizable option instead of an unlabeled
+// "Other apps" entry. Which ones actually render as checked (found on this
+// machine) is determined by scanInstalledApps() at runtime.
 const CURATED_BLOCKABLE_APPS: { label: string; exe: string }[] = [
   { label: 'Discord', exe: 'Discord.exe' },
   { label: 'Slack', exe: 'Slack.exe' },
@@ -53,6 +55,19 @@ const CURATED_BLOCKABLE_APPS: { label: string; exe: string }[] = [
   { label: 'Mozilla Firefox (entire browser)', exe: 'firefox.exe' }
 ]
 const CURATED_EXE_LOWER = new Set(CURATED_BLOCKABLE_APPS.map((a) => a.exe.toLowerCase()))
+
+const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
+  { id: 'orange', label: 'Orange', swatch: 'linear-gradient(135deg, #ffab3d, #ff5a36)' },
+  { id: 'blue', label: 'Blue', swatch: 'linear-gradient(135deg, #60a5fa, #3b82f6)' },
+  { id: 'green', label: 'Green', swatch: 'linear-gradient(135deg, #4ade80, #22c55e)' },
+  { id: 'purple', label: 'Purple', swatch: 'linear-gradient(135deg, #c084fc, #a855f7)' }
+]
+
+function sensitivityLabel(value: number): string {
+  if (value >= 0.75) return 'Fewer claims, higher confidence only'
+  if (value >= 0.45) return 'Balanced'
+  return 'More claims, including borderline ones'
+}
 
 function parseAppList(raw: string): string[] {
   return raw
@@ -100,7 +115,7 @@ export default function SettingsView(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.screenWatchBlockedApps])
 
-  async function toggleScreenWatch(enabled: boolean): Promise<void> {
+  async function toggleTracely(enabled: boolean): Promise<void> {
     const status = await tracelyApi.setScreenWatchEnabled(enabled)
     setScreenWatch(status)
   }
@@ -119,6 +134,22 @@ export default function SettingsView(): JSX.Element {
     applyTheme(theme)
     setSettings((s) => (s ? { ...s, theme } : s))
     void save({ theme })
+  }
+
+  function changeAccentColor(accentColor: AccentColor): void {
+    applyAccentColor(accentColor)
+    setSettings((s) => (s ? { ...s, accentColor } : s))
+    void save({ accentColor })
+  }
+
+  function changeDensity(density: Density): void {
+    applyDensity(density)
+    setSettings((s) => (s ? { ...s, density } : s))
+    void save({ density })
+  }
+
+  function changeSensitivity(claimSensitivity: number): void {
+    setSettings((s) => (s ? { ...s, claimSensitivity } : s))
   }
 
   function toggleCuratedApp(exe: string, checked: boolean): void {
@@ -161,6 +192,51 @@ export default function SettingsView(): JSX.Element {
   return (
     <div className="settings-view">
       <section className="settings-section">
+        <h3>General</h3>
+        <div className="settings-power-row">
+          <div>
+            <p className="settings-power-title">Tracely</p>
+            <p className="muted settings-power-sub">
+              {screenWatch?.enabled
+                ? screenWatch.active
+                  ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
+                  : screenWatch.blockedApp
+                    ? `${screenWatch.blockedApp} is blocked, so it's not being read.`
+                    : 'On — no supported text field is currently focused.'
+                : 'Off — nothing is being read anywhere.'}
+            </p>
+          </div>
+          <ToggleSwitch checked={screenWatch?.enabled ?? false} onChange={toggleTracely} />
+        </div>
+        {screenWatch?.lastError ? <p className="error-text">{screenWatch.lastError}</p> : null}
+
+        <label>
+          Toggle hotkey
+          <input
+            type="text"
+            value={settings.screenWatchHotkeyAccelerator}
+            onChange={(e) => setSettings({ ...settings, screenWatchHotkeyAccelerator: e.target.value })}
+            onBlur={(e) => save({ screenWatchHotkeyAccelerator: e.target.value })}
+          />
+        </label>
+
+        <label>
+          Claim sensitivity
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={settings.claimSensitivity}
+            onChange={(e) => changeSensitivity(Number(e.target.value))}
+            onMouseUp={() => save({ claimSensitivity: settings.claimSensitivity })}
+            onTouchEnd={() => save({ claimSensitivity: settings.claimSensitivity })}
+          />
+        </label>
+        <p className="muted settings-slider-caption">{sensitivityLabel(settings.claimSensitivity)}</p>
+      </section>
+
+      <section className="settings-section">
         <h3>Appearance</h3>
         <label>
           Theme
@@ -169,6 +245,28 @@ export default function SettingsView(): JSX.Element {
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
+        </label>
+
+        <p className="settings-label-heading">Accent color</p>
+        <div className="accent-swatch-row">
+          {ACCENT_COLORS.map((c) => (
+            <button
+              key={c.id}
+              className={`accent-swatch ${settings.accentColor === c.id ? 'accent-swatch-active' : ''}`}
+              style={{ background: c.swatch }}
+              title={c.label}
+              onClick={() => changeAccentColor(c.id)}
+            />
+          ))}
+        </div>
+
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={settings.density === 'compact'}
+            onChange={(e) => changeDensity(e.target.checked ? 'compact' : 'comfortable')}
+          />
+          Compact density
         </label>
       </section>
 
@@ -197,30 +295,13 @@ export default function SettingsView(): JSX.Element {
       </section>
 
       <section className="settings-section">
-        <h3>Screen Watch</h3>
+        <h3>Where Tracely Works</h3>
         <p className="muted">
           When on, Tracely reads the text of whatever field is focused in other apps (via Windows
           accessibility APIs, not a screenshot) and underlines flagged claims directly on your
           screen — works in any app by default, like Grammarly. Apps you check below are skipped
           entirely: no text is ever read from them, and nothing is sent anywhere.
         </p>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={screenWatch?.enabled ?? false}
-            onChange={(e) => toggleScreenWatch(e.target.checked)}
-          />
-          Enable Screen Watch
-        </label>
-        <label>
-          Toggle hotkey
-          <input
-            type="text"
-            value={settings.screenWatchHotkeyAccelerator}
-            onChange={(e) => setSettings({ ...settings, screenWatchHotkeyAccelerator: e.target.value })}
-            onBlur={(e) => save({ screenWatchHotkeyAccelerator: e.target.value })}
-          />
-        </label>
 
         <p className="settings-label-heading">
           Blocked apps
@@ -258,35 +339,24 @@ export default function SettingsView(): JSX.Element {
           />
         </label>
         <p className="muted">
-          Screen Watch identifies apps by their process, so only apps with their own desktop
-          program can be blocked individually — a browser can only be blocked as a whole (the
-          &quot;entire browser&quot; options above), not one site within it. That means Google
-          Docs, Google Drive, and Notion&apos;s web app can&apos;t be excluded on their own; block
-          the browser you use them in if you need that. Separately, the whole Google Workspace
-          suite — Docs, Sheets, and Slides — won&apos;t work with Screen Watch at all, blocked or
-          not: they render their editing surface as pixels instead of exposing real text to
-          accessibility tools, which Tracely relies on to read anything. Windows never sees a real
-          text field to attach to, so there&apos;s nothing for Tracely to read no matter what.
+          Tracely identifies apps by their process, so only apps with their own desktop program
+          can be blocked individually — a browser can only be blocked as a whole (the &quot;entire
+          browser&quot; options above), not one site within it. That means Google Docs, Google
+          Drive, and Notion&apos;s web app can&apos;t be excluded on their own; block the browser
+          you use them in if you need that. Separately, the whole Google Workspace suite — Docs,
+          Sheets, and Slides — won&apos;t work at all, blocked or not: they render their editing
+          surface as pixels instead of exposing real text to accessibility tools, which Tracely
+          relies on to read anything.
         </p>
-        {screenWatch?.enabled ? (
-          <p className="muted">
-            {screenWatch.active
-              ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
-              : screenWatch.blockedApp
-                ? `${screenWatch.blockedApp} is blocked, so it's not being read.`
-                : 'No supported text field is currently focused.'}
-          </p>
-        ) : null}
-        {screenWatch?.lastError ? <p className="error-text">Screen Watch error: {screenWatch.lastError}</p> : null}
       </section>
 
       <section className="settings-section">
         <h3>Privacy</h3>
         <p className="muted">
           Tracely sends text to the Tracely relay when you click Analyze, Find Evidence, or
-          Critique, and — everywhere except apps on the Screen Watch blocklist above —
-          automatically while you write. It's never sent anywhere else, and evidence search only
-          ever queries academic APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
+          Critique, and — everywhere except apps on the blocklist above — automatically while you
+          write. It's never sent anywhere else, and evidence search only ever queries academic
+          APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
         </p>
         <div className="input-row">
           <Button variant="danger" onClick={() => setConfirmClear('history')}>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ClaimType } from '@shared/types'
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent, ScreenWatchWidget } from '@shared/ipc-contract'
-import logo from './assets/logo.png'
+import Logo from './components/Logo'
 
 const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
   statistic: 'Statistic',
@@ -122,7 +122,7 @@ export default function OverlayApp(): JSX.Element {
             justifyContent: 'center'
           }}
         >
-          <img src={logo} alt="" style={{ width: '62%', height: '62%', borderRadius: 3, objectFit: 'contain' }} />
+          <Logo size={22} />
           {widget.claimCount > 0 ? (
             <span
               style={{

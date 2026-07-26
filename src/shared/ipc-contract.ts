@@ -1,4 +1,5 @@
 import type {
+  AccentColor,
   Analysis,
   AppSettings,
   Citation,
@@ -6,6 +7,7 @@ import type {
   Claim,
   ClaimType,
   CritiqueVerdict,
+  Density,
   EvidenceItem,
   LibraryItem,
   ScoreBreakdown,
@@ -118,6 +120,9 @@ export interface SettingsSetRequest {
   hotkeyAccelerator?: string
   enableStrengthSummaries?: boolean
   theme?: Theme
+  accentColor?: AccentColor
+  density?: Density
+  claimSensitivity?: number
   screenWatchHotkeyAccelerator?: string
   screenWatchBlockedApps?: string
 }
