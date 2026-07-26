@@ -866,6 +866,27 @@ textarea:disabled {
   margin-bottom: 14px;
 }
 
+.settings-label-heading {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.app-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 2px 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.app-checklist-item {
+  margin-bottom: 6px;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

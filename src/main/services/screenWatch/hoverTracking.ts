@@ -12,15 +12,20 @@ import { getHoverTargets } from './screenWatchService'
 // from the main process (which works regardless of window focus) and toggle
 // click-through on/off depending on whether the cursor is over a claim's
 // underline — the same technique Grammarly's desktop overlay uses.
-const POLL_MS = 80
-// Rects are padded well past the underline itself, mainly downward, so the
-// hit zone also covers the space the tooltip renders into — otherwise
-// moving the mouse from the underline down to the tooltip's button would
-// cross a gap with no hit zone and the tooltip would vanish before you get
-// there.
+// Polled faster than the claim-detection tick (POLL_INTERVAL_MS in
+// screenWatchService.ts) specifically so the tooltip can track the cursor
+// smoothly while hovering — 80ms read choppy/disconnected for that.
+const POLL_MS = 40
+// Rects are padded past the underline itself, mainly downward, so the hit
+// zone also covers the space the tooltip renders into — otherwise moving
+// the mouse from the underline down to the tooltip's button would cross a
+// gap with no hit zone and the tooltip would vanish before you get there.
+// Now that the tooltip follows the cursor instead of sitting at a fixed
+// offset from the underline, it stays close to wherever the mouse actually
+// is, so this doesn't need to be as large as before.
 const PAD_SIDE = 6
 const PAD_TOP = 4
-const PAD_BOTTOM = 90
+const PAD_BOTTOM = 60
 // The widget badge has no tooltip growing below it (its label is a native
 // OS title tooltip, not part of our DOM), so it only needs a small uniform
 // pad — the claim's generous PAD_BOTTOM would otherwise create a dead zone
@@ -95,14 +100,19 @@ function poll(): void {
     if (hoveredClaimId !== match.claimId) {
       hoveredClaimId = match.claimId
       setCaptureMouseEvents(true)
-      sendHover({
-        claimId: match.claimId,
-        kind: match.kind,
-        text: match.text,
-        claimType: match.claimType,
-        anchor: match.rectsWindowLocal[0]
-      })
     }
+    // Sent every tick (not just on target change) with a fresh cursor
+    // position, so the tooltip visually tracks the mouse instead of
+    // snapping to wherever the underline happens to be.
+    const win = getOverlayWindow()
+    const bounds = win?.getBounds()
+    sendHover({
+      claimId: match.claimId,
+      kind: match.kind,
+      text: match.text,
+      claimType: match.claimType,
+      cursor: bounds ? { x: cursor.x - bounds.x, y: cursor.y - bounds.y } : { x: 0, y: 0 }
+    })
     return
   }
 

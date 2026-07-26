@@ -121,8 +121,8 @@ export default function OverlayApp(): JSX.Element {
         <div
           style={{
             position: 'absolute',
-            left: Math.max(8, claimHovered.anchor.x),
-            top: claimHovered.anchor.y + claimHovered.anchor.height + 6,
+            left: Math.min(Math.max(8, claimHovered.cursor.x + 16), window.innerWidth - 328),
+            top: Math.min(claimHovered.cursor.y + 20, window.innerHeight - 140),
             maxWidth: 320,
             background: '#17171b',
             border: '1px solid #2b2b31',
@@ -130,7 +130,11 @@ export default function OverlayApp(): JSX.Element {
             boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
             padding: '10px 12px',
             fontFamily: FONT_STACK,
-            color: '#f6f6f8'
+            color: '#f6f6f8',
+            // Short, linear transition smooths out the discrete 40ms position
+            // updates into what reads as continuous cursor-following instead
+            // of the tooltip visibly stepping/jumping between poll ticks.
+            transition: 'left 0.06s linear, top 0.06s linear'
           }}
         >
           <div
