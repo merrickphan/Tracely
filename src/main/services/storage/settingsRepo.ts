@@ -6,7 +6,7 @@ const DEFAULTS: Record<string, string> = {
   crossrefMailto: '',
   enableStrengthSummaries: 'false',
   screenWatchEnabled: 'false',
-  theme: 'system',
+  theme: 'dark',
   screenWatchHotkeyAccelerator: 'CommandOrControl+Shift+S',
   // Process image names (e.g. "WINWORD.EXE") Screen Watch is allowed to read
   // text from. Comma-separated, case-insensitive. Empty means "nowhere" —

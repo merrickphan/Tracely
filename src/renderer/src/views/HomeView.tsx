@@ -25,7 +25,9 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
     <div className="home-view">
       <div className="home-hero">
         <div className="home-copy">
-          <h2>Tracely is up and running.</h2>
+          <h2>
+            Tracely is <span className="home-accent-text">up and running.</span>
+          </h2>
           <p className="muted">
             Paste text into Analyze to check it, or turn on Screen Watch to catch claims as you
             write in Word, your browser, or wherever you allow it.
@@ -34,7 +36,13 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
 
         <div className="home-preview">
           <div className="home-preview-card">
-            <p className="home-preview-meta">Draft</p>
+            <div className="home-preview-titlebar">
+              <span className="home-preview-dot home-preview-dot-red" />
+              <span className="home-preview-dot home-preview-dot-yellow" />
+              <span className="home-preview-dot home-preview-dot-green" />
+              <span className="home-preview-titletext">Tracely — Draft</span>
+            </div>
+            <p className="home-preview-meta">Analyzed text</p>
             <p className="home-preview-text">
               Studies show that <span className="home-preview-underline">regular napping</span>{' '}
               improves memory retention in adults.

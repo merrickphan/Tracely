@@ -6,6 +6,7 @@ import SettingsView from './views/SettingsView'
 import WindowControls from './components/WindowControls'
 import { applyTheme } from './lib/theme'
 import { tracelyApi } from './lib/api'
+import logo from './assets/logo.png'
 
 export type Tab = 'home' | 'analyze' | 'library' | 'settings'
 
@@ -26,7 +27,10 @@ export default function App(): JSX.Element {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Tracely</h1>
+        <div className="app-brand">
+          <img src={logo} alt="" className="app-logo" />
+          <h1>Tracely</h1>
+        </div>
         <nav className="tab-nav">
           {TABS.map((t) => (
             <button
