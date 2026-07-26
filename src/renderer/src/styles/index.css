@@ -168,6 +168,139 @@ button {
   margin: 0 auto;
 }
 
+.home-view {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding-top: 20px;
+}
+
+.home-hero {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.home-copy {
+  flex: 1 1 280px;
+  min-width: 240px;
+}
+
+.home-copy h2 {
+  font-size: 30px;
+  line-height: 1.15;
+  margin: 0 0 12px;
+}
+
+.home-copy p {
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 40ch;
+}
+
+.home-preview {
+  flex: 1 1 280px;
+  min-width: 260px;
+  display: flex;
+  justify-content: center;
+}
+
+.home-preview-card {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px 24px;
+  box-shadow: 0 6px 20px rgba(120, 80, 40, 0.1);
+}
+
+.home-preview-meta {
+  margin: 0 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.home-preview-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.home-preview-underline {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.home-preview-badge {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg);
+  box-shadow: 0 3px 8px rgba(240, 101, 61, 0.35);
+}
+
+.home-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.home-actions-left {
+  display: flex;
+  gap: 20px;
+}
+
+.home-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.home-action-link:hover {
+  color: var(--accent);
+}
+
+.home-action-link-muted {
+  color: var(--muted);
+}
+
+.home-action-icon {
+  color: var(--accent);
+  font-size: 13px;
+}
+
 .textarea,
 textarea {
   width: 100%;

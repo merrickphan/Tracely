@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
 import AnalyzeView from './views/AnalyzeView'
+import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
 import SettingsView from './views/SettingsView'
 import { applyTheme } from './lib/theme'
 import { tracelyApi } from './lib/api'
 
-type Tab = 'analyze' | 'library' | 'settings'
+export type Tab = 'home' | 'analyze' | 'library' | 'settings'
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'home', label: 'Home' },
   { id: 'analyze', label: 'Analyze' },
   { id: 'library', label: 'Library' },
   { id: 'settings', label: 'Settings' }
 ]
 
 export default function App(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('analyze')
+  const [tab, setTab] = useState<Tab>('home')
 
   useEffect(() => {
     tracelyApi.getSettings().then((s) => applyTheme(s.theme))
@@ -37,6 +39,7 @@ export default function App(): JSX.Element {
         </nav>
       </header>
       <main className="app-main">
+        {tab === 'home' ? <HomeView onNavigate={setTab} /> : null}
         {tab === 'analyze' ? <AnalyzeView /> : null}
         {tab === 'library' ? <LibraryView /> : null}
         {tab === 'settings' ? <SettingsView /> : null}
