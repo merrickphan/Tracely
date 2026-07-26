@@ -14,10 +14,13 @@ export function setQuitting(value: boolean): void {
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 760,
-    minHeight: 560,
+    // Sized to match Grammarly's desktop "up and running" window proportions
+    // (~837x483 measured against a 1108x760 reference) rather than our
+    // previous large, mostly-empty default.
+    width: 840,
+    height: 485,
+    minWidth: 640,
+    minHeight: 420,
     show: false,
     // Custom-drawn title bar (see App.tsx's app-header) instead of the OS
     // chrome, so window controls can match the rest of the UI rather than
