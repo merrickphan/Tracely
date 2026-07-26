@@ -49,6 +49,43 @@ function Write-Result($obj) {
   $stdout.Flush()
 }
 
+# GetBoundingRectangles() is documented as returning a flat double[]
+# (x,y,width,height per rect, four values per rect), which is what the rest
+# of this script originally assumed. In practice at least one provider
+# (confirmed: Chrome/Chromium's UIA bridge) instead hands back an array of
+# System.Windows.Rect objects — parsing that as a flat double[] doesn't throw
+# cleanly, it just quietly reads garbage (an out-of-range Rect object where a
+# number was expected), which surfaced as "Cannot compare X because it is
+# not IComparable" once that garbage hit a numeric comparison. Handle both
+# shapes explicitly rather than assume one.
+function Get-RectsFromBoundingArray($flat) {
+  $result = @()
+  if (-not $flat -or $flat.Length -eq 0) { return $result }
+
+  if ($flat[0] -is [System.Windows.Rect]) {
+    foreach ($r in $flat) {
+      if ($r.Width -gt 0 -and $r.Height -gt 0) {
+        $result += @{ x = $r.X; y = $r.Y; width = $r.Width; height = $r.Height }
+      }
+    }
+  } else {
+    for ($i = 0; $i -lt $flat.Length; $i += 4) {
+      $w = $flat[$i + 2]
+      $h = $flat[$i + 3]
+      if ($w -gt 0 -and $h -gt 0) {
+        $result += @{ x = $flat[$i]; y = $flat[$i + 1]; width = $w; height = $h }
+      }
+    }
+  }
+  return $result
+}
+
+function Get-RectCount($flat) {
+  if (-not $flat -or $flat.Length -eq 0) { return 0 }
+  if ($flat[0] -is [System.Windows.Rect]) { return $flat.Length }
+  return [int]($flat.Length / 4)
+}
+
 try {
   Add-Type -AssemblyName UIAutomationClient
   Add-Type -AssemblyName UIAutomationTypes
@@ -100,7 +137,7 @@ try {
 
     try {
       $wholeFlat = $docRange.GetBoundingRectangles()
-      $wholeDocRectCount = [int]($wholeFlat.Length / 4)
+      $wholeDocRectCount = Get-RectCount $wholeFlat
     } catch {}
 
     try {
@@ -108,7 +145,7 @@ try {
       $visibleRangeCount = if ($visible) { $visible.Length } else { 0 }
       if ($visibleRangeCount -gt 0) {
         $visFlat = $visible[0].GetBoundingRectangles()
-        $visibleRangeRectCount = [int]($visFlat.Length / 4)
+        $visibleRangeRectCount = Get-RectCount $visFlat
       }
     } catch {}
   } else {
@@ -166,15 +203,10 @@ try {
 
       try {
         $flat = $range.GetBoundingRectangles()
-        for ($i = 0; $i -lt $flat.Length; $i += 4) {
-          $w = $flat[$i + 2]
-          $h = $flat[$i + 3]
-          # Off-screen/scrolled-out matches come back degenerate (zero or
-          # negative extents) — skip rather than draw a garbage underline.
-          if ($w -gt 0 -and $h -gt 0) {
-            $rects += @{ x = $flat[$i]; y = $flat[$i + 1]; width = $w; height = $h }
-          }
-        }
+        # Off-screen/scrolled-out matches come back degenerate (zero or
+        # negative extents) — Get-RectsFromBoundingArray skips those rather
+        # than drawing a garbage underline.
+        $rects = Get-RectsFromBoundingArray $flat
       } catch {
         $rectError = $_.Exception.Message
       }
@@ -182,7 +214,7 @@ try {
       $claimRects += @{
         id               = $span.id
         rects            = $rects
-        rawRectCount     = [int]($flat.Length / 4)
+        rawRectCount     = Get-RectCount $flat
         rangeTextPreview = $rangeTextPreview
         moveError        = $moveError
         scrollError      = $scrollError
