@@ -179,9 +179,8 @@ button {
 .home-view {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 40px;
-  min-height: 100%;
+  gap: 32px;
+  padding: 8px 0 24px;
 }
 
 .home-hero {
@@ -267,6 +266,111 @@ button {
   justify-content: center;
   border: 2px solid var(--bg);
   box-shadow: 0 3px 8px rgba(240, 101, 61, 0.35);
+}
+
+.home-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.home-stat-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 1px 3px rgba(120, 80, 40, 0.05);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.home-stat-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(240, 101, 61, 0.12);
+  transform: translateY(-1px);
+}
+
+.home-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.home-stat-value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 2px 0;
+}
+
+.home-stat-value-on {
+  color: var(--score-good);
+}
+
+.home-stat-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.home-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.home-recent-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.home-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-recent-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.home-recent-item:hover {
+  border-color: var(--accent);
+}
+
+.home-recent-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.home-recent-meta {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .home-actions-row {
