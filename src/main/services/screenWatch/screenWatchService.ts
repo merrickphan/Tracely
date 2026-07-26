@@ -23,6 +23,9 @@ let pendingText = ''
 let pendingSince = 0
 let lastAnalyzedText = ''
 let currentClaims: Claim[] = []
+let retryAfter = 0
+let lastError: string | null = null
+const RETRY_COOLDOWN_MS = 5000
 
 function synthesizeClaim(detected: {
   text: string
@@ -50,7 +53,8 @@ let lastStatus: ScreenWatchStatus = {
   active: false,
   processName: null,
   supportsUnderlines: false,
-  claimCount: 0
+  claimCount: 0,
+  lastError: null
 }
 
 function emitStatus(status: ScreenWatchStatus): void {
@@ -78,7 +82,16 @@ async function tick(): Promise<void> {
     const snapshot = await takeUiaSnapshot(queries)
 
     if (!snapshot.ok) {
-      emitStatus({ enabled, active: false, processName: null, supportsUnderlines: false, claimCount: 0 })
+      lastError = snapshot.error
+      console.error('[screenWatch] snapshot failed:', snapshot.error)
+      emitStatus({
+        enabled,
+        active: false,
+        processName: null,
+        supportsUnderlines: false,
+        claimCount: 0,
+        lastError
+      })
       return
     }
 
@@ -90,7 +103,8 @@ async function tick(): Promise<void> {
         active: false,
         processName: 'processName' in snapshot ? (snapshot.processName ?? null) : null,
         supportsUnderlines: false,
-        claimCount: 0
+        claimCount: 0,
+        lastError
       })
       return
     }
@@ -102,17 +116,28 @@ async function tick(): Promise<void> {
       pendingText.trim().length >= MIN_TEXT_LENGTH &&
       pendingText !== lastAnalyzedText &&
       Date.now() - pendingSince >= STABLE_MS &&
+      Date.now() >= retryAfter &&
       !detecting
     ) {
       detecting = true
-      lastAnalyzedText = pendingText
-      detectClaims(pendingText)
+      const textAtRequestTime = pendingText
+      detectClaims(textAtRequestTime)
         .then((detected) => {
+          // Only mark this text "done" on success — a failure must stay
+          // retryable rather than being silently marked as already-tried.
+          lastAnalyzedText = textAtRequestTime
           currentClaims = detected.map(synthesizeClaim)
+          lastError = null
+          console.log(`[screenWatch] detected ${currentClaims.length} claim(s)`)
+          // Don't wait for the next scheduled poll tick to show results —
+          // that adds up to POLL_INTERVAL_MS of dead time on top of the
+          // relay round-trip for no reason.
+          void tick()
         })
-        .catch(() => {
-          // Leave currentClaims as-is; the relay error surfaces via the normal
-          // Analyze/Live flows, no need to duplicate error UI for a background poll.
+        .catch((err) => {
+          retryAfter = Date.now() + RETRY_COOLDOWN_MS
+          lastError = err instanceof Error ? err.message : String(err)
+          console.error('[screenWatch] detectClaims failed:', lastError)
         })
         .finally(() => {
           detecting = false
@@ -126,7 +151,8 @@ async function tick(): Promise<void> {
       active: true,
       processName: snapshot.processName,
       supportsUnderlines: snapshot.supportsTextPattern,
-      claimCount: currentClaims.length
+      claimCount: currentClaims.length,
+      lastError
     })
   } finally {
     ticking = false
@@ -149,9 +175,15 @@ function updateOverlay(
   }
 
   if (underlines.length === 0) {
+    if (claims.length > 0) {
+      console.log(
+        `[screenWatch] ${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`
+      )
+    }
     hideOverlay()
     return
   }
+  console.log(`[screenWatch] showing ${underlines.length} underline(s)`)
 
   const center = {
     x: controlRect.x + controlRect.width / 2,
@@ -182,7 +214,8 @@ export function startScreenWatch(): void {
   enabled = true
   setSetting('screenWatchEnabled', 'true')
   resetTrackingState()
-  lastStatus = { ...lastStatus, enabled: true }
+  lastError = null
+  lastStatus = { ...lastStatus, enabled: true, lastError: null }
   void tick()
 }
 
@@ -195,7 +228,14 @@ export function stopScreenWatch(): void {
   }
   resetTrackingState()
   hideOverlay()
-  emitStatus({ enabled: false, active: false, processName: null, supportsUnderlines: false, claimCount: 0 })
+  emitStatus({
+    enabled: false,
+    active: false,
+    processName: null,
+    supportsUnderlines: false,
+    claimCount: 0,
+    lastError: null
+  })
 }
 
 export function initScreenWatch(): void {

@@ -166,6 +166,7 @@ export interface ScreenWatchStatus {
   processName: string | null
   supportsUnderlines: boolean
   claimCount: number
+  lastError: string | null
 }
 export type ScreenWatchSetEnabledResponse = ScreenWatchStatus
 export type ScreenWatchGetStatusRequest = Record<string, never>

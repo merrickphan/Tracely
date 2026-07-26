@@ -146,6 +146,7 @@ export default function SettingsView(): JSX.Element {
               : 'No supported text field is currently focused.'}
           </p>
         ) : null}
+        {screenWatch?.lastError ? <p className="error-text">Screen Watch error: {screenWatch.lastError}</p> : null}
       </section>
 
       <section className="settings-section">
