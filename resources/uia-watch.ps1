@@ -6,8 +6,21 @@
   async stdin command handling in PowerShell.
 
   Params:
-    -ClaimsB64      base64 of a JSON string[] of claim substrings to locate
-                     (bounding rectangles for underlining), or empty.
+    -SpansB64        base64 of a JSON array of {id, start, length} character
+                     offsets to fetch bounding rectangles for, or empty.
+                     Offsets are resolved by position, not by text search —
+                     the Node side locates claims within the text itself
+                     (shared/claimSpans.ts, the same fuzzy matching the Live
+                     tab uses) because the AI's "claim text" is frequently
+                     NOT an exact substring of the source despite the
+                     detection prompt asking for a verbatim quote — models
+                     don't reliably comply for claims that are natural
+                     paraphrases of surrounding context. UIA's FindText only
+                     does exact (case-insensitive) substring search with no
+                     fuzzy matching, so search-by-text silently returned zero
+                     matches for most real claims — confirmed by direct
+                     comparison against live document text during
+                     development, not a hypothetical.
     -SelfProcessName the app's own process image name (e.g. "Tracely.exe"),
                      so focus inside Tracely's own windows is ignored rather
                      than fed back into itself.
@@ -15,7 +28,7 @@
   Always prints exactly one line of JSON to stdout and exits.
 #>
 param(
-  [string]$ClaimsB64 = "",
+  [string]$SpansB64 = "",
   [string]$SelfProcessName = "Tracely.exe"
 )
 
@@ -89,30 +102,37 @@ try {
   }
 
   $claimRects = @()
-  if ($supportsTextPattern -and $ClaimsB64 -ne "") {
-    $claimsJson = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ClaimsB64))
-    $queries = $claimsJson | ConvertFrom-Json
-    if ($queries -isnot [System.Array]) { $queries = @($queries) }
+  if ($supportsTextPattern -and $SpansB64 -ne "") {
+    $spansJson = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($SpansB64))
+    $spans = $spansJson | ConvertFrom-Json
+    if ($spans -isnot [System.Array]) { $spans = @($spans) }
 
-    foreach ($query in $queries) {
+    $Endp = [System.Windows.Automation.Text.TextPatternRangeEndpoint]
+    $Unit = [System.Windows.Automation.Text.TextUnit]
+
+    foreach ($span in $spans) {
       $rects = @()
       try {
-        $searchRange = $docRange.Clone()
-        $match = $searchRange.FindText($query, $false, $true)
-        if ($null -ne $match) {
-          $flat = $match.GetBoundingRectangles()
-          for ($i = 0; $i -lt $flat.Length; $i += 4) {
-            $w = $flat[$i + 2]
-            $h = $flat[$i + 3]
-            # Off-screen/scrolled-out matches come back degenerate (zero or
-            # negative extents) — skip rather than draw a garbage underline.
-            if ($w -gt 0 -and $h -gt 0) {
-              $rects += @{ x = $flat[$i]; y = $flat[$i + 1]; width = $w; height = $h }
-            }
+        # Collapse-then-expand: the standard UIA idiom for getting a text
+        # range from a character offset + length rather than a text search.
+        # Validated directly against a live document before shipping.
+        $range = $docRange.Clone()
+        $range.MoveEndpointByUnit($Endp::End, $Unit::Character, -($text.Length + 10)) | Out-Null
+        $range.MoveEndpointByUnit($Endp::Start, $Unit::Character, $span.start) | Out-Null
+        $range.MoveEndpointByUnit($Endp::End, $Unit::Character, $span.length) | Out-Null
+
+        $flat = $range.GetBoundingRectangles()
+        for ($i = 0; $i -lt $flat.Length; $i += 4) {
+          $w = $flat[$i + 2]
+          $h = $flat[$i + 3]
+          # Off-screen/scrolled-out matches come back degenerate (zero or
+          # negative extents) — skip rather than draw a garbage underline.
+          if ($w -gt 0 -and $h -gt 0) {
+            $rects += @{ x = $flat[$i]; y = $flat[$i + 1]; width = $w; height = $h }
           }
         }
       } catch {}
-      $claimRects += @{ query = $query; rects = $rects }
+      $claimRects += @{ id = $span.id; rects = $rects }
     }
   }
 

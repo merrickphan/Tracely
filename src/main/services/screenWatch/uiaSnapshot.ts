@@ -10,8 +10,14 @@ export interface ScreenRect {
   height: number
 }
 
+export interface ClaimSpanRequest {
+  id: string
+  start: number
+  length: number
+}
+
 export interface ClaimRectResult {
-  query: string
+  id: string
   rects: ScreenRect[]
 }
 
@@ -41,12 +47,10 @@ function getScriptPath(): string {
  * fresh per call (rather than kept alive) to avoid async-stdin complexity in
  * the PowerShell side — see resources/uia-watch.ps1 for why.
  */
-export function takeUiaSnapshot(claimQueries: string[]): Promise<UiaSnapshot> {
+export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot> {
   return new Promise((resolve) => {
-    const claimsB64 =
-      claimQueries.length > 0
-        ? Buffer.from(JSON.stringify(claimQueries), 'utf-8').toString('base64')
-        : ''
+    const spansB64 =
+      spans.length > 0 ? Buffer.from(JSON.stringify(spans), 'utf-8').toString('base64') : ''
 
     const child = spawn(
       'powershell.exe',
@@ -57,8 +61,8 @@ export function takeUiaSnapshot(claimQueries: string[]): Promise<UiaSnapshot> {
         'Bypass',
         '-File',
         getScriptPath(),
-        '-ClaimsB64',
-        claimsB64,
+        '-SpansB64',
+        spansB64,
         '-SelfProcessName',
         `${app.name}.exe`
       ],

@@ -9,7 +9,7 @@ import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnDisplay } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
-import { takeUiaSnapshot, type ScreenRect } from './uiaSnapshot'
+import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
 const STABLE_MS = 1200
@@ -24,6 +24,7 @@ let pendingText = ''
 let pendingSince = 0
 let lastAnalyzedText = ''
 let currentClaims: Claim[] = []
+let currentSpans: ClaimSpanRequest[] = []
 let retryAfter = 0
 let lastError: string | null = null
 const RETRY_COOLDOWN_MS = 5000
@@ -73,14 +74,14 @@ function resetTrackingState(): void {
   pendingSince = 0
   lastAnalyzedText = ''
   currentClaims = []
+  currentSpans = []
 }
 
 async function tick(): Promise<void> {
   if (!enabled || ticking) return
   ticking = true
   try {
-    const queries = currentClaims.map((c) => c.text)
-    const snapshot = await takeUiaSnapshot(queries)
+    const snapshot = await takeUiaSnapshot(currentSpans)
 
     if (!snapshot.ok) {
       lastError = snapshot.error
@@ -151,9 +152,18 @@ async function tick(): Promise<void> {
         })
     }
 
+    // Locate claims within THIS tick's text ourselves — via the same fuzzy
+    // matching the Live tab uses — rather than asking UIA's FindText to
+    // search for the AI's claim text, which is frequently not an exact
+    // substring (see the note atop resources/uia-watch.ps1). The resulting
+    // offsets are sent up on the *next* tick's snapshot request.
+    const claimSpans = computeClaimSpans(snapshot.text, currentClaims)
+    currentSpans = claimSpans.map((s) => ({ id: s.claim.id, start: s.start, length: s.end - s.start }))
+
     if (currentClaims.length > 0) {
       logScreenWatch(
-        `claimRects from snapshot: ${snapshot.claimRects.map((r) => `"${r.query.slice(0, 40)}"=${r.rects.length}rect(s)`).join(', ')}`
+        `located ${claimSpans.length}/${currentClaims.length} claim(s) in text this tick; ` +
+          `claimRects from snapshot: ${snapshot.claimRects.map((r) => `${r.id.slice(0, 8)}=${r.rects.length}rect(s)`).join(', ')}`
       )
     }
 
@@ -175,17 +185,10 @@ async function tick(): Promise<void> {
 
 function updateOverlay(
   controlRect: ScreenRect,
-  claimRects: { query: string; rects: ScreenRect[] }[],
+  claimRects: { id: string; rects: ScreenRect[] }[],
   claims: Claim[]
 ): void {
-  const underlines: { id: string; rects: ScreenRect[] }[] = []
-
-  for (const result of claimRects) {
-    if (result.rects.length === 0) continue
-    const claim = claims.find((c) => c.text === result.query)
-    if (!claim) continue
-    underlines.push({ id: claim.id, rects: result.rects })
-  }
+  const underlines = claimRects.filter((r) => r.rects.length > 0)
 
   if (underlines.length === 0) {
     if (claims.length > 0) {
