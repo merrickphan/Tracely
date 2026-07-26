@@ -27,6 +27,9 @@ export const IPC = {
   WINDOW_HIDE: 'window:hide',
   WINDOW_SHOW: 'window:show',
   WINDOW_CLOSE: 'window:close',
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_MAXIMIZE_TOGGLE: 'window:maximizeToggle',
+  WINDOW_IS_MAXIMIZED: 'window:isMaximized',
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
@@ -39,7 +42,8 @@ export const IPC_EVENTS = {
   FLOATING_CLIPBOARD_CAPTURED: 'floating:clipboardCaptured',
   SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
   SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate',
-  SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged'
+  SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged',
+  WINDOW_MAXIMIZE_CHANGED: 'window:maximizeChanged'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

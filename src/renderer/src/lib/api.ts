@@ -46,6 +46,11 @@ export const tracelyApi = {
 
   showWindow: (target: 'main' | 'floating') => call(window.tracely.window.show({ target })),
   hideWindow: (target: 'main' | 'floating') => call(window.tracely.window.hide({ target })),
+  minimizeWindow: () => call(window.tracely.window.minimize()),
+  toggleMaximizeWindow: () => call(window.tracely.window.maximizeToggle()),
+  isWindowMaximized: () => call(window.tracely.window.isMaximized()),
+  onWindowMaximizeChanged: (cb: Parameters<typeof window.tracely.onWindowMaximizeChanged>[0]) =>
+    window.tracely.onWindowMaximizeChanged(cb),
 
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
 

@@ -113,9 +113,12 @@ button {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 14px 20px;
+  padding: 12px 12px 12px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
+  /* Custom title bar (BrowserWindow uses frame:false) — the header itself
+     is the drag handle; interactive children opt back out below. */
+  -webkit-app-region: drag;
 }
 
 .app-header h1 {
@@ -131,9 +134,14 @@ button {
   color: var(--accent);
 }
 
+.app-header-spacer {
+  flex: 1;
+}
+
 .tab-nav {
   display: flex;
   gap: 4px;
+  -webkit-app-region: no-drag;
 }
 
 .tab-button {
@@ -171,8 +179,9 @@ button {
 .home-view {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 40px;
-  padding-top: 20px;
+  min-height: 100%;
 }
 
 .home-hero {
@@ -666,11 +675,22 @@ textarea:disabled {
 .settings-view {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
+}
+
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(120, 80, 40, 0.05);
 }
 
 .settings-section h3 {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
+  font-size: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-section label {
@@ -781,4 +801,38 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Custom window controls (replaces native OS chrome, frame:false) */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.window-control-btn:hover {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.window-control-btn.window-control-close:hover {
+  background: var(--danger);
+  color: #fff;
 }

@@ -43,6 +43,10 @@ import type {
   SettingsSetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
+  WindowIsMaximizedResponse,
+  WindowMaximizeChangedEvent,
+  WindowMaximizeToggleResponse,
+  WindowMinimizeResponse,
   WindowTargetRequest,
   WindowTargetResponse
 } from '@shared/ipc-contract'
@@ -103,7 +107,11 @@ const api = {
     show: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
       ipcRenderer.invoke(IPC.WINDOW_SHOW, req),
     close: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_CLOSE, req)
+      ipcRenderer.invoke(IPC.WINDOW_CLOSE, req),
+    minimize: (): Promise<WindowMinimizeResponse> => ipcRenderer.invoke(IPC.WINDOW_MINIMIZE, {}),
+    maximizeToggle: (): Promise<WindowMaximizeToggleResponse> =>
+      ipcRenderer.invoke(IPC.WINDOW_MAXIMIZE_TOGGLE, {}),
+    isMaximized: (): Promise<WindowIsMaximizedResponse> => ipcRenderer.invoke(IPC.WINDOW_IS_MAXIMIZED, {})
   },
   shell: {
     openExternal: (req: ShellOpenExternalRequest): Promise<ShellOpenExternalResponse> =>
@@ -135,6 +143,11 @@ const api = {
     const listener = (_: unknown, payload: ScreenWatchHoverEvent | null): void => callback(payload)
     ipcRenderer.on(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
+  },
+  onWindowMaximizeChanged: (callback: (event: WindowMaximizeChangedEvent) => void): (() => void) => {
+    const listener = (_: unknown, payload: WindowMaximizeChangedEvent): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, listener)
   }
 }
 

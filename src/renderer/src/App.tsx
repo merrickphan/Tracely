@@ -3,6 +3,7 @@ import AnalyzeView from './views/AnalyzeView'
 import HomeView from './views/HomeView'
 import LibraryView from './views/LibraryView'
 import SettingsView from './views/SettingsView'
+import WindowControls from './components/WindowControls'
 import { applyTheme } from './lib/theme'
 import { tracelyApi } from './lib/api'
 
@@ -37,6 +38,8 @@ export default function App(): JSX.Element {
             </button>
           ))}
         </nav>
+        <div className="app-header-spacer" />
+        <WindowControls />
       </header>
       <main className="app-main">
         {tab === 'home' ? <HomeView onNavigate={setTab} /> : null}

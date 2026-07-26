@@ -149,6 +149,25 @@ export interface WindowTargetResponse {
   ok: true
 }
 
+export type WindowMinimizeRequest = Record<string, never>
+export interface WindowMinimizeResponse {
+  ok: true
+}
+
+export type WindowMaximizeToggleRequest = Record<string, never>
+export interface WindowMaximizeToggleResponse {
+  maximized: boolean
+}
+
+export type WindowIsMaximizedRequest = Record<string, never>
+export interface WindowIsMaximizedResponse {
+  maximized: boolean
+}
+
+export interface WindowMaximizeChangedEvent {
+  maximized: boolean
+}
+
 export interface ShellOpenExternalRequest {
   url: string
 }
