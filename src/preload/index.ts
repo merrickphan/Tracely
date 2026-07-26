@@ -31,7 +31,10 @@ import type {
   LibrarySaveResponse,
   LibraryUpdateRequest,
   LibraryUpdateResponse,
+  ScreenWatchAnalyzeClaimRequest,
+  ScreenWatchAnalyzeClaimResponse,
   ScreenWatchGetStatusResponse,
+  ScreenWatchHoverEvent,
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSetEnabledRequest,
   ScreenWatchSetEnabledResponse,
@@ -109,7 +112,9 @@ const api = {
   screenWatch: {
     setEnabled: (req: ScreenWatchSetEnabledRequest): Promise<ScreenWatchSetEnabledResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_SET_ENABLED, req),
-    getStatus: (): Promise<ScreenWatchGetStatusResponse> => ipcRenderer.invoke(IPC.SCREENWATCH_GET_STATUS, {})
+    getStatus: (): Promise<ScreenWatchGetStatusResponse> => ipcRenderer.invoke(IPC.SCREENWATCH_GET_STATUS, {}),
+    analyzeClaim: (req: ScreenWatchAnalyzeClaimRequest): Promise<ScreenWatchAnalyzeClaimResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_ANALYZE_CLAIM, req)
   },
   onClipboardCaptured: (callback: (event: FloatingClipboardCapturedEvent) => void): (() => void) => {
     const listener = (_: unknown, payload: FloatingClipboardCapturedEvent): void => callback(payload)
@@ -125,6 +130,11 @@ const api = {
     const listener = (_: unknown, payload: ScreenWatchOverlayUpdateEvent): void => callback(payload)
     ipcRenderer.on(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, listener)
     return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, listener)
+  },
+  onScreenWatchHover: (callback: (event: ScreenWatchHoverEvent | null) => void): (() => void) => {
+    const listener = (_: unknown, payload: ScreenWatchHoverEvent | null): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
   }
 }
 

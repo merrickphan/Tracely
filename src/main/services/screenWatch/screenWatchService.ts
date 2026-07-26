@@ -9,6 +9,7 @@ import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnDisplay } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
+import { startHoverTracking, stopHoverTracking } from './hoverTracking'
 import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
@@ -28,6 +29,25 @@ let currentSpans: ClaimSpanRequest[] = []
 let retryAfter = 0
 let lastError: string | null = null
 const RETRY_COOLDOWN_MS = 5000
+
+export interface HoverTarget {
+  claimId: string
+  text: string
+  claimType: Claim['claimType']
+  // Absolute logical (DIP) screen coordinates — same space as
+  // screen.getCursorScreenPoint() — for hit-testing in hoverTracking.ts.
+  rectsAbsolute: ScreenRect[]
+  // Window-local coordinates — same space sent in
+  // SCREENWATCH_OVERLAY_UPDATE — for positioning the tooltip in the overlay
+  // renderer without any unit conversion there.
+  rectsWindowLocal: ScreenRect[]
+}
+
+let hoverTargets: HoverTarget[] = []
+
+export function getHoverTargets(): HoverTarget[] {
+  return hoverTargets
+}
 
 function synthesizeClaim(detected: {
   text: string
@@ -92,6 +112,7 @@ function resetTrackingState(): void {
   lastAnalyzedText = ''
   currentClaims = []
   currentSpans = []
+  hoverTargets = []
 }
 
 async function tick(): Promise<void> {
@@ -253,6 +274,7 @@ function updateOverlay(
     if (claims.length > 0) {
       logScreenWatch(`${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`)
     }
+    hoverTargets = []
     hideOverlay()
     return
   }
@@ -289,6 +311,25 @@ function updateOverlay(
   )
 
   win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, { underlines: localized })
+
+  hoverTargets = underlines
+    .map((u, idx) => {
+      const claim = claims.find((c) => c.id === u.id)
+      if (!claim) return null
+      return {
+        claimId: u.id,
+        text: claim.text,
+        claimType: claim.claimType,
+        rectsAbsolute: u.rects.map((r) => ({
+          x: r.x / scale,
+          y: r.y / scale,
+          width: r.width / scale,
+          height: r.height / scale
+        })),
+        rectsWindowLocal: localized[idx].rects
+      }
+    })
+    .filter((t): t is HoverTarget => t !== null)
 }
 
 export function isScreenWatchEnabled(): boolean {
@@ -303,6 +344,7 @@ export function startScreenWatch(): void {
   resetScreenWatchLog()
   lastError = null
   lastStatus = { ...lastStatus, enabled: true, lastError: null }
+  startHoverTracking()
   void tick()
 }
 
@@ -313,6 +355,7 @@ export function stopScreenWatch(): void {
     clearTimeout(timer)
     timer = null
   }
+  stopHoverTracking()
   resetTrackingState()
   hideOverlay()
   emitStatus({
@@ -338,6 +381,7 @@ export function shutdownScreenWatch(): void {
     clearTimeout(timer)
     timer = null
   }
+  stopHoverTracking()
   const win = getOverlayWindow()
   win?.destroy()
 }

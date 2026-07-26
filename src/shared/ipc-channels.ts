@@ -31,13 +31,15 @@ export const IPC = {
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
   SCREENWATCH_SET_ENABLED: 'screenWatch:setEnabled',
-  SCREENWATCH_GET_STATUS: 'screenWatch:getStatus'
+  SCREENWATCH_GET_STATUS: 'screenWatch:getStatus',
+  SCREENWATCH_ANALYZE_CLAIM: 'screenWatch:analyzeClaim'
 } as const
 
 export const IPC_EVENTS = {
   FLOATING_CLIPBOARD_CAPTURED: 'floating:clipboardCaptured',
   SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
-  SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate'
+  SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate',
+  SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

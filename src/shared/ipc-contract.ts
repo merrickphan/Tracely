@@ -4,6 +4,7 @@ import type {
   Citation,
   CitationStyle,
   Claim,
+  ClaimType,
   CritiqueVerdict,
   EvidenceItem,
   LibraryItem,
@@ -183,4 +184,21 @@ export interface ScreenRect {
 }
 export interface ScreenWatchOverlayUpdateEvent {
   underlines: { id: string; rects: ScreenRect[] }[]
+}
+
+export interface ScreenWatchHoverEvent {
+  claimId: string
+  text: string
+  claimType: ClaimType
+  // Window-local (same coordinate space as ScreenWatchOverlayUpdateEvent
+  // rects), so the overlay renderer can position a tooltip without any unit
+  // conversion.
+  anchor: ScreenRect
+}
+
+export interface ScreenWatchAnalyzeClaimRequest {
+  text: string
+}
+export interface ScreenWatchAnalyzeClaimResponse {
+  ok: true
 }
