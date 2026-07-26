@@ -21,7 +21,12 @@ const MIN_TEXT_LENGTH = 20
 // where the user explicitly asked for a full pass and can just ignore a
 // weak one. Filtering to higher-confidence claims only is a second,
 // independent guard on top of the detection prompt itself.
-const MIN_CLAIM_CONFIDENCE = 0.8
+// 0.8 combined with the relay prompt's calibration guidance (which
+// deliberately deflates scores for anything not unambiguous) turned out to
+// compound too far — real claims stopped clearing the bar at all, so
+// nothing ever underlined. Settled lower, still well above the original
+// "flag everything" baseline.
+const MIN_CLAIM_CONFIDENCE = 0.55
 
 let enabled = false
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -336,26 +341,21 @@ function updateOverlayAndWidget(
 
   const localized = underlines.map((u) => ({ id: u.id, rects: u.rects.map(toLocal) }))
 
-  // Fixed position (bottom-right corner of the display's work area) rather
-  // than anchored to the focused control's bounding rect. Anchoring to the
-  // control meant the widget jumped, resized, or briefly vanished whenever
-  // the control moved/scrolled/resized, or when a provider's bounding rect
-  // was momentarily unreliable — that read as "glitchy" and made the widget
-  // seem broken. A fixed corner is stable and always somewhere predictable,
-  // independent of whatever text control is focused. Authored directly in
-  // logical (DIP) units, so no physical/scale conversion is needed here.
-  const widgetLocal: ScreenRect = {
-    x: display.workArea.x - display.bounds.x + display.workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
-    y: display.workArea.y - display.bounds.y + display.workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
-    width: WIDGET_SIZE,
-    height: WIDGET_SIZE
+  // Anchored to the right edge of the focused control, vertically centered
+  // — sits beside the text box rather than overlapping its corner or
+  // sitting fixed in the screen corner (tried both; this is what was
+  // actually asked for). controlRect is physical pixels from UIA, so this
+  // needs the same physical->logical conversion as the underline rects.
+  const widgetPhysicalSize = WIDGET_SIZE * scale
+  const widgetMarginPhysical = WIDGET_MARGIN * scale
+  const widgetPhysicalRect: ScreenRect = {
+    x: controlRect.x + controlRect.width + widgetMarginPhysical,
+    y: controlRect.y + controlRect.height / 2 - widgetPhysicalSize / 2,
+    width: widgetPhysicalSize,
+    height: widgetPhysicalSize
   }
-  const widgetAbsolute: ScreenRect = {
-    x: display.workArea.x + display.workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
-    y: display.workArea.y + display.workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
-    width: WIDGET_SIZE,
-    height: WIDGET_SIZE
-  }
+  const widgetLocal = toLocal(widgetPhysicalRect)
+  const widgetAbsolute = toAbsolute(widgetPhysicalRect)
 
   if (underlines.length > 0) {
     logScreenWatch(

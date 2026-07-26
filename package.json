@@ -1,6 +1,6 @@
 {
   "name": "tracely",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "description": "Tracely — a private, local AI writing and research assistant that strengthens the credibility of what you write.",
   "main": "./out/main/index.js",
   "author": "Tracely",
