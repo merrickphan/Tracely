@@ -262,9 +262,11 @@ export default function SettingsView(): JSX.Element {
           program can be blocked individually — a browser can only be blocked as a whole (the
           &quot;entire browser&quot; options above), not one site within it. That means Google
           Docs, Google Drive, and Notion&apos;s web app can&apos;t be excluded on their own; block
-          the browser you use them in if you need that. Separately, Google Docs specifically won&apos;t
-          work with Screen Watch at all, blocked or not — it renders its editor as pixels instead of
-          exposing real text to accessibility tools, which Tracely relies on to read anything.
+          the browser you use them in if you need that. Separately, the whole Google Workspace
+          suite — Docs, Sheets, and Slides — won&apos;t work with Screen Watch at all, blocked or
+          not: they render their editing surface as pixels instead of exposing real text to
+          accessibility tools, which Tracely relies on to read anything. Windows never sees a real
+          text field to attach to, so there&apos;s nothing for Tracely to read no matter what.
         </p>
         {screenWatch?.enabled ? (
           <p className="muted">
