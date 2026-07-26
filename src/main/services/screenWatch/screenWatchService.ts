@@ -32,6 +32,7 @@ const RETRY_COOLDOWN_MS = 5000
 
 export interface HoverTarget {
   claimId: string
+  kind: 'claim' | 'widget'
   text: string
   claimType: Claim['claimType']
   // Absolute logical (DIP) screen coordinates — same space as
@@ -80,20 +81,21 @@ let lastStatus: ScreenWatchStatus = {
   blockedApp: null
 }
 
-function getAllowedApps(): string[] {
-  return getSetting('screenWatchAllowedApps')
+function getBlockedApps(): string[] {
+  return getSetting('screenWatchBlockedApps')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
 }
 
-// Fail closed: an empty/unset allowlist means Screen Watch runs nowhere,
-// rather than defaulting to "everywhere" — this is the guard against
-// scanning apps like Discord that the user never asked it to read, and it's
-// also what keeps relay token usage bounded to only the apps picked.
-function isProcessAllowed(processName: string): boolean {
-  const allowed = getAllowedApps()
-  return allowed.some((name) => name.toLowerCase() === processName.toLowerCase())
+// Default-allow (works in any app, like Grammarly) with an opt-out
+// blocklist rather than an opt-in allowlist — the blocklist defaults to
+// chat/DM apps (Discord, Slack, Teams, ...) so casual messages don't get
+// read without the user ever having to configure anything, while any other
+// app just works out of the box.
+function isProcessBlocked(processName: string): boolean {
+  const blocked = getBlockedApps()
+  return blocked.some((name) => name.toLowerCase() === processName.toLowerCase())
 }
 
 function emitStatus(status: ScreenWatchStatus): void {
@@ -151,13 +153,13 @@ async function tick(): Promise<void> {
       return
     }
 
-    if (!isProcessAllowed(snapshot.processName)) {
-      // Not an error — the user just hasn't put this app on the allowlist.
-      // Bail out before any text ever reaches detectClaims: this is the
-      // actual token-usage and privacy boundary, not just a UI filter.
+    if (isProcessBlocked(snapshot.processName)) {
+      // Not an error — the user's blocklist just excludes this app. Bail
+      // out before any text ever reaches detectClaims: this is the actual
+      // token-usage and privacy boundary, not just a UI filter.
       hideOverlay()
       resetTrackingState()
-      logScreenWatch(`focused app ${snapshot.processName} is not in the allowlist, skipping`)
+      logScreenWatch(`focused app ${snapshot.processName} is on the blocklist, skipping`)
       emitStatus({
         enabled,
         active: false,
@@ -244,7 +246,7 @@ async function tick(): Promise<void> {
       )
     }
 
-    updateOverlay(snapshot.controlRect, snapshot.claimRects, currentClaims)
+    updateOverlayAndWidget(snapshot.controlRect, snapshot.claimRects, currentClaims, snapshot.text)
 
     emitStatus({
       enabled,
@@ -261,22 +263,21 @@ async function tick(): Promise<void> {
   }
 }
 
-function updateOverlay(
+const WIDGET_SIZE = 26
+const WIDGET_INSET = 6
+
+function updateOverlayAndWidget(
   controlRect: ScreenRect,
   claimRects: { id: string; rects: ScreenRect[] }[],
-  claims: Claim[]
+  claims: Claim[],
+  fullText: string
 ): void {
   const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
     (r) => Array.isArray(r.rects) && r.rects.length > 0
   )
 
-  if (underlines.length === 0) {
-    if (claims.length > 0) {
-      logScreenWatch(`${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`)
-    }
-    hoverTargets = []
-    hideOverlay()
-    return
+  if (underlines.length === 0 && claims.length > 0) {
+    logScreenWatch(`${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`)
   }
 
   const center = {
@@ -284,6 +285,10 @@ function updateOverlay(
     y: controlRect.y + controlRect.height / 2
   }
   const display = screen.getDisplayNearestPoint(center)
+  // The widget badge (see hoverTracking.ts / OverlayApp.tsx) shows
+  // whenever a supported text field is focused — like Grammarly's icon —
+  // independent of whether any claims were found yet, so the overlay stays
+  // shown for that even with zero underlines.
   const win = showOverlayOnDisplay(display)
 
   // UI Automation returns physical screen pixels; Electron window bounds are
@@ -296,40 +301,69 @@ function updateOverlay(
   // fix would need each display's physical origin, which Electron doesn't
   // expose — still a known gap for that specific case.
   const scale = display.scaleFactor || 1
-  const localized = underlines.map((u) => ({
-    id: u.id,
-    rects: u.rects.map((r) => ({
-      x: r.x / scale - display.bounds.x,
-      y: r.y / scale - display.bounds.y,
-      width: r.width / scale,
-      height: r.height / scale
-    }))
-  }))
+  const toLocal = (r: ScreenRect): ScreenRect => ({
+    x: r.x / scale - display.bounds.x,
+    y: r.y / scale - display.bounds.y,
+    width: r.width / scale,
+    height: r.height / scale
+  })
+  const toAbsolute = (r: ScreenRect): ScreenRect => ({
+    x: r.x / scale,
+    y: r.y / scale,
+    width: r.width / scale,
+    height: r.height / scale
+  })
 
-  logScreenWatch(
-    `showing ${underlines.length} underline(s) on display ${display.id} (bounds ${JSON.stringify(display.bounds)}, scaleFactor=${display.scaleFactor}), overlay window bounds=${JSON.stringify(win.getBounds())}, visible=${win.isVisible()}, rects=${JSON.stringify(localized)}`
-  )
+  const localized = underlines.map((u) => ({ id: u.id, rects: u.rects.map(toLocal) }))
 
-  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, { underlines: localized })
+  const widgetPhysicalSize = WIDGET_SIZE * scale
+  const widgetInsetPhysical = WIDGET_INSET * scale
+  const widgetPhysicalRect: ScreenRect = {
+    x: controlRect.x + controlRect.width - widgetPhysicalSize - widgetInsetPhysical,
+    y: controlRect.y + controlRect.height - widgetPhysicalSize - widgetInsetPhysical,
+    width: widgetPhysicalSize,
+    height: widgetPhysicalSize
+  }
+  const widgetLocal = toLocal(widgetPhysicalRect)
+  const widgetAbsolute = toAbsolute(widgetPhysicalRect)
 
-  hoverTargets = underlines
+  if (underlines.length > 0) {
+    logScreenWatch(
+      `showing ${underlines.length} underline(s) on display ${display.id} (bounds ${JSON.stringify(display.bounds)}, scaleFactor=${display.scaleFactor}), overlay window bounds=${JSON.stringify(win.getBounds())}, visible=${win.isVisible()}, rects=${JSON.stringify(localized)}`
+    )
+  }
+
+  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, {
+    underlines: localized,
+    widget: { rect: widgetLocal, claimCount: claims.length, text: fullText }
+  })
+
+  const claimTargets = underlines
     .map((u, idx) => {
       const claim = claims.find((c) => c.id === u.id)
       if (!claim) return null
-      return {
+      const target: HoverTarget = {
         claimId: u.id,
+        kind: 'claim',
         text: claim.text,
         claimType: claim.claimType,
-        rectsAbsolute: u.rects.map((r) => ({
-          x: r.x / scale,
-          y: r.y / scale,
-          width: r.width / scale,
-          height: r.height / scale
-        })),
+        rectsAbsolute: u.rects.map(toAbsolute),
         rectsWindowLocal: localized[idx].rects
       }
+      return target
     })
     .filter((t): t is HoverTarget => t !== null)
+
+  const widgetTarget: HoverTarget = {
+    claimId: '__widget__',
+    kind: 'widget',
+    text: fullText,
+    claimType: 'factual',
+    rectsAbsolute: [widgetAbsolute],
+    rectsWindowLocal: [widgetLocal]
+  }
+
+  hoverTargets = [...claimTargets, widgetTarget]
 }
 
 export function isScreenWatchEnabled(): boolean {

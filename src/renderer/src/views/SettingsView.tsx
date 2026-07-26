@@ -100,9 +100,8 @@ export default function SettingsView(): JSX.Element {
         <p className="muted">
           When on, Tracely reads the text of whatever field is focused in other apps (via Windows
           accessibility APIs, not a screenshot) and underlines flagged claims directly on your
-          screen. To keep this from reading things you don&apos;t want it to — like a Discord chat —
-          it only ever runs in the apps you list below; anywhere else, it does nothing and sends no
-          text anywhere.
+          screen — works in any app by default, like Grammarly. Apps on the blocklist below are
+          skipped entirely: no text is ever read from them, and nothing is sent anywhere.
         </p>
         <label className="checkbox-row">
           <input
@@ -122,26 +121,26 @@ export default function SettingsView(): JSX.Element {
           />
         </label>
         <label>
-          Allowed apps (process names, comma-separated)
+          Blocked apps (process names, comma-separated)
           <input
             type="text"
-            value={settings.screenWatchAllowedApps}
-            onChange={(e) => setSettings({ ...settings, screenWatchAllowedApps: e.target.value })}
-            onBlur={(e) => save({ screenWatchAllowedApps: e.target.value })}
-            placeholder="WINWORD.EXE, notepad.exe, msedge.exe, chrome.exe"
+            value={settings.screenWatchBlockedApps}
+            onChange={(e) => setSettings({ ...settings, screenWatchBlockedApps: e.target.value })}
+            onBlur={(e) => save({ screenWatchBlockedApps: e.target.value })}
+            placeholder="Discord.exe, Slack.exe, Teams.exe"
           />
         </label>
         <p className="muted">
-          Defaults cover Word, Notepad, and Chromium browsers (Chrome/Edge). This can&apos;t
-          distinguish tabs or sites within a browser, and it won&apos;t work in apps like Google
-          Docs that render text as pixels instead of exposing it to accessibility tools.
+          Defaults block Discord, Slack, Teams, WhatsApp, Signal, Telegram, and Messenger. It
+          won&apos;t work in apps like Google Docs that render text as pixels instead of exposing
+          it to accessibility tools, regardless of this list.
         </p>
         {screenWatch?.enabled ? (
           <p className="muted">
             {screenWatch.active
               ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
               : screenWatch.blockedApp
-                ? `${screenWatch.blockedApp} isn't in your allowed apps list, so it's not being read.`
+                ? `${screenWatch.blockedApp} is on your blocklist, so it's not being read.`
                 : 'No supported text field is currently focused.'}
           </p>
         ) : null}

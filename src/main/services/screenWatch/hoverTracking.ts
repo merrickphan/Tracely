@@ -21,6 +21,12 @@ const POLL_MS = 80
 const PAD_SIDE = 6
 const PAD_TOP = 4
 const PAD_BOTTOM = 90
+// The widget badge has no tooltip growing below it (its label is a native
+// OS title tooltip, not part of our DOM), so it only needs a small uniform
+// pad — the claim's generous PAD_BOTTOM would otherwise create a dead zone
+// below the widget that silently swallows clicks meant for the app
+// underneath instead of passing them through.
+const WIDGET_PAD = 4
 // Small grace period after the cursor leaves the hit zone before actually
 // hiding — absorbs the kind of momentary jitter that'd otherwise make the
 // tooltip flicker in and out near the boundary.
@@ -68,15 +74,18 @@ function poll(): void {
   }
 
   const cursor = screen.getCursorScreenPoint()
-  const match = targets.find((t) =>
-    t.rectsAbsolute.some(
+  const match = targets.find((t) => {
+    const padBottom = t.kind === 'widget' ? WIDGET_PAD : PAD_BOTTOM
+    const padSide = t.kind === 'widget' ? WIDGET_PAD : PAD_SIDE
+    const padTop = t.kind === 'widget' ? WIDGET_PAD : PAD_TOP
+    return t.rectsAbsolute.some(
       (r) =>
-        cursor.x >= r.x - PAD_SIDE &&
-        cursor.x <= r.x + r.width + PAD_SIDE &&
-        cursor.y >= r.y - PAD_TOP &&
-        cursor.y <= r.y + r.height + PAD_BOTTOM
+        cursor.x >= r.x - padSide &&
+        cursor.x <= r.x + r.width + padSide &&
+        cursor.y >= r.y - padTop &&
+        cursor.y <= r.y + r.height + padBottom
     )
-  )
+  })
 
   if (match) {
     if (leaveTimer) {
@@ -88,6 +97,7 @@ function poll(): void {
       setCaptureMouseEvents(true)
       sendHover({
         claimId: match.claimId,
+        kind: match.kind,
         text: match.text,
         claimType: match.claimType,
         anchor: match.rectsWindowLocal[0]

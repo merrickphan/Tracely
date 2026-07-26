@@ -16,8 +16,8 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
     return tracelyApi.onScreenWatchStatus(setScreenWatch)
   }, [])
 
-  const allowedAppCount = settings?.screenWatchAllowedApps
-    ? settings.screenWatchAllowedApps.split(',').map((s) => s.trim()).filter(Boolean).length
+  const blockedAppCount = settings?.screenWatchBlockedApps
+    ? settings.screenWatchBlockedApps.split(',').map((s) => s.trim()).filter(Boolean).length
     : 0
   const recentItems = libraryItems?.slice(0, 3) ?? []
 
@@ -30,7 +30,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
           </h2>
           <p className="muted">
             Paste text into Analyze to check it, or turn on Screen Watch to catch claims as you
-            write in Word, your browser, or wherever you allow it.
+            write anywhere on your computer.
           </p>
         </div>
 
@@ -59,7 +59,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
             {screenWatch?.enabled ? 'On' : 'Off'}
           </span>
           <span className="home-stat-sub">
-            {allowedAppCount} app{allowedAppCount === 1 ? '' : 's'} allowed
+            works everywhere{blockedAppCount > 0 ? ` except ${blockedAppCount}` : ''}
           </span>
         </button>
 

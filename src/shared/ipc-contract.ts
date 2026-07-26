@@ -119,7 +119,7 @@ export interface SettingsSetRequest {
   enableStrengthSummaries?: boolean
   theme?: Theme
   screenWatchHotkeyAccelerator?: string
-  screenWatchAllowedApps?: string
+  screenWatchBlockedApps?: string
 }
 export type SettingsSetResponse = AppSettings
 
@@ -201,12 +201,22 @@ export interface ScreenRect {
   width: number
   height: number
 }
+export interface ScreenWatchWidget {
+  rect: ScreenRect
+  claimCount: number
+  // Full watched-text snapshot, so clicking the widget can trigger a
+  // whole-text analysis without a separate round-trip.
+  text: string
+}
+
 export interface ScreenWatchOverlayUpdateEvent {
   underlines: { id: string; rects: ScreenRect[] }[]
+  widget: ScreenWatchWidget | null
 }
 
 export interface ScreenWatchHoverEvent {
   claimId: string
+  kind: 'claim' | 'widget'
   text: string
   claimType: ClaimType
   // Window-local (same coordinate space as ScreenWatchOverlayUpdateEvent

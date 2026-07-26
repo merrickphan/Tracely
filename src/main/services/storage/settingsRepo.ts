@@ -8,12 +8,12 @@ const DEFAULTS: Record<string, string> = {
   screenWatchEnabled: 'false',
   theme: 'dark',
   screenWatchHotkeyAccelerator: 'CommandOrControl+Shift+S',
-  // Process image names (e.g. "WINWORD.EXE") Screen Watch is allowed to read
-  // text from. Comma-separated, case-insensitive. Empty means "nowhere" —
-  // fail closed rather than silently watching whatever app happens to be
-  // focused, since that's exactly the "scanning my Discord DMs" problem this
-  // allowlist exists to prevent.
-  screenWatchAllowedApps: 'WINWORD.EXE,notepad.exe,msedge.exe,chrome.exe'
+  // Process image names (e.g. "Discord.exe") Screen Watch is NOT allowed to
+  // read text from — default-allow (works anywhere, like Grammarly),
+  // opt-out for chat/DM apps so casual conversations aren't read without
+  // any setup. Comma-separated, case-insensitive. Empty means "block
+  // nothing" — truly everywhere.
+  screenWatchBlockedApps: 'Discord.exe,Slack.exe,Teams.exe,WhatsApp.exe,Signal.exe,Telegram.exe,Messenger.exe'
 }
 
 export function getSetting(key: string): string {

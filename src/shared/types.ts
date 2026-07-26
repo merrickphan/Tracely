@@ -96,5 +96,5 @@ export interface AppSettings {
   enableStrengthSummaries: boolean
   theme: Theme
   screenWatchHotkeyAccelerator: string
-  screenWatchAllowedApps: string
+  screenWatchBlockedApps: string
 }

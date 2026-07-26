@@ -12,7 +12,7 @@ const setSchema = z.object({
   enableStrengthSummaries: z.boolean().optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
-  screenWatchAllowedApps: z.string().optional()
+  screenWatchBlockedApps: z.string().optional()
 })
 
 function buildSettings(): AppSettings {
@@ -23,7 +23,7 @@ function buildSettings(): AppSettings {
     enableStrengthSummaries: raw.enableStrengthSummaries === 'true',
     theme: raw.theme as Theme,
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
-    screenWatchAllowedApps: raw.screenWatchAllowedApps
+    screenWatchBlockedApps: raw.screenWatchBlockedApps
   }
 }
 
@@ -46,8 +46,8 @@ export function registerSettingsHandlers(): void {
       setSetting('screenWatchHotkeyAccelerator', patch.screenWatchHotkeyAccelerator)
       registerScreenWatchHotkey(patch.screenWatchHotkeyAccelerator)
     }
-    if (patch.screenWatchAllowedApps !== undefined) {
-      setSetting('screenWatchAllowedApps', patch.screenWatchAllowedApps)
+    if (patch.screenWatchBlockedApps !== undefined) {
+      setSetting('screenWatchBlockedApps', patch.screenWatchBlockedApps)
     }
 
     return buildSettings()
