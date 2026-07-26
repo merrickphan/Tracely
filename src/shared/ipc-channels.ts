@@ -18,6 +18,7 @@ export const IPC = {
 
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+  SETTINGS_SCAN_INSTALLED_APPS: 'settings:scanInstalledApps',
 
   HISTORY_CLEAR: 'history:clear',
 

@@ -12,6 +12,13 @@ import { applyTheme } from '../lib/theme'
 // there's no way to block just one of them without blocking the whole
 // browser; that limitation is called out in the copy below rather than
 // pretending a checkbox for "Google Docs" would do anything.
+//
+// Broader than just "apps to block" — this is every writing/document/
+// reference app Tracely knows the process name for, since Screen Watch is
+// meant to work in exactly these, so a bigger list here means more of what
+// people actually use shows up as a recognizable option instead of an
+// unlabeled "Other apps" entry. Which ones actually render as checked
+// (found on this machine) is determined by scanInstalledApps() at runtime.
 const CURATED_BLOCKABLE_APPS: { label: string; exe: string }[] = [
   { label: 'Discord', exe: 'Discord.exe' },
   { label: 'Slack', exe: 'Slack.exe' },
@@ -22,8 +29,24 @@ const CURATED_BLOCKABLE_APPS: { label: string; exe: string }[] = [
   { label: 'Messenger', exe: 'Messenger.exe' },
   { label: 'Microsoft Word', exe: 'WINWORD.EXE' },
   { label: 'Microsoft Excel', exe: 'EXCEL.EXE' },
+  { label: 'Microsoft PowerPoint', exe: 'POWERPNT.EXE' },
+  { label: 'Microsoft OneNote', exe: 'ONENOTE.EXE' },
   { label: 'Microsoft Outlook', exe: 'OUTLOOK.EXE' },
+  { label: 'LibreOffice', exe: 'soffice.exe' },
+  { label: 'WPS Office', exe: 'wps.exe' },
   { label: 'Notion (desktop app)', exe: 'Notion.exe' },
+  { label: 'Obsidian', exe: 'Obsidian.exe' },
+  { label: 'Evernote', exe: 'Evernote.exe' },
+  { label: 'Scrivener', exe: 'Scrivener.exe' },
+  { label: 'Typora', exe: 'Typora.exe' },
+  { label: 'Zotero', exe: 'zotero.exe' },
+  { label: 'Mendeley Reference Manager', exe: 'Mendeley Reference Manager.exe' },
+  { label: 'Adobe Acrobat', exe: 'Acrobat.exe' },
+  { label: 'Adobe Acrobat Reader', exe: 'AcroRd32.exe' },
+  { label: 'Foxit PDF Reader', exe: 'FoxitPDFReader.exe' },
+  { label: 'Visual Studio Code', exe: 'Code.exe' },
+  { label: 'Sublime Text', exe: 'sublime_text.exe' },
+  { label: 'Notepad++', exe: 'notepad++.exe' },
   { label: 'Spotify', exe: 'Spotify.exe' },
   { label: 'Google Chrome (entire browser)', exe: 'chrome.exe' },
   { label: 'Microsoft Edge (entire browser)', exe: 'msedge.exe' },
@@ -45,12 +68,20 @@ export default function SettingsView(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
   const [extraAppsText, setExtraAppsText] = useState('')
+  const [installedExeLower, setInstalledExeLower] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     tracelyApi
       .getSettings()
       .then(setSettings)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+  }, [])
+
+  useEffect(() => {
+    tracelyApi
+      .scanInstalledApps()
+      .then((res) => setInstalledExeLower(new Set(res.found.map((f) => f.toLowerCase()))))
+      .catch(() => setInstalledExeLower(new Set()))
   }, [])
 
   useEffect(() => {
@@ -119,6 +150,13 @@ export default function SettingsView(): JSX.Element {
   }
 
   const blockedLower = new Set(parseAppList(settings.screenWatchBlockedApps).map((b) => b.toLowerCase()))
+  const sortedApps = installedExeLower
+    ? [...CURATED_BLOCKABLE_APPS].sort((a, b) => {
+        const aIn = installedExeLower.has(a.exe.toLowerCase()) ? 0 : 1
+        const bIn = installedExeLower.has(b.exe.toLowerCase()) ? 0 : 1
+        return aIn - bIn
+      })
+    : CURATED_BLOCKABLE_APPS
 
   return (
     <div className="settings-view">
@@ -184,19 +222,31 @@ export default function SettingsView(): JSX.Element {
           />
         </label>
 
-        <p className="settings-label-heading">Blocked apps</p>
+        <p className="settings-label-heading">
+          Blocked apps
+          {installedExeLower === null ? <span className="muted"> — scanning what's installed…</span> : null}
+        </p>
         <div className="app-checklist">
-          {CURATED_BLOCKABLE_APPS.map((app) => (
-            <label key={app.exe} className="checkbox-row app-checklist-item">
-              <input
-                type="checkbox"
-                checked={blockedLower.has(app.exe.toLowerCase())}
-                onChange={(e) => toggleCuratedApp(app.exe, e.target.checked)}
-              />
-              {app.label}
-            </label>
-          ))}
+          {sortedApps.map((app) => {
+            const isInstalled = installedExeLower?.has(app.exe.toLowerCase()) ?? false
+            return (
+              <label key={app.exe} className="checkbox-row app-checklist-item">
+                <input
+                  type="checkbox"
+                  checked={blockedLower.has(app.exe.toLowerCase())}
+                  onChange={(e) => toggleCuratedApp(app.exe, e.target.checked)}
+                />
+                {app.label}
+                {isInstalled ? <span className="app-checklist-installed-dot" title="Installed on this computer" /> : null}
+              </label>
+            )
+          })}
         </div>
+        <p className="muted">
+          Apps marked with a dot were detected as installed on this computer (via Start Menu
+          shortcuts — portable installs may be missed). Everything else is still selectable in
+          case detection missed it.
+        </p>
         <label>
           Other apps (process names, comma-separated)
           <input

@@ -1,8 +1,9 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
-import type { SettingsSetResponse } from '@shared/ipc-contract'
+import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
 import type { AppSettings, CitationStyle, Theme } from '@shared/types'
+import { scanInstalledAppExeNames } from '../services/appScan'
 import { registerGlobalHotkey, registerScreenWatchHotkey } from '../hotkey'
 import { getAllSettingsRaw, setSetting } from '../services/storage/settingsRepo'
 
@@ -51,5 +52,10 @@ export function registerSettingsHandlers(): void {
     }
 
     return buildSettings()
+  })
+
+  ipcMain.handle(IPC.SETTINGS_SCAN_INSTALLED_APPS, async (): Promise<SettingsScanInstalledAppsResponse> => {
+    const found = await scanInstalledAppExeNames()
+    return { found }
   })
 }

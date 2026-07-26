@@ -283,8 +283,8 @@ async function tick(): Promise<void> {
   }
 }
 
-const WIDGET_SIZE = 26
-const WIDGET_INSET = 6
+const WIDGET_SIZE = 40
+const WIDGET_MARGIN = 20
 
 function updateOverlayAndWidget(
   controlRect: ScreenRect,
@@ -336,16 +336,26 @@ function updateOverlayAndWidget(
 
   const localized = underlines.map((u) => ({ id: u.id, rects: u.rects.map(toLocal) }))
 
-  const widgetPhysicalSize = WIDGET_SIZE * scale
-  const widgetInsetPhysical = WIDGET_INSET * scale
-  const widgetPhysicalRect: ScreenRect = {
-    x: controlRect.x + controlRect.width - widgetPhysicalSize - widgetInsetPhysical,
-    y: controlRect.y + controlRect.height - widgetPhysicalSize - widgetInsetPhysical,
-    width: widgetPhysicalSize,
-    height: widgetPhysicalSize
+  // Fixed position (bottom-right corner of the display's work area) rather
+  // than anchored to the focused control's bounding rect. Anchoring to the
+  // control meant the widget jumped, resized, or briefly vanished whenever
+  // the control moved/scrolled/resized, or when a provider's bounding rect
+  // was momentarily unreliable — that read as "glitchy" and made the widget
+  // seem broken. A fixed corner is stable and always somewhere predictable,
+  // independent of whatever text control is focused. Authored directly in
+  // logical (DIP) units, so no physical/scale conversion is needed here.
+  const widgetLocal: ScreenRect = {
+    x: display.workArea.x - display.bounds.x + display.workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
+    y: display.workArea.y - display.bounds.y + display.workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
+    width: WIDGET_SIZE,
+    height: WIDGET_SIZE
   }
-  const widgetLocal = toLocal(widgetPhysicalRect)
-  const widgetAbsolute = toAbsolute(widgetPhysicalRect)
+  const widgetAbsolute: ScreenRect = {
+    x: display.workArea.x + display.workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
+    y: display.workArea.y + display.workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
+    width: WIDGET_SIZE,
+    height: WIDGET_SIZE
+  }
 
   if (underlines.length > 0) {
     logScreenWatch(

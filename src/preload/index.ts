@@ -39,6 +39,7 @@ import type {
   ScreenWatchSetEnabledRequest,
   ScreenWatchSetEnabledResponse,
   ScreenWatchStatus,
+  SettingsScanInstalledAppsResponse,
   SettingsSetRequest,
   SettingsSetResponse,
   ShellOpenExternalRequest,
@@ -90,7 +91,9 @@ const api = {
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET, {}),
     set: (req: SettingsSetRequest): Promise<SettingsSetResponse> =>
-      ipcRenderer.invoke(IPC.SETTINGS_SET, req)
+      ipcRenderer.invoke(IPC.SETTINGS_SET, req),
+    scanInstalledApps: (): Promise<SettingsScanInstalledAppsResponse> =>
+      ipcRenderer.invoke(IPC.SETTINGS_SCAN_INSTALLED_APPS, {})
   },
   history: {
     clear: (req: HistoryClearRequest): Promise<HistoryClearResponse> =>

@@ -37,6 +37,7 @@ export const tracelyApi = {
   getSettings: () => call(window.tracely.settings.get()),
   setSettings: (patch: Parameters<typeof window.tracely.settings.set>[0]) =>
     call(window.tracely.settings.set(patch)),
+  scanInstalledApps: () => call(window.tracely.settings.scanInstalledApps()),
 
   clearHistory: (includeLibrary: boolean) =>
     call(window.tracely.history.clear({ includeLibrary })),

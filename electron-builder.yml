@@ -13,6 +13,8 @@ extraResources:
     to: icon.png
   - from: resources/uia-watch.ps1
     to: uia-watch.ps1
+  - from: resources/scan-apps.ps1
+    to: scan-apps.ps1
 asarUnpack:
   - '**/*.node'
   - '**/*.wasm'

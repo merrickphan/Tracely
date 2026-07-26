@@ -123,6 +123,14 @@ export interface SettingsSetRequest {
 }
 export type SettingsSetResponse = AppSettings
 
+export type SettingsScanInstalledAppsRequest = Record<string, never>
+export interface SettingsScanInstalledAppsResponse {
+  // Exe basenames found via Start Menu shortcuts — best-effort, not
+  // exhaustive (misses portable installs). Empty means "couldn't tell,"
+  // not "nothing is installed."
+  found: string[]
+}
+
 export interface HistoryClearRequest {
   includeLibrary: boolean
 }
