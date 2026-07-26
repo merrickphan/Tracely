@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Claim, EvidenceItem, ScoreBreakdown } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import Button from './Button'
@@ -53,31 +53,24 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
     }
   }
 
-  // Fact-check as soon as the claim appears, not just after Find Evidence —
-  // the fact-check pass checks the claim against the model's own knowledge
-  // and doesn't need evidence, so there's no reason to make a false claim
-  // wait behind an extra click before showing 0% confidence.
-  useEffect(() => {
-    void critique()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <div className="claim-card">
       <div className="claim-header">
         <span className="claim-type">{CLAIM_TYPE_LABEL[claim.claimType]}</span>
-        {claim.critiqueVerdict === 'contradicted' ? (
-          <span className="claim-confidence claim-confidence-false" title="This claim was fact-checked and found to be false.">
-            0% confidence — false
-          </span>
-        ) : (
-          <span
-            className="claim-confidence"
-            title="How confident Tracely is that this sentence is a checkable factual claim (vs. opinion) — not whether the claim itself is true. Click Find Evidence to fact-check it."
-          >
-            Detected as claim: {Math.round(claim.confidence * 100)}%
-          </span>
-        )}
+        {claim.critique ? (
+          claim.critiqueVerdict === 'contradicted' ? (
+            <span className="claim-confidence claim-confidence-false" title="This claim was fact-checked and found to be false.">
+              0% confidence — false
+            </span>
+          ) : (
+            <span
+              className="claim-confidence"
+              title="How confident Tracely is that this sentence is a checkable factual claim (vs. opinion) — not whether the claim itself is true."
+            >
+              Detected as claim: {Math.round(claim.confidence * 100)}%
+            </span>
+          )
+        ) : null}
       </div>
       <p className="claim-text">&ldquo;{claim.text}&rdquo;</p>
 
