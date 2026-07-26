@@ -208,7 +208,14 @@ async function tick(): Promise<void> {
     if (currentClaims.length > 0) {
       logScreenWatch(
         `located ${claimSpans.length}/${currentClaims.length} claim(s) in text this tick; ` +
-          `claimRects from snapshot: ${snapshot.claimRects.map((r) => `${r.id.slice(0, 8)}=${r.rects.length}/${r.rawRectCount ?? '?'}rect(s)`).join(', ')}`
+          `claimRects from snapshot: ${snapshot.claimRects
+            .map(
+              (r) =>
+                `${r.id.slice(0, 8)}=${r.rects.length}/${r.rawRectCount ?? '?'}rect(s) ` +
+                `rangeText=${JSON.stringify(r.rangeTextPreview ?? null)} ` +
+                `moveError=${r.moveError ?? 'none'} scrollError=${r.scrollError ?? 'none'} rectError=${r.rectError ?? 'none'}`
+            )
+            .join(' | ')}`
       )
     }
 

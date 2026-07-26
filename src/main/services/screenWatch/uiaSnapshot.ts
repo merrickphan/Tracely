@@ -19,10 +19,18 @@ export interface ClaimSpanRequest {
 export interface ClaimRectResult {
   id: string
   rects: ScreenRect[]
-  // Count of rects UIA returned before filtering out degenerate (off-screen)
-  // ones — diagnostic only, lets us tell "provider returned nothing at all"
-  // apart from "returned rects but they were all off-screen".
+  // Diagnostic-only fields below, temporary while chasing down a provider
+  // (confirmed: Windows 11 Notepad) that returns zero bounding rects for a
+  // range built from character offsets. rawRectCount distinguishes "provider
+  // returned nothing at all" from "returned rects but they were all
+  // off-screen"; rangeTextPreview confirms whether the offset math actually
+  // landed the range on the right text in the first place; the *Error
+  // fields catch exceptions that would otherwise be silently swallowed.
   rawRectCount?: number
+  rangeTextPreview?: string | null
+  moveError?: string | null
+  scrollError?: string | null
+  rectError?: string | null
 }
 
 export type UiaSnapshot =

@@ -113,21 +113,35 @@ try {
     foreach ($span in $spans) {
       $rects = @()
       $flat = @()
+      $rangeTextPreview = $null
+      $moveError = $null
+      $scrollError = $null
+      $rectError = $null
+
       try {
         # Collapse-then-expand: the standard UIA idiom for getting a text
         # range from a character offset + length rather than a text search.
-        # Validated directly against a live document before shipping.
         $range = $docRange.Clone()
         $range.MoveEndpointByUnit($Endp::End, $Unit::Character, -($text.Length + 10)) | Out-Null
         $range.MoveEndpointByUnit($Endp::Start, $Unit::Character, $span.start) | Out-Null
         $range.MoveEndpointByUnit($Endp::End, $Unit::Character, $span.length) | Out-Null
+      } catch {
+        $moveError = $_.Exception.Message
+      }
 
-        # Some providers (confirmed with the current Windows 11 Notepad) never
-        # compute layout/bounding rects for a range unless it's been scrolled
-        # into view first, even when the text is already visible on screen —
-        # GetBoundingRectangles otherwise comes back completely empty.
-        try { $range.ScrollIntoView($true) | Out-Null } catch {}
+      # Diagnostic: what text does the provider think this range actually
+      # covers? If this doesn't match the claim text, the offset math (or the
+      # provider's Character-unit granularity) is wrong — a completely
+      # different bug from "rects came back empty".
+      try { $rangeTextPreview = $range.GetText(120) } catch { $rangeTextPreview = "<error: $($_.Exception.Message)>" }
 
+      try {
+        $range.ScrollIntoView($true) | Out-Null
+      } catch {
+        $scrollError = $_.Exception.Message
+      }
+
+      try {
         $flat = $range.GetBoundingRectangles()
         for ($i = 0; $i -lt $flat.Length; $i += 4) {
           $w = $flat[$i + 2]
@@ -138,8 +152,19 @@ try {
             $rects += @{ x = $flat[$i]; y = $flat[$i + 1]; width = $w; height = $h }
           }
         }
-      } catch {}
-      $claimRects += @{ id = $span.id; rects = $rects; rawRectCount = [int]($flat.Length / 4) }
+      } catch {
+        $rectError = $_.Exception.Message
+      }
+
+      $claimRects += @{
+        id               = $span.id
+        rects            = $rects
+        rawRectCount     = [int]($flat.Length / 4)
+        rangeTextPreview = $rangeTextPreview
+        moveError        = $moveError
+        scrollError      = $scrollError
+        rectError        = $rectError
+      }
     }
   }
 
