@@ -21,7 +21,7 @@ const MIN_TEXT_LENGTH = 20
 // where the user explicitly asked for a full pass and can just ignore a
 // weak one. Filtering to higher-confidence claims only is a second,
 // independent guard on top of the detection prompt itself.
-const MIN_CLAIM_CONFIDENCE = 0.6
+const MIN_CLAIM_CONFIDENCE = 0.8
 
 let enabled = false
 let timer: ReturnType<typeof setTimeout> | null = null

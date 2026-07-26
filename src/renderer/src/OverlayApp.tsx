@@ -44,8 +44,9 @@ export default function OverlayApp(): JSX.Element {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {underlines.flatMap((u) =>
-        u.rects.map((r, i) => (
+      {underlines.flatMap((u) => {
+        const isHovered = claimHovered?.claimId === u.id
+        return u.rects.map((r, i) => (
           <div
             key={`${u.id}-${i}`}
             style={{
@@ -54,16 +55,22 @@ export default function OverlayApp(): JSX.Element {
               top: r.y + r.height - 3,
               width: r.width,
               height: 3,
-              borderBottom: `3px solid ${claimHovered?.claimId === u.id ? '#ff5a36' : '#ffab3d'}`,
+              borderRadius: 2,
               // A CSS wavy underline needs text-decoration on real text; this is a
               // free-floating rect over someone else's app, so approximate the
-              // "flagged" look with a solid amber bar instead.
-              opacity: claimHovered?.claimId === u.id ? 1 : 0.85,
-              transition: 'border-color 0.1s ease, opacity 0.1s ease'
+              // "flagged" look with a gradient bar instead, with a soft glow
+              // (box-shadow blur) rather than a flat line so it actually reads
+              // as "glowing" instead of just a colored bar.
+              background: 'linear-gradient(90deg, #ffab3d, #ff5a36)',
+              boxShadow: isHovered
+                ? '0 0 10px 1px rgba(255, 90, 54, 0.9), 0 0 4px rgba(255, 171, 61, 0.95)'
+                : '0 0 6px 0.5px rgba(255, 90, 54, 0.6)',
+              opacity: isHovered ? 1 : 0.92,
+              transition: 'box-shadow 0.12s ease, opacity 0.12s ease'
             }}
           />
         ))
-      )}
+      })}
 
       {widget ? (
         <button
