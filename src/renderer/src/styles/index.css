@@ -1665,49 +1665,40 @@ textarea:disabled {
   flex-shrink: 0;
 }
 
-.settings-app-list {
+/* Compact checklist — small checkbox + label pairs that wrap, rather than
+   full-width bordered rows, since selecting apps to block is a scan-and-tick
+   task, not a list of settings each worth their own row of chrome. */
+.settings-app-grid {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 6px 18px;
   max-height: 280px;
   overflow-y: auto;
   padding-top: 16px;
   margin-bottom: 12px;
 }
 
-.settings-app-row {
+.settings-app-check {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.settings-app-row:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.settings-app-row-text {
-  display: flex;
-  align-items: baseline;
   gap: 8px;
+  cursor: pointer;
+  width: calc(50% - 9px);
   min-width: 0;
 }
 
-.settings-app-row-name {
+.settings-app-check input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-app-check-name {
   font-size: 13px;
   font-weight: 500;
   color: #1c1c1c;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.settings-app-row-exe {
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.4);
-  white-space: nowrap;
 }
 
 .settings-app-add {

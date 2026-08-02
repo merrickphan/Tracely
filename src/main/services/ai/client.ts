@@ -11,11 +11,19 @@ export class RelayError extends Error {
   }
 }
 
-export async function callRelay<T>(endpoint: 'detect-claims' | 'critique', body: unknown): Promise<T> {
-  if (!__RELAY_URL__) {
-    throw new RelayError('This build has no relay configured. Set RELAY_URL/RELAY_TOKEN and rebuild.')
-  }
+// Transient conditions worth one retry: a dropped connection, the relay
+// briefly overloaded (503/504), or its own soft rate limit (429, which
+// clears within its rolling window) — none of these reached OpenAI, so
+// retrying costs no extra tokens. A real 4xx (bad auth, bad request) is
+// retried-for-nothing and fails again immediately, so those are not retried.
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504])
+const RETRY_DELAY_MS = 800
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function requestOnce<T>(endpoint: 'detect-claims' | 'critique', body: unknown): Promise<T> {
   const response = await fetch(`${__RELAY_URL__}/api/${endpoint}`, {
     method: 'POST',
     headers: {
@@ -29,8 +37,26 @@ export async function callRelay<T>(endpoint: 'detect-claims' | 'critique', body:
     const errorBody = (await response.json().catch(() => ({ error: response.statusText }))) as {
       error?: string
     }
-    throw new RelayError(errorBody.error ?? `Relay request failed (${response.status})`)
+    const error = new RelayError(errorBody.error ?? `Relay request failed (${response.status})`)
+    ;(error as RelayError & { status?: number }).status = response.status
+    throw error
   }
 
   return (await response.json()) as T
+}
+
+export async function callRelay<T>(endpoint: 'detect-claims' | 'critique', body: unknown): Promise<T> {
+  if (!__RELAY_URL__) {
+    throw new RelayError('This build has no relay configured. Set RELAY_URL/RELAY_TOKEN and rebuild.')
+  }
+
+  try {
+    return await requestOnce<T>(endpoint, body)
+  } catch (error) {
+    const status = (error as RelayError & { status?: number }).status
+    const retryable = status === undefined || RETRYABLE_STATUS.has(status)
+    if (!retryable) throw error
+    await delay(RETRY_DELAY_MS)
+    return await requestOnce<T>(endpoint, body)
+  }
 }

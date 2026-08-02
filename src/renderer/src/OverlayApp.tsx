@@ -2,32 +2,31 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ClaimType } from '@shared/types'
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent, ScreenWatchWidget } from '@shared/ipc-contract'
+import logo from './assets/logo.png'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
-// Widget mark: a plain white "T" on the widget's black circle — no logo
-// image, no gradient. Text rather than an <img>/background-image since a
-// plain <img> was previously reported not rendering on this window (the
-// only `transparent: true` BrowserWindow in the app).
+// Widget mark: the real Tracely brand artwork. An earlier plain <img> was
+// reported not rendering on this window (the only `transparent: true`
+// BrowserWindow in the app) — that was actually a path-resolution issue
+// specific to a large, separately-emitted asset file. `logo.png` is small
+// enough (<4kb) that Vite inlines it as a base64 data URI at build time, so
+// there's no file path to resolve at runtime and it renders like any other
+// data URI image.
 function LogoBg({ size }: { size: number }): JSX.Element {
   return (
-    <div
+    <img
+      src={logo}
+      alt=""
+      draggable={false}
       style={{
         width: size,
         height: size,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        fontFamily: FONT_STACK,
-        fontWeight: 700,
-        fontSize: Math.round(size * 0.7),
-        lineHeight: 1,
-        userSelect: 'none'
+        objectFit: 'contain',
+        userSelect: 'none',
+        pointerEvents: 'none'
       }}
-    >
-      T
-    </div>
+    />
   )
 }
 

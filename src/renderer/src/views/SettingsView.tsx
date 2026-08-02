@@ -189,11 +189,11 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     ...blockedApps.filter((exe) => !scannedExeSet.has(exe.toLowerCase())).map((exe) => ({ name: exe, exe }))
   ].sort((a, b) => a.name.localeCompare(b.name))
 
-  async function setAppAllowed(exe: string, allowed: boolean): Promise<void> {
+  async function setAppBlocked(exe: string, blocked: boolean): Promise<void> {
     setPrefsError(null)
     const current = new Set(blockedApps.map((a) => a.toLowerCase()))
-    if (allowed) current.delete(exe.toLowerCase())
-    else current.add(exe.toLowerCase())
+    if (blocked) current.add(exe.toLowerCase())
+    else current.delete(exe.toLowerCase())
     try {
       await save({ screenWatchBlockedApps: Array.from(current).join(',') })
     } catch (err) {
@@ -388,25 +388,22 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                   onChange={toggleScreenWatch}
                 />
               </label>
-              <div className="settings-app-list">
+              <div className="settings-app-grid">
                 {installedApps === null ? (
                   <p className="muted">Scanning installed apps…</p>
                 ) : knownApps.length === 0 ? (
                   <p className="muted">No apps found. Add one by name below.</p>
                 ) : (
                   knownApps.map((app: ScannedApp) => {
-                    const allowed = !blockedApps.some((b) => b.toLowerCase() === app.exe.toLowerCase())
+                    const blocked = blockedApps.some((b) => b.toLowerCase() === app.exe.toLowerCase())
                     return (
-                      <label key={app.exe} className="settings-app-row">
+                      <label key={app.exe} className="settings-app-check" title={app.exe}>
                         <input
                           type="checkbox"
-                          checked={allowed}
-                          onChange={(e) => void setAppAllowed(app.exe, e.target.checked)}
+                          checked={blocked}
+                          onChange={(e) => void setAppBlocked(app.exe, e.target.checked)}
                         />
-                        <span className="settings-app-row-text">
-                          <span className="settings-app-row-name">{app.name}</span>
-                          {app.name !== app.exe ? <span className="settings-app-row-exe">{app.exe}</span> : null}
-                        </span>
+                        <span className="settings-app-check-name">{app.name}</span>
                       </label>
                     )
                   })
@@ -427,8 +424,8 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               </div>
               {prefsError ? <p className="error-text">{prefsError}</p> : null}
               <p className="muted settings-app-note">
-                Unchecked apps are on Screen Watch&rsquo;s blocklist and never have their text read. Chat apps
-                (Discord, Slack, Teams, WhatsApp, Signal, Telegram, Messenger) are blocked by default.
+                Check an app to block Screen Watch from reading its text. Chat apps (Discord, Slack, Teams,
+                WhatsApp, Signal, Telegram, Messenger) are checked/blocked by default.
               </p>
             </>
           ) : null}
