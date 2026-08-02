@@ -5,7 +5,6 @@ import { registerCritiqueHandlers } from './critiqueHandlers'
 import { registerEvidenceHandlers } from './evidenceHandlers'
 import { registerHistoryHandlers } from './historyHandlers'
 import { registerLibraryHandlers } from './libraryHandlers'
-import { registerLocalModelHandlers } from './localModelHandlers'
 import { registerProfileHandlers } from './profileHandlers'
 import { registerScreenWatchHandlers } from './screenWatchHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
@@ -23,5 +22,4 @@ export function registerIpcHandlers(): void {
   registerLibraryHandlers()
   registerScreenWatchHandlers()
   registerProfileHandlers()
-  registerLocalModelHandlers()
 }

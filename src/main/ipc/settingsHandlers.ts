@@ -16,8 +16,7 @@ const setSchema = z.object({
   density: z.enum(['comfortable', 'compact']).optional(),
   claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
-  screenWatchBlockedApps: z.string().optional(),
-  localModelEnabled: z.boolean().optional()
+  screenWatchBlockedApps: z.string().optional()
 })
 
 function buildSettings(): AppSettings {
@@ -31,8 +30,7 @@ function buildSettings(): AppSettings {
     density: raw.density as Density,
     claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
-    screenWatchBlockedApps: raw.screenWatchBlockedApps,
-    localModelEnabled: raw.localModelEnabled === 'true'
+    screenWatchBlockedApps: raw.screenWatchBlockedApps
   }
 }
 
@@ -60,9 +58,6 @@ export function registerSettingsHandlers(): void {
     }
     if (patch.screenWatchBlockedApps !== undefined) {
       setSetting('screenWatchBlockedApps', patch.screenWatchBlockedApps)
-    }
-    if (patch.localModelEnabled !== undefined) {
-      setSetting('localModelEnabled', String(patch.localModelEnabled))
     }
 
     return buildSettings()

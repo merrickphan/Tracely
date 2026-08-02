@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type { AccentColor, AppSettings, Density, Theme } from '@shared/types'
-import type { LocalModelStatus, ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
+import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
 import SettingsField from '../components/SettingsField'
-import { UserIcon, SunIcon, SlidersIcon, CogIcon, SignOutIcon, BackIcon } from '../components/icons'
+import { UserIcon, SunIcon, SlidersIcon, SignOutIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import { applyTheme } from '../lib/theme'
 import { applyAccentColor, applyDensity } from '../lib/appearance'
@@ -23,13 +23,12 @@ const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
 // rather than kept as decoration — only sections with a real backend stay:
 // Profile (local display prefs + avatar file), Appearance (real theme/
 // accent/density), Preferences (real Screen Watch app allow/block list).
-type Section = 'profile' | 'appearance' | 'preferences' | 'aiModel'
+type Section = 'profile' | 'appearance' | 'preferences'
 
 const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
   { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'appearance', label: 'Appearance', icon: SunIcon },
-  { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
-  { id: 'aiModel', label: 'AI Model', icon: CogIcon }
+  { id: 'preferences', label: 'Preferences', icon: SlidersIcon }
 ]
 
 export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
@@ -212,40 +211,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     // Newly-added apps default to allowed (not in the blocklist) unless
     // they're already blocked — no change needed unless the name matches
     // an existing blocked entry, in which case it already renders blocked.
-  }
-
-  // --- AI Model: the download starts automatically at app launch (see
-  // autoStartLocalModelDownload in modelDownload.ts) rather than requiring
-  // the user to find and click a button — this just displays whatever's
-  // already happening, and re-fetches status on a completed progress event
-  // since node-llama-cpp's download progress doesn't itself carry a
-  // "now ready" signal. The toggle in AppSettings only takes effect once the
-  // model has actually finished downloading, so status is tracked
-  // separately here rather than assumed from the setting alone.
-  const [localModelStatus, setLocalModelStatus] = useState<LocalModelStatus | null>(null)
-  const [downloadProgress, setDownloadProgress] = useState<{ downloaded: number; total: number } | null>(null)
-
-  useEffect(() => {
-    tracelyApi.getLocalModelStatus().then((res) => setLocalModelStatus(res.status))
-    return tracelyApi.onLocalModelDownloadProgress(({ downloadedBytes, totalBytes }) => {
-      setDownloadProgress({ downloaded: downloadedBytes, total: totalBytes })
-      if (totalBytes > 0 && downloadedBytes >= totalBytes) {
-        tracelyApi.getLocalModelStatus().then((res) => setLocalModelStatus(res.status))
-      }
-    })
-  }, [])
-
-  async function retryLocalModelDownload(): Promise<void> {
-    setDownloadProgress(null)
-    const res = await tracelyApi.startLocalModelDownload()
-    setLocalModelStatus(res.status)
-  }
-
-  function toggleLocalModel(): void {
-    if (!settings) return
-    const next = !settings.localModelEnabled
-    setSettings((s) => (s ? { ...s, localModelEnabled: next } : s))
-    void save({ localModelEnabled: next })
   }
 
   if (!settings) {
@@ -465,62 +430,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 Unchecked apps are on Screen Watch&rsquo;s blocklist and never have their text read. Chat apps
                 (Discord, Slack, Teams, WhatsApp, Signal, Telegram, Messenger) are blocked by default.
               </p>
-            </>
-          ) : null}
-
-          {section === 'aiModel' ? (
-            <>
-              <div className="settings-panel-header">
-                <h3>AI Model</h3>
-                <p>Run claim detection on a model bundled with Tracely — offline, private, no per-request cost.</p>
-              </div>
-              <label className="settings-toggle-row">
-                <div>
-                  <div className="settings-toggle-row-title">Use local AI</div>
-                  <div className="settings-toggle-row-subtitle">
-                    {localModelStatus === 'ready'
-                      ? settings.localModelEnabled
-                        ? 'On — claim detection runs locally.'
-                        : 'Off — claim detection uses the relay.'
-                      : 'Download the model below to enable this.'}
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.localModelEnabled}
-                  disabled={localModelStatus !== 'ready'}
-                  onChange={toggleLocalModel}
-                />
-              </label>
-              <div className="settings-model-status">
-                {localModelStatus === 'ready' ? (
-                  <p className="muted">Model downloaded and ready.</p>
-                ) : localModelStatus === 'error' ? (
-                  <>
-                    <p className="error-text">Download failed.</p>
-                    <Button variant="dark" onClick={retryLocalModelDownload}>
-                      Retry download
-                    </Button>
-                  </>
-                ) : downloadProgress ? (
-                  <>
-                    <div className="settings-progress-bar">
-                      <div
-                        className="settings-progress-bar-fill"
-                        style={{
-                          width: `${downloadProgress.total ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100) : 0}%`
-                        }}
-                      />
-                    </div>
-                    <p className="muted">
-                      {(downloadProgress.downloaded / 1e6).toFixed(0)} MB /{' '}
-                      {(downloadProgress.total / 1e6).toFixed(0)} MB
-                    </p>
-                  </>
-                ) : (
-                  <p className="muted">Downloading in the background (~2.5 GB, starts automatically)…</p>
-                )}
-              </div>
             </>
           ) : null}
 

@@ -20,9 +20,6 @@ export const IPC = {
   SETTINGS_SET: 'settings:set',
   SETTINGS_SCAN_INSTALLED_APPS: 'settings:scanInstalledApps',
 
-  LOCAL_MODEL_STATUS_GET: 'localModel:getStatus',
-  LOCAL_MODEL_DOWNLOAD_START: 'localModel:startDownload',
-
   PROFILE_GET: 'profile:get',
   PROFILE_SET: 'profile:set',
 
@@ -50,8 +47,7 @@ export const IPC_EVENTS = {
   FLOATING_CLIPBOARD_CAPTURED: 'floating:clipboardCaptured',
   SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
   SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate',
-  SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged',
-  LOCAL_MODEL_DOWNLOAD_PROGRESS: 'localModel:downloadProgress'
+  SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

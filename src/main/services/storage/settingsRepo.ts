@@ -16,8 +16,7 @@ const DEFAULTS: Record<string, string> = {
   // opt-out for chat/DM apps so casual conversations aren't read without
   // any setup. Comma-separated, case-insensitive. Empty means "block
   // nothing" — truly everywhere.
-  screenWatchBlockedApps: 'Discord.exe,Slack.exe,Teams.exe,WhatsApp.exe,Signal.exe,Telegram.exe,Messenger.exe',
-  localModelEnabled: 'false'
+  screenWatchBlockedApps: 'Discord.exe,Slack.exe,Teams.exe,WhatsApp.exe,Signal.exe,Telegram.exe,Messenger.exe'
 }
 
 export function getSetting(key: string): string {

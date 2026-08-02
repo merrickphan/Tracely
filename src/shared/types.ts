@@ -106,9 +106,4 @@ export interface AppSettings {
   claimSensitivity: number
   screenWatchHotkeyAccelerator: string
   screenWatchBlockedApps: string
-  // Runs claim detection on a bundled local model (no relay call, no
-  // per-request cost) instead of the relay — see services/ai/localModel.ts.
-  // Only takes effect once the model has actually been downloaded; see
-  // LocalModelStatus in ipc-contract.ts for the real download/ready state.
-  localModelEnabled: boolean
 }

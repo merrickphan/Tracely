@@ -31,9 +31,6 @@ import type {
   LibrarySaveResponse,
   LibraryUpdateRequest,
   LibraryUpdateResponse,
-  LocalModelDownloadProgressEvent,
-  LocalModelDownloadStartResponse,
-  LocalModelStatusGetResponse,
   ProfileGetResponse,
   ProfileSetRequest,
   ProfileSetResponse,
@@ -104,11 +101,6 @@ const api = {
     scanInstalledApps: (): Promise<SettingsScanInstalledAppsResponse> =>
       ipcRenderer.invoke(IPC.SETTINGS_SCAN_INSTALLED_APPS, {})
   },
-  localModel: {
-    getStatus: (): Promise<LocalModelStatusGetResponse> => ipcRenderer.invoke(IPC.LOCAL_MODEL_STATUS_GET, {}),
-    startDownload: (): Promise<LocalModelDownloadStartResponse> =>
-      ipcRenderer.invoke(IPC.LOCAL_MODEL_DOWNLOAD_START, {})
-  },
   profile: {
     get: (): Promise<ProfileGetResponse> => ipcRenderer.invoke(IPC.PROFILE_GET, {}),
     set: (req: ProfileSetRequest): Promise<ProfileSetResponse> => ipcRenderer.invoke(IPC.PROFILE_SET, req)
@@ -170,11 +162,6 @@ const api = {
     const listener = (_: unknown, payload: ScreenWatchHoverEvent | null): void => callback(payload)
     ipcRenderer.on(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
-  },
-  onLocalModelDownloadProgress: (callback: (event: LocalModelDownloadProgressEvent) => void): (() => void) => {
-    const listener = (_: unknown, payload: LocalModelDownloadProgressEvent): void => callback(payload)
-    ipcRenderer.on(IPC_EVENTS.LOCAL_MODEL_DOWNLOAD_PROGRESS, listener)
-    return () => ipcRenderer.removeListener(IPC_EVENTS.LOCAL_MODEL_DOWNLOAD_PROGRESS, listener)
   }
 }
 

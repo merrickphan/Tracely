@@ -39,11 +39,6 @@ export const tracelyApi = {
     call(window.tracely.settings.set(patch)),
   scanInstalledApps: () => call(window.tracely.settings.scanInstalledApps()),
 
-  getLocalModelStatus: () => call(window.tracely.localModel.getStatus()),
-  startLocalModelDownload: () => call(window.tracely.localModel.startDownload()),
-  onLocalModelDownloadProgress: (cb: Parameters<typeof window.tracely.onLocalModelDownloadProgress>[0]) =>
-    window.tracely.onLocalModelDownloadProgress(cb),
-
   getProfile: () => call(window.tracely.profile.get()),
   setProfile: (patch: Parameters<typeof window.tracely.profile.set>[0]) =>
     call(window.tracely.profile.set(patch)),

@@ -125,29 +125,8 @@ export interface SettingsSetRequest {
   claimSensitivity?: number
   screenWatchHotkeyAccelerator?: string
   screenWatchBlockedApps?: string
-  localModelEnabled?: boolean
 }
 export type SettingsSetResponse = AppSettings
-
-// 'error' means the last download or local-inference attempt failed (see
-// claimDetection.ts's fallback-to-relay catch) — the user can retry from
-// Settings, it isn't a permanent state.
-export type LocalModelStatus = 'not-downloaded' | 'downloading' | 'ready' | 'error'
-
-export type LocalModelStatusGetRequest = Record<string, never>
-export interface LocalModelStatusGetResponse {
-  status: LocalModelStatus
-}
-
-export type LocalModelDownloadStartRequest = Record<string, never>
-export interface LocalModelDownloadStartResponse {
-  status: LocalModelStatus
-}
-
-export interface LocalModelDownloadProgressEvent {
-  downloadedBytes: number
-  totalBytes: number
-}
 
 export type SettingsScanInstalledAppsRequest = Record<string, never>
 export interface ScannedApp {

@@ -18,7 +18,6 @@
     "@fontsource/instrument-sans": "^5.3.0",
     "dotenv": "^16.4.5",
     "electron-updater": "^6.8.9",
-    "node-llama-cpp": "^3.19.1",
     "sql.js": "^1.11.0",
     "zod": "^3.23.8"
   },
@@ -36,8 +35,5 @@
     "react-dom": "^18.3.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
-  },
-  "allowScripts": {
-    "node-llama-cpp@3.19.1": true
   }
 }
