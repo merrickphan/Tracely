@@ -498,9 +498,16 @@ function updateOverlayAndWidget(
   const activeLocal: ScreenRect = widgetManualPos
     ? { x: widgetManualPos.x, y: widgetManualPos.y, width: anchoredLocal.width, height: anchoredLocal.height }
     : anchoredLocal
+  // Must add the overlay's own origin (the focused app window's logical
+  // top-left, windowLogical), not display.bounds — the overlay is sized to
+  // that window, not the whole display, since the window-scoping change.
+  // Adding the display's origin here left the widget's hit-test rect offset
+  // from where it's actually drawn whenever the app window didn't start at
+  // the display's own top-left corner, so hoverTracking.ts never detected
+  // the cursor over it and clicks always passed through.
   const activeAbsolute: ScreenRect = {
-    x: activeLocal.x + display.bounds.x,
-    y: activeLocal.y + display.bounds.y,
+    x: activeLocal.x + windowLogical.x,
+    y: activeLocal.y + windowLogical.y,
     width: activeLocal.width,
     height: activeLocal.height
   }
