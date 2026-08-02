@@ -11,12 +11,12 @@
   --bg: #f0f0f1;
   --surface: #ffffff;
   --surface-2: rgba(0, 0, 0, 0.02);
-  --border: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.12);
+  --border: rgba(0, 0, 0, 0.18);
+  --border-strong: rgba(0, 0, 0, 0.26);
   --text: #000000;
-  --muted: rgba(0, 0, 0, 0.45);
-  --muted-2: rgba(0, 0, 0, 0.5);
-  --label: rgba(0, 0, 0, 0.4);
+  --muted: rgba(0, 0, 0, 0.6);
+  --muted-2: rgba(0, 0, 0, 0.64);
+  --label: rgba(0, 0, 0, 0.56);
   --ink: #000000;
   --ink-contrast: #ffffff;
   --accent: #f47b20;
@@ -43,12 +43,12 @@
     --bg: #0b0b0d;
     --surface: #17171b;
     --surface-2: rgba(255, 255, 255, 0.04);
-    --border: rgba(255, 255, 255, 0.1);
-    --border-strong: rgba(255, 255, 255, 0.14);
+    --border: rgba(255, 255, 255, 0.18);
+    --border-strong: rgba(255, 255, 255, 0.28);
     --text: #f6f6f8;
-    --muted: rgba(246, 246, 248, 0.5);
-    --muted-2: rgba(246, 246, 248, 0.55);
-    --label: rgba(246, 246, 248, 0.45);
+    --muted: rgba(246, 246, 248, 0.66);
+    --muted-2: rgba(246, 246, 248, 0.7);
+    --label: rgba(246, 246, 248, 0.62);
     --ink: #f6f6f8;
     --ink-contrast: #0b0b0d;
     --accent: #f47b20;
@@ -76,12 +76,12 @@
   --bg: #0b0b0d;
   --surface: #17171b;
   --surface-2: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.18);
+  --border-strong: rgba(255, 255, 255, 0.28);
   --text: #f6f6f8;
-  --muted: rgba(246, 246, 248, 0.5);
-  --muted-2: rgba(246, 246, 248, 0.55);
-  --label: rgba(246, 246, 248, 0.45);
+  --muted: rgba(246, 246, 248, 0.66);
+  --muted-2: rgba(246, 246, 248, 0.7);
+  --label: rgba(246, 246, 248, 0.62);
   --ink: #f6f6f8;
   --ink-contrast: #0b0b0d;
   --accent: #f47b20;
@@ -388,7 +388,7 @@ input[type='range']::-webkit-slider-runnable-track {
   font-weight: 400;
   line-height: 1.35;
   letter-spacing: 0.18px;
-  color: #6d6d6d;
+  color: #4a4a4a;
   margin: 0;
 }
 
@@ -417,7 +417,7 @@ input[type='range']::-webkit-slider-runnable-track {
 .home-link {
   border: none;
   background: transparent;
-  color: #6d6d6d;
+  color: #4a4a4a;
   text-align: right;
   cursor: pointer;
   padding: 0;
@@ -516,7 +516,7 @@ input[type='range']::-webkit-slider-runnable-track {
   top: 533px;
   font-size: 16px;
   letter-spacing: 0.16px;
-  color: #6d6d6d;
+  color: #4a4a4a;
   white-space: nowrap;
 }
 
@@ -645,7 +645,7 @@ textarea:disabled {
   left: 32px;
   border: none;
   background: transparent;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.7);
   cursor: pointer;
   padding: 4px;
 }
@@ -664,7 +664,7 @@ textarea:disabled {
   gap: 6px;
   border: none;
   background: transparent;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(0, 0, 0, 0.68);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -836,7 +836,7 @@ textarea:disabled {
   gap: 10px;
   font-size: 13px;
   font-weight: 400;
-  color: rgba(0, 0, 0, 0.35);
+  color: rgba(0, 0, 0, 0.5);
 }
 
 .analyzing-step.done {
@@ -894,7 +894,7 @@ textarea:disabled {
   gap: 4px;
   border: none;
   background: transparent;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(0, 0, 0, 0.68);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -909,12 +909,12 @@ textarea:disabled {
 .docedit-divider {
   width: 1px;
   height: 20px;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.18);
   flex-shrink: 0;
 }
 
 .docedit-icon {
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.7);
   flex-shrink: 0;
 }
 
@@ -940,7 +940,7 @@ textarea:disabled {
   min-width: 22px;
   padding: 0 6px;
   font-size: 13px;
-  color: #808080;
+  color: #595959;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -974,7 +974,7 @@ textarea:disabled {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  color: #808080;
+  color: #595959;
   background: rgba(0, 0, 0, 0.04);
   border: none;
   border-radius: 6px;
@@ -1075,7 +1075,7 @@ textarea:disabled {
 .docedit-more {
   border: none;
   background: transparent;
-  color: #848484;
+  color: #5c5c5c;
   font-size: 12px;
   font-weight: 500;
   cursor: default;
@@ -1464,6 +1464,7 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  -webkit-app-region: no-drag;
 }
 
 .settings-sidebar-header {
@@ -1566,6 +1567,12 @@ textarea:disabled {
   min-width: 0;
   padding: 28px;
   overflow-y: auto;
+  /* .settings-shell (the drag handle for this window) marks its whole
+     subtree as a drag region; Electron/Chromium blocks wheel scroll inside
+     a drag region unless it's explicitly opted back out, same as the
+     input/button/etc. opt-outs above — without this, overflow-y: auto has
+     no effect and the panel just can't be scrolled at all. */
+  -webkit-app-region: no-drag;
 }
 
 .settings-panel-header {
@@ -1597,7 +1604,7 @@ textarea:disabled {
   height: 48px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.25);
+  color: rgba(0, 0, 0, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1626,7 +1633,7 @@ textarea:disabled {
 .settings-avatar-meta p {
   margin: 0;
   font-size: 10px;
-  color: rgba(0, 0, 0, 0.35);
+  color: rgba(0, 0, 0, 0.5);
 }
 
 .settings-avatar-photo {
@@ -1655,7 +1662,7 @@ textarea:disabled {
 
 .settings-toggle-row-subtitle {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(0, 0, 0, 0.6);
   margin-top: 2px;
 }
 

@@ -1,10 +1,10 @@
 import { join } from 'path'
-import { BrowserWindow, type Display } from 'electron'
+import { BrowserWindow, type Rectangle } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { logScreenWatch } from '../services/screenWatch/debugLog'
 
 let overlayWindow: BrowserWindow | null = null
-let currentDisplayId: number | null = null
+let currentBoundsKey: string | null = null
 
 function createOverlayWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -56,12 +56,17 @@ export function getOverlayWindow(): BrowserWindow | null {
   return overlayWindow
 }
 
-export function showOverlayOnDisplay(display: Display): BrowserWindow {
+// Sized/positioned to the focused app's own window rect (logical/DIP
+// pixels, already scale-converted by the caller) rather than the whole
+// display — so underlines and the widget only ever draw over the app
+// that's actually focused, not wherever else happens to share the monitor.
+export function showOverlayOnWindow(bounds: Rectangle): BrowserWindow {
   const win = overlayWindow ?? createOverlayWindow()
 
-  if (currentDisplayId !== display.id) {
-    win.setBounds(display.bounds)
-    currentDisplayId = display.id
+  const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`
+  if (currentBoundsKey !== key) {
+    win.setBounds(bounds)
+    currentBoundsKey = key
   }
 
   if (!win.isVisible()) win.showInactive()

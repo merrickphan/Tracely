@@ -144,6 +144,35 @@ try {
   $rect = $focused.Current.BoundingRectangle
   $controlRect = @{ x = $rect.X; y = $rect.Y; width = $rect.Width; height = $rect.Height }
 
+  # Walk up to the focused control's top-level application window so the
+  # overlay can be sized/clipped to that one window instead of the whole
+  # display — without this, Screen Watch reads whichever control has OS
+  # keyboard focus but draws across the entire monitor, so underlines can
+  # appear to "leak" outside the app that's actually focused (e.g. over
+  # whatever else happens to be on screen) whenever a provider's reported
+  # text-range rectangles don't line up perfectly with the visible viewport.
+  # A max iteration count guards against an unexpected tree shape looping
+  # forever; falling back to the control's own rect if no Window ancestor is
+  # found is a graceful degrade back to the old single-control behavior
+  # rather than a hard failure.
+  $windowRect = $controlRect
+  try {
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $ancestor = $focused
+    $hops = 0
+    while ($ancestor -ne $null -and $hops -lt 25) {
+      if ($ancestor.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) {
+        $wr = $ancestor.Current.BoundingRectangle
+        if ($wr.Width -gt 0 -and $wr.Height -gt 0) {
+          $windowRect = @{ x = $wr.X; y = $wr.Y; width = $wr.Width; height = $wr.Height }
+        }
+        break
+      }
+      $ancestor = $walker.GetParent($ancestor)
+      $hops++
+    }
+  } catch {}
+
   $text = $null
   $supportsTextPattern = $false
   $docRange = $null
@@ -259,6 +288,7 @@ try {
     text                   = $text
     supportsTextPattern    = $supportsTextPattern
     controlRect            = $controlRect
+    windowRect             = $windowRect
     claimRects             = $claimRects
     wholeDocRectCount      = $wholeDocRectCount
     visibleRangeCount      = $visibleRangeCount

@@ -6,7 +6,7 @@ import type { Claim } from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
 import { getSetting, setSetting } from '../storage/settingsRepo'
-import { getOverlayWindow, hideOverlay, showOverlayOnDisplay } from '../../windows/overlayWindow'
+import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
@@ -68,7 +68,7 @@ let widgetExpanded = false
 // Cached so toggling expanded/collapsed can redraw immediately instead of
 // waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
 let lastUpdateInputs: {
-  controlRect: ScreenRect
+  windowRect: ScreenRect
   claimRects: { id: string; rects: ScreenRect[] }[]
   claims: Claim[]
   fullText: string
@@ -85,7 +85,7 @@ export function setWidgetExpanded(expanded: boolean): void {
   if (!expanded) widgetManualPos = null
   if (lastUpdateInputs) {
     updateOverlayAndWidget(
-      lastUpdateInputs.controlRect,
+      lastUpdateInputs.windowRect,
       lastUpdateInputs.claimRects,
       lastUpdateInputs.claims,
       lastUpdateInputs.fullText
@@ -102,7 +102,7 @@ export function setWidgetDragEnd(local: { x: number; y: number }): void {
   setDragActive(false)
   if (lastUpdateInputs) {
     updateOverlayAndWidget(
-      lastUpdateInputs.controlRect,
+      lastUpdateInputs.windowRect,
       lastUpdateInputs.claimRects,
       lastUpdateInputs.claims,
       lastUpdateInputs.fullText
@@ -110,21 +110,22 @@ export function setWidgetDragEnd(local: { x: number; y: number }): void {
   }
 }
 
-// The display a claim's underline was last drawn on — needed to convert the
+// The overlay's own logical top-left (the focused app window's origin, not
+// the display's) the last time it was drawn — needed to convert the
 // renderer-reported popover rect (window-local) into absolute screen
 // coordinates for hoverTracking.ts, the same way widget drag positions are
 // converted.
-let lastDisplayOrigin: { x: number; y: number } | null = null
+let lastOverlayOrigin: { x: number; y: number } | null = null
 let activePopoverClaimId: string | null = null
 let activePopoverRectAbsolute: ScreenRect | null = null
 
 export function setActivePopoverRect(claimId: string | null, rectLocal: ScreenRect | null): void {
   activePopoverClaimId = claimId
   activePopoverRectAbsolute =
-    rectLocal && lastDisplayOrigin
+    rectLocal && lastOverlayOrigin
       ? {
-          x: rectLocal.x + lastDisplayOrigin.x,
-          y: rectLocal.y + lastDisplayOrigin.y,
+          x: rectLocal.x + lastOverlayOrigin.x,
+          y: rectLocal.y + lastOverlayOrigin.y,
           width: rectLocal.width,
           height: rectLocal.height
         }
@@ -349,7 +350,7 @@ async function tick(): Promise<void> {
       )
     }
 
-    updateOverlayAndWidget(snapshot.controlRect, snapshot.claimRects, currentClaims, snapshot.text)
+    updateOverlayAndWidget(snapshot.windowRect, snapshot.claimRects, currentClaims, snapshot.text)
 
     emitStatus({
       enabled,
@@ -368,9 +369,9 @@ async function tick(): Promise<void> {
 
 // Matches the Figma "Collapsed Launcher" mockup's 56px circle.
 const WIDGET_SIZE = 56
-// Fixed distance from the display's bottom-right corner — matches where the
-// Figma mockups place it, and (deliberately) has nothing to do with where
-// the focused control or text cursor currently is.
+// Fixed distance from the focused window's bottom-right corner — matches
+// where the Figma mockups place it, and (deliberately) has nothing to do
+// with where the focused control or text cursor currently is.
 const EDGE_MARGIN = 24
 // Matches the Figma "Widget over Document" mockup's card size exactly.
 const PANEL_WIDTH = 560
@@ -397,12 +398,12 @@ function computeAvgConfidencePercent(claims: Claim[]): number {
 }
 
 function updateOverlayAndWidget(
-  controlRect: ScreenRect,
+  windowRect: ScreenRect,
   claimRects: { id: string; rects: ScreenRect[] }[],
   claims: Claim[],
   fullText: string
 ): void {
-  lastUpdateInputs = { controlRect, claimRects, claims, fullText }
+  lastUpdateInputs = { windowRect, claimRects, claims, fullText }
 
   const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
     (r) => Array.isArray(r.rects) && r.rects.length > 0
@@ -413,30 +414,47 @@ function updateOverlayAndWidget(
   }
 
   const center = {
-    x: controlRect.x + controlRect.width / 2,
-    y: controlRect.y + controlRect.height / 2
+    x: windowRect.x + windowRect.width / 2,
+    y: windowRect.y + windowRect.height / 2
   }
   const display = screen.getDisplayNearestPoint(center)
-  lastDisplayOrigin = { x: display.bounds.x, y: display.bounds.y }
-  // The widget badge (see hoverTracking.ts / OverlayApp.tsx) shows
-  // whenever a supported text field is focused — like Grammarly's icon —
-  // independent of whether any claims were found yet, so the overlay stays
-  // shown for that even with zero underlines.
-  const win = showOverlayOnDisplay(display)
 
   // UI Automation returns physical screen pixels; Electron window bounds are
   // logical (DPI-scaled) pixels. On anything other than 100% display scaling
   // (125%/150% are the common Windows defaults on modern laptops) these are
   // different units — divide by scaleFactor or every rect lands in the wrong
-  // place, usually off the visible overlay window entirely. This assumes the
-  // display's physical top-left aligns with its logical (0,0), which holds
-  // for the primary display; a true secondary-display-with-different-scale
-  // fix would need each display's physical origin, which Electron doesn't
-  // expose — still a known gap for that specific case.
+  // place. This assumes the display's physical top-left aligns with its
+  // logical (0,0), which holds for the primary display; a true secondary-
+  // display-with-different-scale fix would need each display's physical
+  // origin, which Electron doesn't expose — still a known gap for that
+  // specific case.
   const scale = display.scaleFactor || 1
+  const windowLogical = {
+    x: windowRect.x / scale,
+    y: windowRect.y / scale,
+    width: windowRect.width / scale,
+    height: windowRect.height / scale
+  }
+  lastOverlayOrigin = { x: windowLogical.x, y: windowLogical.y }
+
+  // The overlay is sized to the focused app's own window, not the whole
+  // display — the OS clips anything drawn outside a window's own bounds for
+  // free, which is what keeps underlines/the widget confined to whichever
+  // app is actually focused instead of "leaking" across the rest of the
+  // screen. The widget badge (see hoverTracking.ts / OverlayApp.tsx) shows
+  // whenever a supported text field is focused — like Grammarly's icon —
+  // independent of whether any claims were found yet, so the overlay stays
+  // shown for that even with zero underlines.
+  const win = showOverlayOnWindow({
+    x: Math.round(windowLogical.x),
+    y: Math.round(windowLogical.y),
+    width: Math.max(1, Math.round(windowLogical.width)),
+    height: Math.max(1, Math.round(windowLogical.height))
+  })
+
   const toLocal = (r: ScreenRect): ScreenRect => ({
-    x: r.x / scale - display.bounds.x,
-    y: r.y / scale - display.bounds.y,
+    x: r.x / scale - windowLogical.x,
+    y: r.y / scale - windowLogical.y,
     width: r.width / scale,
     height: r.height / scale
   })
@@ -453,12 +471,12 @@ function updateOverlayAndWidget(
     claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual'
   }))
 
-  // Anchored to a fixed corner of the display, not the focused control — a
-  // control-relative anchor moved every time the user typed (the control's
-  // rect can shift as text reflows), which is exactly the "don't follow
-  // where I'm typing" behavior this replaced. Local space is already
-  // window-local logical pixels (the overlay window IS the display), so no
-  // physical/scale conversion is needed here at all, unlike the underline
+  // Anchored to a fixed corner of the focused app's window, not the focused
+  // control — a control-relative anchor moved every time the user typed (the
+  // control's rect can shift as text reflows), which is exactly the "don't
+  // follow where I'm typing" behavior this replaced. Local space is already
+  // window-local logical pixels (the overlay window IS the app window), so
+  // no physical/scale conversion is needed here at all, unlike the underline
   // rects above.
   const winBounds = win.getBounds()
   const widgetLocalAnchored: ScreenRect = {

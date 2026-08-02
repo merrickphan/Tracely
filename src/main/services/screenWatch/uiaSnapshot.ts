@@ -42,6 +42,11 @@ export type UiaSnapshot =
       text: string
       supportsTextPattern: boolean
       controlRect: ScreenRect
+      // The focused control's top-level application window, walked via
+      // TreeWalker — used to scope the overlay to that one window instead of
+      // the whole display (falls back to controlRect if no Window ancestor
+      // was found; see uia-watch.ps1).
+      windowRect: ScreenRect
       claimRects: ClaimRectResult[]
       // Diagnostic-only, see the comment on ClaimRectResult.
       wholeDocRectCount?: number

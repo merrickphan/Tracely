@@ -2,21 +2,21 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ClaimType } from '@shared/types'
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent, ScreenWatchWidget } from '@shared/ipc-contract'
-import logo from './assets/logo.png'
+import figmaLogo from './assets/figma-logo.png'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
-// Widget mark: the real Tracely brand artwork. An earlier plain <img> was
-// reported not rendering on this window (the only `transparent: true`
-// BrowserWindow in the app) — that was actually a path-resolution issue
-// specific to a large, separately-emitted asset file. `logo.png` is small
-// enough (<4kb) that Vite inlines it as a base64 data URI at build time, so
-// there's no file path to resolve at runtime and it renders like any other
-// data URI image.
+// Widget mark: just the Tracely "T" glyph, no background — `figma-logo.png`
+// is transparent everywhere except the mark itself (unlike `logo.png`,
+// which is the app-icon version with its own solid orange-square
+// background baked in, wrong for sitting inside the widget's own black
+// circle). `brightness(0) invert(1)` flattens the mark's orange gradient to
+// solid white while leaving the transparent pixels transparent, since the
+// black circle behind it is the widget's own background, not the logo's.
 function LogoBg({ size }: { size: number }): JSX.Element {
   return (
     <img
-      src={logo}
+      src={figmaLogo}
       alt=""
       draggable={false}
       style={{
@@ -24,7 +24,8 @@ function LogoBg({ size }: { size: number }): JSX.Element {
         height: size,
         objectFit: 'contain',
         userSelect: 'none',
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        filter: 'brightness(0) invert(1)'
       }}
     />
   )
@@ -205,11 +206,20 @@ export default function OverlayApp(): JSX.Element {
               key={`${u.id}-${i}`}
               style={{
                 position: 'absolute',
-                left: r.x,
-                top: r.y + r.height,
-                width: r.width,
+                // Rounded to whole pixels (the underlying rect arrives
+                // scale-converted from physical UIA coordinates, so it's
+                // rarely already an integer) — a fractional position blurs a
+                // 2px line across two rows of pixels instead of one crisp
+                // one. A small gap below the text's bounding box, rather
+                // than flush against it, keeps the line clear of descenders
+                // (g, y, p) that a tight bounding rect leaves right at its
+                // own bottom edge — flush was reading as "cutting through"
+                // those letters instead of sitting under them.
+                left: Math.round(r.x),
+                top: Math.round(r.y + r.height) + 2,
+                width: Math.round(r.width),
                 height: 2,
-                borderRadius: 1,
+                borderRadius: 2,
                 background: color,
                 opacity: isHovered ? 1 : 0.85,
                 boxShadow: isHovered ? `0 0 6px 0.5px ${color}99` : 'none',
@@ -497,7 +507,7 @@ export default function OverlayApp(): JSX.Element {
                     {CLAIM_TYPE_LABEL[claimHovered.claimType]} flagged
                   </div>
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.4, color: '#737373' }}>
+                <div style={{ fontSize: 13, lineHeight: 1.4, color: '#4a4a4a' }}>
                   {CLAIM_TYPE_DESCRIPTION[claimHovered.claimType]}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -521,7 +531,7 @@ export default function OverlayApp(): JSX.Element {
                   <button
                     onClick={() => dismiss(claimHovered.claimId)}
                     style={{
-                      border: '1px solid #d9d9d9',
+                      border: '1px solid #b3b3b3',
                       borderRadius: 8,
                       padding: '8px 14px',
                       fontSize: 13,
