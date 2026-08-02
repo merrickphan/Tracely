@@ -167,21 +167,20 @@ let lastStatus: ScreenWatchStatus = {
   blockedApp: null
 }
 
-function getBlockedApps(): string[] {
-  return getSetting('screenWatchBlockedApps')
+function getAllowedApps(): string[] {
+  return getSetting('screenWatchAllowedApps')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
 }
 
-// Default-allow (works in any app, like Grammarly) with an opt-out
-// blocklist rather than an opt-in allowlist — the blocklist defaults to
-// chat/DM apps (Discord, Slack, Teams, ...) so casual messages don't get
-// read without the user ever having to configure anything, while any other
-// app just works out of the box.
-function isProcessBlocked(processName: string): boolean {
-  const blocked = getBlockedApps()
-  return blocked.some((name) => name.toLowerCase() === processName.toLowerCase())
+// Opt-in allowlist — Screen Watch reads nothing anywhere until the user
+// explicitly picks which apps it's allowed to work in (Settings >
+// Preferences), rather than working everywhere by default with an opt-out
+// blocklist. Nothing is enabled out of the box.
+function isProcessAllowed(processName: string): boolean {
+  const allowed = getAllowedApps()
+  return allowed.some((name) => name.toLowerCase() === processName.toLowerCase())
 }
 
 function emitStatus(status: ScreenWatchStatus): void {
@@ -255,13 +254,13 @@ async function tick(): Promise<void> {
     }
     lastSkipReason = null
 
-    if (isProcessBlocked(snapshot.processName)) {
-      // Not an error — the user's blocklist just excludes this app. Bail
-      // out before any text ever reaches detectClaims: this is the actual
+    if (!isProcessAllowed(snapshot.processName)) {
+      // Not an error — the user just hasn't allowed this app. Bail out
+      // before any text ever reaches detectClaims: this is the actual
       // token-usage and privacy boundary, not just a UI filter.
       hideOverlay()
       resetTrackingState()
-      logScreenWatch(`focused app ${snapshot.processName} is on the blocklist, skipping`)
+      logScreenWatch(`focused app ${snapshot.processName} is not on the allowed list, skipping`)
       emitStatus({
         enabled,
         active: false,

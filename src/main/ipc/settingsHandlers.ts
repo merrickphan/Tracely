@@ -16,7 +16,7 @@ const setSchema = z.object({
   density: z.enum(['comfortable', 'compact']).optional(),
   claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
-  screenWatchBlockedApps: z.string().optional()
+  screenWatchAllowedApps: z.string().optional()
 })
 
 function buildSettings(): AppSettings {
@@ -30,7 +30,7 @@ function buildSettings(): AppSettings {
     density: raw.density as Density,
     claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
-    screenWatchBlockedApps: raw.screenWatchBlockedApps
+    screenWatchAllowedApps: raw.screenWatchAllowedApps
   }
 }
 
@@ -56,8 +56,8 @@ export function registerSettingsHandlers(): void {
       setSetting('screenWatchHotkeyAccelerator', patch.screenWatchHotkeyAccelerator)
       registerScreenWatchHotkey(patch.screenWatchHotkeyAccelerator)
     }
-    if (patch.screenWatchBlockedApps !== undefined) {
-      setSetting('screenWatchBlockedApps', patch.screenWatchBlockedApps)
+    if (patch.screenWatchAllowedApps !== undefined) {
+      setSetting('screenWatchAllowedApps', patch.screenWatchAllowedApps)
     }
 
     return buildSettings()

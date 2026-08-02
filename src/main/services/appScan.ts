@@ -23,7 +23,7 @@ export interface ScannedApp {
 /**
  * Best-effort scan of Windows' installed-programs registry data (the same
  * source Windows Settings > Apps reads) for installed apps, used to show a
- * real Screen Watch blocklist checklist instead of a generic fixed list.
+ * real Screen Watch allowlist checklist instead of a generic fixed list.
  * Registry entries that can't be resolved to an actual, existing .exe are
  * dropped rather than shown wrong (see scan-apps.ps1) — callers should
  * treat an empty/failed result as "couldn't tell," not "nothing is

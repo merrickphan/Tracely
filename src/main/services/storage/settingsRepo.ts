@@ -11,12 +11,12 @@ const DEFAULTS: Record<string, string> = {
   density: 'comfortable',
   claimSensitivity: '0.55',
   screenWatchHotkeyAccelerator: 'CommandOrControl+Shift+S',
-  // Process image names (e.g. "Discord.exe") Screen Watch is NOT allowed to
-  // read text from — default-allow (works anywhere, like Grammarly),
-  // opt-out for chat/DM apps so casual conversations aren't read without
-  // any setup. Comma-separated, case-insensitive. Empty means "block
-  // nothing" — truly everywhere.
-  screenWatchBlockedApps: 'Discord.exe,Slack.exe,Teams.exe,WhatsApp.exe,Signal.exe,Telegram.exe,Messenger.exe'
+  // Process image names (e.g. "Discord.exe") Screen Watch IS allowed to
+  // read text from — opt-in allowlist, not an opt-out blocklist: nothing
+  // works anywhere until the user explicitly picks apps in Settings >
+  // Preferences. Comma-separated, case-insensitive. Empty means nothing is
+  // enabled yet.
+  screenWatchAllowedApps: ''
 }
 
 export function getSetting(key: string): string {

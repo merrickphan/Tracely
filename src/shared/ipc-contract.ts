@@ -124,7 +124,7 @@ export interface SettingsSetRequest {
   density?: Density
   claimSensitivity?: number
   screenWatchHotkeyAccelerator?: string
-  screenWatchBlockedApps?: string
+  screenWatchAllowedApps?: string
 }
 export type SettingsSetResponse = AppSettings
 

@@ -105,5 +105,7 @@ export interface AppSettings {
   // the user instead of a value we keep re-tuning ourselves in code.
   claimSensitivity: number
   screenWatchHotkeyAccelerator: string
-  screenWatchBlockedApps: string
+  // Opt-in: apps this exe list contains are the ONLY ones Screen Watch
+  // reads text from. Empty means nothing is enabled anywhere yet.
+  screenWatchAllowedApps: string
 }
