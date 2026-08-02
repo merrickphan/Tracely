@@ -139,28 +139,48 @@ export default function OverlayApp(): JSX.Element {
     setDismissedIds((prev) => new Set(prev).add(claimId))
   }
 
-  function onGripMouseDown(e: ReactMouseEvent): void {
+  // Shared drag handler for both the collapsed circle and the expanded
+  // panel's grip. The circle also needs to stay clickable (to open the
+  // panel) without a drag — distinguished by a small movement threshold:
+  // real dragging isn't reported to main (and doesn't move anything) until
+  // the cursor has actually moved past it, and a mouseup before that
+  // threshold is treated as a plain click instead.
+  const DRAG_THRESHOLD = 4
+  function startWidgetDrag(e: ReactMouseEvent, size: { width: number; height: number }, onClick?: () => void): void {
     if (!widget) return
     e.preventDefault()
     const startMouse = { x: e.clientX, y: e.clientY }
     const startRect = { x: widget.rect.x, y: widget.rect.y }
-    void window.tracely.screenWatch.widgetDragStart()
+    let dragging = false
 
     function clamp(pos: { x: number; y: number }): { x: number; y: number } {
       return {
-        x: Math.min(Math.max(0, pos.x), window.innerWidth - 560),
-        y: Math.min(Math.max(0, pos.y), window.innerHeight - 320)
+        x: Math.min(Math.max(0, pos.x), window.innerWidth - size.width),
+        y: Math.min(Math.max(0, pos.y), window.innerHeight - size.height)
       }
     }
+    function delta(ev: MouseEvent): { x: number; y: number } {
+      return { x: startRect.x + (ev.clientX - startMouse.x), y: startRect.y + (ev.clientY - startMouse.y) }
+    }
     function onMove(ev: MouseEvent): void {
-      setDragPos(clamp({ x: startRect.x + (ev.clientX - startMouse.x), y: startRect.y + (ev.clientY - startMouse.y) }))
+      if (!dragging) {
+        const dx = ev.clientX - startMouse.x
+        const dy = ev.clientY - startMouse.y
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+        dragging = true
+        void window.tracely.screenWatch.widgetDragStart()
+      }
+      setDragPos(clamp(delta(ev)))
     }
     function onUp(ev: MouseEvent): void {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
-      const final = clamp({ x: startRect.x + (ev.clientX - startMouse.x), y: startRect.y + (ev.clientY - startMouse.y) })
-      setDragPos(null)
-      void window.tracely.screenWatch.widgetDragEnd(final)
+      if (dragging) {
+        setDragPos(null)
+        void window.tracely.screenWatch.widgetDragEnd(clamp(delta(ev)))
+      } else {
+        onClick?.()
+      }
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -229,54 +249,61 @@ export default function OverlayApp(): JSX.Element {
           ))
         })}
 
-      {widget && !widget.expanded ? (
-        <div style={{ position: 'absolute', left: widget.rect.x, top: widget.rect.y, width: 56, height: 56 }}>
-          <button
-            onClick={toggleWidgetExpanded}
-            title="Open Tracely widget"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              border: 'none',
-              borderRadius: '50%',
-              padding: 0,
-              cursor: 'pointer',
-              background: '#000',
-              boxShadow: widgetHovered ? '0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 2px #ff5900' : '0 2px 8px rgba(0, 0, 0, 0.35)',
-              transition: 'box-shadow 0.12s ease, transform 0.12s ease',
-              transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <LogoBg size={26} />
-          </button>
-          {widget.claimCount > 0 ? (
-            <div
-              style={{
-                position: 'absolute',
-                left: 28.5,
-                top: -8.5,
-                width: 31,
-                height: 31,
-                borderRadius: '50%',
-                background: '#ff5900',
-                border: '2px solid #0b0b0d',
-                color: '#fff',
-                fontSize: 14,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none'
-              }}
-            >
-              {widget.claimCount}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {widget && !widget.expanded
+        ? (() => {
+            const circlePos = dragPos ?? widget.rect
+            return (
+              <div style={{ position: 'absolute', left: circlePos.x, top: circlePos.y, width: 56, height: 56 }}>
+                <button
+                  onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, toggleWidgetExpanded)}
+                  title="Tracely widget — click to open, drag to move"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    border: 'none',
+                    borderRadius: '50%',
+                    padding: 0,
+                    cursor: 'pointer',
+                    background: '#000',
+                    boxShadow: widgetHovered
+                      ? '0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 2px #ff5900'
+                      : '0 2px 8px rgba(0, 0, 0, 0.35)',
+                    transition: 'box-shadow 0.12s ease, transform 0.12s ease',
+                    transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <LogoBg size={34} />
+                </button>
+                {widget.claimCount > 0 ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 28.5,
+                      top: -8.5,
+                      width: 31,
+                      height: 31,
+                      borderRadius: '50%',
+                      background: '#ff5900',
+                      border: '2px solid #0b0b0d',
+                      color: '#fff',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    {widget.claimCount}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })()
+        : null}
 
       {widget && widget.expanded
         ? (() => {
@@ -302,11 +329,11 @@ export default function OverlayApp(): JSX.Element {
                   overflow: 'hidden'
                 }}
               >
-                <div style={{ position: 'absolute', left: 22, top: 22, width: 40, height: 28, pointerEvents: 'none' }}>
-                  <LogoBg size={28} />
+                <div style={{ position: 'absolute', left: 22, top: 18, width: 40, height: 36, pointerEvents: 'none' }}>
+                  <LogoBg size={36} />
                 </div>
                 <div
-                  onMouseDown={onGripMouseDown}
+                  onMouseDown={(e) => startWidgetDrag(e, { width: 560, height: 320 })}
                   title="Drag to move"
                   style={{
                     position: 'absolute',

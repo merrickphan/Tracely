@@ -340,6 +340,11 @@ input[type='range']::-webkit-slider-runnable-track {
   height: 21px;
   opacity: 0.85;
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.home-closeicon:hover {
+  opacity: 1;
 }
 
 .home-logo {
@@ -424,6 +429,7 @@ input[type='range']::-webkit-slider-runnable-track {
   font-weight: 400;
   letter-spacing: 0.2px;
   transform: translateY(-50%);
+  transition: color 0.15s ease;
 }
 
 .home-link:hover {
@@ -648,6 +654,7 @@ textarea:disabled {
   color: rgba(0, 0, 0, 0.7);
   cursor: pointer;
   padding: 4px;
+  transition: color 0.15s ease;
 }
 
 .analyze-close:hover {
@@ -669,6 +676,7 @@ textarea:disabled {
   font-weight: 500;
   cursor: pointer;
   padding: 4px;
+  transition: color 0.15s ease;
 }
 
 .analyze-back:hover {
@@ -730,11 +738,16 @@ textarea:disabled {
   transition:
     border-color 0.12s ease,
     background 0.12s ease,
-    color 0.12s ease;
+    color 0.12s ease,
+    transform 0.08s ease;
 }
 
 .source-tile:hover {
   border-color: var(--accent);
+}
+
+.source-tile:active {
+  transform: scale(0.98);
 }
 
 .source-tile.active {
@@ -900,6 +913,7 @@ textarea:disabled {
   cursor: pointer;
   padding: 4px;
   flex-shrink: 0;
+  transition: color 0.15s ease;
 }
 
 .docedit-back:hover {
@@ -946,6 +960,14 @@ textarea:disabled {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.08s ease;
+}
+
+.docedit-toolbtn:active {
+  transform: scale(0.94);
 }
 
 .docedit-toolbtn:hover {
@@ -1030,6 +1052,7 @@ textarea:disabled {
   padding: 6px 8px;
   border-radius: 5px;
   cursor: pointer;
+  transition: background 0.12s ease;
 }
 
 .docedit-align-menu button:hover {
@@ -1060,6 +1083,7 @@ textarea:disabled {
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
+  transition: background 0.12s ease;
 }
 
 .docedit-insights:hover:not(:disabled) {
@@ -1169,7 +1193,9 @@ textarea:disabled {
     transform 0.1s ease,
     box-shadow 0.15s ease,
     border-color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    color 0.15s ease,
+    filter 0.15s ease;
 }
 
 .btn:hover:not(:disabled) {
@@ -1482,6 +1508,7 @@ textarea:disabled {
   font-weight: 500;
   cursor: pointer;
   padding: 8px 0 0;
+  transition: color 0.15s ease;
 }
 
 .settings-back-link:hover {
@@ -1519,12 +1546,17 @@ textarea:disabled {
   text-align: left;
   transition:
     background 0.12s ease,
-    color 0.12s ease;
+    color 0.12s ease,
+    transform 0.08s ease;
 }
 
 .settings-nav-item:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--text);
+}
+
+.settings-nav-item:active {
+  transform: scale(0.98);
 }
 
 .settings-nav-item.active {
@@ -1556,6 +1588,7 @@ textarea:disabled {
   width: 100%;
   text-align: left;
   border-radius: 12px;
+  transition: background 0.12s ease;
 }
 
 .settings-signout:hover {
