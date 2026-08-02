@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { BrowserWindow, type Display } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { logScreenWatch } from '../services/screenWatch/debugLog'
 
 let overlayWindow: BrowserWindow | null = null
 let currentDisplayId: number | null = null
@@ -26,6 +27,16 @@ function createOverlayWindow(): BrowserWindow {
 
   win.setIgnoreMouseEvents(true, { forward: true })
   win.setAlwaysOnTop(true, 'screen-saver')
+
+  // Temporary diagnostic: the overlay's logo image has been reported not
+  // rendering, with no clear cause found by static code review (no CSP, no
+  // obvious asset-path issue). Forwarding the renderer's console into the
+  // same screenwatch-debug.log lets that be diagnosed from real data
+  // instead of another guess — see the explicit Image() load probe in
+  // OverlayApp.tsx that logs success/failure for this exact asset.
+  win.webContents.on('console-message', (_event, level, message) => {
+    logScreenWatch(`[overlay console L${level}] ${message}`)
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/overlay.html`)

@@ -31,23 +31,32 @@ import type {
   LibrarySaveResponse,
   LibraryUpdateRequest,
   LibraryUpdateResponse,
+  LocalModelDownloadProgressEvent,
+  LocalModelDownloadStartResponse,
+  LocalModelStatusGetResponse,
+  ProfileGetResponse,
+  ProfileSetRequest,
+  ProfileSetResponse,
   ScreenWatchAnalyzeClaimRequest,
   ScreenWatchAnalyzeClaimResponse,
   ScreenWatchGetStatusResponse,
   ScreenWatchHoverEvent,
   ScreenWatchOverlayUpdateEvent,
+  ScreenWatchSetActivePopoverRectRequest,
+  ScreenWatchSetActivePopoverRectResponse,
   ScreenWatchSetEnabledRequest,
   ScreenWatchSetEnabledResponse,
+  ScreenWatchSetWidgetExpandedRequest,
+  ScreenWatchSetWidgetExpandedResponse,
   ScreenWatchStatus,
+  ScreenWatchWidgetDragEndRequest,
+  ScreenWatchWidgetDragEndResponse,
+  ScreenWatchWidgetDragStartResponse,
   SettingsScanInstalledAppsResponse,
   SettingsSetRequest,
   SettingsSetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
-  WindowIsMaximizedResponse,
-  WindowMaximizeChangedEvent,
-  WindowMaximizeToggleResponse,
-  WindowMinimizeResponse,
   WindowTargetRequest,
   WindowTargetResponse
 } from '@shared/ipc-contract'
@@ -95,6 +104,15 @@ const api = {
     scanInstalledApps: (): Promise<SettingsScanInstalledAppsResponse> =>
       ipcRenderer.invoke(IPC.SETTINGS_SCAN_INSTALLED_APPS, {})
   },
+  localModel: {
+    getStatus: (): Promise<LocalModelStatusGetResponse> => ipcRenderer.invoke(IPC.LOCAL_MODEL_STATUS_GET, {}),
+    startDownload: (): Promise<LocalModelDownloadStartResponse> =>
+      ipcRenderer.invoke(IPC.LOCAL_MODEL_DOWNLOAD_START, {})
+  },
+  profile: {
+    get: (): Promise<ProfileGetResponse> => ipcRenderer.invoke(IPC.PROFILE_GET, {}),
+    set: (req: ProfileSetRequest): Promise<ProfileSetResponse> => ipcRenderer.invoke(IPC.PROFILE_SET, req)
+  },
   history: {
     clear: (req: HistoryClearRequest): Promise<HistoryClearResponse> =>
       ipcRenderer.invoke(IPC.HISTORY_CLEAR, req)
@@ -110,11 +128,7 @@ const api = {
     show: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
       ipcRenderer.invoke(IPC.WINDOW_SHOW, req),
     close: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_CLOSE, req),
-    minimize: (): Promise<WindowMinimizeResponse> => ipcRenderer.invoke(IPC.WINDOW_MINIMIZE, {}),
-    maximizeToggle: (): Promise<WindowMaximizeToggleResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_MAXIMIZE_TOGGLE, {}),
-    isMaximized: (): Promise<WindowIsMaximizedResponse> => ipcRenderer.invoke(IPC.WINDOW_IS_MAXIMIZED, {})
+      ipcRenderer.invoke(IPC.WINDOW_CLOSE, req)
   },
   shell: {
     openExternal: (req: ShellOpenExternalRequest): Promise<ShellOpenExternalResponse> =>
@@ -125,7 +139,17 @@ const api = {
       ipcRenderer.invoke(IPC.SCREENWATCH_SET_ENABLED, req),
     getStatus: (): Promise<ScreenWatchGetStatusResponse> => ipcRenderer.invoke(IPC.SCREENWATCH_GET_STATUS, {}),
     analyzeClaim: (req: ScreenWatchAnalyzeClaimRequest): Promise<ScreenWatchAnalyzeClaimResponse> =>
-      ipcRenderer.invoke(IPC.SCREENWATCH_ANALYZE_CLAIM, req)
+      ipcRenderer.invoke(IPC.SCREENWATCH_ANALYZE_CLAIM, req),
+    setWidgetExpanded: (req: ScreenWatchSetWidgetExpandedRequest): Promise<ScreenWatchSetWidgetExpandedResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_SET_WIDGET_EXPANDED, req),
+    widgetDragStart: (): Promise<ScreenWatchWidgetDragStartResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_WIDGET_DRAG_START, {}),
+    widgetDragEnd: (req: ScreenWatchWidgetDragEndRequest): Promise<ScreenWatchWidgetDragEndResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_WIDGET_DRAG_END, req),
+    setActivePopoverRect: (
+      req: ScreenWatchSetActivePopoverRectRequest
+    ): Promise<ScreenWatchSetActivePopoverRectResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_SET_ACTIVE_POPOVER_RECT, req)
   },
   onClipboardCaptured: (callback: (event: FloatingClipboardCapturedEvent) => void): (() => void) => {
     const listener = (_: unknown, payload: FloatingClipboardCapturedEvent): void => callback(payload)
@@ -147,10 +171,10 @@ const api = {
     ipcRenderer.on(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
   },
-  onWindowMaximizeChanged: (callback: (event: WindowMaximizeChangedEvent) => void): (() => void) => {
-    const listener = (_: unknown, payload: WindowMaximizeChangedEvent): void => callback(payload)
-    ipcRenderer.on(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, listener)
-    return () => ipcRenderer.removeListener(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, listener)
+  onLocalModelDownloadProgress: (callback: (event: LocalModelDownloadProgressEvent) => void): (() => void) => {
+    const listener = (_: unknown, payload: LocalModelDownloadProgressEvent): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.LOCAL_MODEL_DOWNLOAD_PROGRESS, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.LOCAL_MODEL_DOWNLOAD_PROGRESS, listener)
   }
 }
 

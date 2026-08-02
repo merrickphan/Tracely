@@ -1,8 +1,6 @@
 import { join } from 'path'
 import { BrowserWindow, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { IPC_EVENTS } from '@shared/ipc-channels'
-import type { WindowMaximizeChangedEvent } from '@shared/ipc-contract'
 import { getAppIconPath } from '../icon'
 
 let mainWindow: BrowserWindow | null = null
@@ -14,18 +12,23 @@ export function setQuitting(value: boolean): void {
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    // Sized to match Grammarly's desktop "up and running" window proportions
-    // (~837x483 measured against a 1108x760 reference) rather than our
-    // previous large, mostly-empty default.
-    width: 840,
-    height: 485,
-    minWidth: 640,
-    minHeight: 420,
+    // Fixed to the Figma design's own frame size (870x606) — the app IS
+    // the frame, not a resizable OS window with the frame floating inside
+    // it. No minimize/maximize either: the design has no such chrome, only
+    // its own in-content close button (see HomeView/AnalyzeView).
+    width: 870,
+    height: 606,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
     show: false,
-    // Custom-drawn title bar (see App.tsx's app-header) instead of the OS
-    // chrome, so window controls can match the rest of the UI rather than
-    // standing out as a mismatched native element.
     frame: false,
+    // Transparent so only the CSS-rounded card is visible — otherwise the
+    // OS window itself stays a plain opaque rectangle behind/around the
+    // rounded content and its square corners show through.
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     title: 'Tracely',
     icon: getAppIconPath(),
     webPreferences: {
@@ -45,15 +48,6 @@ export function createMainWindow(): BrowserWindow {
       event.preventDefault()
       win.hide()
     }
-  })
-
-  win.on('maximize', () => {
-    const payload: WindowMaximizeChangedEvent = { maximized: true }
-    win.webContents.send(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, payload)
-  })
-  win.on('unmaximize', () => {
-    const payload: WindowMaximizeChangedEvent = { maximized: false }
-    win.webContents.send(IPC_EVENTS.WINDOW_MAXIMIZE_CHANGED, payload)
   })
 
   win.webContents.setWindowOpenHandler((details) => {

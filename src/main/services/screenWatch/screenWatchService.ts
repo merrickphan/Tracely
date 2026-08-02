@@ -9,7 +9,7 @@ import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnDisplay } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
-import { startHoverTracking, stopHoverTracking } from './hoverTracking'
+import { setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
 import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
@@ -62,6 +62,77 @@ let hoverTargets: HoverTarget[] = []
 
 export function getHoverTargets(): HoverTarget[] {
   return hoverTargets
+}
+
+let widgetExpanded = false
+// Cached so toggling expanded/collapsed can redraw immediately instead of
+// waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
+let lastUpdateInputs: {
+  controlRect: ScreenRect
+  claimRects: { id: string; rects: ScreenRect[] }[]
+  claims: Claim[]
+  fullText: string
+} | null = null
+
+// Window-local top-left corner the user last dragged the widget/panel to —
+// overrides the fixed corner anchor while set. Cleared whenever the widget
+// collapses or a new control/app comes into focus, so the next expand
+// starts fresh at the anchor rather than wherever it happened to be left.
+let widgetManualPos: { x: number; y: number } | null = null
+
+export function setWidgetExpanded(expanded: boolean): void {
+  widgetExpanded = expanded
+  if (!expanded) widgetManualPos = null
+  if (lastUpdateInputs) {
+    updateOverlayAndWidget(
+      lastUpdateInputs.controlRect,
+      lastUpdateInputs.claimRects,
+      lastUpdateInputs.claims,
+      lastUpdateInputs.fullText
+    )
+  }
+}
+
+export function setWidgetDragStart(): void {
+  setDragActive(true)
+}
+
+export function setWidgetDragEnd(local: { x: number; y: number }): void {
+  widgetManualPos = local
+  setDragActive(false)
+  if (lastUpdateInputs) {
+    updateOverlayAndWidget(
+      lastUpdateInputs.controlRect,
+      lastUpdateInputs.claimRects,
+      lastUpdateInputs.claims,
+      lastUpdateInputs.fullText
+    )
+  }
+}
+
+// The display a claim's underline was last drawn on — needed to convert the
+// renderer-reported popover rect (window-local) into absolute screen
+// coordinates for hoverTracking.ts, the same way widget drag positions are
+// converted.
+let lastDisplayOrigin: { x: number; y: number } | null = null
+let activePopoverClaimId: string | null = null
+let activePopoverRectAbsolute: ScreenRect | null = null
+
+export function setActivePopoverRect(claimId: string | null, rectLocal: ScreenRect | null): void {
+  activePopoverClaimId = claimId
+  activePopoverRectAbsolute =
+    rectLocal && lastDisplayOrigin
+      ? {
+          x: rectLocal.x + lastDisplayOrigin.x,
+          y: rectLocal.y + lastDisplayOrigin.y,
+          width: rectLocal.width,
+          height: rectLocal.height
+        }
+      : null
+}
+
+export function getActivePopoverRect(): { claimId: string | null; rectAbsolute: ScreenRect | null } {
+  return { claimId: activePopoverClaimId, rectAbsolute: activePopoverRectAbsolute }
 }
 
 function synthesizeClaim(detected: {
@@ -129,6 +200,12 @@ function resetTrackingState(): void {
   currentClaims = []
   currentSpans = []
   hoverTargets = []
+  widgetExpanded = false
+  widgetManualPos = null
+  lastUpdateInputs = null
+  activePopoverClaimId = null
+  activePopoverRectAbsolute = null
+  lastSentPayloadKey = null
 }
 
 async function tick(): Promise<void> {
@@ -289,8 +366,35 @@ async function tick(): Promise<void> {
   }
 }
 
-const WIDGET_SIZE = 40
-const WIDGET_MARGIN = 20
+// Matches the Figma "Collapsed Launcher" mockup's 56px circle.
+const WIDGET_SIZE = 56
+// Fixed distance from the display's bottom-right corner — matches where the
+// Figma mockups place it, and (deliberately) has nothing to do with where
+// the focused control or text cursor currently is.
+const EDGE_MARGIN = 24
+// Matches the Figma "Widget over Document" mockup's card size exactly.
+const PANEL_WIDTH = 560
+const PANEL_HEIGHT = 320
+
+let lastSentPayloadKey: string | null = null
+
+function computeWidgetBreakdown(claims: Claim[]): { statisticCount: number; factualCount: number; otherCount: number } {
+  let statisticCount = 0
+  let factualCount = 0
+  let otherCount = 0
+  for (const claim of claims) {
+    if (claim.claimType === 'statistic') statisticCount++
+    else if (claim.claimType === 'factual') factualCount++
+    else otherCount++
+  }
+  return { statisticCount, factualCount, otherCount }
+}
+
+function computeAvgConfidencePercent(claims: Claim[]): number {
+  if (claims.length === 0) return 0
+  const sum = claims.reduce((acc, c) => acc + c.confidence, 0)
+  return Math.round((sum / claims.length) * 100)
+}
 
 function updateOverlayAndWidget(
   controlRect: ScreenRect,
@@ -298,6 +402,8 @@ function updateOverlayAndWidget(
   claims: Claim[],
   fullText: string
 ): void {
+  lastUpdateInputs = { controlRect, claimRects, claims, fullText }
+
   const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
     (r) => Array.isArray(r.rects) && r.rects.length > 0
   )
@@ -311,6 +417,7 @@ function updateOverlayAndWidget(
     y: controlRect.y + controlRect.height / 2
   }
   const display = screen.getDisplayNearestPoint(center)
+  lastDisplayOrigin = { x: display.bounds.x, y: display.bounds.y }
   // The widget badge (see hoverTracking.ts / OverlayApp.tsx) shows
   // whenever a supported text field is focused — like Grammarly's icon —
   // independent of whether any claims were found yet, so the overlay stays
@@ -340,23 +447,45 @@ function updateOverlayAndWidget(
     height: r.height / scale
   })
 
-  const localized = underlines.map((u) => ({ id: u.id, rects: u.rects.map(toLocal) }))
+  const localized = underlines.map((u) => ({
+    id: u.id,
+    rects: u.rects.map(toLocal),
+    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual'
+  }))
 
-  // Anchored to the right edge of the focused control, vertically centered
-  // — sits beside the text box rather than overlapping its corner or
-  // sitting fixed in the screen corner (tried both; this is what was
-  // actually asked for). controlRect is physical pixels from UIA, so this
-  // needs the same physical->logical conversion as the underline rects.
-  const widgetPhysicalSize = WIDGET_SIZE * scale
-  const widgetMarginPhysical = WIDGET_MARGIN * scale
-  const widgetPhysicalRect: ScreenRect = {
-    x: controlRect.x + controlRect.width + widgetMarginPhysical,
-    y: controlRect.y + controlRect.height / 2 - widgetPhysicalSize / 2,
-    width: widgetPhysicalSize,
-    height: widgetPhysicalSize
+  // Anchored to a fixed corner of the display, not the focused control — a
+  // control-relative anchor moved every time the user typed (the control's
+  // rect can shift as text reflows), which is exactly the "don't follow
+  // where I'm typing" behavior this replaced. Local space is already
+  // window-local logical pixels (the overlay window IS the display), so no
+  // physical/scale conversion is needed here at all, unlike the underline
+  // rects above.
+  const winBounds = win.getBounds()
+  const widgetLocalAnchored: ScreenRect = {
+    x: Math.max(0, winBounds.width - WIDGET_SIZE - EDGE_MARGIN),
+    y: Math.max(0, winBounds.height - WIDGET_SIZE - EDGE_MARGIN),
+    width: WIDGET_SIZE,
+    height: WIDGET_SIZE
   }
-  const widgetLocal = toLocal(widgetPhysicalRect)
-  const widgetAbsolute = toAbsolute(widgetPhysicalRect)
+  const panelLocalAnchored: ScreenRect = {
+    x: Math.max(0, winBounds.width - PANEL_WIDTH - EDGE_MARGIN),
+    y: Math.max(0, winBounds.height - PANEL_HEIGHT - EDGE_MARGIN),
+    width: PANEL_WIDTH,
+    height: PANEL_HEIGHT
+  }
+
+  const anchoredLocal = widgetExpanded ? panelLocalAnchored : widgetLocalAnchored
+  // A user-dragged position overrides the anchor until the widget collapses
+  // or a new control/app comes into focus (see widgetManualPos above).
+  const activeLocal: ScreenRect = widgetManualPos
+    ? { x: widgetManualPos.x, y: widgetManualPos.y, width: anchoredLocal.width, height: anchoredLocal.height }
+    : anchoredLocal
+  const activeAbsolute: ScreenRect = {
+    x: activeLocal.x + display.bounds.x,
+    y: activeLocal.y + display.bounds.y,
+    width: activeLocal.width,
+    height: activeLocal.height
+  }
 
   if (underlines.length > 0) {
     logScreenWatch(
@@ -364,10 +493,37 @@ function updateOverlayAndWidget(
     )
   }
 
-  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, {
+  const payload: {
+    underlines: typeof localized
+    widget: {
+      rect: ScreenRect
+      expanded: boolean
+      claimCount: number
+      breakdown: ReturnType<typeof computeWidgetBreakdown>
+      avgConfidencePercent: number
+      text: string
+    }
+  } = {
     underlines: localized,
-    widget: { rect: widgetLocal, claimCount: claims.length, text: fullText }
-  })
+    widget: {
+      rect: activeLocal,
+      expanded: widgetExpanded,
+      claimCount: claims.length,
+      breakdown: computeWidgetBreakdown(claims),
+      avgConfidencePercent: computeAvgConfidencePercent(claims),
+      text: fullText
+    }
+  }
+  // Re-sending an unchanged payload every poll tick (every 1.2s, even when
+  // nothing on screen actually changed) forces the renderer to re-render
+  // the whole overlay tree for no reason — on a transparent always-on-top
+  // window that's a plausible source of visible flicker. Skip the send
+  // (and the resulting re-render) when nothing observable changed.
+  const payloadKey = JSON.stringify(payload)
+  if (payloadKey === lastSentPayloadKey) return
+  lastSentPayloadKey = payloadKey
+
+  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
 
   const claimTargets = underlines
     .map((u, idx) => {
@@ -390,8 +546,8 @@ function updateOverlayAndWidget(
     kind: 'widget',
     text: fullText,
     claimType: 'factual',
-    rectsAbsolute: [widgetAbsolute],
-    rectsWindowLocal: [widgetLocal]
+    rectsAbsolute: [activeAbsolute],
+    rectsWindowLocal: [activeLocal]
   }
 
   hoverTargets = [...claimTargets, widgetTarget]

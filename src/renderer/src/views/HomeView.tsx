@@ -1,120 +1,96 @@
 import { useEffect, useState } from 'react'
-import type { LibraryItem, AppSettings } from '@shared/types'
 import type { ScreenWatchStatus } from '@shared/ipc-contract'
 import type { Tab } from '../App'
+import figmaLogo from '../assets/figma-logo.png'
+import homeCog from '../assets/home-cog.png'
+import homePlus from '../assets/home-plus.png'
+import homeClose from '../assets/home-close.png'
 import { tracelyApi } from '../lib/api'
 
+// Pixel-exact recreation of Figma's "Frame Main Page" (870x597) — every
+// element below is positioned with the design's literal coordinates,
+// converted to CSS container-query units (cqw = %/870 of width, cqh =
+// %/597 of height) so the whole canvas scales as one fixed-aspect-ratio
+// unit and nothing drifts out of proportion. See styles/index.css
+// `.home-canvas` and `.home-*` rules for the actual values.
 export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
-  const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [libraryItems, setLibraryItems] = useState<LibraryItem[] | null>(null)
 
   useEffect(() => {
     tracelyApi.getScreenWatchStatus().then(setScreenWatch)
-    tracelyApi.getSettings().then(setSettings)
-    tracelyApi.listLibrary().then((res) => setLibraryItems(res.items))
     return tracelyApi.onScreenWatchStatus(setScreenWatch)
   }, [])
 
-  const blockedAppCount = settings?.screenWatchBlockedApps
-    ? settings.screenWatchBlockedApps.split(',').map((s) => s.trim()).filter(Boolean).length
-    : 0
-  const recentItems = libraryItems?.slice(0, 2) ?? []
-
   return (
-    <div className="home-view">
-      <div className="home-hero">
-        <div className="home-copy">
-          <h2>
-            Tracely is <span className="home-accent-text">up and running.</span>
-          </h2>
-          <p className="muted">
-            Paste text into Analyze to check it, or turn Tracely on to catch claims as you write
-            anywhere on your computer.
-          </p>
-        </div>
+    <div className="home-canvas">
+      <img
+        src={homeClose}
+        className="home-el home-closeicon"
+        alt=""
+        role="button"
+        aria-label="Close"
+        onClick={() => tracelyApi.hideWindow('main')}
+      />
 
-        <div className="home-preview">
-          <div className="home-preview-card">
-            <div className="home-preview-titlebar">
-              <span className="home-preview-dot home-preview-dot-red" />
-              <span className="home-preview-dot home-preview-dot-yellow" />
-              <span className="home-preview-dot home-preview-dot-green" />
-              <span className="home-preview-titletext">Tracely — Draft</span>
-            </div>
-            <p className="home-preview-meta">Analyzed text</p>
-            <p className="home-preview-text">
-              Studies show that <span className="home-preview-underline">regular napping</span>{' '}
-              improves memory retention in adults.
-            </p>
-            <div className="home-preview-badge">1</div>
-          </div>
-        </div>
-      </div>
+      <img src={figmaLogo} className="home-el home-logo" alt="" />
+      <span className="home-el home-title">Tracely</span>
+      <span className="home-el home-greeting">Hey, Merrick!</span>
 
-      <div className="home-stats-row">
-        <button className="home-stat-card" onClick={() => onNavigate('settings')}>
-          <span className="home-stat-label">Tracely</span>
-          <span className={`home-stat-value ${screenWatch?.enabled ? 'home-stat-value-on' : ''}`}>
-            {screenWatch?.enabled ? 'On' : 'Off'}
-          </span>
-          <span className="home-stat-sub">
-            works everywhere{blockedAppCount > 0 ? ` except ${blockedAppCount}` : ''}
-          </span>
+      <h2 className="home-el home-heading">
+        {screenWatch?.enabled ? 'Tracely is running and ready.' : 'Tracely is off.'}
+      </h2>
+      <p className="home-el home-subtext">
+        Start typing in an website or document, and Tracely will start analyzing the content.
+      </p>
+
+      <img src={homeCog} className="home-el home-cogicon" alt="" />
+      <button className="home-el home-link home-link-settings" onClick={() => onNavigate('settings')}>
+        Settings
+      </button>
+
+      <img src={homePlus} className="home-el home-plusicon" alt="" />
+      <button className="home-el home-link home-link-newsession" onClick={() => onNavigate('analyze')}>
+        New Session
+      </button>
+
+      {/* Static, non-functional — matches the Figma design exactly, both
+          buttons are display-only. */}
+      <div className="home-el home-flagcard">
+        <div className="home-flagcard-checkbox-lid" />
+        <div className="home-flagcard-checkbox" />
+        <p className="home-flagcard-quote">
+          &ldquo;Their quality of life has decreased as approximately 60% of jobs avoid
+          traveling or applying to jobs, and one in ten are too afraid to even seek medical
+          care.&rdquo;
+        </p>
+        <button className="home-flagcard-dismiss" type="button">
+          Dismiss
         </button>
-
-        <button className="home-stat-card" onClick={() => onNavigate('library')}>
-          <span className="home-stat-label">Library</span>
-          <span className="home-stat-value">{libraryItems ? libraryItems.length : '—'}</span>
-          <span className="home-stat-sub">saved source{libraryItems?.length === 1 ? '' : 's'}</span>
-        </button>
-
-        <button className="home-stat-card" onClick={() => onNavigate('settings')}>
-          <span className="home-stat-label">Citation style</span>
-          <span className="home-stat-value">{settings?.defaultCitationStyle ?? '—'}</span>
-          <span className="home-stat-sub">default format</span>
+        <button className="home-flagcard-insights" type="button">
+          See insights
         </button>
       </div>
 
-      <div className="home-recent">
-        <div className="home-recent-header">
-          <h3>Recent in Library</h3>
-          {recentItems.length > 0 ? (
-            <button className="home-action-link home-action-link-muted" onClick={() => onNavigate('library')}>
-              View all <span className="home-action-icon">↗</span>
-            </button>
-          ) : null}
-        </div>
-        {recentItems.length > 0 ? (
-          <div className="home-recent-list">
-            {recentItems.map((item) => (
-              <button key={item.id} className="home-recent-item" onClick={() => onNavigate('library')}>
-                <span className="home-recent-title">{item.source.title}</span>
-                <span className="home-recent-meta">
-                  {[item.source.venue, item.source.year].filter(Boolean).join(' · ') || 'Saved source'}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">
-            Nothing saved yet — evidence you save from Analyze will show up here.
-          </p>
-        )}
-      </div>
+      <span className="home-el home-worktext">You choose where Tracely works</span>
+      <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">
+        <path
+          d="M0.820127 22.6547L15.8201 1.15466M17.3201 8.65466L15.8201 1.15466L7.32013 2.65466"
+          stroke="#F28D00"
+          strokeWidth="2"
+        />
+      </svg>
 
-      <div className="home-actions-row">
-        <div className="home-actions-left">
-          <button className="home-action-link" onClick={() => onNavigate('analyze')}>
-            <span className="home-action-icon">+</span> New Analysis
-          </button>
-          <button className="home-action-link" onClick={() => onNavigate('settings')}>
-            <span className="home-action-icon">⚙</span> Settings
-          </button>
-        </div>
-        <button className="home-action-link home-action-link-muted" onClick={() => onNavigate('settings')}>
-          You choose where Tracely works <span className="home-action-icon">↗</span>
-        </button>
+      <svg className="home-el home-trail" viewBox="0 0 701.596 92" fill="none" preserveAspectRatio="none">
+        <path
+          d="M0.339381 4.79838C96.7642 -8.41382 272.572 40.8305 407.781 14.0261C600.31 -24.1416 647.786 94.8362 701.339 89.313"
+          stroke="#FF9D00"
+          strokeWidth="5"
+          strokeDasharray="33 20"
+        />
+      </svg>
+
+      <div className="home-el home-flyinglogo">
+        <img src={figmaLogo} alt="" />
       </div>
     </div>
   )

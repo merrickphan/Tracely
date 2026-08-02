@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey, unregisterScreenWatchHotkey } from './hotkey'
 import { registerIpcHandlers } from './ipc'
+import { autoStartLocalModelDownload, checkExistingLocalModel } from './services/ai/modelDownload'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { initDb, persist } from './services/storage/db'
 import { getSetting } from './services/storage/settingsRepo'
@@ -26,10 +27,12 @@ if (!gotLock) {
     })
 
     await initDb()
+    await checkExistingLocalModel()
 
     createMainWindow()
     createFloatingWindow()
     createTray()
+    autoStartLocalModelDownload()
     registerIpcHandlers()
     registerGlobalHotkey(getSetting('hotkeyAccelerator'))
     registerScreenWatchHotkey(getSetting('screenWatchHotkeyAccelerator'))

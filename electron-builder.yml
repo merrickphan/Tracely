@@ -6,6 +6,14 @@ directories:
 files:
   - out/**/*
   - package.json
+  # node-llama-cpp installs a prebuilt native binary per platform/arch/GPU-backend
+  # as separate optional-dependency packages; only win-x64 (CPU) and
+  # win-x64-vulkan (broad GPU accel, no CUDA toolkit needed) are ever used by
+  # this app's win-x64 target. Without these excludes the installer balloons
+  # from ~86MB to 360MB+ by bundling arm64/cuda variants nothing here loads.
+  - '!node_modules/@node-llama-cpp/win-arm64/**'
+  - '!node_modules/@node-llama-cpp/win-x64-cuda/**'
+  - '!node_modules/@node-llama-cpp/win-x64-cuda-ext/**'
 extraResources:
   - from: node_modules/sql.js/dist/sql-wasm.wasm
     to: sql-wasm.wasm

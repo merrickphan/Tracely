@@ -20,6 +20,12 @@ export const IPC = {
   SETTINGS_SET: 'settings:set',
   SETTINGS_SCAN_INSTALLED_APPS: 'settings:scanInstalledApps',
 
+  LOCAL_MODEL_STATUS_GET: 'localModel:getStatus',
+  LOCAL_MODEL_DOWNLOAD_START: 'localModel:startDownload',
+
+  PROFILE_GET: 'profile:get',
+  PROFILE_SET: 'profile:set',
+
   HISTORY_CLEAR: 'history:clear',
 
   CLIPBOARD_READ: 'clipboard:read',
@@ -28,15 +34,16 @@ export const IPC = {
   WINDOW_HIDE: 'window:hide',
   WINDOW_SHOW: 'window:show',
   WINDOW_CLOSE: 'window:close',
-  WINDOW_MINIMIZE: 'window:minimize',
-  WINDOW_MAXIMIZE_TOGGLE: 'window:maximizeToggle',
-  WINDOW_IS_MAXIMIZED: 'window:isMaximized',
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
   SCREENWATCH_SET_ENABLED: 'screenWatch:setEnabled',
   SCREENWATCH_GET_STATUS: 'screenWatch:getStatus',
-  SCREENWATCH_ANALYZE_CLAIM: 'screenWatch:analyzeClaim'
+  SCREENWATCH_ANALYZE_CLAIM: 'screenWatch:analyzeClaim',
+  SCREENWATCH_SET_WIDGET_EXPANDED: 'screenWatch:setWidgetExpanded',
+  SCREENWATCH_WIDGET_DRAG_START: 'screenWatch:widgetDragStart',
+  SCREENWATCH_WIDGET_DRAG_END: 'screenWatch:widgetDragEnd',
+  SCREENWATCH_SET_ACTIVE_POPOVER_RECT: 'screenWatch:setActivePopoverRect'
 } as const
 
 export const IPC_EVENTS = {
@@ -44,7 +51,7 @@ export const IPC_EVENTS = {
   SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
   SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate',
   SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged',
-  WINDOW_MAXIMIZE_CHANGED: 'window:maximizeChanged'
+  LOCAL_MODEL_DOWNLOAD_PROGRESS: 'localModel:downloadProgress'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -11,15 +11,25 @@ function getScriptPath(): string {
     : join(process.resourcesPath, 'scan-apps.ps1')
 }
 
+export interface ScannedApp {
+  // Human-readable name from the registry's installed-programs list (e.g.
+  // "Google Chrome"), for display.
+  name: string
+  // Resolved .exe basename (e.g. "chrome.exe"), for matching against the
+  // focused window's real process name.
+  exe: string
+}
+
 /**
- * Best-effort scan of Start Menu shortcuts for installed apps, used to show
- * only relevant options in the Screen Watch blocklist checklist instead of
- * a generic fixed list. Misses portable installs and anything that doesn't
- * create a Start Menu shortcut — callers should treat an empty/failed
- * result as "couldn't tell," not "nothing is installed," and fall back to
- * showing the full candidate list.
+ * Best-effort scan of Windows' installed-programs registry data (the same
+ * source Windows Settings > Apps reads) for installed apps, used to show a
+ * real Screen Watch blocklist checklist instead of a generic fixed list.
+ * Registry entries that can't be resolved to an actual, existing .exe are
+ * dropped rather than shown wrong (see scan-apps.ps1) — callers should
+ * treat an empty/failed result as "couldn't tell," not "nothing is
+ * installed," and let the user add an app manually by exe name instead.
  */
-export function scanInstalledAppExeNames(): Promise<string[]> {
+export function scanInstalledApps(): Promise<ScannedApp[]> {
   return new Promise((resolve) => {
     const child = spawn(
       'powershell.exe',
@@ -30,7 +40,7 @@ export function scanInstalledAppExeNames(): Promise<string[]> {
     let stdout = ''
     let settled = false
 
-    const finish = (result: string[]): void => {
+    const finish = (result: ScannedApp[]): void => {
       if (settled) return
       settled = true
       resolve(result)
@@ -51,7 +61,7 @@ export function scanInstalledAppExeNames(): Promise<string[]> {
     child.on('close', () => {
       clearTimeout(timer)
       try {
-        const parsed = JSON.parse(stdout.trim()) as { ok: boolean; apps?: string[] }
+        const parsed = JSON.parse(stdout.trim()) as { ok: boolean; apps?: ScannedApp[] }
         finish(parsed.ok && Array.isArray(parsed.apps) ? parsed.apps : [])
       } catch {
         finish([])

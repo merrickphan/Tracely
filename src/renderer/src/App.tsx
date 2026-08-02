@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react'
 import AnalyzeView from './views/AnalyzeView'
 import HomeView from './views/HomeView'
-import LibraryView from './views/LibraryView'
 import SettingsView from './views/SettingsView'
-import WindowControls from './components/WindowControls'
-import Logo from './components/Logo'
 import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 
-export type Tab = 'home' | 'analyze' | 'library' | 'settings'
+export type Tab = 'home' | 'analyze' | 'settings'
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'home', label: 'Home' },
-  { id: 'analyze', label: 'Analyze' },
-  { id: 'library', label: 'Library' },
-  { id: 'settings', label: 'Settings' }
-]
-
+// No window-level chrome at all — the BrowserWindow itself is fixed to the
+// Figma frame's own size and isn't resizable/minimizable/maximizable (see
+// createMainWindow), so there's nothing here to control beyond what each
+// view already draws itself (Home's close-X, Analyze's close-X, Settings'
+// Back link) — exactly what the Figma design shows and nothing else.
 export default function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('home')
 
@@ -31,30 +26,10 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-brand">
-          <Logo size={22} />
-          <h1>Tracely</h1>
-        </div>
-        <nav className="tab-nav">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab-button ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-        <div className="app-header-spacer" />
-        <WindowControls />
-      </header>
       <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
         {tab === 'home' ? <HomeView onNavigate={setTab} /> : null}
-        {tab === 'analyze' ? <AnalyzeView /> : null}
-        {tab === 'library' ? <LibraryView /> : null}
-        {tab === 'settings' ? <SettingsView /> : null}
+        {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} /> : null}
+        {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
       </main>
     </div>
   )

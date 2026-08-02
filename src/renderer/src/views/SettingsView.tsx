@@ -1,89 +1,41 @@
-import { useEffect, useState } from 'react'
-import type { AccentColor, AppSettings, CitationStyle, Density, Theme } from '@shared/types'
-import type { ScreenWatchStatus } from '@shared/ipc-contract'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import type { AccentColor, AppSettings, Density, Theme } from '@shared/types'
+import type { LocalModelStatus, ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
-import ConfirmDialog from '../components/ConfirmDialog'
-import ToggleSwitch from '../components/ToggleSwitch'
+import SettingsField from '../components/SettingsField'
+import { UserIcon, SunIcon, SlidersIcon, CogIcon, SignOutIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import { applyTheme } from '../lib/theme'
 import { applyAccentColor, applyDensity } from '../lib/appearance'
-
-// Only real desktop apps (their own process, own .exe) can be individually
-// blocked — Tracely identifies apps by process name. Google Docs, Google
-// Drive, Notion's web app, etc. all run inside a browser process, so
-// there's no way to block just one of them without blocking the whole
-// browser; that limitation is called out in the copy below rather than
-// pretending a checkbox for "Google Docs" would do anything.
-//
-// Broader than just "apps to block" — this is every writing/document/
-// reference app Tracely knows the process name for, since it's meant to
-// work in exactly these, so a bigger list here means more of what people
-// actually use shows up as a recognizable option instead of an unlabeled
-// "Other apps" entry. Which ones actually render as checked (found on this
-// machine) is determined by scanInstalledApps() at runtime.
-const CURATED_BLOCKABLE_APPS: { label: string; exe: string }[] = [
-  { label: 'Discord', exe: 'Discord.exe' },
-  { label: 'Slack', exe: 'Slack.exe' },
-  { label: 'Microsoft Teams', exe: 'ms-teams.exe' },
-  { label: 'WhatsApp', exe: 'WhatsApp.exe' },
-  { label: 'Signal', exe: 'Signal.exe' },
-  { label: 'Telegram', exe: 'Telegram.exe' },
-  { label: 'Messenger', exe: 'Messenger.exe' },
-  { label: 'Microsoft Word', exe: 'WINWORD.EXE' },
-  { label: 'Microsoft Excel', exe: 'EXCEL.EXE' },
-  { label: 'Microsoft PowerPoint', exe: 'POWERPNT.EXE' },
-  { label: 'Microsoft OneNote', exe: 'ONENOTE.EXE' },
-  { label: 'Microsoft Outlook', exe: 'OUTLOOK.EXE' },
-  { label: 'LibreOffice', exe: 'soffice.exe' },
-  { label: 'WPS Office', exe: 'wps.exe' },
-  { label: 'Notion (desktop app)', exe: 'Notion.exe' },
-  { label: 'Obsidian', exe: 'Obsidian.exe' },
-  { label: 'Evernote', exe: 'Evernote.exe' },
-  { label: 'Scrivener', exe: 'Scrivener.exe' },
-  { label: 'Typora', exe: 'Typora.exe' },
-  { label: 'Zotero', exe: 'zotero.exe' },
-  { label: 'Mendeley Reference Manager', exe: 'Mendeley Reference Manager.exe' },
-  { label: 'Adobe Acrobat', exe: 'Acrobat.exe' },
-  { label: 'Adobe Acrobat Reader', exe: 'AcroRd32.exe' },
-  { label: 'Foxit PDF Reader', exe: 'FoxitPDFReader.exe' },
-  { label: 'Visual Studio Code', exe: 'Code.exe' },
-  { label: 'Sublime Text', exe: 'sublime_text.exe' },
-  { label: 'Notepad++', exe: 'notepad++.exe' },
-  { label: 'Spotify', exe: 'Spotify.exe' },
-  { label: 'Google Chrome (entire browser)', exe: 'chrome.exe' },
-  { label: 'Microsoft Edge (entire browser)', exe: 'msedge.exe' },
-  { label: 'Mozilla Firefox (entire browser)', exe: 'firefox.exe' }
-]
-const CURATED_EXE_LOWER = new Set(CURATED_BLOCKABLE_APPS.map((a) => a.exe.toLowerCase()))
+import type { Tab } from '../App'
 
 const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
-  { id: 'orange', label: 'Orange', swatch: 'linear-gradient(135deg, #ffab3d, #ff5a36)' },
+  { id: 'orange', label: 'Orange', swatch: 'linear-gradient(135deg, #ffaf01, #ff6a00)' },
   { id: 'blue', label: 'Blue', swatch: 'linear-gradient(135deg, #60a5fa, #3b82f6)' },
   { id: 'green', label: 'Green', swatch: 'linear-gradient(135deg, #4ade80, #22c55e)' },
   { id: 'purple', label: 'Purple', swatch: 'linear-gradient(135deg, #c084fc, #a855f7)' }
 ]
 
-function sensitivityLabel(value: number): string {
-  if (value >= 0.75) return 'Fewer claims, higher confidence only'
-  if (value >= 0.45) return 'Balanced'
-  return 'More claims, including borderline ones'
-}
+// Figma's mockup also specified Account/Notifications/Security/Integrations/
+// Billing, but those had no real backend (Tracely is local-first with no
+// server, accounts, OAuth, or payments) and were previously implemented as
+// static sample data wired to nothing. Removed on explicit instruction
+// rather than kept as decoration — only sections with a real backend stay:
+// Profile (local display prefs + avatar file), Appearance (real theme/
+// accent/density), Preferences (real Screen Watch app allow/block list).
+type Section = 'profile' | 'appearance' | 'preferences' | 'aiModel'
 
-function parseAppList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
+const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
+  { id: 'profile', label: 'Profile', icon: UserIcon },
+  { id: 'appearance', label: 'Appearance', icon: SunIcon },
+  { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
+  { id: 'aiModel', label: 'AI Model', icon: CogIcon }
+]
 
-export default function SettingsView(): JSX.Element {
+export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
+  const [section, setSection] = useState<Section>('profile')
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [confirmClear, setConfirmClear] = useState<null | 'history' | 'all'>(null)
-  const [clearedMessage, setClearedMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
-  const [extraAppsText, setExtraAppsText] = useState('')
-  const [installedExeLower, setInstalledExeLower] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     tracelyApi
@@ -91,34 +43,6 @@ export default function SettingsView(): JSX.Element {
       .then(setSettings)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
-
-  useEffect(() => {
-    tracelyApi
-      .scanInstalledApps()
-      .then((res) => setInstalledExeLower(new Set(res.found.map((f) => f.toLowerCase()))))
-      .catch(() => setInstalledExeLower(new Set()))
-  }, [])
-
-  useEffect(() => {
-    tracelyApi.getScreenWatchStatus().then(setScreenWatch)
-    return tracelyApi.onScreenWatchStatus(setScreenWatch)
-  }, [])
-
-  useEffect(() => {
-    if (!settings) return
-    const blocked = parseAppList(settings.screenWatchBlockedApps)
-    const extras = blocked.filter((b) => !CURATED_EXE_LOWER.has(b.toLowerCase()))
-    setExtraAppsText(extras.join(', '))
-    // Only re-sync from the curated/extra split when settings load or the
-    // blocklist changes elsewhere (e.g. checkbox toggles) — not on every
-    // render, so typing in the free-text field isn't fought over.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings?.screenWatchBlockedApps])
-
-  async function toggleTracely(enabled: boolean): Promise<void> {
-    const status = await tracelyApi.setScreenWatchEnabled(enabled)
-    setScreenWatch(status)
-  }
 
   async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
     setError(null)
@@ -148,242 +72,461 @@ export default function SettingsView(): JSX.Element {
     void save({ density })
   }
 
-  function changeSensitivity(claimSensitivity: number): void {
-    setSettings((s) => (s ? { ...s, claimSensitivity } : s))
-  }
+  const [appearanceSaving, setAppearanceSaving] = useState(false)
 
-  function toggleCuratedApp(exe: string, checked: boolean): void {
+  async function saveAppearance(): Promise<void> {
     if (!settings) return
-    const current = parseAppList(settings.screenWatchBlockedApps)
-    const withoutThis = current.filter((b) => b.toLowerCase() !== exe.toLowerCase())
-    const next = checked ? [...withoutThis, exe] : withoutThis
-    void save({ screenWatchBlockedApps: next.join(',') })
+    setAppearanceSaving(true)
+    try {
+      await save({ theme: settings.theme, accentColor: settings.accentColor, density: settings.density })
+    } finally {
+      setAppearanceSaving(false)
+    }
   }
 
-  function saveExtraApps(): void {
+  // Real, locally-persisted (see profileHandlers.ts) — not tied to any
+  // account, just local display preferences + an avatar image file.
+  const [profile, setProfile] = useState<ProfileInfo | null>(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    tracelyApi
+      .getProfile()
+      .then(setProfile)
+      .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
+  }, [])
+
+  async function saveProfile(): Promise<void> {
+    if (!profile) return
+    setProfileSaving(true)
+    setProfileError(null)
+    try {
+      const updated = await tracelyApi.setProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        username: profile.username,
+        bio: profile.bio
+      })
+      setProfile(updated)
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  function handleAvatarFile(file: File): void {
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileError('Avatar image must be 2 MB or smaller')
+      return
+    }
+    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+      setProfileError('Avatar must be a JPG or PNG image')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      setProfileError(null)
+      tracelyApi
+        .setProfile({ avatarDataUrl: dataUrl })
+        .then(setProfile)
+        .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // --- Preferences: Screen Watch on/off (moved here from the Home page
+  // heading, which used to double as a click-to-toggle control) + the app
+  // allow/block list, backed by the same screenWatchBlockedApps setting and
+  // settings:scanInstalledApps IPC that already existed before this UI
+  // surface was added.
+  const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
+  const [screenWatchToggling, setScreenWatchToggling] = useState(false)
+  const [installedApps, setInstalledApps] = useState<ScannedApp[] | null>(null)
+  const [manualApp, setManualApp] = useState('')
+  const [prefsError, setPrefsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    tracelyApi.getScreenWatchStatus().then(setScreenWatch)
+    return tracelyApi.onScreenWatchStatus(setScreenWatch)
+  }, [])
+
+  async function toggleScreenWatch(): Promise<void> {
+    if (!screenWatch || screenWatchToggling) return
+    setScreenWatchToggling(true)
+    try {
+      const status = await tracelyApi.setScreenWatchEnabled(!screenWatch.enabled)
+      setScreenWatch(status)
+    } finally {
+      setScreenWatchToggling(false)
+    }
+  }
+
+  useEffect(() => {
+    if (section !== 'preferences' || installedApps !== null) return
+    tracelyApi
+      .scanInstalledApps()
+      .then((res) => setInstalledApps(res.found))
+      .catch((err) => setPrefsError(err instanceof Error ? err.message : String(err)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section])
+
+  const blockedApps = (settings?.screenWatchBlockedApps ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  // Scanned apps (with a real display name) plus any blocked exe that
+  // wasn't found by the scan (e.g. manually added, or a portable app) —
+  // those fall back to showing their exe name as the label since there's
+  // no friendly name known for them.
+  const scanned = installedApps ?? []
+  const scannedExeSet = new Set(scanned.map((a) => a.exe.toLowerCase()))
+  const knownApps = [
+    ...scanned,
+    ...blockedApps.filter((exe) => !scannedExeSet.has(exe.toLowerCase())).map((exe) => ({ name: exe, exe }))
+  ].sort((a, b) => a.name.localeCompare(b.name))
+
+  async function setAppAllowed(exe: string, allowed: boolean): Promise<void> {
+    setPrefsError(null)
+    const current = new Set(blockedApps.map((a) => a.toLowerCase()))
+    if (allowed) current.delete(exe.toLowerCase())
+    else current.add(exe.toLowerCase())
+    try {
+      await save({ screenWatchBlockedApps: Array.from(current).join(',') })
+    } catch (err) {
+      setPrefsError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function addManualApp(): Promise<void> {
+    const exe = manualApp.trim()
+    if (!exe) return
+    setManualApp('')
+    if (!knownApps.some((a) => a.exe.toLowerCase() === exe.toLowerCase())) {
+      setInstalledApps((prev) => [...(prev ?? []), { name: exe, exe }])
+    }
+    // Newly-added apps default to allowed (not in the blocklist) unless
+    // they're already blocked — no change needed unless the name matches
+    // an existing blocked entry, in which case it already renders blocked.
+  }
+
+  // --- AI Model: the download starts automatically at app launch (see
+  // autoStartLocalModelDownload in modelDownload.ts) rather than requiring
+  // the user to find and click a button — this just displays whatever's
+  // already happening, and re-fetches status on a completed progress event
+  // since node-llama-cpp's download progress doesn't itself carry a
+  // "now ready" signal. The toggle in AppSettings only takes effect once the
+  // model has actually finished downloading, so status is tracked
+  // separately here rather than assumed from the setting alone.
+  const [localModelStatus, setLocalModelStatus] = useState<LocalModelStatus | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState<{ downloaded: number; total: number } | null>(null)
+
+  useEffect(() => {
+    tracelyApi.getLocalModelStatus().then((res) => setLocalModelStatus(res.status))
+    return tracelyApi.onLocalModelDownloadProgress(({ downloadedBytes, totalBytes }) => {
+      setDownloadProgress({ downloaded: downloadedBytes, total: totalBytes })
+      if (totalBytes > 0 && downloadedBytes >= totalBytes) {
+        tracelyApi.getLocalModelStatus().then((res) => setLocalModelStatus(res.status))
+      }
+    })
+  }, [])
+
+  async function retryLocalModelDownload(): Promise<void> {
+    setDownloadProgress(null)
+    const res = await tracelyApi.startLocalModelDownload()
+    setLocalModelStatus(res.status)
+  }
+
+  function toggleLocalModel(): void {
     if (!settings) return
-    const curatedChecked = parseAppList(settings.screenWatchBlockedApps).filter((b) =>
-      CURATED_EXE_LOWER.has(b.toLowerCase())
-    )
-    const extras = parseAppList(extraAppsText)
-    void save({ screenWatchBlockedApps: [...curatedChecked, ...extras].join(',') })
-  }
-
-  async function clearHistory(includeLibrary: boolean): Promise<void> {
-    await tracelyApi.clearHistory(includeLibrary)
-    setConfirmClear(null)
-    setClearedMessage(includeLibrary ? 'History and library cleared.' : 'History cleared.')
-    setTimeout(() => setClearedMessage(null), 3000)
+    const next = !settings.localModelEnabled
+    setSettings((s) => (s ? { ...s, localModelEnabled: next } : s))
+    void save({ localModelEnabled: next })
   }
 
   if (!settings) {
     return <div className="settings-view">{error ? <p className="error-text">{error}</p> : <p>Loading…</p>}</div>
   }
 
-  const blockedLower = new Set(parseAppList(settings.screenWatchBlockedApps).map((b) => b.toLowerCase()))
-  const sortedApps = installedExeLower
-    ? [...CURATED_BLOCKABLE_APPS].sort((a, b) => {
-        const aIn = installedExeLower.has(a.exe.toLowerCase()) ? 0 : 1
-        const bIn = installedExeLower.has(b.exe.toLowerCase()) ? 0 : 1
-        return aIn - bIn
-      })
-    : CURATED_BLOCKABLE_APPS
-
   return (
     <div className="settings-view">
-      <section className="settings-section">
-        <h3>General</h3>
-        <div className="settings-power-row">
-          <div>
-            <p className="settings-power-title">Tracely</p>
-            <p className="muted settings-power-sub">
-              {screenWatch?.enabled
-                ? screenWatch.active
-                  ? `Watching ${screenWatch.processName ?? 'the focused app'} — ${screenWatch.claimCount} claim${screenWatch.claimCount === 1 ? '' : 's'} flagged`
-                  : screenWatch.blockedApp
-                    ? `${screenWatch.blockedApp} is blocked, so it's not being read.`
-                    : 'On — no supported text field is currently focused.'
-                : 'Off — nothing is being read anywhere.'}
-            </p>
+      <div className="settings-shell">
+        <aside className="settings-sidebar">
+          <div className="settings-sidebar-header">
+            <button className="settings-back-link" onClick={() => onNavigate('home')}>
+              <BackIcon /> Back
+            </button>
+            <h2>Settings</h2>
           </div>
-          <ToggleSwitch checked={screenWatch?.enabled ?? false} onChange={toggleTracely} />
-        </div>
-        {screenWatch?.lastError ? <p className="error-text">{screenWatch.lastError}</p> : null}
+          <nav className="settings-nav">
+            {NAV.map((n) => (
+              <Fragment key={n.id}>
+                <button
+                  className={`settings-nav-item ${section === n.id ? 'active' : ''}`}
+                  onClick={() => setSection(n.id)}
+                >
+                  <n.icon size={15} />
+                  {n.label}
+                </button>
+              </Fragment>
+            ))}
+          </nav>
+          <div className="settings-sidebar-footer">
+            <button className="settings-signout">
+              <SignOutIcon size={15} /> Sign out
+            </button>
+          </div>
+        </aside>
 
-        <label>
-          Toggle hotkey
-          <input
-            type="text"
-            value={settings.screenWatchHotkeyAccelerator}
-            onChange={(e) => setSettings({ ...settings, screenWatchHotkeyAccelerator: e.target.value })}
-            onBlur={(e) => save({ screenWatchHotkeyAccelerator: e.target.value })}
-          />
-        </label>
+        <div className="settings-panel">
+          {section === 'profile' && profile ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Profile</h3>
+                <p>How others see you across the platform.</p>
+              </div>
+              <div className="settings-avatar-row">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="" className="settings-avatar settings-avatar-photo" />
+                ) : (
+                  <div className="settings-avatar">
+                    {(profile.firstName[0] ?? '') + (profile.lastName[0] ?? '') || '?'}
+                  </div>
+                )}
+                <div className="settings-avatar-meta">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleAvatarFile(file)
+                      e.target.value = ''
+                    }}
+                  />
+                  <button
+                    className="settings-avatar-upload"
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    Upload photo
+                  </button>
+                  <p>JPG or PNG · max 2 MB</p>
+                </div>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="First name">
+                  <input
+                    value={profile.firstName}
+                    placeholder="First name"
+                    onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                  />
+                </SettingsField>
+                <SettingsField label="Last name">
+                  <input
+                    value={profile.lastName}
+                    placeholder="Last name"
+                    onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                  />
+                </SettingsField>
+                <SettingsField label="Username" full>
+                  <input
+                    value={profile.username}
+                    placeholder="@username"
+                    onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                  />
+                </SettingsField>
+                <SettingsField label="Bio" full>
+                  <textarea
+                    value={profile.bio}
+                    placeholder="Say something about yourself"
+                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                  />
+                </SettingsField>
+              </div>
+              {profileError ? <p className="error-text">{profileError}</p> : null}
+              <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
+                {profileSaving ? 'Saving…' : 'Save changes'}
+              </Button>
+            </>
+          ) : null}
 
-        <label>
-          Claim sensitivity
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={settings.claimSensitivity}
-            onChange={(e) => changeSensitivity(Number(e.target.value))}
-            onMouseUp={() => save({ claimSensitivity: settings.claimSensitivity })}
-            onTouchEnd={() => save({ claimSensitivity: settings.claimSensitivity })}
-          />
-        </label>
-        <p className="muted settings-slider-caption">{sensitivityLabel(settings.claimSensitivity)}</p>
-      </section>
+          {section === 'appearance' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Appearance</h3>
+                <p>Customize how Tracely looks for you.</p>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="Theme">
+                  <select value={settings.theme} onChange={(e) => changeTheme(e.target.value as Theme)}>
+                    <option value="system">System default</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Accent color">
+                  <div className="accent-swatch-row">
+                    {ACCENT_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        className={`accent-swatch ${settings.accentColor === c.id ? 'accent-swatch-active' : ''}`}
+                        style={{ background: c.swatch }}
+                        title={c.label}
+                        onClick={() => changeAccentColor(c.id)}
+                      />
+                    ))}
+                  </div>
+                </SettingsField>
+                <SettingsField label="Font size">
+                  <select disabled defaultValue="Medium">
+                    <option>Small</option>
+                    <option>Medium</option>
+                    <option>Large</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Density">
+                  <select value={settings.density} onChange={(e) => changeDensity(e.target.value as Density)}>
+                    <option value="comfortable">Comfortable spacing across lists and cards</option>
+                    <option value="compact">Compact spacing across lists and cards</option>
+                  </select>
+                </SettingsField>
+              </div>
+              <Button variant="dark" onClick={saveAppearance} disabled={appearanceSaving}>
+                {appearanceSaving ? 'Saving…' : 'Save changes'}
+              </Button>
+            </>
+          ) : null}
 
-      <section className="settings-section">
-        <h3>Appearance</h3>
-        <label>
-          Theme
-          <select value={settings.theme} onChange={(e) => changeTheme(e.target.value as Theme)}>
-            <option value="system">Match system</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-
-        <p className="settings-label-heading">Accent color</p>
-        <div className="accent-swatch-row">
-          {ACCENT_COLORS.map((c) => (
-            <button
-              key={c.id}
-              className={`accent-swatch ${settings.accentColor === c.id ? 'accent-swatch-active' : ''}`}
-              style={{ background: c.swatch }}
-              title={c.label}
-              onClick={() => changeAccentColor(c.id)}
-            />
-          ))}
-        </div>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={settings.density === 'compact'}
-            onChange={(e) => changeDensity(e.target.checked ? 'compact' : 'comfortable')}
-          />
-          Compact density
-        </label>
-      </section>
-
-      <section className="settings-section">
-        <h3>Preferences</h3>
-        <label>
-          Default citation style
-          <select
-            value={settings.defaultCitationStyle}
-            onChange={(e) => save({ defaultCitationStyle: e.target.value as CitationStyle })}
-          >
-            <option value="APA">APA</option>
-            <option value="MLA">MLA</option>
-            <option value="Chicago">Chicago</option>
-          </select>
-        </label>
-        <label>
-          Floating assistant hotkey
-          <input
-            type="text"
-            value={settings.hotkeyAccelerator}
-            onChange={(e) => setSettings({ ...settings, hotkeyAccelerator: e.target.value })}
-            onBlur={(e) => save({ hotkeyAccelerator: e.target.value })}
-          />
-        </label>
-      </section>
-
-      <section className="settings-section">
-        <h3>Where Tracely Works</h3>
-        <p className="muted">
-          When on, Tracely reads the text of whatever field is focused in other apps (via Windows
-          accessibility APIs, not a screenshot) and underlines flagged claims directly on your
-          screen — works in any app by default, like Grammarly. Apps you check below are skipped
-          entirely: no text is ever read from them, and nothing is sent anywhere.
-        </p>
-
-        <p className="settings-label-heading">
-          Blocked apps
-          {installedExeLower === null ? <span className="muted"> — scanning what's installed…</span> : null}
-        </p>
-        <div className="app-checklist">
-          {sortedApps.map((app) => {
-            const isInstalled = installedExeLower?.has(app.exe.toLowerCase()) ?? false
-            return (
-              <label key={app.exe} className="checkbox-row app-checklist-item">
+          {section === 'preferences' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Preferences</h3>
+                <p>Turn Screen Watch on or off, and choose which apps it's allowed to read text from.</p>
+              </div>
+              <label className="settings-toggle-row">
+                <div>
+                  <div className="settings-toggle-row-title">Screen Watch</div>
+                  <div className="settings-toggle-row-subtitle">
+                    {screenWatch?.enabled ? 'On — reading focused apps for flagged claims.' : 'Off.'}
+                  </div>
+                </div>
                 <input
                   type="checkbox"
-                  checked={blockedLower.has(app.exe.toLowerCase())}
-                  onChange={(e) => toggleCuratedApp(app.exe, e.target.checked)}
+                  checked={screenWatch?.enabled ?? false}
+                  disabled={!screenWatch || screenWatchToggling}
+                  onChange={toggleScreenWatch}
                 />
-                {app.label}
-                {isInstalled ? <span className="app-checklist-installed-dot" title="Installed on this computer" /> : null}
               </label>
-            )
-          })}
+              <div className="settings-app-list">
+                {installedApps === null ? (
+                  <p className="muted">Scanning installed apps…</p>
+                ) : knownApps.length === 0 ? (
+                  <p className="muted">No apps found. Add one by name below.</p>
+                ) : (
+                  knownApps.map((app: ScannedApp) => {
+                    const allowed = !blockedApps.some((b) => b.toLowerCase() === app.exe.toLowerCase())
+                    return (
+                      <label key={app.exe} className="settings-app-row">
+                        <input
+                          type="checkbox"
+                          checked={allowed}
+                          onChange={(e) => void setAppAllowed(app.exe, e.target.checked)}
+                        />
+                        <span className="settings-app-row-text">
+                          <span className="settings-app-row-name">{app.name}</span>
+                          {app.name !== app.exe ? <span className="settings-app-row-exe">{app.exe}</span> : null}
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+              <div className="settings-app-add">
+                <input
+                  value={manualApp}
+                  placeholder="Add an app by .exe name (e.g. notepad.exe)"
+                  onChange={(e) => setManualApp(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void addManualApp()
+                  }}
+                />
+                <Button variant="secondary" onClick={addManualApp}>
+                  Add
+                </Button>
+              </div>
+              {prefsError ? <p className="error-text">{prefsError}</p> : null}
+              <p className="muted settings-app-note">
+                Unchecked apps are on Screen Watch&rsquo;s blocklist and never have their text read. Chat apps
+                (Discord, Slack, Teams, WhatsApp, Signal, Telegram, Messenger) are blocked by default.
+              </p>
+            </>
+          ) : null}
+
+          {section === 'aiModel' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>AI Model</h3>
+                <p>Run claim detection on a model bundled with Tracely — offline, private, no per-request cost.</p>
+              </div>
+              <label className="settings-toggle-row">
+                <div>
+                  <div className="settings-toggle-row-title">Use local AI</div>
+                  <div className="settings-toggle-row-subtitle">
+                    {localModelStatus === 'ready'
+                      ? settings.localModelEnabled
+                        ? 'On — claim detection runs locally.'
+                        : 'Off — claim detection uses the relay.'
+                      : 'Download the model below to enable this.'}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.localModelEnabled}
+                  disabled={localModelStatus !== 'ready'}
+                  onChange={toggleLocalModel}
+                />
+              </label>
+              <div className="settings-model-status">
+                {localModelStatus === 'ready' ? (
+                  <p className="muted">Model downloaded and ready.</p>
+                ) : localModelStatus === 'error' ? (
+                  <>
+                    <p className="error-text">Download failed.</p>
+                    <Button variant="dark" onClick={retryLocalModelDownload}>
+                      Retry download
+                    </Button>
+                  </>
+                ) : downloadProgress ? (
+                  <>
+                    <div className="settings-progress-bar">
+                      <div
+                        className="settings-progress-bar-fill"
+                        style={{
+                          width: `${downloadProgress.total ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100) : 0}%`
+                        }}
+                      />
+                    </div>
+                    <p className="muted">
+                      {(downloadProgress.downloaded / 1e6).toFixed(0)} MB /{' '}
+                      {(downloadProgress.total / 1e6).toFixed(0)} MB
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted">Downloading in the background (~2.5 GB, starts automatically)…</p>
+                )}
+              </div>
+            </>
+          ) : null}
+
+          {error ? <p className="error-text">{error}</p> : null}
         </div>
-        <p className="muted">
-          Apps marked with a dot were detected as installed on this computer (via Start Menu
-          shortcuts — portable installs may be missed). Everything else is still selectable in
-          case detection missed it.
-        </p>
-        <label>
-          Other apps (process names, comma-separated)
-          <input
-            type="text"
-            value={extraAppsText}
-            onChange={(e) => setExtraAppsText(e.target.value)}
-            onBlur={saveExtraApps}
-            placeholder="SomeApp.exe"
-          />
-        </label>
-        <p className="muted">
-          Tracely identifies apps by their process, so only apps with their own desktop program
-          can be blocked individually — a browser can only be blocked as a whole (the &quot;entire
-          browser&quot; options above), not one site within it. That means Google Docs, Google
-          Drive, and Notion&apos;s web app can&apos;t be excluded on their own; block the browser
-          you use them in if you need that. Separately, the whole Google Workspace suite — Docs,
-          Sheets, and Slides — won&apos;t work at all, blocked or not: they render their editing
-          surface as pixels instead of exposing real text to accessibility tools, which Tracely
-          relies on to read anything.
-        </p>
-      </section>
-
-      <section className="settings-section">
-        <h3>Privacy</h3>
-        <p className="muted">
-          Tracely sends text to the Tracely relay when you click Analyze, Find Evidence, or
-          Critique, and — everywhere except apps on the blocklist above — automatically while you
-          write. It's never sent anywhere else, and evidence search only ever queries academic
-          APIs (OpenAlex, Crossref, Semantic Scholar, PubMed).
-        </p>
-        <div className="input-row">
-          <Button variant="danger" onClick={() => setConfirmClear('history')}>
-            Clear Analysis History
-          </Button>
-          <Button variant="danger" onClick={() => setConfirmClear('all')}>
-            Clear History + Library
-          </Button>
-        </div>
-        {clearedMessage ? <p className="muted">{clearedMessage}</p> : null}
-      </section>
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      {confirmClear ? (
-        <ConfirmDialog
-          title="Clear local data"
-          message={
-            confirmClear === 'all'
-              ? 'This permanently deletes all analyses, cached results, and your saved source library from this computer.'
-              : 'This permanently deletes analyses and cached results. Your saved library will be kept.'
-          }
-          confirmLabel="Delete"
-          onConfirm={() => clearHistory(confirmClear === 'all')}
-          onCancel={() => setConfirmClear(null)}
-        />
-      ) : null}
+      </div>
     </div>
   )
 }

@@ -39,6 +39,15 @@ export const tracelyApi = {
     call(window.tracely.settings.set(patch)),
   scanInstalledApps: () => call(window.tracely.settings.scanInstalledApps()),
 
+  getLocalModelStatus: () => call(window.tracely.localModel.getStatus()),
+  startLocalModelDownload: () => call(window.tracely.localModel.startDownload()),
+  onLocalModelDownloadProgress: (cb: Parameters<typeof window.tracely.onLocalModelDownloadProgress>[0]) =>
+    window.tracely.onLocalModelDownloadProgress(cb),
+
+  getProfile: () => call(window.tracely.profile.get()),
+  setProfile: (patch: Parameters<typeof window.tracely.profile.set>[0]) =>
+    call(window.tracely.profile.set(patch)),
+
   clearHistory: (includeLibrary: boolean) =>
     call(window.tracely.history.clear({ includeLibrary })),
 
@@ -47,11 +56,6 @@ export const tracelyApi = {
 
   showWindow: (target: 'main' | 'floating') => call(window.tracely.window.show({ target })),
   hideWindow: (target: 'main' | 'floating') => call(window.tracely.window.hide({ target })),
-  minimizeWindow: () => call(window.tracely.window.minimize()),
-  toggleMaximizeWindow: () => call(window.tracely.window.maximizeToggle()),
-  isWindowMaximized: () => call(window.tracely.window.isMaximized()),
-  onWindowMaximizeChanged: (cb: Parameters<typeof window.tracely.onWindowMaximizeChanged>[0]) =>
-    window.tracely.onWindowMaximizeChanged(cb),
 
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
 
