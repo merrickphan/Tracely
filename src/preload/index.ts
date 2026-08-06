@@ -5,6 +5,17 @@ import type {
   AnalyzeDetectClaimsResponse,
   AnalyzeGetResultRequest,
   AnalyzeGetResultResponse,
+  AuthDeleteAccountResponse,
+  AuthGetUserResponse,
+  AuthSignInRequest,
+  AuthSignInWithGoogleResponse,
+  AuthSignOutResponse,
+  AuthSignResponse,
+  AuthSignUpRequest,
+  AuthUpdateNameRequest,
+  AuthUpdateNameResponse,
+  AuthUpdateUsernameRequest,
+  AuthUpdateUsernameResponse,
   CitationGenerateRequest,
   CitationGenerateResponse,
   CitationListRequest,
@@ -34,18 +45,28 @@ import type {
   ProfileGetResponse,
   ProfileSetRequest,
   ProfileSetResponse,
-  ScreenWatchAnalyzeClaimRequest,
-  ScreenWatchAnalyzeClaimResponse,
+  ScreenWatchCritiqueClaimRequest,
+  ScreenWatchCritiqueClaimResponse,
+  ScreenWatchFindSourceRequest,
+  ScreenWatchFindSourceResponse,
   ScreenWatchGetStatusResponse,
   ScreenWatchHoverEvent,
+  ScreenWatchInsertCitationRequest,
+  ScreenWatchInsertCitationResponse,
   ScreenWatchOverlayUpdateEvent,
+  ScreenWatchRefreshEvidenceRequest,
+  ScreenWatchRefreshEvidenceResponse,
   ScreenWatchSetActivePopoverRectRequest,
   ScreenWatchSetActivePopoverRectResponse,
   ScreenWatchSetEnabledRequest,
   ScreenWatchSetEnabledResponse,
   ScreenWatchSetWidgetExpandedRequest,
   ScreenWatchSetWidgetExpandedResponse,
+  ScreenWatchSetWidgetViewModeRequest,
+  ScreenWatchSetWidgetViewModeResponse,
   ScreenWatchStatus,
+  ScreenWatchUndoCitationRequest,
+  ScreenWatchUndoCitationResponse,
   ScreenWatchWidgetDragEndRequest,
   ScreenWatchWidgetDragEndResponse,
   ScreenWatchWidgetDragStartResponse,
@@ -57,7 +78,7 @@ import type {
   WindowTargetRequest,
   WindowTargetResponse
 } from '@shared/ipc-contract'
-import type { AppSettings } from '@shared/types'
+import type { AppSettings, AuthUser } from '@shared/types'
 
 const api = {
   analyze: {
@@ -105,6 +126,19 @@ const api = {
     get: (): Promise<ProfileGetResponse> => ipcRenderer.invoke(IPC.PROFILE_GET, {}),
     set: (req: ProfileSetRequest): Promise<ProfileSetResponse> => ipcRenderer.invoke(IPC.PROFILE_SET, req)
   },
+  auth: {
+    getUser: (): Promise<AuthGetUserResponse> => ipcRenderer.invoke(IPC.AUTH_GET_USER, {}),
+    signUp: (req: AuthSignUpRequest): Promise<AuthSignResponse> => ipcRenderer.invoke(IPC.AUTH_SIGN_UP, req),
+    signIn: (req: AuthSignInRequest): Promise<AuthSignResponse> => ipcRenderer.invoke(IPC.AUTH_SIGN_IN, req),
+    signOut: (): Promise<AuthSignOutResponse> => ipcRenderer.invoke(IPC.AUTH_SIGN_OUT, {}),
+    signInWithGoogle: (): Promise<AuthSignInWithGoogleResponse> =>
+      ipcRenderer.invoke(IPC.AUTH_SIGN_IN_WITH_GOOGLE, {}),
+    updateName: (req: AuthUpdateNameRequest): Promise<AuthUpdateNameResponse> =>
+      ipcRenderer.invoke(IPC.AUTH_UPDATE_NAME, req),
+    updateUsername: (req: AuthUpdateUsernameRequest): Promise<AuthUpdateUsernameResponse> =>
+      ipcRenderer.invoke(IPC.AUTH_UPDATE_USERNAME, req),
+    deleteAccount: (): Promise<AuthDeleteAccountResponse> => ipcRenderer.invoke(IPC.AUTH_DELETE_ACCOUNT, {})
+  },
   history: {
     clear: (req: HistoryClearRequest): Promise<HistoryClearResponse> =>
       ipcRenderer.invoke(IPC.HISTORY_CLEAR, req)
@@ -130,10 +164,10 @@ const api = {
     setEnabled: (req: ScreenWatchSetEnabledRequest): Promise<ScreenWatchSetEnabledResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_SET_ENABLED, req),
     getStatus: (): Promise<ScreenWatchGetStatusResponse> => ipcRenderer.invoke(IPC.SCREENWATCH_GET_STATUS, {}),
-    analyzeClaim: (req: ScreenWatchAnalyzeClaimRequest): Promise<ScreenWatchAnalyzeClaimResponse> =>
-      ipcRenderer.invoke(IPC.SCREENWATCH_ANALYZE_CLAIM, req),
     setWidgetExpanded: (req: ScreenWatchSetWidgetExpandedRequest): Promise<ScreenWatchSetWidgetExpandedResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_SET_WIDGET_EXPANDED, req),
+    setWidgetViewMode: (req: ScreenWatchSetWidgetViewModeRequest): Promise<ScreenWatchSetWidgetViewModeResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_SET_WIDGET_VIEW_MODE, req),
     widgetDragStart: (): Promise<ScreenWatchWidgetDragStartResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_WIDGET_DRAG_START, {}),
     widgetDragEnd: (req: ScreenWatchWidgetDragEndRequest): Promise<ScreenWatchWidgetDragEndResponse> =>
@@ -141,7 +175,17 @@ const api = {
     setActivePopoverRect: (
       req: ScreenWatchSetActivePopoverRectRequest
     ): Promise<ScreenWatchSetActivePopoverRectResponse> =>
-      ipcRenderer.invoke(IPC.SCREENWATCH_SET_ACTIVE_POPOVER_RECT, req)
+      ipcRenderer.invoke(IPC.SCREENWATCH_SET_ACTIVE_POPOVER_RECT, req),
+    refreshEvidence: (req: ScreenWatchRefreshEvidenceRequest): Promise<ScreenWatchRefreshEvidenceResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_REFRESH_EVIDENCE, req),
+    critiqueClaim: (req: ScreenWatchCritiqueClaimRequest): Promise<ScreenWatchCritiqueClaimResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_CRITIQUE_CLAIM, req),
+    findSource: (req: ScreenWatchFindSourceRequest): Promise<ScreenWatchFindSourceResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_FIND_SOURCE, req),
+    insertCitation: (req: ScreenWatchInsertCitationRequest): Promise<ScreenWatchInsertCitationResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_INSERT_CITATION, req),
+    undoCitation: (req: ScreenWatchUndoCitationRequest): Promise<ScreenWatchUndoCitationResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_UNDO_CITATION, req)
   },
   onClipboardCaptured: (callback: (event: FloatingClipboardCapturedEvent) => void): (() => void) => {
     const listener = (_: unknown, payload: FloatingClipboardCapturedEvent): void => callback(payload)
@@ -162,6 +206,16 @@ const api = {
     const listener = (_: unknown, payload: ScreenWatchHoverEvent | null): void => callback(payload)
     ipcRenderer.on(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC_EVENTS.SCREENWATCH_HOVER_CHANGED, listener)
+  },
+  onAuthStateChanged: (callback: (user: AuthUser | null) => void): (() => void) => {
+    const listener = (_: unknown, payload: AuthUser | null): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.AUTH_STATE_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.AUTH_STATE_CHANGED, listener)
+  },
+  onAuthOAuthError: (callback: (message: string) => void): (() => void) => {
+    const listener = (_: unknown, payload: string): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.AUTH_OAUTH_ERROR, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.AUTH_OAUTH_ERROR, listener)
   }
 }
 

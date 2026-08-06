@@ -1,33 +1,49 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import { IPC, IPC_EVENTS } from '@shared/ipc-channels'
+import { IPC } from '@shared/ipc-channels'
 import type {
-  FloatingClipboardCapturedEvent,
-  ScreenWatchAnalyzeClaimResponse,
+  ScreenWatchCritiqueClaimResponse,
+  ScreenWatchFindSourceResponse,
   ScreenWatchGetStatusResponse,
+  ScreenWatchInsertCitationResponse,
+  ScreenWatchRefreshEvidenceResponse,
   ScreenWatchSetActivePopoverRectResponse,
   ScreenWatchSetEnabledResponse,
   ScreenWatchSetWidgetExpandedResponse,
+  ScreenWatchSetWidgetViewModeResponse,
+  ScreenWatchUndoCitationResponse,
   ScreenWatchWidgetDragEndResponse,
   ScreenWatchWidgetDragStartResponse
 } from '@shared/ipc-contract'
 import {
+  critiqueClaim,
+  findSourceForClaim,
   getScreenWatchStatus,
+  insertCitationForClaim,
+  refreshEvidenceForClaim,
   setActivePopoverRect,
   setWidgetDragEnd,
   setWidgetDragStart,
   setWidgetExpanded,
+  setWidgetViewMode,
   startScreenWatch,
-  stopScreenWatch
+  stopScreenWatch,
+  undoCitationForClaim
 } from '../services/screenWatch/screenWatchService'
-import { getFloatingWindow, showFloatingWindowNearCursor } from '../windows/floatingWindow'
 
 const setEnabledSchema = z.object({ enabled: z.boolean() })
-const analyzeClaimSchema = z.object({ text: z.string().min(1) })
 const setWidgetExpandedSchema = z.object({ expanded: z.boolean() })
+const setWidgetViewModeSchema = z.object({ mode: z.enum(['single', 'all']) })
 const widgetDragEndSchema = z.object({ x: z.number(), y: z.number() })
 const rectSchema = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
 const setActivePopoverRectSchema = z.object({ claimId: z.string().nullable(), rect: rectSchema.nullable() })
+const claimIdSchema = z.object({ claimId: z.string() })
+const findSourceSchema = z.object({ claimId: z.string(), query: z.string().optional() })
+const insertCitationSchema = z.object({
+  claimId: z.string(),
+  sourceRef: z.string(),
+  style: z.enum(['APA', 'MLA', 'Chicago'])
+})
 
 export function registerScreenWatchHandlers(): void {
   ipcMain.handle(IPC.SCREENWATCH_SET_ENABLED, (_event, raw): ScreenWatchSetEnabledResponse => {
@@ -41,21 +57,15 @@ export function registerScreenWatchHandlers(): void {
     return getScreenWatchStatus()
   })
 
-  ipcMain.handle(IPC.SCREENWATCH_ANALYZE_CLAIM, (_event, raw): ScreenWatchAnalyzeClaimResponse => {
-    const { text } = analyzeClaimSchema.parse(raw)
-    // Reuses the same clipboard-capture flow the global hotkey uses — the
-    // floating window already knows how to take a chunk of text and run a
-    // full analysis on it, so there's no separate code path to maintain.
-    showFloatingWindowNearCursor()
-    const win = getFloatingWindow()
-    const payload: FloatingClipboardCapturedEvent = { text }
-    win?.webContents.send(IPC_EVENTS.FLOATING_CLIPBOARD_CAPTURED, payload)
-    return { ok: true }
-  })
-
   ipcMain.handle(IPC.SCREENWATCH_SET_WIDGET_EXPANDED, (_event, raw): ScreenWatchSetWidgetExpandedResponse => {
     const { expanded } = setWidgetExpandedSchema.parse(raw)
     setWidgetExpanded(expanded)
+    return { ok: true }
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_SET_WIDGET_VIEW_MODE, (_event, raw): ScreenWatchSetWidgetViewModeResponse => {
+    const { mode } = setWidgetViewModeSchema.parse(raw)
+    setWidgetViewMode(mode)
     return { ok: true }
   })
 
@@ -73,6 +83,32 @@ export function registerScreenWatchHandlers(): void {
   ipcMain.handle(IPC.SCREENWATCH_SET_ACTIVE_POPOVER_RECT, (_event, raw): ScreenWatchSetActivePopoverRectResponse => {
     const { claimId, rect } = setActivePopoverRectSchema.parse(raw)
     setActivePopoverRect(claimId, rect)
+    return { ok: true }
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_REFRESH_EVIDENCE, async (_event, raw): Promise<ScreenWatchRefreshEvidenceResponse> => {
+    const { claimId } = claimIdSchema.parse(raw)
+    return { evidence: await refreshEvidenceForClaim(claimId) }
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_CRITIQUE_CLAIM, async (_event, raw): Promise<ScreenWatchCritiqueClaimResponse> => {
+    const { claimId } = claimIdSchema.parse(raw)
+    return await critiqueClaim(claimId)
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_FIND_SOURCE, async (_event, raw): Promise<ScreenWatchFindSourceResponse> => {
+    const { claimId, query } = findSourceSchema.parse(raw)
+    return { candidates: await findSourceForClaim(claimId, query) }
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_INSERT_CITATION, async (_event, raw): Promise<ScreenWatchInsertCitationResponse> => {
+    const { claimId, sourceRef, style } = insertCitationSchema.parse(raw)
+    return { citation: await insertCitationForClaim(claimId, sourceRef, style) }
+  })
+
+  ipcMain.handle(IPC.SCREENWATCH_UNDO_CITATION, async (_event, raw): Promise<ScreenWatchUndoCitationResponse> => {
+    const { claimId } = claimIdSchema.parse(raw)
+    await undoCitationForClaim(claimId)
     return { ok: true }
   })
 }

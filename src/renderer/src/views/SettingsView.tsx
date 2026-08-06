@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { AccentColor, AppSettings, Density, Theme } from '@shared/types'
+import type { AccentColor, AppSettings, AuthUser, Density, Theme } from '@shared/types'
 import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
+import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
+import ConfirmDialog from '../components/ConfirmDialog'
+import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
 import { UserIcon, SunIcon, SlidersIcon, SignOutIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
@@ -105,7 +108,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       const updated = await tracelyApi.setProfile({
         firstName: profile.firstName,
         lastName: profile.lastName,
-        username: profile.username,
         bio: profile.bio
       })
       setProfile(updated)
@@ -212,6 +214,26 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     // makes them checkable; the user still has to check the box.
   }
 
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  const [signOutBusy, setSignOutBusy] = useState(false)
+
+  useEffect(() => {
+    tracelyApi.getAuthUser().then((res) => setAuthUser(res.user))
+    return tracelyApi.onAuthStateChanged(setAuthUser)
+  }, [])
+
+  async function sidebarSignOut(): Promise<void> {
+    if (!authUser) return
+    setSignOutBusy(true)
+    try {
+      await tracelyApi.signOut()
+    } finally {
+      setSignOutBusy(false)
+      setConfirmingSignOut(false)
+    }
+  }
+
   if (!settings) {
     return <div className="settings-view">{error ? <p className="error-text">{error}</p> : <p>Loading…</p>}</div>
   }
@@ -239,16 +261,31 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               </Fragment>
             ))}
           </nav>
-          <div className="settings-sidebar-footer">
-            <button className="settings-signout">
-              <SignOutIcon size={15} /> Sign out
-            </button>
-          </div>
+          {authUser ? (
+            <div className="settings-sidebar-footer">
+              <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
+                <SignOutIcon size={15} /> Sign out
+              </button>
+            </div>
+          ) : null}
         </aside>
+
+        {confirmingSignOut ? (
+          <ConfirmDialog
+            title="Sign out?"
+            message="You'll need to sign back in to use Tracely again."
+            confirmLabel="Sign out"
+            danger
+            busy={signOutBusy}
+            onConfirm={sidebarSignOut}
+            onCancel={() => setConfirmingSignOut(false)}
+          />
+        ) : null}
 
         <div className="settings-panel">
           {section === 'profile' && profile ? (
-            <>
+            <div key="profile" className="settings-panel-content">
+              {authUser ? <AuthPanel user={authUser} /> : null}
               <div className="settings-panel-header">
                 <h3>Profile</h3>
                 <p>How others see you across the platform.</p>
@@ -298,13 +335,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                     onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
                   />
                 </SettingsField>
-                <SettingsField label="Username" full>
-                  <input
-                    value={profile.username}
-                    placeholder="@username"
-                    onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-                  />
-                </SettingsField>
                 <SettingsField label="Bio" full>
                   <textarea
                     value={profile.bio}
@@ -317,11 +347,12 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
                 {profileSaving ? 'Saving…' : 'Save changes'}
               </Button>
-            </>
+              {authUser ? <DangerZone user={authUser} /> : null}
+            </div>
           ) : null}
 
           {section === 'appearance' ? (
-            <>
+            <div key="appearance" className="settings-panel-content">
               <div className="settings-panel-header">
                 <h3>Appearance</h3>
                 <p>Customize how Tracely looks for you.</p>
@@ -364,11 +395,11 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               <Button variant="dark" onClick={saveAppearance} disabled={appearanceSaving}>
                 {appearanceSaving ? 'Saving…' : 'Save changes'}
               </Button>
-            </>
+            </div>
           ) : null}
 
           {section === 'preferences' ? (
-            <>
+            <div key="preferences" className="settings-panel-content">
               <div className="settings-panel-header">
                 <h3>Preferences</h3>
                 <p>Turn Screen Watch on or off, and choose which apps it's allowed to read text from.</p>
@@ -426,7 +457,7 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 Screen Watch only reads text in apps you check below — nothing is enabled anywhere until you pick
                 it. Uncheck an app any time to stop it from being read.
               </p>
-            </>
+            </div>
           ) : null}
 
           {error ? <p className="error-text">{error}</p> : null}

@@ -1,5 +1,26 @@
 export type ClaimType = 'statistic' | 'causal' | 'factual' | 'prediction' | 'opinion'
 
+// A signed-in Supabase account. Entirely separate from Profile (local
+// display name/avatar) — this is the real, server-verified unique identity;
+// null means signed out / no account configured.
+export interface AuthUser {
+  id: string
+  email: string | null
+  // Google sign-in populates this from the Google account automatically;
+  // email/password sign-up asks for it explicitly (see AuthSignUpRequest)
+  // since Supabase has no built-in name field. Null means "not set yet" —
+  // the renderer should prompt for it before showing the main app rather
+  // than ever rendering a blank greeting.
+  firstName: string | null
+  // Defaults to email until the user picks something else (see
+  // updateUsername) — that default is also exactly what a Google account
+  // already has, so "Google sign-in gets email as a username" needs no
+  // separate handling. Null only for the placeholder case of no email
+  // either (shouldn't happen in practice — every Supabase auth method here
+  // collects an email).
+  username: string | null
+}
+
 export type CitationStyle = 'APA' | 'MLA' | 'Chicago'
 
 export type CritiqueVerdict =

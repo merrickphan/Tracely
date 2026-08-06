@@ -2,6 +2,7 @@ import type {
   AccentColor,
   Analysis,
   AppSettings,
+  AuthUser,
   Citation,
   CitationStyle,
   Claim,
@@ -11,8 +12,13 @@ import type {
   EvidenceItem,
   LibraryItem,
   ScoreBreakdown,
+  SourceProvider,
   Theme
 } from './types'
+
+// Note: CitationStyle is already 'APA' | 'MLA' | 'Chicago' — reused as-is for
+// the Screen Watch citation flow below, same enum the main app's citation
+// generation already uses.
 
 export interface AnalyzeDetectClaimsRequest {
   text: string
@@ -149,7 +155,6 @@ export type ProfileGetRequest = Record<string, never>
 export interface ProfileInfo {
   firstName: string
   lastName: string
-  username: string
   bio: string
   // file:// URL to the locally-stored avatar image, or null if none set.
   avatarUrl: string | null
@@ -159,7 +164,6 @@ export type ProfileGetResponse = ProfileInfo
 export interface ProfileSetRequest {
   firstName?: string
   lastName?: string
-  username?: string
   bio?: string
   // Raw data URL (e.g. "data:image/png;base64,...") from a freshly-picked
   // file, written to disk server-side; pass null to remove the avatar.
@@ -227,16 +231,118 @@ export interface ScreenRect {
   width: number
   height: number
 }
-// Real per-claimType counts over the currently-flagged claims. Deliberately
-// NOT an evidence-quality judgment — no evidence search runs during Screen
-// Watch (see costGuard.ts), so Tracely never actually checks whether a
-// claim is unverified, missing a citation, etc. This only reports what's
-// real: the claim type detectClaims assigned it.
-export interface ScreenWatchWidgetBreakdown {
-  statisticCount: number
-  factualCount: number
-  otherCount: number
+// Evidence search now runs in the background per flagged claim (fire-and-
+// forget, kicked off right after detection) — this is its result once it
+// resolves. `articles` is trimmed to the top few by rank (not the full
+// result set — see leanEvidence in screenWatchService.ts) since it travels
+// in the overlay payload that gets re-sent on every change; the full list is
+// only ever fetched from the main Tracely window via the existing
+// EVIDENCE_FIND flow, not through Screen Watch.
+export interface ScreenWatchEvidenceArticle {
+  title: string
+  venue: string | null
+  year: number | null
+  provider: SourceProvider
+  url: string | null
+  // Real favicon for the source's own site, fetched server-side (see
+  // main/services/search/favicon.ts) as a data: URI so it satisfies the
+  // overlay's img-src 'self' data: CSP with no loosening. Null while
+  // unavailable/unfetchable — the renderer falls back to the provider
+  // monogram badge in that case.
+  faviconDataUrl: string | null
 }
+export interface ScreenWatchClaimEvidence {
+  score: number
+  count: number
+  articles: ScreenWatchEvidenceArticle[]
+}
+
+// Set once the user has actually inserted a citation into the watched
+// document for this claim (see insertCitationForClaim in
+// screenWatchService.ts) — the renderer treats a cited claim as resolved
+// (dropped from the flagged/underline set) rather than re-showing the
+// "missing citation" popup for something already fixed.
+export interface ScreenWatchClaimCitation {
+  inTextCitation: string
+  worksCitedEntry: string
+}
+
+export interface ScreenWatchClaimSummary {
+  id: string
+  text: string
+  claimType: ClaimType
+  confidence: number
+  // null while the background search hasn't resolved yet (or failed) for
+  // this claim — the renderer shows a loading state, not a zero score.
+  evidence: ScreenWatchClaimEvidence | null
+  // Both null until the user explicitly clicks "Critique Argument" — unlike
+  // evidence search, critique hits the paid relay, so it never runs
+  // automatically for passive background reading (see critiqueClaim in
+  // screenWatchService.ts).
+  critique: string | null
+  critiqueVerdict: CritiqueVerdict | null
+  citation: ScreenWatchClaimCitation | null
+}
+
+// "Find a source" — a focused, single-claim search distinct from
+// refreshEvidence's broader multi-source list: ranked candidates with a
+// per-item match % so the user can pick one specific source to cite,
+// rather than browsing everything found. sourceRef is an opaque id (same
+// derivation as synthesizeEvidenceItem's Source.id in screenWatchService.ts)
+// the follow-up insertCitation call uses to find the same item server-side —
+// results aren't persisted anywhere, same ephemeral rule as the rest of
+// Screen Watch's evidence.
+export interface ScreenWatchFindSourceRequest {
+  claimId: string
+  // When set, re-runs the search with this text instead of the claim's own
+  // searchQuery — backs the citation picker's "search again" box.
+  query?: string
+}
+export interface ScreenWatchSourceCandidate {
+  sourceRef: string
+  title: string
+  venue: string | null
+  year: number | null
+  provider: SourceProvider
+  url: string | null
+  matchPercent: number
+  faviconDataUrl: string | null
+}
+export interface ScreenWatchFindSourceResponse {
+  candidates: ScreenWatchSourceCandidate[]
+}
+
+export interface ScreenWatchInsertCitationRequest {
+  claimId: string
+  sourceRef: string
+  style: CitationStyle
+}
+export interface ScreenWatchInsertCitationResponse {
+  citation: ScreenWatchClaimCitation
+}
+
+export interface ScreenWatchUndoCitationRequest {
+  claimId: string
+}
+export interface ScreenWatchUndoCitationResponse {
+  ok: true
+}
+
+export interface ScreenWatchRefreshEvidenceRequest {
+  claimId: string
+}
+export interface ScreenWatchRefreshEvidenceResponse {
+  evidence: ScreenWatchClaimEvidence | null
+}
+
+export interface ScreenWatchCritiqueClaimRequest {
+  claimId: string
+}
+export interface ScreenWatchCritiqueClaimResponse {
+  critique: string
+  verdict: CritiqueVerdict
+}
+
 export interface ScreenWatchWidget {
   rect: ScreenRect
   // Whether `rect` is the collapsed launcher circle or the expanded stats
@@ -245,16 +351,20 @@ export interface ScreenWatchWidget {
   // the renderer's draw position always agree on where the widget actually
   // is.
   expanded: boolean
+  // Only meaningful while expanded — 'single' shows the top claim, 'all'
+  // shows every currently-flagged claim in a grid. Determines `rect`'s
+  // actual size (see computeAllPanelSize in screenWatchService.ts) since
+  // "no scrolling" means the panel itself has to grow/shrink to fit.
+  viewMode: 'single' | 'all'
   claimCount: number
-  breakdown: ScreenWatchWidgetBreakdown
-  // Average claim-detection confidence (0-100) across currently-flagged
-  // claims — real, already-computed data. Shown as the ring's "Sourced" %
-  // since no evidence search runs in this flow to produce a true sourced
-  // percentage; it's the closest real signal, not a literal sourced rate.
-  avgConfidencePercent: number
-  // Full watched-text snapshot, so clicking the widget can trigger a
-  // whole-text analysis without a separate round-trip.
-  text: string
+  // Ordered by confidence, highest first — the popup/panel picks which one
+  // to show (hovered claim, or the top one by default) from this list
+  // rather than needing a separate round-trip per claim.
+  claims: ScreenWatchClaimSummary[]
+  // claims.length + the evidence item count of every claim whose search has
+  // resolved so far — the single "how much has been found" number the
+  // widget badge and panel header show.
+  totalInfoCount: number
 }
 
 export interface ScreenWatchOverlayUpdateEvent {
@@ -274,17 +384,17 @@ export interface ScreenWatchHoverEvent {
   anchor: ScreenRect
 }
 
-export interface ScreenWatchAnalyzeClaimRequest {
-  text: string
-}
-export interface ScreenWatchAnalyzeClaimResponse {
-  ok: true
-}
-
 export interface ScreenWatchSetWidgetExpandedRequest {
   expanded: boolean
 }
 export interface ScreenWatchSetWidgetExpandedResponse {
+  ok: true
+}
+
+export interface ScreenWatchSetWidgetViewModeRequest {
+  mode: 'single' | 'all'
+}
+export interface ScreenWatchSetWidgetViewModeResponse {
   ok: true
 }
 
@@ -317,5 +427,56 @@ export interface ScreenWatchSetActivePopoverRectRequest {
   rect: ScreenRect | null
 }
 export interface ScreenWatchSetActivePopoverRectResponse {
+  ok: true
+}
+
+export type AuthGetUserRequest = Record<string, never>
+export interface AuthGetUserResponse {
+  user: AuthUser | null
+  // False if this build has no Supabase project configured (no
+  // SUPABASE_URL/SUPABASE_ANON_KEY at build time) — the renderer should
+  // hide/disable the login UI rather than show sign-in attempts that will
+  // always fail.
+  configured: boolean
+}
+
+export interface AuthSignUpRequest {
+  email: string
+  password: string
+  firstName: string
+}
+export interface AuthSignInRequest {
+  email: string
+  password: string
+}
+export interface AuthSignResponse {
+  user: AuthUser | null
+}
+
+export type AuthSignOutRequest = Record<string, never>
+export interface AuthSignOutResponse {
+  ok: true
+}
+
+export type AuthSignInWithGoogleRequest = Record<string, never>
+export interface AuthSignInWithGoogleResponse {
+  // The system browser is opened with this URL; the actual signed-in user
+  // arrives later via the AUTH_STATE_CHANGED event once the OAuth redirect
+  // completes, not as this call's return value.
+  ok: true
+}
+
+export interface AuthUpdateNameRequest {
+  firstName: string
+}
+export type AuthUpdateNameResponse = AuthSignResponse
+
+export interface AuthUpdateUsernameRequest {
+  username: string
+}
+export type AuthUpdateUsernameResponse = AuthSignResponse
+
+export type AuthDeleteAccountRequest = Record<string, never>
+export interface AuthDeleteAccountResponse {
   ok: true
 }

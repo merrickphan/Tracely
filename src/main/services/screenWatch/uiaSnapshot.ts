@@ -56,6 +56,10 @@ export type UiaSnapshot =
   | { ok: false; error: string }
 
 const SCRIPT_TIMEOUT_MS = 4000
+// Insert mode does a clipboard round-trip and a 200ms settle sleep on top of
+// the UIA work snapshot mode does, so it gets a little more headroom before
+// being treated as hung.
+const INSERT_TIMEOUT_MS = 6000
 
 function getScriptPath(): string {
   return is.dev
@@ -64,15 +68,14 @@ function getScriptPath(): string {
 }
 
 /**
- * Runs the UIA snapshot script once and returns its parsed result. Spawned
- * fresh per call (rather than kept alive) to avoid async-stdin complexity in
- * the PowerShell side — see resources/uia-watch.ps1 for why.
+ * Spawns uia-watch.ps1 with the given extra args and returns its parsed
+ * single-line JSON result. Spawned fresh per call (rather than kept alive)
+ * to avoid async-stdin complexity in the PowerShell side — see
+ * resources/uia-watch.ps1 for why. Shared by snapshot/insert/undo modes;
+ * each caller supplies its own -Mode and mode-specific args.
  */
-export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot> {
+function runUiaScript<T>(args: string[], timeoutMs: number): Promise<T | { ok: false; error: string }> {
   return new Promise((resolve) => {
-    const spansB64 =
-      spans.length > 0 ? Buffer.from(JSON.stringify(spans), 'utf-8').toString('base64') : ''
-
     const child = spawn(
       'powershell.exe',
       [
@@ -82,10 +85,9 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
         'Bypass',
         '-File',
         getScriptPath(),
-        '-SpansB64',
-        spansB64,
         '-SelfProcessName',
-        `${app.name}.exe`
+        `${app.name}.exe`,
+        ...args
       ],
       { windowsHide: true }
     )
@@ -94,7 +96,7 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
     let stderr = ''
     let settled = false
 
-    const finish = (result: UiaSnapshot): void => {
+    const finish = (result: T | { ok: false; error: string }): void => {
       if (settled) return
       settled = true
       resolve(result)
@@ -103,7 +105,7 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
     const timer = setTimeout(() => {
       child.kill()
       finish({ ok: false, error: 'uia-watch.ps1 timed out' })
-    }, SCRIPT_TIMEOUT_MS)
+    }, timeoutMs)
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString()
@@ -118,7 +120,7 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
     child.on('close', () => {
       clearTimeout(timer)
       try {
-        finish(JSON.parse(stdout.trim()) as UiaSnapshot)
+        finish(JSON.parse(stdout.trim()) as T)
       } catch {
         // Was previously just "Unparseable output from uia-watch.ps1" with no
         // way to tell what actually went wrong — the two live candidates are
@@ -137,4 +139,44 @@ export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot>
       }
     })
   })
+}
+
+export function takeUiaSnapshot(spans: ClaimSpanRequest[]): Promise<UiaSnapshot> {
+  const spansB64 = spans.length > 0 ? Buffer.from(JSON.stringify(spans), 'utf-8').toString('base64') : ''
+  return runUiaScript<UiaSnapshot>(['-SpansB64', spansB64], SCRIPT_TIMEOUT_MS) as Promise<UiaSnapshot>
+}
+
+export type UiaWriteResult = { ok: true; processName: string } | { ok: false; error: string }
+
+/**
+ * Types `text` into the currently focused external control at `offset`
+ * (character offset into that control's live text). `expectedSnippet` is
+ * the ~30 characters the caller last saw starting at that offset — the
+ * script aborts rather than inserting if the live text there no longer
+ * matches, since the document may have changed since the offset was
+ * computed. See the "insert" mode block in resources/uia-watch.ps1.
+ */
+export function insertCitationText(
+  offset: number,
+  text: string,
+  expectedSnippet: string
+): Promise<UiaWriteResult> {
+  return runUiaScript<UiaWriteResult>(
+    [
+      '-Mode',
+      'insert',
+      '-InsertOffset',
+      String(offset),
+      '-InsertTextB64',
+      Buffer.from(text, 'utf-8').toString('base64'),
+      '-ExpectedSnippetB64',
+      Buffer.from(expectedSnippet, 'utf-8').toString('base64')
+    ],
+    INSERT_TIMEOUT_MS
+  ) as Promise<UiaWriteResult>
+}
+
+/** Sends Ctrl+Z to whatever external control is currently focused. */
+export function undoLastInsert(): Promise<UiaWriteResult> {
+  return runUiaScript<UiaWriteResult>(['-Mode', 'undo'], SCRIPT_TIMEOUT_MS) as Promise<UiaWriteResult>
 }

@@ -1,4 +1,5 @@
 import { registerAnalyzeHandlers } from './analyzeHandlers'
+import { registerAuthHandlers } from './authHandlers'
 import { registerCitationHandlers } from './citationHandlers'
 import { registerClipboardHandlers } from './clipboardHandlers'
 import { registerCritiqueHandlers } from './critiqueHandlers'
@@ -22,4 +23,5 @@ export function registerIpcHandlers(): void {
   registerLibraryHandlers()
   registerScreenWatchHandlers()
   registerProfileHandlers()
+  registerAuthHandlers()
 }

@@ -1,16 +1,35 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow, screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
-import type { ScreenWatchStatus } from '@shared/ipc-contract'
-import type { Claim } from '@shared/types'
+import type {
+  ScreenWatchClaimCitation,
+  ScreenWatchClaimEvidence,
+  ScreenWatchClaimSummary,
+  ScreenWatchSourceCandidate,
+  ScreenWatchStatus
+} from '@shared/ipc-contract'
+import type { CitationStyle, Claim, CritiqueVerdict, EvidenceItem, Source } from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
+import { generateCritique } from '../ai/critique'
+import { formatCitation } from '../citations'
+import { formatInTextCitation } from '../citations/inText'
+import { findEvidence } from '../search/aggregator'
+import { getFaviconDataUrl } from '../search/favicon'
+import { computeTextRelevance } from '../search/scoring'
+import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
-import { takeUiaSnapshot, type ClaimSpanRequest, type ScreenRect } from './uiaSnapshot'
+import {
+  insertCitationText,
+  takeUiaSnapshot,
+  undoLastInsert,
+  type ClaimSpanRequest,
+  type ScreenRect
+} from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
 const STABLE_MS = 1200
@@ -38,6 +57,32 @@ let pendingText = ''
 let pendingSince = 0
 let lastAnalyzedText = ''
 let currentClaims: Claim[] = []
+// Background evidence search result per currently-flagged claim — kicked
+// off right after detection (see triggerEvidenceSearch) rather than waiting
+// for the user to ask, so the widget/popup can show a real "X sources
+// found" number instead of only the claim-detection confidence. Full
+// results are kept here (not just the lean score/count sent to the
+// renderer, see leanEvidence) so critiqueClaim below has real titles/
+// abstracts to work with without a second search round-trip. Kept separate
+// from `currentClaims` (rather than mutating strengthScore on the Claim
+// objects directly) since results arrive asynchronously, one claim at a
+// time, well after currentClaims was already set.
+let evidenceResultByClaimId = new Map<string, { evidence: NormalizedSourceResult[]; score: number }>()
+// Critique is never run automatically here (unlike evidence search) — it's
+// the paid relay, so it only runs when the user explicitly clicks "Critique
+// Argument" in the overlay (see critiqueClaim).
+let critiqueByClaimId = new Map<string, { critique: string; verdict: CritiqueVerdict }>()
+// Results of the focused "Find a source" search (findSourceForClaim) — kept
+// separate from evidenceResultByClaimId (the broader background auto-search)
+// since it's a distinct, user-triggered search that can use a different
+// query than the claim's own searchQuery (the picker's "search again" box).
+let findSourceResultByClaimId = new Map<string, NormalizedSourceResult[]>()
+// Set once insertCitationForClaim has actually typed a citation into the
+// watched document for a claim — insertOffset is kept only so a future
+// insert on the same claim (unlikely, since cited claims are hidden from
+// the flagged set) wouldn't need to re-derive it; nothing reads it back out
+// today beyond the map value itself.
+let citationByClaimId = new Map<string, { inTextCitation: string; worksCitedEntry: string; insertOffset: number }>()
 let currentSpans: ClaimSpanRequest[] = []
 let retryAfter = 0
 let lastError: string | null = null
@@ -80,17 +125,26 @@ let lastUpdateInputs: {
 // starts fresh at the anchor rather than wherever it happened to be left.
 let widgetManualPos: { x: number; y: number } | null = null
 
+// 'single' shows just one claim at a time (the highest-confidence one);
+// 'all' shows every currently-flagged claim in a grid sized to fit with no
+// scrolling — the panel's actual pixel size (see updateOverlayAndWidget)
+// depends on this, so it has to be known server-side rather than left as a
+// renderer-only toggle the way the hover popover's own single/all switch is.
+export type WidgetViewMode = 'single' | 'all'
+let widgetViewMode: WidgetViewMode = 'single'
+
 export function setWidgetExpanded(expanded: boolean): void {
   widgetExpanded = expanded
-  if (!expanded) widgetManualPos = null
-  if (lastUpdateInputs) {
-    updateOverlayAndWidget(
-      lastUpdateInputs.windowRect,
-      lastUpdateInputs.claimRects,
-      lastUpdateInputs.claims,
-      lastUpdateInputs.fullText
-    )
+  if (!expanded) {
+    widgetManualPos = null
+    widgetViewMode = 'single'
   }
+  redrawOverlay()
+}
+
+export function setWidgetViewMode(mode: WidgetViewMode): void {
+  widgetViewMode = mode
+  redrawOverlay()
 }
 
 export function setWidgetDragStart(): void {
@@ -100,14 +154,7 @@ export function setWidgetDragStart(): void {
 export function setWidgetDragEnd(local: { x: number; y: number }): void {
   widgetManualPos = local
   setDragActive(false)
-  if (lastUpdateInputs) {
-    updateOverlayAndWidget(
-      lastUpdateInputs.windowRect,
-      lastUpdateInputs.claimRects,
-      lastUpdateInputs.claims,
-      lastUpdateInputs.fullText
-    )
-  }
+  redrawOverlay()
 }
 
 // The overlay's own logical top-left (the focused app window's origin, not
@@ -198,9 +245,16 @@ function resetTrackingState(): void {
   pendingSince = 0
   lastAnalyzedText = ''
   currentClaims = []
+  evidenceResultByClaimId = new Map()
+  critiqueByClaimId = new Map()
+  findSourceResultByClaimId = new Map()
+  citationByClaimId = new Map()
+  faviconByUrl = new Map()
+  faviconFetchInFlight = new Set()
   currentSpans = []
   hoverTargets = []
   widgetExpanded = false
+  widgetViewMode = 'single'
   widgetManualPos = null
   lastUpdateInputs = null
   activePopoverClaimId = null
@@ -308,6 +362,13 @@ async function tick(): Promise<void> {
           // draws nothing, and only catches up a full poll cycle later.
           const freshSpans = computeClaimSpans(textAtRequestTime, currentClaims)
           currentSpans = freshSpans.map((s) => ({ id: s.claim.id, start: s.start, length: s.end - s.start }))
+          // Fresh claim set → any evidence/critique/citation from the
+          // previous one no longer applies to anything currently shown.
+          evidenceResultByClaimId = new Map()
+          critiqueByClaimId = new Map()
+          findSourceResultByClaimId = new Map()
+          citationByClaimId = new Map()
+          triggerEvidenceSearch(currentClaims)
           // Don't wait for the next scheduled poll tick to show results —
           // that adds up to POLL_INTERVAL_MS of dead time on top of the
           // relay round-trip for no reason.
@@ -372,28 +433,310 @@ const WIDGET_SIZE = 56
 // where the Figma mockups place it, and (deliberately) has nothing to do
 // with where the focused control or text cursor currently is.
 const EDGE_MARGIN = 24
-// Matches the Figma "Widget over Document" mockup's card size exactly.
-const PANEL_WIDTH = 560
-const PANEL_HEIGHT = 320
+// Single-claim panel — big enough for the full action card (claim text,
+// evidence row, Find Evidence/Critique Argument buttons, and the critique
+// result once run), no scrolling. Must match OverlayApp.tsx's
+// POPOVER_WIDTH/EST_HEIGHT-equivalent sizing intent for the same content.
+const SINGLE_PANEL_WIDTH = 400
+const SINGLE_PANEL_HEIGHT = 400
+// "Show all" — a single vertical column (not a grid) so each row has room
+// to show real article titles, not just a count. Sized per-claim-count
+// below (computeAllPanelSize) so a normal number of claims fits with no
+// scrolling; height is capped (MAX_LIST_PANEL_HEIGHT) for the rare case of
+// many claims at once, since letting the panel grow past the screen would
+// just reintroduce clipping — the renderer scrolls internally only past
+// that cap. Mirrored client-side in OverlayApp.tsx (GRID_*) — keep in sync.
+const GRID_CARD_WIDTH = 364
+const GRID_CARD_HEIGHT = 176
+const GRID_GAP = 10
+const GRID_HEADER_HEIGHT = 44
+const GRID_PADDING = 18
+const MAX_LIST_PANEL_HEIGHT = 560
+
+function computeAllPanelSize(claimCount: number): { width: number; height: number } {
+  const count = Math.max(1, claimCount)
+  const naturalHeight = GRID_PADDING * 2 + GRID_HEADER_HEIGHT + count * GRID_CARD_HEIGHT + (count - 1) * GRID_GAP
+  return {
+    width: GRID_PADDING * 2 + GRID_CARD_WIDTH,
+    height: Math.min(naturalHeight, MAX_LIST_PANEL_HEIGHT)
+  }
+}
 
 let lastSentPayloadKey: string | null = null
 
-function computeWidgetBreakdown(claims: Claim[]): { statisticCount: number; factualCount: number; otherCount: number } {
-  let statisticCount = 0
-  let factualCount = 0
-  let otherCount = 0
-  for (const claim of claims) {
-    if (claim.claimType === 'statistic') statisticCount++
-    else if (claim.claimType === 'factual') factualCount++
-    else otherCount++
-  }
-  return { statisticCount, factualCount, otherCount }
+function redrawOverlay(): void {
+  if (!lastUpdateInputs) return
+  updateOverlayAndWidget(
+    lastUpdateInputs.windowRect,
+    lastUpdateInputs.claimRects,
+    lastUpdateInputs.claims,
+    lastUpdateInputs.fullText
+  )
 }
 
-function computeAvgConfidencePercent(claims: Claim[]): number {
-  if (claims.length === 0) return 0
-  const sum = claims.reduce((acc, c) => acc + c.confidence, 0)
-  return Math.round((sum / claims.length) * 100)
+// Top 3 by rank, not the full result set — enough for the overlay to show
+// real article titles instead of just a count, without ballooning the
+// payload that gets re-sent on every overlay-update.
+const MAX_ARTICLES_IN_OVERLAY = 3
+
+// Favicon lookups are async (a real network call, see search/favicon.ts)
+// but leanEvidence itself has to stay synchronous — it's read on every
+// redrawOverlay(), which nothing downstream awaits. So this is a
+// fire-and-forget-then-redraw cache: the first time a URL is seen its
+// favicon returns null immediately (fetch kicked off in the background),
+// and once that resolves a fresh redraw picks up the real image. Reset
+// per-session like every other per-run map (favicons are cheap enough to
+// just refetch next run rather than persist across restarts).
+let faviconByUrl = new Map<string, string | null>()
+let faviconFetchInFlight = new Set<string>()
+
+function ensureFaviconsFor(urls: (string | null)[]): void {
+  for (const url of urls) {
+    if (!url || faviconByUrl.has(url) || faviconFetchInFlight.has(url)) continue
+    faviconFetchInFlight.add(url)
+    getFaviconDataUrl(url)
+      .then((dataUrl) => {
+        faviconByUrl.set(url, dataUrl)
+        redrawOverlay()
+      })
+      .finally(() => {
+        faviconFetchInFlight.delete(url)
+      })
+  }
+}
+
+function leanEvidence(claimId: string): ScreenWatchClaimEvidence | null {
+  const result = evidenceResultByClaimId.get(claimId)
+  if (!result) return null
+  ensureFaviconsFor(result.evidence.slice(0, MAX_ARTICLES_IN_OVERLAY).map((item) => item.url))
+  return {
+    score: result.score,
+    count: result.evidence.length,
+    articles: result.evidence.slice(0, MAX_ARTICLES_IN_OVERLAY).map((item) => ({
+      title: item.title,
+      venue: item.venue,
+      year: item.year,
+      faviconDataUrl: item.url ? (faviconByUrl.get(item.url) ?? null) : null,
+      provider: item.provider,
+      url: item.url
+    }))
+  }
+}
+
+// Stable id for a search result within one claim's result set — same
+// derivation synthesizeEvidenceItem always used, now also doubling as the
+// "sourceRef" the citation flow's IPC responses hand back to the renderer
+// and expect returned on insertCitationForClaim, since these results are
+// never persisted through sourcesRepo (no real database id exists to use).
+function sourceRefFor(item: NormalizedSourceResult, rank: number): string {
+  return item.doi ?? item.providerId ?? `${item.provider}:${rank}`
+}
+
+// generateCritique and formatCitation/formatInTextCitation only ever read
+// plain fields off a Source (title/abstract/authors/year/venue) — building
+// one here (rather than persisting these ephemeral, never-saved search
+// results through sourcesRepo just to get a real id) is safe precisely
+// because nothing downstream needs a real database-backed id for a claim's
+// evidence to be critiqued or cited correctly.
+function synthesizeSourceFromResult(item: NormalizedSourceResult, rank: number): Source {
+  return {
+    id: sourceRefFor(item, rank),
+    doi: item.doi,
+    title: item.title,
+    authors: item.authors,
+    year: item.year,
+    venue: item.venue,
+    venueType: item.venueType,
+    url: item.url,
+    pdfUrl: item.pdfUrl,
+    abstract: item.abstract,
+    provider: item.provider,
+    providerId: item.providerId,
+    citationCount: item.citationCount,
+    oaStatus: item.oaStatus,
+    createdAt: new Date().toISOString()
+  }
+}
+
+function synthesizeEvidenceItem(item: NormalizedSourceResult, rank: number): EvidenceItem {
+  const source = synthesizeSourceFromResult(item, rank)
+  return { source, relevanceScore: 1 - rank / Math.max(1, item.relevanceRank + 1), rank }
+}
+
+// Looks a citation-flow sourceRef back up across both places a result could
+// have come from: the focused "Find a source" search, or the background
+// auto-search's broader result set (when the user clicked "Add citation"
+// straight from evidence that was already on hand).
+function resolveSourceRef(claimId: string, sourceRef: string): NormalizedSourceResult | null {
+  const pools = [findSourceResultByClaimId.get(claimId) ?? [], evidenceResultByClaimId.get(claimId)?.evidence ?? []]
+  for (const pool of pools) {
+    const idx = pool.findIndex((item, i) => sourceRefFor(item, i) === sourceRef)
+    if (idx !== -1) return pool[idx]
+  }
+  return null
+}
+
+// Fired once per fresh claim set, right after detection — free public APIs
+// (OpenAlex/Crossref/Semantic Scholar/PubMed, already rate-limited per
+// provider in rateLimiter.ts), not the paid relay, so running this
+// automatically for passive background reading doesn't add API cost the way
+// auto-running claim detection/critique would. Each claim's result lands in
+// evidenceResultByClaimId independently and triggers its own redraw as soon
+// as it's ready, rather than waiting for every claim's search to finish.
+function triggerEvidenceSearch(claims: Claim[]): void {
+  for (const claim of claims) {
+    findEvidence(claim.searchQuery, claim.text)
+      .then((result) => {
+        // The claim set may have moved on (text changed again, focus moved
+        // to a different app) by the time this resolves — a result for a
+        // claim that's no longer current would only show stale data.
+        if (!currentClaims.some((c) => c.id === claim.id)) return
+        evidenceResultByClaimId.set(claim.id, { evidence: result.evidence, score: result.score })
+        redrawOverlay()
+      })
+      .catch((err) => {
+        logScreenWatch(`background evidence search failed for claim ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
+      })
+  }
+}
+
+// User-initiated re-run of evidence search for one claim (the overlay's
+// "Find Evidence"/"Refresh Evidence" button) — same search as
+// triggerEvidenceSearch, just for a single claim on demand instead of the
+// whole set automatically.
+export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWatchClaimEvidence | null> {
+  const claim = currentClaims.find((c) => c.id === claimId)
+  if (!claim) return null
+  const result = await findEvidence(claim.searchQuery, claim.text)
+  if (!currentClaims.some((c) => c.id === claimId)) return null
+  evidenceResultByClaimId.set(claimId, { evidence: result.evidence, score: result.score })
+  redrawOverlay()
+  return leanEvidence(claimId)
+}
+
+// User-initiated only (the overlay's "Critique Argument" button) — unlike
+// evidence search this hits the paid relay, so it never runs automatically
+// for passive background reading.
+export async function critiqueClaim(claimId: string): Promise<{ critique: string; verdict: CritiqueVerdict }> {
+  const claim = currentClaims.find((c) => c.id === claimId)
+  if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
+  const evidence = evidenceResultByClaimId.get(claimId)
+  const evidenceItems = evidence ? evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i)) : []
+  const claimWithScore: Claim = { ...claim, strengthScore: evidence?.score ?? null }
+  const result = await generateCritique(claimWithScore, evidenceItems)
+  if (currentClaims.some((c) => c.id === claimId)) {
+    critiqueByClaimId.set(claimId, result)
+    redrawOverlay()
+  }
+  return result
+}
+
+// Ranked candidates for one claim, capped so the picker stays scannable —
+// this is deliberately smaller/more curated than Refresh Evidence's list.
+const MAX_FIND_SOURCE_CANDIDATES = 5
+// Mirrors PER_PROVIDER_LIMIT in search/scoring.ts — that constant isn't
+// exported (it's an internal tuning knob for the whole-claim strength
+// score), so it's duplicated here for the same per-item rank-relevance
+// blend, applied to a single claim's candidate list rather than the whole
+// evidence set.
+const RANK_RELEVANCE_LIMIT = 6
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+// The focused, single-claim search behind the overlay's "Find a source"
+// action — same findEvidence call Refresh Evidence already uses, but with a
+// per-item match % (the same text-relevance/rank blend computeStrengthScore
+// uses internally for the whole claim, just surfaced per candidate here)
+// so the user can pick one specific source to cite instead of browsing a
+// plain list. `query` overrides the claim's own searchQuery for the
+// picker's "search again" box.
+export async function findSourceForClaim(claimId: string, query?: string): Promise<ScreenWatchSourceCandidate[]> {
+  const claim = currentClaims.find((c) => c.id === claimId)
+  if (!claim) return []
+  const result = await findEvidence(query ?? claim.searchQuery, claim.text)
+  if (!currentClaims.some((c) => c.id === claimId)) return []
+  findSourceResultByClaimId.set(claimId, result.evidence)
+
+  const ranked = result.evidence
+    .map((item, i) => {
+      const textRelevance = computeTextRelevance(claim.text, `${item.title} ${item.abstract ?? ''}`)
+      const rankRelevance = clamp01(1 - item.relevanceRank / RANK_RELEVANCE_LIMIT)
+      const matchPercent = Math.round(100 * clamp01(0.75 * textRelevance + 0.25 * rankRelevance))
+      return { item, sourceRef: sourceRefFor(item, i), matchPercent }
+    })
+    .sort((a, b) => b.matchPercent - a.matchPercent)
+    .slice(0, MAX_FIND_SOURCE_CANDIDATES)
+
+  // Unlike leanEvidence's fire-and-forget favicon lookups (fine there since
+  // widget.claims re-pushes on every redraw), this response is a one-shot
+  // IPC reply the renderer stores directly — there's no later redraw that
+  // would pick up a favicon that resolved after the fact. So this awaits
+  // the (small, capped, timeout-bounded) fetch for just the final top-N
+  // candidates before returning, rather than returning null placeholders.
+  const candidates: ScreenWatchSourceCandidate[] = await Promise.all(
+    ranked.map(async ({ item, sourceRef, matchPercent }) => ({
+      sourceRef,
+      title: item.title,
+      venue: item.venue,
+      year: item.year,
+      provider: item.provider,
+      url: item.url,
+      matchPercent,
+      faviconDataUrl: await getFaviconDataUrl(item.url)
+    }))
+  )
+  return candidates
+}
+
+// The overlay's "Insert citation" action — formats both citation forms from
+// the chosen candidate (never touching sourcesRepo/citationsRepo, same
+// ephemeral rule as the rest of Screen Watch) and types the in-text form
+// into the watched external document right after the claim's current text,
+// via the new UIA write-back in uiaSnapshot.ts.
+export async function insertCitationForClaim(
+  claimId: string,
+  sourceRef: string,
+  style: CitationStyle
+): Promise<ScreenWatchClaimCitation> {
+  const claim = currentClaims.find((c) => c.id === claimId)
+  if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
+
+  const item = resolveSourceRef(claimId, sourceRef)
+  if (!item) throw new Error('That source is no longer available — try searching again.')
+
+  const source = synthesizeSourceFromResult(item, 0)
+  const worksCitedEntry = formatCitation(source, style)
+  const inTextCitation = formatInTextCitation(source, style)
+
+  const span = currentSpans.find((s) => s.id === claimId)
+  if (!span) throw new Error('Could not locate this claim in the document anymore — try again.')
+  const insertOffset = span.start + span.length
+  const fullText = lastUpdateInputs?.fullText ?? ''
+  const expectedSnippet = fullText.slice(insertOffset, insertOffset + 30)
+
+  const result = await insertCitationText(insertOffset, ` ${inTextCitation}`, expectedSnippet)
+  if (!result.ok) throw new Error(result.error)
+
+  const citation: ScreenWatchClaimCitation = { inTextCitation, worksCitedEntry }
+  citationByClaimId.set(claimId, { ...citation, insertOffset })
+  redrawOverlay()
+  return citation
+}
+
+// "Undo" on the citation-added confirmation — a plain Ctrl+Z to whatever
+// app is still focused. Reliable because insertCitationForClaim always
+// performs exactly one paste, which is one undo step in effectively every
+// real text editor/browser; Tracely doesn't need to track its own undo
+// stack for this. Leaves the claim flagged again (removed from
+// citationByClaimId) so the user can retry or pick a different source.
+export async function undoCitationForClaim(claimId: string): Promise<void> {
+  if (!citationByClaimId.has(claimId)) return
+  const result = await undoLastInsert()
+  if (!result.ok) throw new Error(result.error)
+  citationByClaimId.delete(claimId)
+  redrawOverlay()
 }
 
 function updateOverlayAndWidget(
@@ -484,11 +827,15 @@ function updateOverlayAndWidget(
     width: WIDGET_SIZE,
     height: WIDGET_SIZE
   }
+  const panelSize =
+    widgetViewMode === 'all'
+      ? computeAllPanelSize(claims.length)
+      : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
   const panelLocalAnchored: ScreenRect = {
-    x: Math.max(0, winBounds.width - PANEL_WIDTH - EDGE_MARGIN),
-    y: Math.max(0, winBounds.height - PANEL_HEIGHT - EDGE_MARGIN),
-    width: PANEL_WIDTH,
-    height: PANEL_HEIGHT
+    x: Math.max(0, winBounds.width - panelSize.width - EDGE_MARGIN),
+    y: Math.max(0, winBounds.height - panelSize.height - EDGE_MARGIN),
+    width: panelSize.width,
+    height: panelSize.height
   }
 
   const anchoredLocal = widgetExpanded ? panelLocalAnchored : widgetLocalAnchored
@@ -517,25 +864,47 @@ function updateOverlayAndWidget(
     )
   }
 
+  const claimSummaries: ScreenWatchClaimSummary[] = [...claims]
+    .sort((a, b) => b.confidence - a.confidence)
+    .map((c) => {
+      const critique = critiqueByClaimId.get(c.id)
+      const citation = citationByClaimId.get(c.id)
+      return {
+        id: c.id,
+        text: c.text,
+        claimType: c.claimType,
+        confidence: c.confidence,
+        evidence: leanEvidence(c.id),
+        critique: critique?.critique ?? null,
+        critiqueVerdict: critique?.verdict ?? null,
+        citation: citation ? { inTextCitation: citation.inTextCitation, worksCitedEntry: citation.worksCitedEntry } : null
+      }
+    })
+  // The actual number of sources found across every currently-flagged claim
+  // — previously this also added +1 per claim (counting the claim itself as
+  // a piece of "info"), which inflated the badge well past the number of
+  // real sources anyone could actually see or click on.
+  const totalInfoCount = claimSummaries.reduce((sum, c) => sum + (c.evidence?.count ?? 0), 0)
+
   const payload: {
     underlines: typeof localized
     widget: {
       rect: ScreenRect
       expanded: boolean
+      viewMode: WidgetViewMode
       claimCount: number
-      breakdown: ReturnType<typeof computeWidgetBreakdown>
-      avgConfidencePercent: number
-      text: string
+      claims: ScreenWatchClaimSummary[]
+      totalInfoCount: number
     }
   } = {
     underlines: localized,
     widget: {
       rect: activeLocal,
       expanded: widgetExpanded,
+      viewMode: widgetViewMode,
       claimCount: claims.length,
-      breakdown: computeWidgetBreakdown(claims),
-      avgConfidencePercent: computeAvgConfidencePercent(claims),
-      text: fullText
+      claims: claimSummaries,
+      totalInfoCount
     }
   }
   // Re-sending an unchanged payload every poll tick (every 1.2s, even when

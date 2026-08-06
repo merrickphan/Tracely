@@ -1,7 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
-import type { ClaimType } from '@shared/types'
-import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent, ScreenWatchWidget } from '@shared/ipc-contract'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
+import type { CitationStyle, ClaimType, CritiqueVerdict, SourceProvider } from '@shared/types'
+import type {
+  ScreenWatchClaimCitation,
+  ScreenWatchClaimSummary,
+  ScreenWatchEvidenceArticle,
+  ScreenWatchHoverEvent,
+  ScreenWatchOverlayUpdateEvent,
+  ScreenWatchSourceCandidate,
+  ScreenWatchWidget
+} from '@shared/ipc-contract'
 import figmaLogo from './assets/figma-logo.png'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
@@ -31,25 +39,23 @@ function LogoBg({ size }: { size: number }): JSX.Element {
   )
 }
 
-// Real per-category claim-type counts over the currently-flagged claims —
-// NOT an evidence-quality judgment. No evidence search runs during Screen
-// Watch, so Tracely has never actually checked whether any of these claims
-// has, needs, or lacks a citation — labeling them "Unverified"/"Missing
-// citation"/"Weak source" asserted things that were never checked, which
-// was simply wrong on claims where it didn't happen to be true. This now
-// only claims what's real: the claim's detected type.
-type Bucket = 'statistic' | 'factual' | 'other'
+// Per-claim-type color used for the underline and the type dot — matches
+// the Figma "Overlay Mockup" frames' 4-color legend (factual/statistic/
+// reasoning/other), not the prior pastel-badge palette.
+type Bucket = 'statistic' | 'factual' | 'causal' | 'other'
 
 function bucketFor(claimType: ClaimType): Bucket {
   if (claimType === 'statistic') return 'statistic'
   if (claimType === 'factual') return 'factual'
+  if (claimType === 'causal') return 'causal'
   return 'other'
 }
 
 const BUCKET_COLOR: Record<Bucket, string> = {
-  statistic: '#ff5900',
-  factual: '#ffb800',
-  other: '#d93636'
+  factual: '#f47b20',
+  statistic: '#7c3aed',
+  causal: '#2f6fed',
+  other: '#d6301a'
 }
 
 const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
@@ -60,25 +66,41 @@ const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
   opinion: 'Opinion'
 }
 
-const CLAIM_TYPE_DESCRIPTION: Record<ClaimType, string> = {
-  statistic: "This is a statistic — Tracely hasn't checked it against any source yet.",
-  causal: 'This claims one thing causes another — cause-and-effect claims usually need stronger evidence than a single source.',
-  factual: 'This is stated as fact — worth double-checking against a source before you rely on it.',
-  prediction: "This is a prediction about the future — it can't be verified the same way a historical fact can.",
-  opinion: 'This reads more like an opinion than a checkable claim — flagged in case that was unintentional.'
+// >=70/40 thresholds match the main app's score-good/mid/low bands
+// (ClaimCard/EvidenceScoreCard) so a score reads the same wherever it shows
+// up in Tracely.
+function evidenceScoreColor(score: number): string {
+  if (score >= 70) return '#1f9d63'
+  if (score >= 40) return '#b3690a'
+  return '#d6301a'
 }
 
-const BUCKET_ROW_LABEL: Record<Bucket, string> = {
-  statistic: 'Statistics',
-  factual: 'Factual claims',
-  other: 'Other claims'
+// A plain filled dot — the Figma mockups mark claim type with a simple
+// colored circle next to the label, not a pastel letter badge.
+function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number }): JSX.Element {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: BUCKET_COLOR[bucketFor(claimType)],
+        flexShrink: 0,
+        display: 'inline-block'
+      }}
+    />
+  )
 }
 
-const POPOVER_WIDTH = 320
-// Estimated, not measured — real height varies with description length,
-// but we need a number before render to decide whether there's room below.
-// Deliberately generous so it flips above rather than risking clipping.
-const POPOVER_EST_HEIGHT = 190
+// Sized to comfortably fit the full action card (claim text, evidence row,
+// Find Evidence/Critique Argument buttons, and — once run — the critique
+// result), not just a couple of lines like the original glance-only popup.
+const POPOVER_WIDTH = 380
+// Estimated, not measured — real height varies with claim/critique text
+// length, but we need a number before render to decide whether there's room
+// below. Deliberately generous so it flips above rather than risking
+// clipping.
+const POPOVER_EST_HEIGHT = 320
 const POPOVER_GAP = 10
 
 function popoverPosition(anchor: { x: number; y: number; width: number; height: number }): {
@@ -98,17 +120,736 @@ function popoverPosition(anchor: { x: number; y: number; width: number; height: 
   return { left, top, placeAbove }
 }
 
+// Mirrors computeAllPanelSize/GRID_* in screenWatchService.ts — "Show all"
+// is a single vertical column (not a grid), so the panel's actual on-screen
+// size is computed server-side (so hoverTracking.ts's click-through
+// hit-test region matches what's drawn) and has to reproduce the exact same
+// size math here or the list wouldn't fit the panel sized for it.
+const GRID_CARD_WIDTH = 364
+const GRID_CARD_HEIGHT = 108
+const GRID_GAP = 10
+const GRID_PADDING = 18
+const GRID_HEADER_HEIGHT = 44
+
+// Card/panel visual tokens — near-black outline + soft neutral shadow, no
+// glow/colored strip, matching the Figma "Overlay Mockup" frames. This is
+// also just the main app's own light-mode border/text tokens
+// (rgba(0,0,0,0.18-0.26) / #000000 in styles/index.css) at full opacity, so
+// it reads as consistent with the rest of the UI rather than a one-off.
+const CARD_BORDER = '1.5px solid #17171b'
+const CARD_SHADOW = '0 10px 28px rgba(15, 15, 20, 0.12), 0 2px 6px rgba(15, 15, 20, 0.06)'
+
+const PRIMARY_BTN_STYLE: CSSProperties = {
+  border: 'none',
+  borderRadius: 999,
+  padding: '9px 18px',
+  fontSize: 13,
+  fontWeight: 700,
+  color: '#fff',
+  cursor: 'pointer',
+  background: '#17171b'
+}
+
+const SECONDARY_BTN_STYLE: CSSProperties = {
+  border: '1.5px solid #17171b',
+  borderRadius: 999,
+  padding: '9px 18px',
+  fontSize: 13,
+  fontWeight: 700,
+  color: '#17171b',
+  background: '#fff',
+  cursor: 'pointer'
+}
+
+// A plain text link, no border/background — the least visually heavy
+// action on a card, used for anything that closes/skips/reverts rather
+// than does something.
+const TEXT_BTN_STYLE: CSSProperties = {
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#6b6b76',
+  cursor: 'pointer'
+}
+
+// The evidence-row content shared by both the widget panel's action card
+// and the citation-flow candidate list — a spinner while the background
+// search (kicked off the moment the claim was detected, see
+// triggerEvidenceSearch in screenWatchService.ts) hasn't resolved yet,
+// otherwise a colored score + source count.
+function EvidenceRow({ claim, compact }: { claim: ScreenWatchClaimSummary; compact?: boolean }): JSX.Element {
+  if (!claim.evidence) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: compact ? 11 : 12, color: '#8a8a8a' }}>
+        <span className="tracely-spinner" />
+        Searching evidence…
+      </div>
+    )
+  }
+  const color = evidenceScoreColor(claim.evidence.score)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: compact ? 11 : 12 }}>
+      <span style={{ fontWeight: 700, color }}>{claim.evidence.score}/100</span>
+      <span style={{ color: '#8a8a8a' }}>
+        · {claim.evidence.count} source{claim.evidence.count === 1 ? '' : 's'}
+      </span>
+    </div>
+  )
+}
+
+// A monogram badge per search provider, in place of a real favicon — there
+// is no source "site" to fetch a favicon from (these are academic search
+// APIs, not the underlying publisher sites), and fetching one from a
+// third-party favicon service would mean sending claim-related domains to
+// an external host and loosening this window's CSP (img-src is locked to
+// 'self'/data: — see overlay.html). Since the provider set is small and
+// fixed, a distinct colored monogram per provider is a safe stand-in that
+// still gives each source a recognizable identity at a glance.
+const PROVIDER_LABEL: Record<SourceProvider, string> = {
+  openalex: 'OA',
+  crossref: 'CR',
+  semanticscholar: 'S2',
+  pubmed: 'PM',
+  manual: '•'
+}
+
+const PROVIDER_COLOR: Record<SourceProvider, string> = {
+  openalex: '#1a56db',
+  crossref: '#0f766e',
+  semanticscholar: '#6d28d9',
+  pubmed: '#15803d',
+  manual: '#6b7280'
+}
+
+function ProviderBadge({ provider }: { provider: SourceProvider }): JSX.Element {
+  return (
+    <div
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        background: PROVIDER_COLOR[provider],
+        color: '#fff',
+        fontSize: 9,
+        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0
+      }}
+    >
+      {PROVIDER_LABEL[provider]}
+    </div>
+  )
+}
+
+// Real favicon for the source's own site when one was fetched (see
+// main/services/search/favicon.ts — a data: URI, so it satisfies this
+// window's img-src 'self' data: CSP with no changes needed) — falls back to
+// the plain provider monogram while it's still loading or unavailable, so a
+// source row is never left with a broken/empty icon.
+function SourceIcon({ provider, faviconDataUrl }: { provider: SourceProvider; faviconDataUrl: string | null }): JSX.Element {
+  if (!faviconDataUrl) return <ProviderBadge provider={provider} />
+  return (
+    <div
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        overflow: 'hidden',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#fff',
+        border: '1px solid #eeeef1'
+      }}
+    >
+      <img src={faviconDataUrl} alt="" width={16} height={16} style={{ objectFit: 'contain' }} />
+    </div>
+  )
+}
+
+function openUrl(url: string | null): void {
+  if (!url) return
+  void window.tracely.shell.openExternal({ url })
+}
+
+function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.Element {
+  const meta = [article.venue, article.year ? String(article.year) : null].filter(Boolean).join(' · ')
+  const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }
+  const content = (
+    <>
+      <SourceIcon provider={article.provider} faviconDataUrl={article.faviconDataUrl} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#1c1c1c',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {article.title}
+        </div>
+        {meta ? <div style={{ fontSize: 10.5, color: '#8a8a8a' }}>{meta}</div> : null}
+      </div>
+    </>
+  )
+  if (!article.url) return <div style={rowStyle}>{content}</div>
+  const url = article.url
+  return (
+    // eslint-disable-next-line jsx-a11y/anchor-is-valid
+    <a
+      href="#"
+      onClick={(e) => {
+        e.preventDefault()
+        openUrl(url)
+      }}
+      style={{ ...rowStyle, cursor: 'pointer' }}
+    >
+      {content}
+    </a>
+  )
+}
+
+// Up to 3 real article titles (see MAX_ARTICLES_IN_OVERLAY in
+// screenWatchService.ts) — previously this card only ever showed a bare
+// "N sources" count with nothing to actually look at.
+function ArticleList({ claim, limit }: { claim: ScreenWatchClaimSummary; limit?: number }): JSX.Element | null {
+  if (!claim.evidence || claim.evidence.articles.length === 0) return null
+  const articles = limit ? claim.evidence.articles.slice(0, limit) : claim.evidence.articles
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {articles.map((article, i) => (
+        <ArticleRow key={`${article.title}-${i}`} article={article} />
+      ))}
+    </div>
+  )
+}
+
+// Same verdict vocabulary/colors as EvidenceScoreCard.tsx in the main app —
+// this card is meant to read as the same feature, not a stripped-down
+// lookalike, just rendered with inline styles since this window has no
+// shared stylesheet to pull CSS classes/variables from.
+const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
+  'well-supported': 'Well Supported',
+  'partially-supported': 'Partially Supported',
+  weak: 'Weak',
+  unsupported: 'Unsupported',
+  contradicted: 'Contradicted — False'
+}
+
+const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
+
+function verdictColor(verdict: CritiqueVerdict): string {
+  if (verdict === 'well-supported') return '#1f9d63'
+  if (verdict === 'partially-supported' || verdict === 'weak') return '#b3690a'
+  return '#d6301a'
+}
+
+function verdictWash(verdict: CritiqueVerdict): string {
+  if (verdict === 'well-supported') return 'rgba(31, 157, 99, 0.12)'
+  if (verdict === 'partially-supported' || verdict === 'weak') return 'rgba(179, 105, 10, 0.12)'
+  return 'rgba(214, 48, 26, 0.12)'
+}
+
+// The full card used by the widget panel — claim text, live evidence with
+// real article titles, and the Find Evidence / Critique Argument actions.
+// `context` controls how much this card assumes: 'panel' (the widget you
+// deliberately opened) is the only place this renders now — the hover
+// popup uses the lighter ProblemCard/CitationFlowCard below instead of this
+// heavier card, matching the Figma "Inline Detection (Grammarly-style)"
+// mockups' lightweight glance-only popup.
+function ClaimActionCard({
+  claim,
+  evidenceBusy,
+  critiqueBusy,
+  onFindEvidence,
+  onCritique
+}: {
+  claim: ScreenWatchClaimSummary
+  evidenceBusy: boolean
+  critiqueBusy: boolean
+  onFindEvidence: () => void
+  onCritique: () => void
+}): JSX.Element {
+  const findLabel = evidenceBusy ? 'Searching…' : claim.evidence ? 'Refresh Evidence' : 'Find Evidence'
+  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Re-check Argument' : 'Critique Argument'
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <TypeDot claimType={claim.claimType} />
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>
+          {CLAIM_TYPE_LABEL[claim.claimType]} · {Math.round(claim.confidence * 100)}% confidence
+        </div>
+      </div>
+      <div
+        style={{
+          fontSize: 15,
+          lineHeight: 1.5,
+          color: '#1a1a1f',
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
+        }}
+      >
+        &ldquo;{claim.text}&rdquo;
+      </div>
+      <EvidenceRow claim={claim} />
+      <ArticleList claim={claim} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          className="tracely-btn-primary"
+          onClick={onFindEvidence}
+          disabled={evidenceBusy}
+          style={{ ...PRIMARY_BTN_STYLE, opacity: evidenceBusy ? 0.6 : 1, cursor: evidenceBusy ? 'default' : 'pointer' }}
+        >
+          {findLabel}
+        </button>
+        <button
+          className="tracely-btn-secondary"
+          onClick={onCritique}
+          disabled={critiqueBusy}
+          style={{ ...SECONDARY_BTN_STYLE, opacity: critiqueBusy ? 0.6 : 1, cursor: critiqueBusy ? 'default' : 'pointer' }}
+        >
+          {critiqueLabel}
+        </button>
+      </div>
+      {claim.critique && claim.critiqueVerdict ? (
+        <div style={{ border: '1px solid #eeeef1', borderRadius: 12, overflow: 'hidden' }}>
+          <div
+            style={{
+              padding: '8px 12px',
+              background: verdictWash(claim.critiqueVerdict),
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: verdictColor(claim.critiqueVerdict),
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em'
+            }}
+          >
+            {VERDICT_LABEL[claim.critiqueVerdict]}
+          </div>
+          <div style={{ padding: '10px 12px', fontSize: 12.5, lineHeight: 1.55, color: '#3a3a3a' }}>{claim.critique}</div>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+// Clicking a card switches to the single-claim view focused on it (see
+// selectedClaimId in OverlayApp) — that's where Find Evidence/Critique
+// Argument live. Simplified to dot + header + quote (no inline evidence
+// preview) to match the "All Claims List" mockup's plain row style.
+function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onClick: () => void }): JSX.Element {
+  return (
+    <button
+      className="tracely-list-row"
+      onClick={onClick}
+      title="View this claim"
+      style={{
+        boxSizing: 'border-box',
+        width: GRID_CARD_WIDTH,
+        height: GRID_CARD_HEIGHT,
+        border: '1px solid #e5e5ea',
+        borderRadius: 14,
+        padding: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        background: '#fff',
+        overflow: 'hidden',
+        textAlign: 'left',
+        cursor: 'pointer',
+        font: 'inherit',
+        color: 'inherit',
+        flexShrink: 0
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <TypeDot claimType={claim.claimType} size={8} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a92', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {CLAIM_TYPE_LABEL[claim.claimType]}
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a92' }}>{Math.round(claim.confidence * 100)}%</div>
+      </div>
+      <div
+        style={{
+          fontSize: 12.5,
+          lineHeight: 1.4,
+          color: '#3a3a3a',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
+        }}
+      >
+        &ldquo;{claim.text}&rdquo;
+      </div>
+    </button>
+  )
+}
+
+// -- Hover popup: ProblemCard -----------------------------------------
+//
+// The lightweight "Grammarly-style" glance card — a single problem
+// statement and one primary action, distinct from the widget panel's
+// heavier ClaimActionCard. Which of the three variants shows is derived
+// entirely from the claim's own state (critique verdict, evidence
+// resolution), not tracked separately.
+
+type ProblemKind = 'weak-reasoning' | 'searching' | 'statistic' | 'citation'
+
+function problemKindFor(claim: ScreenWatchClaimSummary): ProblemKind {
+  if (claim.critiqueVerdict && WEAK_VERDICTS.includes(claim.critiqueVerdict)) return 'weak-reasoning'
+  if (!claim.evidence) return 'searching'
+  return claim.claimType === 'statistic' ? 'statistic' : 'citation'
+}
+
+function ProblemCard({
+  claim,
+  onSuggestFix,
+  onStartCitationFlow,
+  onDismiss
+}: {
+  claim: ScreenWatchClaimSummary
+  onSuggestFix: () => void
+  onStartCitationFlow: () => void
+  onDismiss: () => void
+}): JSX.Element {
+  const kind = problemKindFor(claim)
+
+  if (kind === 'searching') {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b6b76' }}>
+          <span className="tracely-spinner" />
+          Checking for supporting evidence…
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <button className="tracely-btn-text" onClick={onDismiss} style={TEXT_BTN_STYLE}>
+            Dismiss
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  const dot: Bucket = kind === 'weak-reasoning' ? 'other' : 'factual'
+  const title =
+    kind === 'weak-reasoning' ? 'Weak reasoning' : kind === 'statistic' ? 'Unverified statistic' : 'Missing citation'
+  const description =
+    kind === 'weak-reasoning'
+      ? (claim.critique ?? "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.")
+      : kind === 'statistic'
+        ? "This figure doesn't appear in any of your uploaded sources yet. Add a citation or double-check the number."
+        : "This claim isn't backed by a source anywhere in your document. Add a citation to support it."
+  const primaryLabel =
+    kind === 'weak-reasoning' ? 'Suggest fix' : claim.evidence && claim.evidence.count > 0 ? 'Add citation' : 'Find a source'
+  const onPrimary = kind === 'weak-reasoning' ? onSuggestFix : onStartCitationFlow
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>{title}</div>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{description}</div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
+          {primaryLabel}
+        </button>
+        <button className="tracely-btn-text" onClick={onDismiss} style={TEXT_BTN_STYLE}>
+          Dismiss
+        </button>
+      </div>
+    </>
+  )
+}
+
+// -- Hover popup: CitationFlowCard -------------------------------------
+//
+// searching -> picking -> inserted, entered from ProblemCard's "Add
+// citation"/"Find a source" action. Tracked entirely client-side
+// (citationFlowByClaimId in OverlayApp) — the server call itself is a
+// single request/response per step, no persistent flow state on the main
+// process side beyond the final insert.
+
+type CitationFlowState =
+  | { step: 'searching' }
+  | {
+      step: 'picking'
+      candidates: ScreenWatchSourceCandidate[]
+      selectedRef: string | null
+      style: CitationStyle
+    }
+  | { step: 'inserted'; citation: ScreenWatchClaimCitation; showWorksCited: boolean }
+  | { step: 'error'; message: string }
+
+const CITATION_STYLES: CitationStyle[] = ['MLA', 'APA', 'Chicago']
+
+function CitationFlowCard({
+  state,
+  visibleClaimCount,
+  onSelectCandidate,
+  onSetStyle,
+  onSearchAgain,
+  onInsert,
+  onCancel,
+  onDone,
+  onToggleWorksCited,
+  onUndo,
+  inserting,
+  undoing
+}: {
+  state: CitationFlowState
+  visibleClaimCount: number
+  onSelectCandidate: (ref: string) => void
+  onSetStyle: (style: CitationStyle) => void
+  onSearchAgain: () => void
+  onInsert: () => void
+  onCancel: () => void
+  onDone: () => void
+  onToggleWorksCited: () => void
+  onUndo: () => void
+  inserting: boolean
+  undoing: boolean
+}): JSX.Element {
+  if (state.step === 'searching') {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f47b20', flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Searching for a source</div>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>Scanning open-access journals and databases.</div>
+        <div className="tracely-progress-track">
+          <div className="tracely-progress-fill" />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[0, 1].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="tracely-skeleton" style={{ width: 22, height: 22, borderRadius: '50%' }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div className="tracely-skeleton" style={{ height: 8, width: '80%', borderRadius: 4 }} />
+                <div className="tracely-skeleton" style={{ height: 8, width: '45%', borderRadius: 4 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+          <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
+            Cancel
+          </button>
+          <div style={{ fontSize: 11.5, color: '#8a8a8a' }}>Usually 3-5 seconds</div>
+        </div>
+      </>
+    )
+  }
+
+  if (state.step === 'error') {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#d6301a', flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Couldn&apos;t do that</div>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{state.message}</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
+            Try again
+          </button>
+          <button className="tracely-btn-text" onClick={onCancel} style={TEXT_BTN_STYLE}>
+            Cancel
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  if (state.step === 'inserted') {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1f9d63', flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Citation added</div>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>
+          This claim is now backed by a source in your document. {state.citation.inTextCitation} in-text citation inserted.
+        </div>
+        {state.showWorksCited ? (
+          <div style={{ border: '1px solid #eeeef1', borderRadius: 10, padding: '8px 10px', background: '#fafafa' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+              Added to Works Cited
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: '#3a3a3a' }}>{state.citation.worksCitedEntry}</div>
+          </div>
+        ) : null}
+        <div style={{ fontSize: 12, color: '#1f9d63', fontWeight: 600 }}>
+          Claim resolved · {visibleClaimCount} flag{visibleClaimCount === 1 ? '' : 's'} left in this document
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <button className="tracely-btn-primary" onClick={onDone} style={PRIMARY_BTN_STYLE}>
+            Done
+          </button>
+          <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
+            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+          </button>
+          <button
+            className="tracely-btn-secondary"
+            onClick={onUndo}
+            disabled={undoing}
+            style={{ ...SECONDARY_BTN_STYLE, opacity: undoing ? 0.6 : 1 }}
+          >
+            {undoing ? 'Undoing…' : 'Undo'}
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  // picking
+  const selected = state.candidates.find((c) => c.sourceRef === state.selectedRef) ?? null
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1f9d63', flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>
+            {state.candidates.length} source{state.candidates.length === 1 ? '' : 's'} found
+          </div>
+        </div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#6b6b76', border: '1px solid #e5e5ea', borderRadius: 999, padding: '2px 8px' }}>
+          {state.style} {state.style === 'MLA' ? '9' : state.style === 'APA' ? '7' : ''}
+        </div>
+      </div>
+      {state.candidates.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#6b6b76' }}>No sources found for this claim yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+          {state.candidates.map((c) => (
+            <label
+              key={c.sourceRef}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                borderRadius: 10,
+                border: c.sourceRef === state.selectedRef ? '1.5px solid #17171b' : '1px solid #eeeef1',
+                cursor: 'pointer'
+              }}
+            >
+              <input
+                type="radio"
+                checked={c.sourceRef === state.selectedRef}
+                onChange={() => onSelectCandidate(c.sourceRef)}
+                style={{ accentColor: '#17171b' }}
+              />
+              <SourceIcon provider={c.provider} faviconDataUrl={c.faviconDataUrl} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#1c1c1c',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {c.title}
+                </div>
+                <div style={{ fontSize: 10.5, color: '#8a8a8a' }}>
+                  {[c.venue, c.year ? String(c.year) : null].filter(Boolean).join(' · ')}
+                  {c.venue || c.year ? ' · ' : ''}
+                  <span style={{ color: '#1f9d63', fontWeight: 700 }}>{c.matchPercent}% match</span>
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {CITATION_STYLES.map((s) => (
+          <button
+            key={s}
+            className="tracely-btn-text"
+            onClick={() => onSetStyle(s)}
+            style={{
+              ...TEXT_BTN_STYLE,
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: s === state.style ? '1.5px solid #17171b' : '1px solid #e5e5ea',
+              color: s === state.style ? '#17171b' : '#8a8a92'
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {selected?.url ? (
+          <button className="tracely-btn-text" onClick={() => openUrl(selected.url)} style={{ ...TEXT_BTN_STYLE, textDecoration: 'underline' }}>
+            Preview
+          </button>
+        ) : null}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <button
+          className="tracely-btn-primary"
+          onClick={onInsert}
+          disabled={!state.selectedRef || inserting}
+          style={{ ...PRIMARY_BTN_STYLE, opacity: !state.selectedRef || inserting ? 0.6 : 1 }}
+        >
+          {inserting ? 'Inserting…' : 'Insert citation'}
+        </button>
+        <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
+          Find new source
+        </button>
+      </div>
+    </>
+  )
+}
+
 export default function OverlayApp(): JSX.Element {
   const [underlines, setUnderlines] = useState<ScreenWatchOverlayUpdateEvent['underlines']>([])
   const [widget, setWidget] = useState<ScreenWatchWidget | null>(null)
   const [hover, setHover] = useState<ScreenWatchHoverEvent | null>(null)
-  const [sending, setSending] = useState(false)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   // Driven locally at full mouse speed during a drag rather than round-
   // tripping every mousemove through main — main only needs to know the
   // final position (see onGripMouseDown). Cleared once the drag ends so the
   // next server-confirmed rect (which will already match) takes back over.
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null)
+  // Which claim the widget's single-claim view is focused on — null means
+  // "the top one by confidence." Purely client-side: unlike widgetViewMode,
+  // WHICH claim is shown doesn't change the panel's size, so there's no
+  // reason for main to need to know it.
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
+  const [busyEvidenceIds, setBusyEvidenceIds] = useState<Set<string>>(new Set())
+  const [busyCritiqueIds, setBusyCritiqueIds] = useState<Set<string>>(new Set())
+  const [actionError, setActionError] = useState<string | null>(null)
+  // The hover popup's citation flow (Find a source / Add citation), keyed
+  // by claim id — absent means "just showing ProblemCard," not started.
+  const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
+  const [citationBusyIds, setCitationBusyIds] = useState<Set<string>>(new Set())
+  const [undoBusyIds, setUndoBusyIds] = useState<Set<string>>(new Set())
+  const [defaultStyle, setDefaultStyle] = useState<CitationStyle>('APA')
+
+  useEffect(() => {
+    window.tracely.settings
+      .get()
+      .then((s) => setDefaultStyle(s.defaultCitationStyle))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     return window.tracely.onScreenWatchOverlayUpdate((event) => {
@@ -120,23 +861,170 @@ export default function OverlayApp(): JSX.Element {
   useEffect(() => {
     return window.tracely.onScreenWatchHover((event) => {
       setHover(event)
-      setSending(false)
     })
   }, [])
-
-  async function analyzeText(text: string): Promise<void> {
-    if (!text.trim()) return
-    setSending(true)
-    await window.tracely.screenWatch.analyzeClaim({ text })
-  }
 
   function toggleWidgetExpanded(): void {
     if (!widget) return
     void window.tracely.screenWatch.setWidgetExpanded({ expanded: !widget.expanded })
   }
 
+  function showAll(): void {
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'all' })
+    // Local feedback ahead of the next hover-tracking event, which won't
+    // arrive until the cursor actually moves — without this the hover
+    // popover and the widget's new "all" panel could both be on screen at
+    // once for a moment.
+    setHover(null)
+  }
+
+  function showSingle(): void {
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'single' })
+  }
+
   function dismiss(claimId: string): void {
     setDismissedIds((prev) => new Set(prev).add(claimId))
+  }
+
+  function selectClaim(claimId: string): void {
+    setSelectedClaimId(claimId)
+    showSingle()
+  }
+
+  async function findEvidenceFor(claimId: string): Promise<void> {
+    setActionError(null)
+    setBusyEvidenceIds((prev) => new Set(prev).add(claimId))
+    try {
+      await window.tracely.screenWatch.refreshEvidence({ claimId })
+      // The result lands via the next SCREENWATCH_OVERLAY_UPDATE push
+      // (screenWatchService.ts redraws right after updating its state) —
+      // nothing to store from the response itself.
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyEvidenceIds((prev) => {
+        const next = new Set(prev)
+        next.delete(claimId)
+        return next
+      })
+    }
+  }
+
+  async function critiqueFor(claimId: string): Promise<void> {
+    setActionError(null)
+    setBusyCritiqueIds((prev) => new Set(prev).add(claimId))
+    try {
+      await window.tracely.screenWatch.critiqueClaim({ claimId })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyCritiqueIds((prev) => {
+        const next = new Set(prev)
+        next.delete(claimId)
+        return next
+      })
+    }
+  }
+
+  function setFlow(claimId: string, state: CitationFlowState | null): void {
+    setCitationFlowByClaimId((prev) => {
+      const next = new Map(prev)
+      if (state === null) next.delete(claimId)
+      else next.set(claimId, state)
+      return next
+    })
+  }
+
+  // Both "Find a source" (no evidence yet) and "Add citation" (evidence
+  // already on hand) run the same focused search server-side — the overlay
+  // window can never take OS keyboard focus (overlayWindow.ts sets
+  // focusable: false, deliberately, so it never steals focus from the app
+  // being watched), so there's no way to host a real free-text search box
+  // here; "search again" always re-runs with the claim's own query rather
+  // than a typed override.
+  async function startCitationFlow(claimId: string): Promise<void> {
+    setFlow(claimId, { step: 'searching' })
+    try {
+      const { candidates } = await window.tracely.screenWatch.findSource({ claimId })
+      // The user may have cancelled (flow entry removed) while this was in
+      // flight — a stale result landing after that shouldn't reopen it.
+      setCitationFlowByClaimId((prev) => {
+        if (!prev.has(claimId)) return prev
+        const next = new Map(prev)
+        next.set(claimId, {
+          step: 'picking',
+          candidates,
+          selectedRef: candidates[0]?.sourceRef ?? null,
+          style: defaultStyle
+        })
+        return next
+      })
+    } catch (err) {
+      setCitationFlowByClaimId((prev) => {
+        if (!prev.has(claimId)) return prev
+        const next = new Map(prev)
+        next.set(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
+        return next
+      })
+    }
+  }
+
+  function selectCandidate(claimId: string, ref: string): void {
+    const flow = citationFlowByClaimId.get(claimId)
+    if (flow?.step === 'picking') setFlow(claimId, { ...flow, selectedRef: ref })
+  }
+
+  function setCandidateStyle(claimId: string, style: CitationStyle): void {
+    const flow = citationFlowByClaimId.get(claimId)
+    if (flow?.step === 'picking') setFlow(claimId, { ...flow, style })
+  }
+
+  async function insertCitation(claimId: string): Promise<void> {
+    const flow = citationFlowByClaimId.get(claimId)
+    if (flow?.step !== 'picking' || !flow.selectedRef) return
+    setCitationBusyIds((prev) => new Set(prev).add(claimId))
+    try {
+      const { citation } = await window.tracely.screenWatch.insertCitation({
+        claimId,
+        sourceRef: flow.selectedRef,
+        style: flow.style
+      })
+      setFlow(claimId, { step: 'inserted', citation, showWorksCited: false })
+    } catch (err) {
+      setFlow(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setCitationBusyIds((prev) => {
+        const next = new Set(prev)
+        next.delete(claimId)
+        return next
+      })
+    }
+  }
+
+  function toggleWorksCited(claimId: string): void {
+    const flow = citationFlowByClaimId.get(claimId)
+    if (flow?.step === 'inserted') setFlow(claimId, { ...flow, showWorksCited: !flow.showWorksCited })
+  }
+
+  async function undoCitation(claimId: string): Promise<void> {
+    setUndoBusyIds((prev) => new Set(prev).add(claimId))
+    try {
+      await window.tracely.screenWatch.undoCitation({ claimId })
+      // The claim reappears in the flagged set once the next overlay-update
+      // payload lands (citation cleared server-side) — closing the flow
+      // here rather than trying to restore the prior candidate list, which
+      // may be stale by now.
+      setFlow(claimId, null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUndoBusyIds((prev) => {
+        const next = new Set(prev)
+        next.delete(claimId)
+        return next
+      })
+    }
   }
 
   // Shared drag handler for both the collapsed circle and the expanded
@@ -186,8 +1074,31 @@ export default function OverlayApp(): JSX.Element {
     window.addEventListener('mouseup', onUp)
   }
 
+  // Claims a citation has already been inserted for are treated as
+  // resolved — dropped from underlines/hover the same way dismissedIds
+  // drops a manually-dismissed one, so "fixed" claims stop flagging.
+  const citedIds = new Set((widget?.claims ?? []).filter((c) => c.citation).map((c) => c.id))
+  const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
+
   const widgetHovered = hover?.kind === 'widget'
-  const claimHovered = hover?.kind === 'claim' && !dismissedIds.has(hover.claimId) ? hover : null
+  const claimHovered = hover?.kind === 'claim' && !isResolved(hover.claimId) ? hover : null
+  // The hover event itself only carries the bare minimum needed to draw the
+  // underline (id/type/text/anchor) — full detail (confidence, evidence
+  // once it's resolved) lives in widget.claims, looked up by id. A fallback
+  // covers the brief window where a claim was just detected and its hover
+  // target exists before the next overlay-update payload has arrived.
+  const claimHoveredSummary: ScreenWatchClaimSummary | null = claimHovered
+    ? (widget?.claims.find((c) => c.id === claimHovered.claimId) ?? {
+        id: claimHovered.claimId,
+        text: claimHovered.text,
+        claimType: claimHovered.claimType,
+        confidence: 0,
+        evidence: null,
+        critique: null,
+        critiqueVerdict: null,
+        citation: null
+      })
+    : null
   const claimHoveredPos = claimHovered ? popoverPosition(claimHovered.anchor) : null
   const popoverRef = useRef<HTMLDivElement>(null)
   const lastReportedPopoverKey = useRef<string | null>(null)
@@ -196,8 +1107,9 @@ export default function OverlayApp(): JSX.Element {
   // POPOVER_EST_HEIGHT's guess — that constant only exists to decide
   // above-vs-below placement before anything has rendered) to main so
   // hoverTracking.ts can hit-test against it directly. Runs after every
-  // render (widget updates re-render this whole component too), but only
-  // actually sends when the reported rect would change.
+  // render (widget updates, and every citation-flow step change, re-render
+  // this whole component too, since flow state can resize the popover),
+  // but only actually sends when the reported rect would change.
   useLayoutEffect(() => {
     if (claimHovered && claimHoveredPos && popoverRef.current) {
       const rect = popoverRef.current.getBoundingClientRect()
@@ -217,7 +1129,7 @@ export default function OverlayApp(): JSX.Element {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', fontFamily: FONT_STACK }}>
       {underlines
-        .filter((u) => !dismissedIds.has(u.id))
+        .filter((u) => !isResolved(u.id))
         .flatMap((u) => {
           const isHovered = claimHovered?.claimId === u.id
           const color = BUCKET_COLOR[bucketFor(u.claimType)]
@@ -242,8 +1154,7 @@ export default function OverlayApp(): JSX.Element {
                 borderRadius: 2,
                 background: color,
                 opacity: isHovered ? 1 : 0.85,
-                boxShadow: isHovered ? `0 0 6px 0.5px ${color}99` : 'none',
-                transition: 'opacity 0.12s ease, box-shadow 0.12s ease'
+                transition: 'opacity 0.12s ease'
               }}
             />
           ))
@@ -252,329 +1163,341 @@ export default function OverlayApp(): JSX.Element {
       {widget && !widget.expanded
         ? (() => {
             const circlePos = dragPos ?? widget.rect
+            const hasInfo = widget.totalInfoCount > 0
+            // A solid black circle with the plain Tracely mark, plus a
+            // small solid-orange count badge overlapping its top-right
+            // edge once there's something to show — matches the Figma
+            // "Collapsed Launcher" mockup (not a colored ring around the
+            // whole circle).
             return (
-              <div style={{ position: 'absolute', left: circlePos.x, top: circlePos.y, width: 56, height: 56 }}>
-                <button
-                  onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, toggleWidgetExpanded)}
-                  title="Tracely widget — click to open, drag to move"
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    border: 'none',
-                    borderRadius: '50%',
-                    padding: 0,
-                    cursor: 'pointer',
-                    background: '#000',
-                    boxShadow: widgetHovered
-                      ? '0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 2px #ff5900'
-                      : '0 2px 8px rgba(0, 0, 0, 0.35)',
-                    transition: 'box-shadow 0.12s ease, transform 0.12s ease',
-                    transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <LogoBg size={34} />
-                </button>
-                {widget.claimCount > 0 ? (
-                  <div
+              <button
+                onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, toggleWidgetExpanded)}
+                title={
+                  hasInfo
+                    ? `${widget.claimCount} claim${widget.claimCount === 1 ? '' : 's'} flagged, ${widget.totalInfoCount} piece${widget.totalInfoCount === 1 ? '' : 's'} of info found`
+                    : 'Tracely — click to open, drag to move'
+                }
+                style={{
+                  position: 'absolute',
+                  left: circlePos.x,
+                  top: circlePos.y,
+                  width: 56,
+                  height: 56,
+                  border: 'none',
+                  borderRadius: '50%',
+                  padding: 0,
+                  cursor: 'pointer',
+                  background: '#17171b',
+                  boxShadow: widgetHovered ? '0 6px 18px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.18)',
+                  transition: 'box-shadow 0.12s ease, transform 0.12s ease',
+                  transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <LogoBg size={30} />
+                {hasInfo ? (
+                  <span
                     style={{
                       position: 'absolute',
-                      left: 28.5,
-                      top: -8.5,
-                      width: 31,
-                      height: 31,
-                      borderRadius: '50%',
-                      background: '#ff5900',
-                      border: '2px solid #0b0b0d',
+                      top: -4,
+                      right: -4,
+                      minWidth: 22,
+                      height: 22,
+                      padding: '0 5px',
+                      borderRadius: 999,
+                      background: '#f47b20',
                       color: '#fff',
-                      fontSize: 14,
+                      fontSize: 11.5,
                       fontWeight: 700,
+                      border: '2px solid #fff',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none'
+                      justifyContent: 'center'
                     }}
                   >
-                    {widget.claimCount}
-                  </div>
+                    {widget.totalInfoCount}
+                  </span>
                 ) : null}
-              </div>
+              </button>
             )
           })()
         : null}
 
       {widget && widget.expanded
         ? (() => {
-            const b = widget.breakdown
-            const rows: { bucket: Bucket; count: number }[] = [
-              { bucket: 'statistic', count: b.statisticCount },
-              { bucket: 'factual', count: b.factualCount },
-              { bucket: 'other', count: b.otherCount }
-            ]
             const panelPos = dragPos ?? widget.rect
+            const visibleClaims = widget.claims.filter((c) => !isResolved(c.id))
+            const topClaim = visibleClaims.find((c) => c.id === selectedClaimId) ?? visibleClaims[0] ?? null
             return (
               <div
                 style={{
                   position: 'absolute',
                   left: panelPos.x,
                   top: panelPos.y,
-                  width: 560,
-                  height: 320,
+                  width: widget.rect.width,
+                  height: widget.rect.height,
                   background: '#fff',
-                  border: '3px solid #000',
-                  borderRadius: 32,
-                  boxShadow: '0px 8px 12px rgba(0,0,0,0.18)',
-                  overflow: 'hidden'
+                  border: CARD_BORDER,
+                  borderRadius: 20,
+                  boxShadow: CARD_SHADOW,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
                 }}
               >
-                <div style={{ position: 'absolute', left: 22, top: 18, width: 40, height: 36, pointerEvents: 'none' }}>
-                  <LogoBg size={36} />
-                </div>
                 <div
-                  onMouseDown={(e) => startWidgetDrag(e, { width: 560, height: 320 })}
+                  onMouseDown={(e) => startWidgetDrag(e, { width: widget.rect.width, height: widget.rect.height })}
                   title="Drag to move"
                   style={{
-                    position: 'absolute',
-                    left: 66,
-                    top: 12,
-                    width: 40,
-                    height: 40,
-                    cursor: 'grab'
+                    boxSizing: 'border-box',
+                    height: GRID_HEADER_HEIGHT,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '0 10px 0 14px',
+                    cursor: 'grab',
+                    background: '#fafafa',
+                    borderBottom: '1px solid #eeeef1',
+                    flexShrink: 0
                   }}
                 >
-                  {[0, 1, 2].flatMap((row) =>
-                    [0, 1].map((col) => (
-                      <div
-                        key={`${row}-${col}`}
-                        style={{
-                          position: 'absolute',
-                          left: 10 + col * 10,
-                          top: 10 + row * 10,
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          background: 'rgba(0,0,0,0.35)',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    ))
+                  {widget.viewMode === 'all' ? (
+                    <button className="tracely-btn-text" onClick={showSingle} style={TEXT_BTN_STYLE}>
+                      ← Back
+                    </button>
+                  ) : (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#17171b' }}>
+                      {widget.claimCount} claim{widget.claimCount === 1 ? '' : 's'} flagged
+                    </div>
                   )}
-                </div>
-                <button
-                  onClick={toggleWidgetExpanded}
-                  title="Close"
-                  aria-label="Close"
-                  style={{
-                    position: 'absolute',
-                    left: 522,
-                    top: 16,
-                    width: 24,
-                    height: 24,
-                    border: 'none',
-                    background: 'rgba(0,0,0,0.06)',
-                    borderRadius: '50%',
-                    color: '#1c1c1c',
-                    fontSize: 14,
-                    lineHeight: '24px',
-                    padding: 0,
-                    cursor: 'pointer'
-                  }}
-                >
-                  ×
-                </button>
-                <div style={{ position: 'absolute', left: 20, top: 60, width: 520, height: 1, background: 'rgba(0,0,0,0.1)' }} />
-                <div style={{ position: 'absolute', left: 196, top: 78, width: 1, height: 216, background: 'rgba(0,0,0,0.1)' }} />
-
-                <button
-                  onClick={() => analyzeText(widget.text)}
-                  disabled={sending}
-                  title="Open full analysis in Tracely"
-                  style={{
-                    position: 'absolute',
-                    left: 79,
-                    top: 104,
-                    width: 110,
-                    height: 110,
-                    border: 'none',
-                    padding: 0,
-                    cursor: sending ? 'default' : 'pointer',
-                    borderRadius: '50%',
-                    background: `conic-gradient(#ff5900 ${widget.avgConfidencePercent}%, rgba(0,0,0,0.08) ${widget.avgConfidencePercent}% 100%)`
-                  }}
-                >
                   <div
                     style={{
-                      position: 'absolute',
-                      left: 12,
-                      top: 12,
-                      width: 86,
-                      height: 86,
-                      borderRadius: '50%',
-                      background: '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontFamily: "'Inter', sans-serif",
-                      fontSize: 26,
-                      fontWeight: 500,
-                      color: '#1a1a1f'
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: '#f47b20',
+                      background: 'rgba(244, 123, 32, 0.1)',
+                      borderRadius: 999,
+                      padding: '2px 8px'
                     }}
                   >
-                    {widget.avgConfidencePercent}%
+                    {widget.totalInfoCount} found
                   </div>
-                </button>
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: 79,
-                    top: 224,
-                    width: 110,
-                    textAlign: 'center',
-                    fontSize: 15,
-                    fontWeight: 500,
-                    color: '#1a1a1f'
-                  }}
-                >
-                  Confidence
+                  <div style={{ flex: 1 }} />
+                  <button
+                    onClick={toggleWidgetExpanded}
+                    title="Close"
+                    aria-label="Close"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      boxSizing: 'border-box',
+                      border: 'none',
+                      background: 'rgba(0, 0, 0, 0.06)',
+                      borderRadius: '50%',
+                      color: '#6b6b76',
+                      fontSize: 13,
+                      lineHeight: '22px',
+                      padding: 0,
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
 
-                {rows.map((row, i) => (
-                  <div key={row.bucket}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 249,
-                        top: 79 + i * 76,
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: BUCKET_COLOR[row.bucket]
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 276,
-                        top: 70 + i * 76,
-                        fontFamily: "'Inter', sans-serif",
-                        fontSize: 24,
-                        fontWeight: 500,
-                        color: '#ff5900'
-                      }}
-                    >
-                      {row.count}
+                <div style={{ boxSizing: 'border-box', flex: 1, minHeight: 0, padding: GRID_PADDING, overflow: 'hidden' }}>
+                  {visibleClaims.length === 0 ? (
+                    <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center', marginTop: 24 }}>
+                      No claims flagged yet.
                     </div>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 314,
-                        top: 76 + i * 76,
-                        fontSize: 18,
-                        fontWeight: 500,
-                        color: '#1a1a1f'
-                      }}
-                    >
-                      {BUCKET_ROW_LABEL[row.bucket]}
-                    </div>
-                    {i < 2 ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 254,
-                          top: 126 + i * 76,
-                          width: 320,
-                          height: 1,
-                          background: 'rgba(0,0,0,0.1)'
-                        }}
+                  ) : widget.viewMode === 'single' && topClaim ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+                      <ClaimActionCard
+                        claim={topClaim}
+                        evidenceBusy={busyEvidenceIds.has(topClaim.id)}
+                        critiqueBusy={busyCritiqueIds.has(topClaim.id)}
+                        onFindEvidence={() => void findEvidenceFor(topClaim.id)}
+                        onCritique={() => void critiqueFor(topClaim.id)}
                       />
-                    ) : null}
-                  </div>
-                ))}
+                      {actionError ? <div style={{ fontSize: 11.5, color: '#d6301a' }}>{actionError}</div> : null}
+                      <div style={{ flex: 1 }} />
+                      {visibleClaims.length > 1 ? (
+                        <button className="tracely-btn-secondary" onClick={showAll} style={SECONDARY_BTN_STYLE}>
+                          Show all ({visibleClaims.length})
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    // A single vertical column, not a grid — sized per-claim-
+                    // count server-side (computeAllPanelSize); overflowY is a
+                    // safety fallback only for the rare case that caps out.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: GRID_GAP, height: '100%', overflowY: 'auto' }}>
+                      {visibleClaims.map((c) => (
+                        <ClaimListItem key={c.id} claim={c} onClick={() => selectClaim(c.id)} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )
           })()
         : null}
 
-      {claimHovered
+      {claimHovered && claimHoveredSummary
         ? (() => {
-            const bucket = bucketFor(claimHovered.claimType)
             const pos = popoverPosition(claimHovered.anchor)
+            const flow = citationFlowByClaimId.get(claimHoveredSummary.id) ?? null
+            const visibleCount = (widget?.claims ?? []).filter((c) => !isResolved(c.id) && c.id !== claimHoveredSummary.id).length
             return (
               <div
                 ref={popoverRef}
+                className="tracely-popover"
                 style={{
                   position: 'absolute',
                   left: pos.left,
                   top: pos.top,
                   width: POPOVER_WIDTH,
                   background: '#fff',
-                  border: '2px solid #000',
-                  borderRadius: 16,
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+                  border: CARD_BORDER,
+                  borderRadius: 18,
+                  boxShadow: CARD_SHADOW,
                   padding: 16,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 12,
+                  gap: 10,
                   color: '#1c1c1c'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: BUCKET_COLOR[bucket],
-                      flexShrink: 0
-                    }}
+                {flow ? (
+                  <CitationFlowCard
+                    state={flow}
+                    visibleClaimCount={visibleCount}
+                    onSelectCandidate={(ref) => selectCandidate(claimHoveredSummary.id, ref)}
+                    onSetStyle={(style) => setCandidateStyle(claimHoveredSummary.id, style)}
+                    onSearchAgain={() => void startCitationFlow(claimHoveredSummary.id)}
+                    onInsert={() => void insertCitation(claimHoveredSummary.id)}
+                    onCancel={() => setFlow(claimHoveredSummary.id, null)}
+                    onDone={() => setFlow(claimHoveredSummary.id, null)}
+                    onToggleWorksCited={() => toggleWorksCited(claimHoveredSummary.id)}
+                    onUndo={() => void undoCitation(claimHoveredSummary.id)}
+                    inserting={citationBusyIds.has(claimHoveredSummary.id)}
+                    undoing={undoBusyIds.has(claimHoveredSummary.id)}
                   />
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>
-                    {CLAIM_TYPE_LABEL[claimHovered.claimType]} flagged
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.4, color: '#4a4a4a' }}>
-                  {CLAIM_TYPE_DESCRIPTION[claimHovered.claimType]}
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => analyzeText(claimHovered.text)}
-                    disabled={sending}
-                    style={{
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '8px 14px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: '#fff',
-                      cursor: sending ? 'default' : 'pointer',
-                      opacity: sending ? 0.6 : 1,
-                      background: '#1c1c1c'
+                ) : (
+                  <ProblemCard
+                    claim={claimHoveredSummary}
+                    onSuggestFix={() => {
+                      selectClaim(claimHoveredSummary.id)
+                      void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
                     }}
-                  >
-                    {sending ? 'Opening…' : 'Check in Tracely'}
-                  </button>
-                  <button
-                    onClick={() => dismiss(claimHovered.claimId)}
-                    style={{
-                      border: '1px solid #b3b3b3',
-                      borderRadius: 8,
-                      padding: '8px 14px',
-                      fontSize: 13,
-                      fontWeight: 400,
-                      color: '#1c1c1c',
-                      background: '#fff',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Dismiss
-                  </button>
-                </div>
+                    onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
+                    onDismiss={() => dismiss(claimHoveredSummary.id)}
+                  />
+                )}
               </div>
             )
           })()
         : null}
+
+      {/* This window has no shared stylesheet (see overlay.html — kept
+          minimal on purpose for a transparent always-on-top window), so
+          hover/press states and the entrance animation live in a small
+          scoped style block instead of index.css. */}
+      <style>{`
+        /* Every panel/card size in this file is computed to line up exactly
+           with sizes computed server-side (computeAllPanelSize etc.), which
+           assume border-box — content-box (the CSS default) silently adds
+           padding/border on top of an explicit width/height and was the
+           actual cause of content clipping against the panel edge. */
+        *, *::before, *::after {
+          box-sizing: border-box;
+        }
+        @keyframes tracely-popover-in {
+          from { opacity: 0; transform: translateY(4px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .tracely-popover {
+          animation: tracely-popover-in 0.14s ease-out;
+        }
+        .tracely-btn-primary {
+          transition: background 0.12s ease, transform 0.08s ease;
+        }
+        .tracely-btn-primary:hover:not(:disabled) {
+          background: #2c2c33;
+        }
+        .tracely-btn-primary:active:not(:disabled) {
+          transform: scale(0.97);
+        }
+        .tracely-btn-secondary {
+          transition: background 0.12s ease;
+        }
+        .tracely-btn-secondary:hover:not(:disabled) {
+          background: rgba(0, 0, 0, 0.05);
+        }
+        .tracely-btn-secondary:active:not(:disabled) {
+          background: rgba(0, 0, 0, 0.09);
+        }
+        .tracely-btn-primary:disabled,
+        .tracely-btn-secondary:disabled {
+          cursor: default;
+        }
+        .tracely-btn-text {
+          transition: color 0.12s ease;
+        }
+        .tracely-btn-text:hover {
+          color: #17171b;
+        }
+        .tracely-list-row {
+          transition: border-color 0.12s ease, box-shadow 0.12s ease;
+        }
+        .tracely-list-row:hover {
+          border-color: #c9c9d0;
+          box-shadow: 0 2px 10px rgba(15, 15, 20, 0.06);
+        }
+        .tracely-list-row:active {
+          transform: scale(0.99);
+        }
+        @keyframes tracely-spin {
+          to { transform: rotate(360deg); }
+        }
+        .tracely-spinner {
+          display: inline-block;
+          width: 10px;
+          height: 10px;
+          border: 1.5px solid rgba(0, 0, 0, 0.12);
+          border-top-color: #f47b20;
+          border-radius: 50%;
+          animation: tracely-spin 0.7s linear infinite;
+        }
+        .tracely-progress-track {
+          height: 4px;
+          border-radius: 2px;
+          background: rgba(0, 0, 0, 0.08);
+          overflow: hidden;
+        }
+        .tracely-progress-fill {
+          height: 100%;
+          width: 40%;
+          border-radius: 2px;
+          background: #f47b20;
+          animation: tracely-progress 1.1s ease-in-out infinite;
+        }
+        @keyframes tracely-progress {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(250%); }
+        }
+        @keyframes tracely-skeleton-pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        .tracely-skeleton {
+          background: rgba(0, 0, 0, 0.08);
+          animation: tracely-skeleton-pulse 1.1s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   )
 }

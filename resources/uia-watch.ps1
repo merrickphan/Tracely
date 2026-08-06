@@ -6,6 +6,10 @@
   async stdin command handling in PowerShell.
 
   Params:
+    -Mode            "snapshot" (default, unchanged read-only behavior),
+                     "insert" (type a citation into the focused field at a
+                     known offset), or "undo" (send Ctrl+Z to the focused
+                     app) — see insert/undo modes below.
     -SpansB64        base64 of a JSON array of {id, start, length} character
                      offsets to fetch bounding rectangles for, or empty.
                      Offsets are resolved by position, not by text search —
@@ -24,12 +28,26 @@
     -SelfProcessName the app's own process image name (e.g. "Tracely.exe"),
                      so focus inside Tracely's own windows is ignored rather
                      than fed back into itself.
+    -InsertOffset    (insert mode) character offset into the focused
+                     control's current text to insert at.
+    -InsertTextB64   (insert mode) base64 UTF-8 of the citation text to type.
+    -ExpectedSnippetB64
+                     (insert mode) base64 UTF-8 of the ~30 characters the
+                     Node side last saw starting at InsertOffset — a cheap
+                     staleness check. If the live text at that offset no
+                     longer starts with this snippet, the document changed
+                     since the claim was located and the insert is aborted
+                     rather than typing into the wrong spot.
 
   Always prints exactly one line of JSON to stdout and exits.
 #>
 param(
+  [string]$Mode = "snapshot",
   [string]$SpansB64 = "",
-  [string]$SelfProcessName = "Tracely.exe"
+  [string]$SelfProcessName = "Tracely.exe",
+  [string]$InsertOffset = "",
+  [string]$InsertTextB64 = "",
+  [string]$ExpectedSnippetB64 = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,9 +107,143 @@ function Get-RectCount($flat) {
 try {
   Add-Type -AssemblyName UIAutomationClient
   Add-Type -AssemblyName UIAutomationTypes
+  Add-Type -AssemblyName System.Windows.Forms
 } catch {
   Write-Result @{ ok = $false; error = "UIAutomation assemblies unavailable: $($_.Exception.Message)" }
   exit 0
+}
+
+# Insert/undo modes both need the currently focused element and its process
+# name, same as snapshot mode, but nothing else from the big read-path try
+# block below — handled here and the script exits before reaching it.
+if ($Mode -eq "insert" -or $Mode -eq "undo") {
+  try {
+    $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+    if ($null -eq $focused) {
+      Write-Result @{ ok = $false; error = "No focused element - the target app may have lost focus." }
+      exit 0
+    }
+
+    $processName = "unknown"
+    try {
+      $proc = Get-Process -Id $focused.Current.ProcessId -ErrorAction Stop
+      $processName = "$($proc.ProcessName).exe"
+    } catch {}
+
+    if ($processName -ieq $SelfProcessName) {
+      Write-Result @{ ok = $false; error = "Focus moved to Tracely itself - nothing to insert into." }
+      exit 0
+    }
+
+    if ($Mode -eq "undo") {
+      # One paste is one undo step in effectively every real text editor and
+      # browser, so a plain Ctrl+Z is reliable here without Tracely tracking
+      # its own undo stack — the target app's own history does the work.
+      [System.Windows.Forms.SendKeys]::SendWait("^z")
+      Write-Result @{ ok = $true; processName = $processName }
+      exit 0
+    }
+
+    # Mode -eq "insert" from here.
+    $textPatternObj2 = $null
+    if (-not $focused.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$textPatternObj2)) {
+      Write-Result @{ ok = $false; error = "Focused control no longer supports text access." }
+      exit 0
+    }
+    $textPattern2 = $textPatternObj2 -as [System.Windows.Automation.TextPattern]
+    $docRange2 = $textPattern2.DocumentRange
+    $liveText = $docRange2.GetText(-1)
+
+    $offset = 0
+    if (-not [int]::TryParse($InsertOffset, [ref]$offset)) {
+      Write-Result @{ ok = $false; error = "Invalid insert offset." }
+      exit 0
+    }
+
+    $expectedSnippet = ""
+    if ($ExpectedSnippetB64 -ne "") {
+      $expectedSnippet = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ExpectedSnippetB64))
+    }
+    if ($expectedSnippet -ne "") {
+      $actualSnippet = ""
+      if ($offset -ge 0 -and $offset -lt $liveText.Length) {
+        $len = [Math]::Min($expectedSnippet.Length, $liveText.Length - $offset)
+        $actualSnippet = $liveText.Substring($offset, $len)
+      }
+      if ($actualSnippet -ne $expectedSnippet) {
+        Write-Result @{ ok = $false; error = "The document changed since this claim was located - try again." }
+        exit 0
+      }
+    }
+
+    $citationText = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($InsertTextB64))
+
+    $Endp2 = [System.Windows.Automation.Text.TextPatternRangeEndpoint]
+    $Unit2 = [System.Windows.Automation.Text.TextUnit]
+    try {
+      $insertRange = $docRange2.Clone()
+      $insertRange.MoveEndpointByUnit($Endp2::End, $Unit2::Character, -($liveText.Length + 10)) | Out-Null
+      $insertRange.MoveEndpointByUnit($Endp2::Start, $Unit2::Character, $offset) | Out-Null
+      # Moving Start past the collapsed End above drags End along with it
+      # (the standard UIA collapse-then-expand idiom, same one already used
+      # for underline spans below) — End is already sitting at $offset too
+      # at this point, so it's moved by a LENGTH of 0 here, not by $offset
+      # again. Moving it by $offset a second time was the original bug:
+      # it produced a range covering [$offset, 2*$offset] instead of a
+      # zero-length caret, so Select()+paste below replaced however much
+      # text happened to sit in that stretch instead of just inserting.
+      $insertRange.MoveEndpointByUnit($Endp2::End, $Unit2::Character, 0) | Out-Null
+      $insertRange.ScrollIntoView($true) | Out-Null
+
+      # Defensive check: if the range somehow isn't actually collapsed
+      # (a future refactor regresses the math above, or a provider handles
+      # MoveEndpointByUnit differently than expected), abort instead of
+      # letting Select()+paste silently overwrite a stretch of the user's
+      # real document text.
+      $rangeText = ""
+      try { $rangeText = $insertRange.GetText($liveText.Length + 10) } catch {}
+      if ($rangeText.Length -gt 0) {
+        Write-Result @{ ok = $false; error = "Could not safely place the cursor (selection wasn't empty) - nothing was inserted." }
+        exit 0
+      }
+
+      # Collapses the target app's own caret/selection to this exact point —
+      # deliberately not ValuePattern.SetValue, which would replace the
+      # entire field's content and lose formatting/undo history.
+      $insertRange.Select() | Out-Null
+    } catch {
+      Write-Result @{ ok = $false; error = "Could not place the cursor at the insertion point: $($_.Exception.Message)" }
+      exit 0
+    }
+
+    # Typed via the clipboard rather than SendKeys-per-character: SendKeys
+    # treats +^%~(){} as control characters, which real citation text
+    # (parentheses, commas) would otherwise need fragile escaping for, and a
+    # paste is a single native edit the target app's own undo already
+    # understands. The user's existing clipboard content is restored right
+    # after, so this never permanently clobbers what they had copied.
+    $previousClipboard = $null
+    try { $previousClipboard = [System.Windows.Forms.Clipboard]::GetText() } catch {}
+    try {
+      [System.Windows.Forms.Clipboard]::SetText($citationText)
+      [System.Windows.Forms.SendKeys]::SendWait("^v")
+      Start-Sleep -Milliseconds 200
+    } finally {
+      try {
+        if ($null -ne $previousClipboard -and $previousClipboard -ne "") {
+          [System.Windows.Forms.Clipboard]::SetText($previousClipboard)
+        } else {
+          [System.Windows.Forms.Clipboard]::Clear()
+        }
+      } catch {}
+    }
+
+    Write-Result @{ ok = $true; processName = $processName }
+    exit 0
+  } catch {
+    Write-Result @{ ok = $false; error = $_.Exception.Message }
+    exit 0
+  }
 }
 
 try {
