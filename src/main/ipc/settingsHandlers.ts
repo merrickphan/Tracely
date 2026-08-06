@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
-import type { AccentColor, AppSettings, CitationStyle, Density, Theme } from '@shared/types'
+import type { AccentColor, AppSettings, CitationStyle, Density, FontSize, Theme } from '@shared/types'
 import { scanInstalledApps } from '../services/appScan'
 import { registerGlobalHotkey, registerScreenWatchHotkey } from '../hotkey'
 import { getAllSettingsRaw, setSetting } from '../services/storage/settingsRepo'
@@ -14,6 +14,7 @@ const setSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
   accentColor: z.enum(['orange', 'blue', 'green', 'purple']).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
+  fontSize: z.enum(['small', 'medium', 'large']).optional(),
   claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
   screenWatchAllowedApps: z.string().optional()
@@ -28,6 +29,7 @@ function buildSettings(): AppSettings {
     theme: raw.theme as Theme,
     accentColor: raw.accentColor as AccentColor,
     density: raw.density as Density,
+    fontSize: raw.fontSize as FontSize,
     claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
     screenWatchAllowedApps: raw.screenWatchAllowedApps
@@ -47,6 +49,7 @@ export function registerSettingsHandlers(): void {
     if (patch.theme !== undefined) setSetting('theme', patch.theme)
     if (patch.accentColor !== undefined) setSetting('accentColor', patch.accentColor)
     if (patch.density !== undefined) setSetting('density', patch.density)
+    if (patch.fontSize !== undefined) setSetting('fontSize', patch.fontSize)
     if (patch.claimSensitivity !== undefined) setSetting('claimSensitivity', String(patch.claimSensitivity))
     if (patch.hotkeyAccelerator !== undefined) {
       setSetting('hotkeyAccelerator', patch.hotkeyAccelerator)

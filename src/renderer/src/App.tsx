@@ -3,7 +3,7 @@ import AnalyzeView from './views/AnalyzeView'
 import HomeView from './views/HomeView'
 import SettingsView from './views/SettingsView'
 import { applyTheme } from './lib/theme'
-import { applyAccentColor, applyDensity } from './lib/appearance'
+import { applyAccentColor, applyDensity, applyFontSize } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 
 export type Tab = 'home' | 'analyze' | 'settings'
@@ -21,6 +21,7 @@ export default function App(): JSX.Element {
       applyTheme(s.theme)
       applyAccentColor(s.accentColor)
       applyDensity(s.density)
+      applyFontSize(s.fontSize)
     })
   }, [])
 

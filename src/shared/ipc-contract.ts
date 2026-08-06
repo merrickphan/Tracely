@@ -8,6 +8,7 @@ import type {
   ClaimType,
   CritiqueVerdict,
   Density,
+  FontSize,
   EvidenceItem,
   LibraryItem,
   ScoreBreakdown,
@@ -122,6 +123,7 @@ export interface SettingsSetRequest {
   theme?: Theme
   accentColor?: AccentColor
   density?: Density
+  fontSize?: FontSize
   claimSensitivity?: number
   screenWatchHotkeyAccelerator?: string
   screenWatchAllowedApps?: string

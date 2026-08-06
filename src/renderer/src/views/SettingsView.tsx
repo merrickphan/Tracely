@@ -1,12 +1,22 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { AccentColor, AppSettings, Density, Theme } from '@shared/types'
+import type { AccentColor, AppSettings, Density, FontSize, Theme } from '@shared/types'
 import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
 import Button from '../components/Button'
 import SettingsField from '../components/SettingsField'
-import { UserIcon, SunIcon, SlidersIcon, SignOutIcon, BackIcon } from '../components/icons'
+import {
+  UserIcon,
+  SunIcon,
+  SlidersIcon,
+  BellIcon,
+  ShieldIcon,
+  LinkIcon,
+  CardIcon,
+  SignOutIcon,
+  BackIcon
+} from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import { applyTheme } from '../lib/theme'
-import { applyAccentColor, applyDensity } from '../lib/appearance'
+import { applyAccentColor, applyDensity, applyFontSize } from '../lib/appearance'
 import type { Tab } from '../App'
 
 const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
@@ -16,19 +26,28 @@ const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
   { id: 'purple', label: 'Purple', swatch: 'linear-gradient(135deg, #c084fc, #a855f7)' }
 ]
 
-// Figma's mockup also specified Account/Notifications/Security/Integrations/
-// Billing, but those had no real backend (Tracely is local-first with no
-// server, accounts, OAuth, or payments) and were previously implemented as
-// static sample data wired to nothing. Removed on explicit instruction
-// rather than kept as decoration — only sections with a real backend stay:
-// Profile (local display prefs + avatar file), Appearance (real theme/
-// accent/density), Preferences (real Screen Watch app allow/block list).
-type Section = 'profile' | 'appearance' | 'preferences'
+// Two kinds of section live here, and the difference matters when editing:
+//
+//  - Profile / Appearance / Preferences are REAL — each control is wired
+//    through IPC to settingsRepo or profileHandlers and persists.
+//  - Notifications / Security / Integrations / Billing are STATIC MOCKUPS
+//    reproducing the Figma frames (SettingsPage - Notifications/Security/
+//    Integrations/Billing) verbatim, sample values and all. Tracely is
+//    local-first: no accounts, no server, no OAuth, no payments, so there is
+//    nothing behind them. Their selects hold local state so they respond to
+//    clicks, and their "Save changes" buttons are deliberate no-ops. These
+//    were removed once before for exactly this reason and restored on
+//    explicit instruction — don't "fix" them by inventing a backend.
+type Section = 'profile' | 'appearance' | 'preferences' | 'notifications' | 'security' | 'integrations' | 'billing'
 
 const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
   { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'appearance', label: 'Appearance', icon: SunIcon },
-  { id: 'preferences', label: 'Preferences', icon: SlidersIcon }
+  { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
+  { id: 'notifications', label: 'Notifications', icon: BellIcon },
+  { id: 'security', label: 'Security', icon: ShieldIcon },
+  { id: 'integrations', label: 'Integrations', icon: LinkIcon },
+  { id: 'billing', label: 'Billing', icon: CardIcon }
 ]
 
 export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
@@ -71,13 +90,24 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     void save({ density })
   }
 
+  function changeFontSize(fontSize: FontSize): void {
+    applyFontSize(fontSize)
+    setSettings((s) => (s ? { ...s, fontSize } : s))
+    void save({ fontSize })
+  }
+
   const [appearanceSaving, setAppearanceSaving] = useState(false)
 
   async function saveAppearance(): Promise<void> {
     if (!settings) return
     setAppearanceSaving(true)
     try {
-      await save({ theme: settings.theme, accentColor: settings.accentColor, density: settings.density })
+      await save({
+        theme: settings.theme,
+        accentColor: settings.accentColor,
+        density: settings.density,
+        fontSize: settings.fontSize
+      })
     } finally {
       setAppearanceSaving(false)
     }
@@ -211,6 +241,16 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     // Newly-added apps aren't automatically allowed — adding them here just
     // makes them checkable; the user still has to check the box.
   }
+
+  // --- Static mockup sections (see the Section comment above). These hold
+  // local-only state purely so the selects respond when clicked; nothing is
+  // read back, persisted, or sent anywhere.
+  const [mockEmailNotifications, setMockEmailNotifications] = useState('All activity')
+  const [mockPushNotifications, setMockPushNotifications] = useState('All activity')
+  const [mockSmsAlerts, setMockSmsAlerts] = useState('Off')
+  const [mockNotificationSchedule, setMockNotificationSchedule] = useState('Off')
+  const [mockTwoFactor, setMockTwoFactor] = useState('Enabled via Authenticator app')
+  const [mockPlan, setMockPlan] = useState('Pro — $20/month')
 
   if (!settings) {
     return <div className="settings-view">{error ? <p className="error-text">{error}</p> : <p>Loading…</p>}</div>
@@ -348,10 +388,13 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                   </div>
                 </SettingsField>
                 <SettingsField label="Font size">
-                  <select disabled defaultValue="Medium">
-                    <option>Small</option>
-                    <option>Medium</option>
-                    <option>Large</option>
+                  <select
+                    value={settings.fontSize}
+                    onChange={(e) => changeFontSize(e.target.value as FontSize)}
+                  >
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
                   </select>
                 </SettingsField>
                 <SettingsField label="Density">
@@ -426,6 +469,145 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 Screen Watch only reads text in apps you check below — nothing is enabled anywhere until you pick
                 it. Uncheck an app any time to stop it from being read.
               </p>
+            </>
+          ) : null}
+
+          {section === 'notifications' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Notifications</h3>
+                <p>Choose what updates you receive and how.</p>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="Email notifications">
+                  <select
+                    value={mockEmailNotifications}
+                    onChange={(e) => setMockEmailNotifications(e.target.value)}
+                  >
+                    <option>All activity</option>
+                    <option>Mentions only</option>
+                    <option>Weekly digest</option>
+                    <option>Off</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Push notifications">
+                  <select value={mockPushNotifications} onChange={(e) => setMockPushNotifications(e.target.value)}>
+                    <option>All activity</option>
+                    <option>Mentions only</option>
+                    <option>Off</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="SMS alerts" full>
+                  <select value={mockSmsAlerts} onChange={(e) => setMockSmsAlerts(e.target.value)}>
+                    <option>Off</option>
+                    <option>Urgent only</option>
+                    <option>All activity</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Notification schedule" full>
+                  <select
+                    value={mockNotificationSchedule}
+                    onChange={(e) => setMockNotificationSchedule(e.target.value)}
+                  >
+                    <option>Off</option>
+                    <option>Weekdays, 9am – 6pm</option>
+                    <option>Custom hours</option>
+                  </select>
+                </SettingsField>
+              </div>
+              {/* No-op by design — this panel is a static mockup. */}
+              <Button variant="dark">Save changes</Button>
+            </>
+          ) : null}
+
+          {section === 'security' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Security</h3>
+                <p>Keep your account safe and see where you&rsquo;re signed in.</p>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="Two-factor authentication">
+                  <select value={mockTwoFactor} onChange={(e) => setMockTwoFactor(e.target.value)}>
+                    <option>Enabled via Authenticator app</option>
+                    <option>Enabled via SMS</option>
+                    <option>Disabled</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Recovery email">
+                  <div className="settings-static-value">backup@example.com</div>
+                </SettingsField>
+                <SettingsField label="Active sessions" full>
+                  <div className="settings-static-value">2 devices signed in</div>
+                </SettingsField>
+                <SettingsField label="Recent login activity" full>
+                  <div className="settings-static-value settings-static-value-block">
+                    San Luis Obispo, CA · Chrome on macOS · 2 hours ago
+                  </div>
+                </SettingsField>
+              </div>
+              {/* No-op by design — this panel is a static mockup. */}
+              <Button variant="dark">Save changes</Button>
+            </>
+          ) : null}
+
+          {section === 'integrations' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Integrations</h3>
+                <p>Connect the tools you use every day.</p>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="Google Calendar">
+                  <div className="settings-static-value settings-static-value-good">Connected</div>
+                </SettingsField>
+                <SettingsField label="Nextdoor">
+                  <div className="settings-static-value settings-static-value-good">Connected</div>
+                </SettingsField>
+                <SettingsField label="Gmail" full>
+                  <div className="settings-static-value settings-static-value-good">
+                    Connected · jamie.d@example.com
+                  </div>
+                </SettingsField>
+                <SettingsField label="Available integrations" full>
+                  <div className="settings-static-value settings-static-value-block">
+                    Calendly, Google Drive, Slack — connect more from the marketplace
+                  </div>
+                </SettingsField>
+              </div>
+              {/* No-op by design — this panel is a static mockup. */}
+              <Button variant="dark">Save changes</Button>
+            </>
+          ) : null}
+
+          {section === 'billing' ? (
+            <>
+              <div className="settings-panel-header">
+                <h3>Billing</h3>
+                <p>Manage your plan, payment method, and invoices.</p>
+              </div>
+              <div className="settings-panel-grid">
+                <SettingsField label="Plan">
+                  <select value={mockPlan} onChange={(e) => setMockPlan(e.target.value)}>
+                    <option>Pro — $20/month</option>
+                    <option>Free</option>
+                    <option>Team — $60/month</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label="Next invoice">
+                  <div className="settings-static-value">Aug 29, 2026</div>
+                </SettingsField>
+                <SettingsField label="Payment method" full>
+                  <div className="settings-static-value">Visa ending in 4242</div>
+                </SettingsField>
+                <SettingsField label="Billing history" full>
+                  <div className="settings-static-value settings-static-value-block">
+                    Download past invoices and manage your payment details
+                  </div>
+                </SettingsField>
+              </div>
+              {/* No-op by design — this panel is a static mockup. */}
+              <Button variant="dark">Save changes</Button>
             </>
           ) : null}
 

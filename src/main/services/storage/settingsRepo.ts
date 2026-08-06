@@ -9,6 +9,7 @@ const DEFAULTS: Record<string, string> = {
   theme: 'dark',
   accentColor: 'orange',
   density: 'comfortable',
+  fontSize: 'medium',
   claimSensitivity: '0.55',
   screenWatchHotkeyAccelerator: 'CommandOrControl+Shift+S',
   // Process image names (e.g. "Discord.exe") Screen Watch IS allowed to
