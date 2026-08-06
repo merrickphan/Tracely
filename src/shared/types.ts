@@ -115,6 +115,8 @@ export type AccentColor = 'orange' | 'blue' | 'green' | 'purple'
 
 export type Density = 'comfortable' | 'compact'
 
+export type FontSize = 'small' | 'medium' | 'large'
+
 export interface AppSettings {
   defaultCitationStyle: CitationStyle
   hotkeyAccelerator: string
@@ -122,6 +124,7 @@ export interface AppSettings {
   theme: Theme
   accentColor: AccentColor
   density: Density
+  fontSize: FontSize
   // 0-1, higher = fewer/more-confident-only claims underlined. Exposed to
   // the user instead of a value we keep re-tuning ourselves in code.
   claimSensitivity: number

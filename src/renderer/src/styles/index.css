@@ -2186,6 +2186,25 @@ textarea:disabled {
   min-height: 54px;
 }
 
+.settings-static-value {
+  padding: 9px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.settings-static-value-good {
+  color: #00a63e;
+}
+
+/* The Figma Settings frames end each panel with one tall read-only box
+   (Recent login activity, Available integrations, Billing history). */
+.settings-static-value-block {
+  min-height: 100px;
+}
+
 .accent-swatch-row {
   display: flex;
   gap: 10px;
