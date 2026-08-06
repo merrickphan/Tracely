@@ -101,46 +101,6 @@ function MessageBubble({ message }: { message: TracerMessage }): JSX.Element {
   )
 }
 
-// A one-line summary of what Tracer can actually see right now. Shown
-// because the alternative — silently sending the user's document to the
-// relay with no indication — is exactly the kind of thing this app's
-// opt-in Screen Watch allowlist exists to avoid.
-function ContextStrip({ context }: { context: TracerContext }): JSX.Element {
-  const hasDoc = context.documentText.trim().length > 0
-  const label = !hasDoc
-    ? 'No document in view — ask me anything anyway'
-    : `Reading ${context.processName ?? 'your document'} · ${context.claims.length} claim${
-        context.claims.length === 1 ? '' : 's'
-      } flagged`
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '6px 14px',
-        fontSize: 11,
-        fontWeight: 600,
-        color: hasDoc ? '#8a6d3b' : MUTED,
-        background: hasDoc ? 'rgba(244, 123, 32, 0.08)' : 'rgba(0,0,0,0.03)',
-        borderBottom: '1px solid #eeeef1',
-        flexShrink: 0
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: hasDoc ? ACCENT : '#c4c4cc',
-          flexShrink: 0
-        }}
-      />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-    </div>
-  )
-}
-
 export default function TracerApp(): JSX.Element {
   const [conversation, setConversation] = useState<TracerConversation | null>(null)
   const [messages, setMessages] = useState<TracerMessage[]>([])
@@ -330,7 +290,6 @@ export default function TracerApp(): JSX.Element {
         </button>
       </div>
 
-      <ContextStrip context={context} />
 
       {historyOpen ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
