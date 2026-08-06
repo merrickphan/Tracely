@@ -27,6 +27,44 @@ Claim detection and critique require a deployed Tracely Relay. Copy `.env.exampl
 
 `npm run dist:win` can fail the first time with `Cannot create symbolic link : A required privilege is not held by the client` while electron-builder extracts `winCodeSign` (irrelevant macOS `.dylib` symlinks, but the whole archive extraction is treated as failed). Fix: enable Settings → Privacy & Security → For developers → Developer Mode, then re-run.
 
+## Branches and releasing
+
+Three agents work in parallel from git worktrees sharing one `.git`
+(`Tracely-agent1/2/3` under `C:\Users\merri\`), each on its own `agentN-work`
+branch. A `Stop` hook auto-commits and pushes each agent's branch at the end of
+every turn, so work is never left only in a working tree.
+
+- **`main` is the integration branch and the only branch releases are cut
+  from.** It advances by deliberate merge, never by an agent working directly
+  on it — the auto-commit hook refuses to run there for exactly that reason.
+- **Sync from `main` before starting a task** (`git fetch && git merge
+  origin/main`). Skipping this is not theoretical: the Figma Settings work was
+  built twice, once on a `0.3.47` base and once on `0.3.54+`, and one copy is
+  now orphaned on `origin/agent2-work`.
+- **Merge into `main` when a feature is done, not when a release is due.** All
+  three agents touch `services/ai/`, `shared/types.ts` and
+  `shared/ipc-contract.ts`; long-lived branches across those files is how
+  conflicts get expensive.
+
+### Releasing
+
+`npm run release:win` runs `scripts/preflight.mjs` first and refuses to publish
+unless: you're on `main`, the tree is clean and in sync with origin, typecheck
+passes, **every relay endpoint in `callRelay`'s parameter type answers
+something other than 404**, and the version is strictly above the latest
+published GitHub release.
+
+That relay check is the important one. **The desktop app and the relay
+(`C:\Users\merri\Folio-relay`, deployed to Vercel) must ship together**, and
+nothing else enforces it: v0.3.73 was committed, typechecked and building
+cleanly with Tracer's `/api/tracer` returning 404 in production. Deploy the
+relay first, then release the client. The version check matters for the
+opposite failure — `electron-updater` only offers a *strictly higher* version,
+so publishing without bumping produces a release nobody is ever shown.
+
+`GH_TOKEN` lives in `.env.release` and must be in the environment for
+`--publish` to work; electron-builder does not read that file on its own.
+
 ## Architecture
 
 Three Electron processes, strictly separated:

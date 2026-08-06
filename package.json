@@ -12,7 +12,8 @@
     "start": "electron-vite preview",
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac",
-    "release:win": "electron-vite build && electron-builder --win --publish always"
+    "release:win": "npm run preflight && electron-vite build && electron-builder --win --publish always",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@fontsource/instrument-sans": "^5.3.0",
