@@ -115,7 +115,12 @@ const cmp = (a, b) => {
   return 0
 }
 
-try {
+// ship.mjs runs preflight once before bumping, to fail cheaply without
+// burning a version number, then release:win runs it again in full. On that
+// first pass the version legitimately isn't ahead yet, so skip only this check.
+if (process.env.PREFLIGHT_SKIP_VERSION === '1') {
+  console.log(`  --    version check deferred until after the bump`)
+} else try {
   const { owner, repo } = pkg.build?.publish ?? {}
   const yml = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')
   const o = owner ?? yml.match(/owner:\s*(\S+)/)?.[1]

@@ -23,7 +23,7 @@ const die = (msg) => {
 
 if (out('git status --porcelain')) die('Uncommitted work in agent1. Commit or stash it first.')
 
-console.log('\n1/4  Collecting agent work onto main')
+console.log('\n1/5  Collecting agent work onto main')
 run('git checkout main')
 // Local refs, not origin/*: the three worktrees share one .git, so these are
 // always exactly what each agent last committed, and origin/agent2-work still
@@ -37,14 +37,23 @@ for (const b of ['agent1-work', 'agent2-work', 'agent3-work']) {
   }
 }
 
-console.log('\n2/4  Bumping version')
+// Before bumping, not after: a blocked ship should cost nothing, and bumping
+// first burns a version number on every failed attempt.
+console.log('\n2/5  Checking everything is releasable')
+try {
+  run('npm run preflight', { env: { ...process.env, PREFLIGHT_SKIP_VERSION: '1' } })
+} catch {
+  die('Not releasable — nothing was changed. Fix the above and run npm run ship again.')
+}
+
+console.log('\n3/5  Bumping version')
 run('npm version patch --no-git-tag-version')
 const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 run(`git commit -am "Release v${version}"`)
 run('git push origin main')
 console.log(`     v${version}`)
 
-console.log('\n3/4  Loading GH_TOKEN')
+console.log('\n4/5  Loading GH_TOKEN')
 // electron-builder does not read .env.release itself; --publish silently
 // no-ops without a token, producing a "successful" release nobody receives.
 const envFile = join(ROOT, '.env.release')
@@ -52,7 +61,7 @@ if (!existsSync(envFile)) die('.env.release not found — GH_TOKEN is required t
 const token = readFileSync(envFile, 'utf8').match(/^GH_TOKEN=(.+)$/m)?.[1]?.trim()
 if (!token) die('No GH_TOKEN in .env.release.')
 
-console.log('\n4/4  Preflight + build + publish')
+console.log('\n5/5  Build + publish')
 run('npm run release:win', { env: { ...process.env, GH_TOKEN: token } })
 
 console.log(`\nPublished v${version}. Users are offered it within 6 hours.\n`)
