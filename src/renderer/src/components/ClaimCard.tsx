@@ -3,7 +3,7 @@ import type { Claim, EvidenceItem, ScoreBreakdown } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import Button from './Button'
 import EvidenceCard from './EvidenceCard'
-import ScoreBadge from './ScoreBadge'
+import EvidenceScoreCard from './EvidenceScoreCard'
 import Spinner from './Spinner'
 
 const CLAIM_TYPE_LABEL: Record<Claim['claimType'], string> = {
@@ -81,13 +81,6 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
         <Button variant="secondary" onClick={critique} disabled={loadingCritique}>
           {claim.critique ? 'Re-check Argument' : 'Critique Argument'}
         </Button>
-        {claim.strengthScore !== null ? (
-          <ScoreBadge
-            score={claim.strengthScore}
-            breakdown={claim.scoreBreakdown}
-            verdict={claim.critiqueVerdict}
-          />
-        ) : null}
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
@@ -95,10 +88,12 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
       {loadingCritique ? <Spinner label="Fact-checking claim & evaluating argument strength…" /> : null}
 
       {claim.critique ? (
-        <div className={`claim-critique${claim.critiqueVerdict === 'contradicted' ? ' claim-critique-contradicted' : ''}`}>
-          <strong>{claim.critiqueVerdict}</strong>
-          <p>{claim.critique}</p>
-        </div>
+        <EvidenceScoreCard
+          score={claim.strengthScore}
+          breakdown={claim.scoreBreakdown}
+          verdict={claim.critiqueVerdict}
+          critique={claim.critique}
+        />
       ) : null}
 
       {evidence && evidence.length === 0 ? (
