@@ -1182,12 +1182,15 @@ export default function OverlayApp(): JSX.Element {
             // whole circle).
             return (
               <button
-                onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, toggleWidgetExpanded)}
-                title={
-                  hasInfo
-                    ? `${widget.claimCount} claim${widget.claimCount === 1 ? '' : 's'} flagged, ${widget.totalInfoCount} piece${widget.totalInfoCount === 1 ? '' : 's'} of info found`
-                    : 'Tracely — click to open, drag to move'
+                // Clicking the widget opens Tracer directly rather than
+                // expanding the claims panel. The underlines and their hover
+                // popovers are already the surface for inspecting claims —
+                // the panel restated the same information one click deeper,
+                // so the widget is now purely the way to reach the tutor.
+                onMouseDown={(e) =>
+                  startWidgetDrag(e, { width: 56, height: 56 }, () => void window.tracely.tracer.open({}))
                 }
+                title="Ask Tracer — click to open, drag to move"
                 style={{
                   position: 'absolute',
                   left: circlePos.x,
