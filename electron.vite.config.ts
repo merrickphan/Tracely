@@ -10,13 +10,17 @@ dotenv.config({ path: resolve(__dirname, '.env') })
 // `npm run dist:win` with a given .env controls which relay the app talks to.
 const RELAY_URL = JSON.stringify(process.env.RELAY_URL ?? '')
 const RELAY_TOKEN = JSON.stringify(process.env.RELAY_TOKEN ?? '')
+const SUPABASE_URL = JSON.stringify(process.env.SUPABASE_URL ?? '')
+const SUPABASE_ANON_KEY = JSON.stringify(process.env.SUPABASE_ANON_KEY ?? '')
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     define: {
       __RELAY_URL__: RELAY_URL,
-      __RELAY_TOKEN__: RELAY_TOKEN
+      __RELAY_TOKEN__: RELAY_TOKEN,
+      __SUPABASE_URL__: SUPABASE_URL,
+      __SUPABASE_ANON_KEY__: SUPABASE_ANON_KEY
     },
     build: {
       rollupOptions: {

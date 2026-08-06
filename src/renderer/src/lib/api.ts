@@ -60,5 +60,19 @@ export const tracelyApi = {
   getScreenWatchStatus: () => call(window.tracely.screenWatch.getStatus()),
   setScreenWatchEnabled: (enabled: boolean) => call(window.tracely.screenWatch.setEnabled({ enabled })),
   onScreenWatchStatus: (cb: Parameters<typeof window.tracely.onScreenWatchStatus>[0]) =>
-    window.tracely.onScreenWatchStatus(cb)
+    window.tracely.onScreenWatchStatus(cb),
+
+  getAuthUser: () => call(window.tracely.auth.getUser()),
+  signUp: (email: string, password: string, firstName: string) =>
+    call(window.tracely.auth.signUp({ email, password, firstName })),
+  signIn: (email: string, password: string) => call(window.tracely.auth.signIn({ email, password })),
+  signOut: () => call(window.tracely.auth.signOut()),
+  signInWithGoogle: () => call(window.tracely.auth.signInWithGoogle()),
+  updateAuthName: (firstName: string) => call(window.tracely.auth.updateName({ firstName })),
+  updateAuthUsername: (username: string) => call(window.tracely.auth.updateUsername({ username })),
+  deleteAuthAccount: () => call(window.tracely.auth.deleteAccount()),
+  onAuthStateChanged: (cb: Parameters<typeof window.tracely.onAuthStateChanged>[0]) =>
+    window.tracely.onAuthStateChanged(cb),
+  onAuthOAuthError: (cb: Parameters<typeof window.tracely.onAuthOAuthError>[0]) =>
+    window.tracely.onAuthOAuthError(cb)
 }

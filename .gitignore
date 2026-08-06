@@ -9,3 +9,4 @@ release/
 *.db-shm
 .DS_Store
 HANDOFF.md
+*.tsbuildinfo

@@ -13,7 +13,13 @@ import { tracelyApi } from '../lib/api'
 // %/597 of height) so the whole canvas scales as one fixed-aspect-ratio
 // unit and nothing drifts out of proportion. See styles/index.css
 // `.home-canvas` and `.home-*` rules for the actual values.
-export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
+export default function HomeView({
+  onNavigate,
+  firstName
+}: {
+  onNavigate: (tab: Tab) => void
+  firstName: string | null
+}): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
 
   useEffect(() => {
@@ -34,7 +40,7 @@ export default function HomeView({ onNavigate }: { onNavigate: (tab: Tab) => voi
 
       <img src={figmaLogo} className="home-el home-logo" alt="" />
       <span className="home-el home-title">Tracely</span>
-      <span className="home-el home-greeting">Hey, Merrick!</span>
+      {firstName ? <span className="home-el home-greeting">Hey, {firstName}!</span> : null}
 
       <h2 className="home-el home-heading">
         {screenWatch?.enabled ? 'Tracely is running and ready.' : 'Tracely is off.'}

@@ -19,6 +19,10 @@ asarUnpack:
   - '**/*.node'
   - '**/*.wasm'
 npmRebuild: false
+protocols:
+  - name: Tracely OAuth callback
+    schemes:
+      - tracely
 win:
   target: nsis
   icon: build/icon.ico

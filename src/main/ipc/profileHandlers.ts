@@ -9,7 +9,6 @@ import { getSetting, setSetting } from '../services/storage/settingsRepo'
 const setSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  username: z.string().optional(),
   bio: z.string().optional(),
   avatarDataUrl: z.string().nullable().optional()
 })
@@ -34,7 +33,6 @@ function buildProfile(): ProfileGetResponse {
   return {
     firstName: getSetting('profileFirstName'),
     lastName: getSetting('profileLastName'),
-    username: getSetting('profileUsername'),
     bio: getSetting('profileBio'),
     // Cache-busted so the renderer's <img> actually reloads after a
     // re-upload replaces the same filename on disk.
@@ -50,7 +48,6 @@ export function registerProfileHandlers(): void {
 
     if (patch.firstName !== undefined) setSetting('profileFirstName', patch.firstName)
     if (patch.lastName !== undefined) setSetting('profileLastName', patch.lastName)
-    if (patch.username !== undefined) setSetting('profileUsername', patch.username)
     if (patch.bio !== undefined) setSetting('profileBio', patch.bio)
 
     if (patch.avatarDataUrl === null) {
