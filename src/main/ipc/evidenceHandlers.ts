@@ -15,8 +15,12 @@ const claimIdSchema = z.object({ claimId: z.string() })
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 // 24h — evidence for a given query rarely changes intraday
 
-function cacheKey(query: string): string {
-  return createHash('sha256').update(`search:aggregate::${query}`).digest('hex')
+function cacheKey(query: string, claimText: string): string {
+  // v2: score/ranking now also depends on claimText (see computeTextRelevance
+  // in aggregator.ts), not just the search query — included here so two
+  // claims that happen to produce the same searchQuery never share a cached
+  // score/evidence order that was actually computed for different claim text.
+  return createHash('sha256').update(`search:aggregate::v2::${query}::${claimText}`).digest('hex')
 }
 
 export function registerEvidenceHandlers(): void {
@@ -25,12 +29,12 @@ export function registerEvidenceHandlers(): void {
     const claim = getClaim(claimId)
     if (!claim) throw new Error('Claim not found')
 
-    const key = cacheKey(claim.searchQuery)
+    const key = cacheKey(claim.searchQuery, claim.text)
     let result = getCached<{ evidence: NormalizedSourceResult[]; score: number; breakdown: EvidenceFindResponse['scoreBreakdown'] }>(
       key
     )
     if (!result) {
-      result = await findEvidence(claim.searchQuery)
+      result = await findEvidence(claim.searchQuery, claim.text)
       setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
     }
 

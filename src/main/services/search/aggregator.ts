@@ -2,19 +2,48 @@ import * as crossref from './crossref'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import * as semanticScholar from './semanticScholar'
-import { computeStrengthScore } from './scoring'
+import { computeStrengthScore, computeTextRelevance } from './scoring'
 import type { NormalizedSourceResult } from './types'
 
 const PER_PROVIDER_LIMIT = 6
 const MAX_MERGED_RESULTS = 8
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+// Same 0.75/0.25 blend as scoring.ts's relevance factor — used here too so
+// the results that make the cut (and their order) reflect the same
+// "actually about the claim" signal the final strength score is judged by,
+// not just whatever order the source providers happened to return.
+function blendedRelevance(item: NormalizedSourceResult, textRelevance: number): number {
+  const rankRelevance = clamp01(1 - item.relevanceRank / PER_PROVIDER_LIMIT)
+  return 0.75 * textRelevance + 0.25 * rankRelevance
+}
+
 function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-function dedupeKey(item: NormalizedSourceResult): string {
-  if (item.doi) return `doi:${item.doi.toLowerCase()}`
-  return `title:${normalizeTitle(item.title)}:${item.year ?? ''}`
+function normalizedDoi(item: NormalizedSourceResult): string | null {
+  return item.doi ? item.doi.toLowerCase().trim() : null
+}
+
+function titleYearKey(item: NormalizedSourceResult): string {
+  return `${normalizeTitle(item.title)}:${item.year ?? ''}`
+}
+
+// Same paper, indexed by two different providers, doesn't always come back
+// with a DOI from BOTH of them — one might have it, the other might not (or
+// one is the preprint record, one the published version). Matching on DOI
+// *or* normalized title+year — instead of committing to whichever key the
+// first-seen record happened to have — is what catches that case; DOI-only
+// matching let those pairs both survive into the same claim's evidence list
+// as if they were two different sources.
+function findDuplicateIndex(clusters: NormalizedSourceResult[], item: NormalizedSourceResult): number {
+  const doi = normalizedDoi(item)
+  const titleYear = titleYearKey(item)
+  return clusters.findIndex((c) => (doi !== null && normalizedDoi(c) === doi) || titleYearKey(c) === titleYear)
 }
 
 async function safeSearch(
@@ -31,7 +60,8 @@ async function safeSearch(
 }
 
 export async function findEvidence(
-  query: string
+  query: string,
+  claimText: string
 ): Promise<{ evidence: NormalizedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
   const results = await Promise.all([
     safeSearch('openalex', openalex.search, query),
@@ -40,23 +70,46 @@ export async function findEvidence(
     safeSearch('pubmed', pubmed.search, query)
   ])
 
-  const merged = new Map<string, NormalizedSourceResult>()
+  const clusters: NormalizedSourceResult[] = []
   for (const providerResults of results) {
     for (const item of providerResults) {
-      const key = dedupeKey(item)
-      const existing = merged.get(key)
-      if (!existing || item.relevanceRank < existing.relevanceRank) {
-        merged.set(key, item)
+      const idx = findDuplicateIndex(clusters, item)
+      if (idx === -1) {
+        clusters.push(item)
+        continue
+      }
+      // Keep whichever record is more useful: prefer one that actually has
+      // a DOI (more complete/citable metadata) over one that doesn't, and
+      // between two comparable records prefer the one its own provider
+      // ranked higher.
+      const existing = clusters[idx]
+      const itemHasDoi = normalizedDoi(item) !== null
+      const existingHasDoi = normalizedDoi(existing) !== null
+      if ((itemHasDoi && !existingHasDoi) || (itemHasDoi === existingHasDoi && item.relevanceRank < existing.relevanceRank)) {
+        clusters[idx] = item
       }
     }
   }
 
-  const evidence = Array.from(merged.values())
-    .sort((a, b) => a.relevanceRank - b.relevanceRank)
-    .slice(0, MAX_MERGED_RESULTS)
+  // Ranked (and capped) by relevance to the claim itself, not just whichever
+  // provider ranked its own result highest — see blendedRelevance/
+  // computeTextRelevance for why: provider rank alone let confidently wrong
+  // top hits pass straight through.
+  const scored = clusters.map((item) => ({
+    item,
+    textRelevance: computeTextRelevance(claimText, `${item.title} ${item.abstract ?? ''}`)
+  }))
+  scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
+  const topScored = scored.slice(0, MAX_MERGED_RESULTS)
 
+  const evidence = topScored.map((s) => s.item)
   const { score, breakdown } = computeStrengthScore(
-    evidence.map((e) => ({ venueType: e.venueType, year: e.year, relevanceRank: e.relevanceRank }))
+    topScored.map((s) => ({
+      venueType: s.item.venueType,
+      year: s.item.year,
+      relevanceRank: s.item.relevanceRank,
+      textRelevance: s.textRelevance
+    }))
   )
 
   return { evidence, score, breakdown }

@@ -57,8 +57,15 @@ export interface NewSource {
   raw?: unknown
 }
 
+// Case/whitespace-insensitive on purpose — different providers don't always
+// agree on DOI casing for the same paper (e.g. one preserves a registrant's
+// mixed-case suffix, another normalizes it), and an exact-string match here
+// let those show up as two separate Source rows for what's really one
+// article once evidence accumulates across multiple analyses over time.
 export function findByDoi(doi: string): Source | null {
-  const row = queryOne<SourceRow>('SELECT * FROM sources WHERE doi = $doi', { $doi: doi })
+  const row = queryOne<SourceRow>('SELECT * FROM sources WHERE lower(trim(doi)) = $doi', {
+    $doi: doi.toLowerCase().trim()
+  })
   return row ? toDomain(row) : null
 }
 
