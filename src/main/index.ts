@@ -11,6 +11,7 @@ import { createTray } from './tray'
 import { initAutoUpdater } from './updater'
 import { createFloatingWindow } from './windows/floatingWindow'
 import { createMainWindow, getMainWindow, setQuitting, showMainWindow } from './windows/mainWindow'
+import { createTracerWindow } from './windows/tracerWindow'
 
 // Google's OAuth consent screen opens in the user's real default browser
 // (Electron can't embed it), then redirects to this custom scheme to hand
@@ -70,6 +71,9 @@ if (!gotLock) {
 
     createMainWindow()
     createFloatingWindow()
+    // Created hidden at boot like the floating window, so the first "Ask
+    // Tracer" click opens instantly instead of paying for a renderer boot.
+    createTracerWindow()
     createTray()
     registerIpcHandlers()
     registerGlobalHotkey(getSetting('hotkeyAccelerator'))

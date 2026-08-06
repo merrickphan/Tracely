@@ -14,7 +14,9 @@ import type {
   LibraryItem,
   ScoreBreakdown,
   SourceProvider,
-  Theme
+  Theme,
+  TracerConversation,
+  TracerMessage
 } from './types'
 
 // Note: CitationStyle is already 'APA' | 'MLA' | 'Chicago' — reused as-is for
@@ -429,6 +431,83 @@ export interface ScreenWatchSetActivePopoverRectRequest {
   rect: ScreenRect | null
 }
 export interface ScreenWatchSetActivePopoverRectResponse {
+  ok: true
+}
+
+// --- Tracer -----------------------------------------------------------
+// The teaching assistant opened from the Screen Watch widget. It runs in
+// its own focusable BrowserWindow (windows/tracerWindow.ts) rather than
+// inside the overlay, because the overlay is deliberately unfocusable and
+// so cannot host a text input — see the note in overlayWindow.ts.
+
+// What Tracer can currently "see": the text of the document being watched
+// and the claims flagged in it. Pushed to the Tracer window on open and
+// whenever it changes, so the UI can show the user exactly what context
+// their question will be answered against instead of leaving it implicit.
+export interface TracerContext {
+  // Null when Screen Watch is off or no allowed app is focused — Tracer
+  // still answers, just without document context.
+  processName: string | null
+  documentText: string
+  claims: { id: string; text: string; claimType: ClaimType; evidenceScore: number | null }[]
+}
+
+export interface TracerOpenRequest {
+  // Set when opened from a specific claim ("Ask Tracer about this") so the
+  // conversation starts anchored to it rather than the whole document.
+  claimId?: string
+}
+export interface TracerOpenResponse {
+  ok: true
+}
+
+export type TracerCloseRequest = Record<string, never>
+export interface TracerCloseResponse {
+  ok: true
+}
+
+export interface TracerSendRequest {
+  conversationId: string
+  message: string
+}
+export interface TracerSendResponse {
+  // Both the stored user message and Tracer's stored reply — the renderer
+  // appends these rather than optimistically inventing ids that wouldn't
+  // match what's in the database.
+  userMessage: TracerMessage
+  reply: TracerMessage
+}
+
+export interface TracerGetConversationRequest {
+  // Omit to get (or lazily create) the most recent conversation.
+  conversationId?: string
+}
+export interface TracerGetConversationResponse {
+  conversation: TracerConversation
+  messages: TracerMessage[]
+  context: TracerContext
+  // False when this build has no relay configured — the renderer disables
+  // the composer and explains why instead of failing on send.
+  relayConfigured: boolean
+  // Set when the window was opened via "Ask Tracer about this claim" — the
+  // renderer prefills a starter question about it.
+  focusedClaimId: string | null
+}
+
+export type TracerListConversationsRequest = Record<string, never>
+export interface TracerListConversationsResponse {
+  conversations: TracerConversation[]
+}
+
+export type TracerNewConversationRequest = Record<string, never>
+export interface TracerNewConversationResponse {
+  conversation: TracerConversation
+}
+
+export interface TracerDeleteConversationRequest {
+  id: string
+}
+export interface TracerDeleteConversationResponse {
   ok: true
 }
 

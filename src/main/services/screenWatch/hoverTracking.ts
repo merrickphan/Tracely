@@ -2,6 +2,7 @@ import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
 import { getOverlayWindow } from '../../windows/overlayWindow'
+import { isTracerWindowFocused } from '../../windows/tracerWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
 import type { ScreenRect } from './uiaSnapshot'
 
@@ -96,6 +97,17 @@ function within(point: { x: number; y: number }, rect: ScreenRect, pad: number):
 
 function poll(): void {
   if (dragActive) return
+
+  // While the user is typing to Tracer, the frozen underlines behind that
+  // window are not something they're pointing at — hit-testing them would
+  // flip the overlay to click-capturing over a region the Tracer window is
+  // sitting on, and pop tooltips over a conversation. Screen Watch itself
+  // is frozen in the same situation (see the "self" skip in
+  // screenWatchService.tick), so this keeps the two consistent.
+  if (isTracerWindowFocused()) {
+    clearHover()
+    return
+  }
 
   const targets = getHoverTargets()
   if (targets.length === 0) {

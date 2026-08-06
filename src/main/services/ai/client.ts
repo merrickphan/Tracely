@@ -4,6 +4,16 @@
 declare const __RELAY_URL__: string
 declare const __RELAY_TOKEN__: string
 
+/**
+ * Whether this build has a relay baked in at all. Lets a caller disable an
+ * AI affordance up front (Tracer's composer does this) instead of letting
+ * the user type a question and only then hit the "no relay configured"
+ * error thrown by callRelay below.
+ */
+export function isRelayConfigured(): boolean {
+  return Boolean(__RELAY_URL__)
+}
+
 export class RelayError extends Error {
   constructor(message: string) {
     super(message)
@@ -23,7 +33,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function requestOnce<T>(endpoint: 'detect-claims' | 'critique', body: unknown): Promise<T> {
+async function requestOnce<T>(endpoint: 'detect-claims' | 'critique' | 'tracer', body: unknown): Promise<T> {
   const response = await fetch(`${__RELAY_URL__}/api/${endpoint}`, {
     method: 'POST',
     headers: {
@@ -45,7 +55,7 @@ async function requestOnce<T>(endpoint: 'detect-claims' | 'critique', body: unkn
   return (await response.json()) as T
 }
 
-export async function callRelay<T>(endpoint: 'detect-claims' | 'critique', body: unknown): Promise<T> {
+export async function callRelay<T>(endpoint: 'detect-claims' | 'critique' | 'tracer', body: unknown): Promise<T> {
   if (!__RELAY_URL__) {
     throw new RelayError('This build has no relay configured. Set RELAY_URL/RELAY_TOKEN and rebuild.')
   }

@@ -6,7 +6,8 @@ import type {
   ScreenWatchClaimEvidence,
   ScreenWatchClaimSummary,
   ScreenWatchSourceCandidate,
-  ScreenWatchStatus
+  ScreenWatchStatus,
+  TracerContext
 } from '@shared/ipc-contract'
 import type { CitationStyle, Claim, CritiqueVerdict, EvidenceItem, Source } from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
@@ -21,6 +22,7 @@ import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
+import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
 import {
@@ -284,6 +286,18 @@ async function tick(): Promise<void> {
     }
 
     if (snapshot.skip) {
+      // Talking to Tracer means Tracely itself is the foreground app, which
+      // UIA reports as `skip: "self"`. Treating that like any other skip
+      // would wipe the very claims the user opened Tracer to ask about and
+      // hide the underlines out from under them mid-question. So while the
+      // Tracer window is up, a "self" skip freezes Screen Watch instead:
+      // keep the claims, keep the overlay drawn where it was, and pick the
+      // document back up on the next tick after Tracer is closed. Every
+      // other skip reason (and "self" with Tracer closed) still resets.
+      if (snapshot.reason === 'self' && isTracerWindowOpen()) {
+        return
+      }
+
       // Logged only on change, not every tick — "not-editable-control-type"
       // in particular would otherwise spam the log constantly while just
       // browsing a normal webpage.
@@ -917,6 +931,7 @@ function updateOverlayAndWidget(
   lastSentPayloadKey = payloadKey
 
   win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
+  emitTracerContext()
 
   const claimTargets = underlines
     .map((u, idx) => {
@@ -944,6 +959,39 @@ function updateOverlayAndWidget(
   }
 
   hoverTargets = [...claimTargets, widgetTarget]
+}
+
+/**
+ * What Tracer is allowed to see: the text of the watched document and the
+ * claims currently flagged in it. Read live from the same in-memory state
+ * the overlay draws from — deliberately NOT from the database, since Screen
+ * Watch persists none of this (see the note on synthesizeClaim).
+ *
+ * Returns empty context rather than throwing when Screen Watch is off or no
+ * allowed app is focused: Tracer is still useful as a plain tutor with no
+ * document in hand, it just can't refer to anything specific.
+ */
+export function getTracerContext(): TracerContext {
+  const claims = lastUpdateInputs?.claims ?? currentClaims
+  return {
+    processName: lastStatus.active ? lastStatus.processName : null,
+    documentText: lastUpdateInputs?.fullText ?? '',
+    claims: claims.map((c) => ({
+      id: c.id,
+      text: c.text,
+      claimType: c.claimType,
+      evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
+    }))
+  }
+}
+
+// Pushed to the Tracer window whenever the watched document or its claims
+// change, so an open conversation's "what I can see" header stays live
+// instead of being a snapshot from whenever the window happened to open.
+function emitTracerContext(): void {
+  const win = getTracerWindow()
+  if (!win || win.isDestroyed() || !win.isVisible()) return
+  win.webContents.send(IPC_EVENTS.TRACER_CONTEXT_CHANGED, getTracerContext())
 }
 
 export function isScreenWatchEnabled(): boolean {

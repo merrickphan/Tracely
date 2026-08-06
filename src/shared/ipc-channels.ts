@@ -47,6 +47,14 @@ export const IPC = {
   SCREENWATCH_INSERT_CITATION: 'screenWatch:insertCitation',
   SCREENWATCH_UNDO_CITATION: 'screenWatch:undoCitation',
 
+  TRACER_OPEN: 'tracer:open',
+  TRACER_CLOSE: 'tracer:close',
+  TRACER_SEND: 'tracer:send',
+  TRACER_GET_CONVERSATION: 'tracer:getConversation',
+  TRACER_LIST_CONVERSATIONS: 'tracer:listConversations',
+  TRACER_NEW_CONVERSATION: 'tracer:newConversation',
+  TRACER_DELETE_CONVERSATION: 'tracer:deleteConversation',
+
   AUTH_GET_USER: 'auth:getUser',
   AUTH_SIGN_UP: 'auth:signUp',
   AUTH_SIGN_IN: 'auth:signIn',
@@ -62,6 +70,8 @@ export const IPC_EVENTS = {
   SCREENWATCH_STATUS_CHANGED: 'screenWatch:statusChanged',
   SCREENWATCH_OVERLAY_UPDATE: 'screenWatch:overlayUpdate',
   SCREENWATCH_HOVER_CHANGED: 'screenWatch:hoverChanged',
+  TRACER_CONTEXT_CHANGED: 'tracer:contextChanged',
+  TRACER_OPENED: 'tracer:opened',
   AUTH_STATE_CHANGED: 'auth:stateChanged',
   AUTH_OAUTH_ERROR: 'auth:oauthError'
 } as const

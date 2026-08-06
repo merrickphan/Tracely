@@ -75,12 +75,18 @@ export function queryOne<T = Record<string, SqlValue>>(sql: string, params: SqlP
 export function resetDatabase(): void {
   if (!dbPath) return
   getDb().exec(
-    'DELETE FROM claim_evidence; DELETE FROM citations; DELETE FROM library_items; DELETE FROM claims; DELETE FROM analyses; DELETE FROM sources; DELETE FROM request_cache;'
+    'DELETE FROM claim_evidence; DELETE FROM citations; DELETE FROM library_items; DELETE FROM claims; DELETE FROM analyses; DELETE FROM sources; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
   )
   persist()
 }
 
+// Tracer conversations are cleared here too: they quote the user's own
+// writing back at them, so leaving them behind would defeat the point of
+// "Clear Analysis History" as a privacy control, even though they live in
+// their own tables rather than analyses/claims.
 export function clearAnalysisHistory(): void {
-  getDb().exec('DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache;')
+  getDb().exec(
+    'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
+  )
   persist()
 }

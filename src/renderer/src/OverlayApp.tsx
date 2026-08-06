@@ -517,11 +517,13 @@ function ProblemCard({
   claim,
   onSuggestFix,
   onStartCitationFlow,
+  onAskTracer,
   onDismiss
 }: {
   claim: ScreenWatchClaimSummary
   onSuggestFix: () => void
   onStartCitationFlow: () => void
+  onAskTracer: () => void
   onDismiss: () => void
 }): JSX.Element {
   const kind = problemKindFor(claim)
@@ -565,6 +567,15 @@ function ProblemCard({
       <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
           {primaryLabel}
+        </button>
+        {/* The teaching path out of this card: every other action here
+            fixes the claim for you (insert a citation, open the panel),
+            this one opens Tracer to explain why it was flagged so the
+            next draft doesn't need the fix. Opening Tracer takes OS focus
+            away from the watched app, which is why screenWatchService
+            holds its claim state while that window is up. */}
+        <button className="tracely-btn-secondary" onClick={onAskTracer} style={SECONDARY_BTN_STYLE}>
+          Ask Tracer
         </button>
         <button className="tracely-btn-text" onClick={onDismiss} style={TEXT_BTN_STYLE}>
           Dismiss
@@ -1310,8 +1321,18 @@ export default function OverlayApp(): JSX.Element {
 
                 <div style={{ boxSizing: 'border-box', flex: 1, minHeight: 0, padding: GRID_PADDING, overflow: 'hidden' }}>
                   {visibleClaims.length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center', marginTop: 24 }}>
-                      No claims flagged yet.
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
+                      <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center' }}>No claims flagged yet.</div>
+                      {/* Tracer is useful with nothing flagged — it's a
+                          tutor, not a claim inspector, so it stays
+                          reachable even on an empty panel. */}
+                      <button
+                        className="tracely-btn-secondary"
+                        onClick={() => void window.tracely.tracer.open({})}
+                        style={SECONDARY_BTN_STYLE}
+                      >
+                        Ask Tracer
+                      </button>
                     </div>
                   ) : widget.viewMode === 'single' && topClaim ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
@@ -1324,11 +1345,20 @@ export default function OverlayApp(): JSX.Element {
                       />
                       {actionError ? <div style={{ fontSize: 11.5, color: '#d6301a' }}>{actionError}</div> : null}
                       <div style={{ flex: 1 }} />
-                      {visibleClaims.length > 1 ? (
-                        <button className="tracely-btn-secondary" onClick={showAll} style={SECONDARY_BTN_STYLE}>
-                          Show all ({visibleClaims.length})
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="tracely-btn-secondary"
+                          onClick={() => void window.tracely.tracer.open({ claimId: topClaim.id })}
+                          style={{ ...SECONDARY_BTN_STYLE, flex: 1 }}
+                        >
+                          Ask Tracer
                         </button>
-                      ) : null}
+                        {visibleClaims.length > 1 ? (
+                          <button className="tracely-btn-secondary" onClick={showAll} style={{ ...SECONDARY_BTN_STYLE, flex: 1 }}>
+                            Show all ({visibleClaims.length})
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     // A single vertical column, not a grid — sized per-claim-
@@ -1394,6 +1424,7 @@ export default function OverlayApp(): JSX.Element {
                       void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
                     }}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
+                    onAskTracer={() => void window.tracely.tracer.open({ claimId: claimHoveredSummary.id })}
                     onDismiss={() => dismiss(claimHoveredSummary.id)}
                   />
                 )}

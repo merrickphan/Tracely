@@ -109,6 +109,28 @@ export interface LibraryItem {
   source: Source
 }
 
+// Tracer — the teaching assistant you open from the Screen Watch widget.
+// Unlike the rest of Screen Watch (which deliberately persists nothing, see
+// screenWatchService.ts), these conversations DO get written to SQLite: the
+// point of a tutor is that it remembers what it already walked you through.
+export type TracerRole = 'user' | 'tracer'
+
+export interface TracerMessage {
+  id: string
+  conversationId: string
+  role: TracerRole
+  content: string
+  createdAt: string
+}
+
+export interface TracerConversation {
+  id: string
+  // First user message, truncated — used as the label in the history list.
+  title: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type Theme = 'light' | 'dark' | 'system'
 
 export type AccentColor = 'orange' | 'blue' | 'green' | 'purple'

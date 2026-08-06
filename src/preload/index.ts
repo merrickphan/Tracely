@@ -75,6 +75,18 @@ import type {
   SettingsSetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
+  TracerCloseResponse,
+  TracerContext,
+  TracerDeleteConversationRequest,
+  TracerDeleteConversationResponse,
+  TracerGetConversationRequest,
+  TracerGetConversationResponse,
+  TracerListConversationsResponse,
+  TracerNewConversationResponse,
+  TracerOpenRequest,
+  TracerOpenResponse,
+  TracerSendRequest,
+  TracerSendResponse,
   WindowTargetRequest,
   WindowTargetResponse
 } from '@shared/ipc-contract'
@@ -186,6 +198,29 @@ const api = {
       ipcRenderer.invoke(IPC.SCREENWATCH_INSERT_CITATION, req),
     undoCitation: (req: ScreenWatchUndoCitationRequest): Promise<ScreenWatchUndoCitationResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_UNDO_CITATION, req)
+  },
+  tracer: {
+    open: (req: TracerOpenRequest): Promise<TracerOpenResponse> => ipcRenderer.invoke(IPC.TRACER_OPEN, req),
+    close: (): Promise<TracerCloseResponse> => ipcRenderer.invoke(IPC.TRACER_CLOSE, {}),
+    send: (req: TracerSendRequest): Promise<TracerSendResponse> => ipcRenderer.invoke(IPC.TRACER_SEND, req),
+    getConversation: (req: TracerGetConversationRequest): Promise<TracerGetConversationResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_GET_CONVERSATION, req),
+    listConversations: (): Promise<TracerListConversationsResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_LIST_CONVERSATIONS, {}),
+    newConversation: (): Promise<TracerNewConversationResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_NEW_CONVERSATION, {}),
+    deleteConversation: (req: TracerDeleteConversationRequest): Promise<TracerDeleteConversationResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_DELETE_CONVERSATION, req)
+  },
+  onTracerContextChanged: (callback: (context: TracerContext) => void): (() => void) => {
+    const listener = (_: unknown, payload: TracerContext): void => callback(payload)
+    ipcRenderer.on(IPC_EVENTS.TRACER_CONTEXT_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.TRACER_CONTEXT_CHANGED, listener)
+  },
+  onTracerOpened: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(IPC_EVENTS.TRACER_OPENED, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENTS.TRACER_OPENED, listener)
   },
   onClipboardCaptured: (callback: (event: FloatingClipboardCapturedEvent) => void): (() => void) => {
     const listener = (_: unknown, payload: FloatingClipboardCapturedEvent): void => callback(payload)

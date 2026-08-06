@@ -59,7 +59,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           floating: resolve(__dirname, 'src/renderer/floating.html'),
-          overlay: resolve(__dirname, 'src/renderer/overlay.html')
+          overlay: resolve(__dirname, 'src/renderer/overlay.html'),
+          tracer: resolve(__dirname, 'src/renderer/tracer.html')
         }
       }
     }
