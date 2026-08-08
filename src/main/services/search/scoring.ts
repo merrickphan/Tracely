@@ -12,6 +12,16 @@ const RECENCY_WINDOW_YEARS = 20
 const SOURCE_COUNT_CAP = 6
 const PER_PROVIDER_LIMIT = 6
 
+// A source has to cover at least this much of the claim (see
+// computeTextRelevance) before it counts toward the sourceCount factor.
+// Without a floor that factor measured how many results the four providers
+// happened to return, not how many were any good — and since the aggregator
+// merges 4 providers x 6 results down to 8, it was at or above the
+// 6-source cap essentially always, pinning 25% of the score at a constant
+// 1.0 for every claim in the app. A claim nothing relevant was found for
+// now actually scores like one.
+export const MIN_COUNTABLE_RELEVANCE = 0.2
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
@@ -37,13 +47,26 @@ function extractKeywords(text: string): Set<string> {
   )
 }
 
-// Jaccard overlap between a claim's own words and a candidate source's
-// title+abstract — a real, if crude, signal that the source is actually
-// ABOUT what the claim says, independent of whatever rank a search provider
-// gave it. Deliberately just word overlap rather than an embedding/semantic
-// call: it's free (no relay round-trip, no added latency) and good enough to
-// catch a search provider's confidently-top-ranked-but-unrelated result,
-// which is the actual failure mode this exists to catch.
+// What fraction of the claim's own content words show up in a candidate
+// source's title+abstract — a crude but real signal that the source is
+// actually ABOUT what the claim says, independent of whatever rank a search
+// provider gave it. Deliberately word overlap rather than an
+// embedding/semantic call: it's free (no relay round-trip, no added
+// latency) and catches a provider's confidently-top-ranked-but-unrelated
+// result, which is the failure mode this exists for.
+//
+// Denominator is the CLAIM's word count, not the union of both texts. It
+// was Jaccard (intersection/union) and that was quietly broken: a claim has
+// ~15 content words against an abstract's ~150, so the union is dominated
+// by the abstract and the ratio can't structurally exceed ~0.1 no matter
+// how well the source matches (6 of 15 claim words matched scores 6/159 =
+// 0.04, not 6/15 = 0.40). Two consequences, both bad: every source scored
+// as barely-relevant, so the 30%-weighted relevance factor collapsed to
+// near-zero for everything and stopped discriminating at all; and sources
+// with longer, more informative abstracts were penalized for it, since more
+// abstract words meant a bigger union. Claim coverage has neither problem
+// and answers the question actually being asked — how much of this claim
+// does this source speak to?
 export function computeTextRelevance(claimText: string, sourceText: string): number {
   const claimWords = extractKeywords(claimText)
   const sourceWords = extractKeywords(sourceText)
@@ -53,8 +76,7 @@ export function computeTextRelevance(claimText: string, sourceText: string): num
   for (const word of claimWords) {
     if (sourceWords.has(word)) intersection++
   }
-  const union = claimWords.size + sourceWords.size - intersection
-  return union === 0 ? 0 : intersection / union
+  return intersection / claimWords.size
 }
 
 export interface ScorableItem {
@@ -75,7 +97,8 @@ export function computeStrengthScore(items: ScorableItem[]): { score: number; br
 
   const currentYear = new Date().getFullYear()
 
-  const sourceCount = Math.min(items.length, SOURCE_COUNT_CAP) / SOURCE_COUNT_CAP
+  const relevantCount = items.filter((item) => item.textRelevance >= MIN_COUNTABLE_RELEVANCE).length
+  const sourceCount = Math.min(relevantCount, SOURCE_COUNT_CAP) / SOURCE_COUNT_CAP
 
   const quality =
     items.reduce((sum, item) => sum + VENUE_TIER_WEIGHT[item.venueType ?? 'other'], 0) / items.length

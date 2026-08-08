@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc'
 import { handleOAuthRedirect } from './services/auth/client'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { initDb, persist } from './services/storage/db'
+import { setAppPaths } from './services/storage/paths'
 import { getSetting } from './services/storage/settingsRepo'
 import { createTray } from './tray'
 import { initAutoUpdater } from './updater'
@@ -65,6 +66,16 @@ if (!gotLock) {
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
+    })
+
+    // Must precede initDb and anything else that touches storage — every
+    // write location now resolves through storage/paths.ts rather than
+    // calling Electron directly, so that the same modules can run headless
+    // under scripts/evaluate.mjs.
+    setAppPaths({
+      dataDir: app.getPath('userData'),
+      appRoot: app.getAppPath(),
+      resourcesDir: app.isPackaged ? process.resourcesPath : null
     })
 
     await initDb()

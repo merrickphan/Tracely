@@ -1,17 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { app } from 'electron'
 import initSqlJs, { type Database, type SqlValue } from 'sql.js'
+import { getAppPaths } from './paths'
 import { SCHEMA_SQL } from './schema'
 
 let db: Database | null = null
 let dbPath: string | null = null
 
 function getWasmPath(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'sql-wasm.wasm')
+  const { appRoot, resourcesDir } = getAppPaths()
+  if (resourcesDir) {
+    return join(resourcesDir, 'sql-wasm.wasm')
   }
-  return join(app.getAppPath(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
+  return join(appRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
 }
 
 export async function initDb(): Promise<void> {
@@ -24,7 +25,7 @@ export async function initDb(): Promise<void> {
   ) as ArrayBuffer
   const SQL = await initSqlJs({ wasmBinary })
 
-  dbPath = join(app.getPath('userData'), 'tracely.db')
+  dbPath = join(getAppPaths().dataDir, 'tracely.db')
   mkdirSync(dirname(dbPath), { recursive: true })
 
   if (existsSync(dbPath)) {

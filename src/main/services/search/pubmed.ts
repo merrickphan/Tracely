@@ -21,15 +21,97 @@ interface EsummaryDoc {
   source?: string
   pubdate?: string
   articleids?: ArticleId[]
+  pubtype?: string[]
 }
 
 interface EsummaryResponse {
   result?: { uids?: string[] } & Record<string, EsummaryDoc | string[] | undefined>
 }
 
+// Commentary and correction records, not research. They match keyword
+// queries as readily as the papers they discuss (an editorial about a sleep
+// study is full of sleep-study words) and then occupy one of the eight
+// evidence slots with something that reports no findings of its own.
+// "Retracted Publication" marks the withdrawn paper itself.
+const EXCLUDED_PUB_TYPES = new Set([
+  'Editorial',
+  'Comment',
+  'Erratum',
+  'Published Erratum',
+  'Retraction of Publication',
+  'Retracted Publication',
+  'Expression of Concern'
+])
+
 function parseYear(pubdate: string | undefined): number | null {
   const match = pubdate?.match(/\d{4}/)
   return match ? Number(match[0]) : null
+}
+
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&amp;/g, '&')
+}
+
+// esummary carries no abstract, so until now every PubMed result reached
+// scoring with `abstract: null` and was matched against the claim on its
+// title alone. That mattered little when relevance was Jaccard, but claim
+// coverage rewards sources with more matchable text, so title-only records
+// would be systematically pushed below their OpenAlex/S2 equivalents for a
+// reason that has nothing to do with the paper. It also starves the
+// critique (and the planned stance pass) of the one thing they reason over.
+//
+// efetch returns XML and pulling in an XML parser for two fields isn't
+// worth it: records are split on their closing tag so a PMID can never be
+// matched against a neighbouring article's abstract. Structured abstracts
+// carry a Label per section ("RESULTS", "CONCLUSIONS") — kept, because the
+// labelled findings are exactly the part a fact-check needs to find.
+function parseAbstracts(xml: string): Map<string, string> {
+  const abstracts = new Map<string, string>()
+
+  for (const record of xml.split('</PubmedArticle>')) {
+    const pmid = record.match(/<PMID[^>]*>(\d+)<\/PMID>/)?.[1]
+    if (!pmid) continue
+
+    const sections: string[] = []
+    const matcher = /<AbstractText([^>]*)>([\s\S]*?)<\/AbstractText>/g
+    let match: RegExpExecArray | null
+    while ((match = matcher.exec(record)) !== null) {
+      const label = match[1].match(/Label="([^"]*)"/)?.[1]
+      const body = decodeEntities(match[2].replace(/<[^>]+>/g, '')).trim()
+      if (body) sections.push(label ? `${label}: ${body}` : body)
+    }
+
+    if (sections.length > 0) abstracts.set(pmid, sections.join(' '))
+  }
+
+  return abstracts
+}
+
+async function fetchAbstracts(ids: string[]): Promise<Map<string, string>> {
+  // Abstracts are an enrichment — a failure here should cost the text, not
+  // the results, so this never throws into the caller.
+  try {
+    await throttle('pubmed', MIN_INTERVAL_MS)
+    const params = new URLSearchParams({
+      db: 'pubmed',
+      id: ids.join(','),
+      retmode: 'xml',
+      rettype: 'abstract'
+    })
+    const res = await fetch(`${EUTILS_BASE}/efetch.fcgi?${params.toString()}`)
+    if (!res.ok) return new Map()
+    return parseAbstracts(await res.text())
+  } catch (error) {
+    console.error('[search:pubmed] abstract fetch failed', error)
+    return new Map()
+  }
 }
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
@@ -41,7 +123,10 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
     retmode: 'json'
   })
   const searchRes = await fetch(`${EUTILS_BASE}/esearch.fcgi?${searchParams.toString()}`)
-  if (!searchRes.ok) return []
+  if (!searchRes.ok) {
+    console.warn(`[search:pubmed] ${searchRes.status} ${searchRes.statusText} — no results for "${query}"`)
+    return []
+  }
   const searchData = (await searchRes.json()) as EsearchResponse
   const ids = searchData.esearchresult?.idlist ?? []
   if (ids.length === 0) return []
@@ -52,7 +137,15 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
   if (!summaryRes.ok) return []
   const summaryData = (await summaryRes.json()) as EsummaryResponse
 
-  return ids.map((id, index) => {
+  const kept = ids.filter((id) => {
+    const doc = summaryData.result?.[id] as EsummaryDoc | undefined
+    return !(doc?.pubtype ?? []).some((type) => EXCLUDED_PUB_TYPES.has(type))
+  })
+  if (kept.length === 0) return []
+
+  const abstracts = await fetchAbstracts(kept)
+
+  return kept.map((id, index) => {
     const doc = summaryData.result?.[id] as EsummaryDoc | undefined
     const doi = doc?.articleids?.find((a) => a.idtype === 'doi')?.value ?? null
     const authors: Author[] = (doc?.authors ?? [])
@@ -69,7 +162,7 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
       venueType: 'journal',
       url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
       pdfUrl: null,
-      abstract: null,
+      abstract: abstracts.get(id) ?? null,
       provider: 'pubmed',
       providerId: id,
       citationCount: null,

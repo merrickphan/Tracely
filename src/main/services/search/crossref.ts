@@ -27,6 +27,24 @@ function toVenueType(type: string | undefined): VenueType | null {
   return 'other'
 }
 
+// Crossref indexes the whole scholarly record, not just papers: a plain
+// keyword query routinely returns journal issues, whole volumes, component
+// figures, peer-review reports and grant records, all of which arrived here
+// as "sources" a student could cite. These are the record types that are
+// never the thing someone means to cite.
+const NON_ARTICLE_TYPES = new Set([
+  'journal-issue',
+  'journal-volume',
+  'journal',
+  'book-series',
+  'book-set',
+  'component',
+  'peer-review',
+  'grant',
+  'report-component',
+  'edited-book'
+])
+
 function stripTags(text: string | undefined): string | null {
   if (!text) return null
   const stripped = text.replace(/<[^>]+>/g, '').trim()
@@ -42,10 +60,17 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
   })
 
   const res = await fetch(`https://api.crossref.org/works?${params.toString()}`)
-  if (!res.ok) return []
+  if (!res.ok) {
+    console.warn(`[search:crossref] ${res.status} ${res.statusText} — no results for "${query}"`)
+    return []
+  }
 
   const data = (await res.json()) as { message?: { items?: CrossrefItem[] } }
-  const items = data.message?.items ?? []
+  // An untitled record can't be presented or cited either — it's almost
+  // always a metadata stub rather than a real work.
+  const items = (data.message?.items ?? []).filter(
+    (item) => !NON_ARTICLE_TYPES.has(item.type ?? '') && Boolean(item.title?.[0])
+  )
 
   return items.map((item, index) => ({
     doi: item.DOI ?? null,

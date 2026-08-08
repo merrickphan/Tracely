@@ -21,6 +21,8 @@ interface OpenAlexWork {
   open_access?: { oa_status?: string | null }
   cited_by_count?: number | null
   abstract_inverted_index?: Record<string, number[]> | null
+  is_retracted?: boolean | null
+  is_paratext?: boolean | null
 }
 
 function toAuthors(authorships: OpenAlexAuthorship[] | undefined): Author[] {
@@ -67,10 +69,19 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
   })
 
   const res = await fetch(`https://api.openalex.org/works?${params.toString()}`)
-  if (!res.ok) return []
+  if (!res.ok) {
+    console.warn(`[search:openalex] ${res.status} ${res.statusText} — no results for "${query}"`)
+    return []
+  }
 
   const data = (await res.json()) as { results?: OpenAlexWork[] }
-  const works = data.results ?? []
+  // Retracted papers are the worst possible evidence — the literature has
+  // formally withdrawn them — and paratext is a work record for a journal's
+  // front matter, cover, or table of contents rather than a paper at all.
+  // Both were being surfaced to students as citable sources. Filtering
+  // after the fetch rather than via an API filter param keeps the request
+  // identical for every provider and costs one pass over six records.
+  const works = (data.results ?? []).filter((w) => w.is_retracted !== true && w.is_paratext !== true)
 
   return works.map((work, index) => ({
     doi: work.doi ? work.doi.replace('https://doi.org/', '') : null,

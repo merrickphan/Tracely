@@ -29,11 +29,10 @@ function normalizeForCacheKey(text: string): string {
 }
 
 function cacheKey(text: string): string {
-  // v3: results are now sorted by confidence and low-confidence candidates
-  // are dropped before the MAX_CLAIMS_PER_ANALYSIS cap, instead of just
-  // taking the relay's first 8 in whatever order it returned — bump so
-  // stale v2 results (unsorted/unfiltered) aren't served.
-  return createHash('sha256').update(`ai:detectClaims::v3::${normalizeForCacheKey(text)}`).digest('hex')
+  // v4: claims that reconstruct to the same sentence are now collapsed
+  // (see dedupeByText) — bump so cached v3 results, which could contain the
+  // same sentence twice, aren't served.
+  return createHash('sha256').update(`ai:detectClaims::v4::${normalizeForCacheKey(text)}`).digest('hex')
 }
 
 function reconstructClaim(candidate: RelayClaim, sentences: SentenceSpan[], text: string): DetectedClaim | null {
@@ -59,6 +58,23 @@ function reconstructClaim(candidate: RelayClaim, sentences: SentenceSpan[], text
   }
 }
 
+// The model can return the same sentence index more than once — usually
+// reading one sentence as two claims of different types, e.g. a Gutenberg
+// sentence flagged once as "factual" and again as "statistic". Both
+// reconstruct to identical text, so the user sees the same sentence listed
+// twice, and each copy separately spends four provider searches plus a
+// critique call. Keeping the first occurrence keeps the highest-confidence
+// one, since the caller sorts before this runs.
+function dedupeByText(claims: DetectedClaim[]): DetectedClaim[] {
+  const seen = new Set<string>()
+  return claims.filter((claim) => {
+    const key = claim.text.toLowerCase().replace(/\s+/g, ' ').trim()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export async function detectClaims(rawText: string): Promise<DetectedClaim[]> {
   const text = truncateForClaimDetection(rawText.trim())
   const key = cacheKey(text)
@@ -80,14 +96,16 @@ export async function detectClaims(rawText: string): Promise<DetectedClaim[]> {
 
   const { claims } = await callRelay<{ claims: RelayClaim[] }>('detect-claims', { text: numberedText })
 
-  const detected = (Array.isArray(claims) ? claims : [])
-    .map((c) => reconstructClaim(c, sentences, text))
-    .filter((c): c is DetectedClaim => c !== null && c.confidence >= MIN_CLAIM_CONFIDENCE)
-    // Highest-confidence claims first, so the 8-claim cap below keeps the
-    // claims the model itself was surest about instead of whatever
-    // happened to come first in the relay's response order.
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, MAX_CLAIMS_PER_ANALYSIS)
+  const detected = dedupeByText(
+    (Array.isArray(claims) ? claims : [])
+      .map((c) => reconstructClaim(c, sentences, text))
+      .filter((c): c is DetectedClaim => c !== null && c.confidence >= MIN_CLAIM_CONFIDENCE)
+      // Highest-confidence claims first, so the cap below keeps the claims
+      // the model itself was surest about instead of whatever happened to
+      // come first in the relay's response order — and so that dedupe keeps
+      // the better-scored copy of a repeated sentence.
+      .sort((a, b) => b.confidence - a.confidence)
+  ).slice(0, MAX_CLAIMS_PER_ANALYSIS)
 
   setCached(key, 'ai:detectClaims', detected)
   return detected

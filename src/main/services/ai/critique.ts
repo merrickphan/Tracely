@@ -26,11 +26,10 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
     .map((e) => e.source.id)
     .sort()
     .join(',')
-  // v3: abstracts sent to the model are now truncated at a word boundary
-  // instead of a hard character cut, and the relay prompt was tightened to
-  // reduce generic/overconfident output — bump so stale v2 critiques
-  // (built from mid-word-truncated abstracts) aren't served.
-  return createHash('sha256').update(`ai:critique::v3::${claim.id}::${evidenceIds}`).digest('hex')
+  // v4: the abstract budget went from 200 chars to 1200, so v3 entries were
+  // all judged on roughly the first sentence of each paper — bump rather
+  // than keep serving critiques formed without sight of the findings.
+  return createHash('sha256').update(`ai:critique::v4::${claim.id}::${evidenceIds}`).digest('hex')
 }
 
 export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): Promise<CritiqueResult> {

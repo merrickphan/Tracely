@@ -1,7 +1,15 @@
 export const MAX_CLAIM_DETECTION_INPUT_CHARS = 6000
 export const MAX_CLAIMS_PER_ANALYSIS = 8
 export const MAX_CRITIQUE_EVIDENCE_ITEMS = 5
-export const MAX_CRITIQUE_ABSTRACT_CHARS = 200
+// ~200 chars of an abstract is one sentence, and in a structured abstract
+// that sentence is the background ("Adolescent sleep has been widely
+// studied...") — the findings, effect sizes and populations all sit past
+// the cut. The critique prompt asks the model whether the evidence supports
+// the claim and then faults it for being vague, while showing it the part
+// of each paper that contains no evidence. 1200 covers most of a real
+// abstract; at 5 items that's ~1.5k tokens of extra input per critique,
+// which is a rounding error next to being able to answer the question.
+export const MAX_CRITIQUE_ABSTRACT_CHARS = 1200
 
 // Below this, the model itself said it wasn't sure this is even a real,
 // citation-worthy claim (see the prompt's calibration instructions) — no

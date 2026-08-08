@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
 import dotenv from 'dotenv'
+import { getAppPaths } from './paths'
 
 export interface AppConfig {
   semanticScholarApiKey: string | null
@@ -12,13 +12,13 @@ let configPath: string | null = null
 
 function getConfigPath(): string {
   if (!configPath) {
-    configPath = join(app.getPath('userData'), 'config.json')
+    configPath = join(getAppPaths().dataDir, 'config.json')
   }
   return configPath
 }
 
 function loadEnvDefaults(): void {
-  dotenv.config({ path: join(app.getAppPath(), '.env') })
+  dotenv.config({ path: join(getAppPaths().appRoot, '.env') })
 }
 
 export function getConfig(): AppConfig {
