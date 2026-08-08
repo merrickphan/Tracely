@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+/* Tailwind v4 is CSS-first — there is no tailwind.config.js. Design tokens
+   are declared here as @theme variables, which makes them available both as
+   CSS custom properties and as utility classes (bg-ink, text-accent, ...).
+
+   The values are the same ones TracerApp.tsx and OverlayApp.tsx already
+   hard-coded, not a new palette: Tracer is launched from the Screen Watch
+   widget and has to read as the same surface, not a second app. */
+@theme {
+  --color-ink: #17171b;
+  --color-muted: #6b6b76;
+  --color-accent: #f47b20;
+  --color-line: #eeeef1;
+  --color-line-strong: #e8e8ec;
+  --color-body: #1a1a1f;
+  --color-danger: #d6301a;
+
+  --font-sans:
+    'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+}
+
+/* This file is imported only by tracer.tsx, so the preflight reset below is
+   confined to the Tracer window. Do not import it from main.tsx,
+   floating.tsx or overlay.tsx without first checking those windows against
+   the reset — they rely on default UA styling in places. */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(0 0 0 / 0.15);
+    border-radius: 4px;
+  }
+}
+
+@keyframes tracer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
