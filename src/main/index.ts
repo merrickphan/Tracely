@@ -3,7 +3,8 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey, unregisterScreenWatchHotkey } from './hotkey'
 import { registerIpcHandlers } from './ipc'
-import { handleOAuthRedirect } from './services/auth/client'
+import { setAccessTokenProvider } from './services/ai/identity'
+import { getSupabase, handleOAuthRedirect, isAuthConfigured } from './services/auth/client'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { warmUp as warmUpMl } from './services/ml'
 import { initDb, persist } from './services/storage/db'
@@ -80,6 +81,16 @@ if (!gotLock) {
     })
 
     await initDb()
+
+    // Before any window exists, because a window is where AI calls come from.
+    // The relay bills per account and refuses calls it cannot attribute, so
+    // every request carries the signed-in user's Supabase access token —
+    // read fresh each time so an expired one is refreshed rather than sent.
+    setAccessTokenProvider(async () => {
+      if (!isAuthConfigured()) return null
+      const { data } = await getSupabase().auth.getSession()
+      return data.session?.access_token ?? null
+    })
 
     createMainWindow()
     createFloatingWindow()

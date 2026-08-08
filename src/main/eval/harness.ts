@@ -18,6 +18,8 @@ import { basename, join } from 'path'
 import type { Claim, EvidenceItem, ScoreBreakdown, Source } from '@shared/types'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
+import { setAccessTokenProvider } from '../services/ai/identity'
+import { appSessionTokenProvider, noSessionMessage } from './identity'
 import { findEvidence, type RankedSourceResult } from '../services/search/aggregator'
 import { initDb } from '../services/storage/db'
 import { setAppPaths } from '../services/storage/paths'
@@ -324,6 +326,14 @@ export async function main(): Promise<void> {
   setAppPaths({ dataDir, appRoot: repoRoot, resourcesDir: null })
   mkdirSync(dataDir, { recursive: true })
   await initDb()
+
+  // The relay now bills per account, so the harness authenticates as the user
+  // signed into the desktop app rather than on a shared token. Warned about
+  // rather than fatal: a cassette replay never reaches the network and so
+  // never needs one, and that is the common case for a re-run.
+  const tokenProvider = appSessionTokenProvider()
+  if (!tokenProvider) console.warn(`\n${noSessionMessage()}\n`)
+  setAccessTokenProvider(tokenProvider ?? (async () => null))
 
   const files = readdirSync(essayDir)
     .filter((f) => f.endsWith('.txt') || f.endsWith('.md'))

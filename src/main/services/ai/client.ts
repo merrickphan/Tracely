@@ -1,6 +1,15 @@
+import { getAccessToken } from './identity'
+
 // RELAY_URL/RELAY_TOKEN are inlined at build time by electron.vite.config.ts
 // (see the `define` block) — they are not read from user-editable config, so
 // there is no runtime path for a user to see or change which API is used.
+//
+// RELAY_TOKEN is not a secret and is not treated as one. It ships inside
+// every installer, so anyone who downloads a release can read it out of the
+// asar in a minute. It tells the relay "this is a Tracely build"; it does not
+// say who is calling. The signed-in user's Supabase access token does that,
+// and the relay verifies it independently before spending anything — see
+// resolveUser() in the relay's lib/auth.ts.
 declare const __RELAY_URL__: string
 declare const __RELAY_TOKEN__: string
 
@@ -38,12 +47,21 @@ function delay(ms: number): Promise<void> {
 // it from the source to decide which routes to verify against production, and
 // a second copy here could silently fall behind it.
 async function requestOnce<T>(endpoint: Parameters<typeof callRelay>[0], body: unknown): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-tracely-token': __RELAY_TOKEN__
+  }
+  // Fetched per request rather than cached: access tokens expire hourly and
+  // the provider hands back a refreshed one, so caching here would reintroduce
+  // the expiry problem supabase-js already solves. Omitted entirely when
+  // signed out, rather than sent as "Bearer null" — the relay's 401 then says
+  // what is actually wrong.
+  const token = await getAccessToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
   const response = await fetch(`${__RELAY_URL__}/api/${endpoint}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-tracely-token': __RELAY_TOKEN__
-    },
+    headers,
     body: JSON.stringify(body)
   })
 
