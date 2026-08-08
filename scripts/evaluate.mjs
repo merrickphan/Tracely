@@ -11,16 +11,24 @@
 // Output lands in out/eval/ (gitignored) so node can still resolve sql.js
 // and dotenv from the repo's node_modules.
 //
+// Provider responses are recorded to out/eval/cassettes on the first run and
+// replayed for free afterwards (see scripts/eval-http.mjs), so iterating on
+// ranking and scoring costs nothing and compares against byte-identical
+// inputs. EVAL_REFRESH=1 re-records against live providers.
+//
 // Usage:
 //   npm run evaluate                      # uses eval/essays/
 //   npm run evaluate -- --essays path     # a different folder
 //   EVAL_SKIP_CRITIQUE=1 npm run evaluate # retrieval + scoring only, no relay critique calls
+//   EVAL_REFRESH=1 npm run evaluate       # ignore recordings, fetch live again
+//   EVAL_NO_CASSETTE=1 npm run evaluate   # never record or replay
 
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync } from 'fs'
 import { dirname, isAbsolute, join, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import dotenv from 'dotenv'
 import * as esbuild from 'esbuild'
+import { announce, installHttpRecorder, report } from './eval-http.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: join(repoRoot, '.env') })
@@ -43,20 +51,40 @@ if (!existsSync(essayDir)) {
   process.exit(1)
 }
 
-// Every run of this script bills the OpenAI account behind the relay: one
-// detect-claims call per essay plus one critique per claim, and the cache
-// does not save you across a cache-key bump. Five runs in one afternoon is
-// a visible line on the bill, which is exactly how this guard came to
-// exist. Spending is now opt-in per invocation rather than the default.
-if (!process.env.EVAL_ALLOW_SPEND) {
-  console.error('Refusing to run: this harness makes paid relay calls.')
+const cassetteDir = join(repoRoot, 'out', 'eval', 'cassettes')
+const cassetteMode = process.env.EVAL_NO_CASSETTE ? 'off' : process.env.EVAL_REFRESH ? 'refresh' : 'cassette'
+
+// A first run bills the OpenAI account behind the relay — one detect-claims
+// call per essay plus one critique per claim — and spends OpenAlex credits at
+// 10 per claim. Seven runs in one morning is ~910 of the 1,000 free daily
+// credits and a visible line on the bill, which is exactly how this guard came
+// to exist. Spending is opt-in per invocation rather than the default.
+//
+// EVAL_SKIP_CRITIQUE was never the whole story and the old message implied it
+// was: detection runs unconditionally and is a paid call too. Said plainly now.
+//
+// The guard only applies when a run can actually spend. Replaying recorded
+// responses costs nothing, so it should not need a flag that trains you to
+// type EVAL_ALLOW_SPEND=1 reflexively.
+// Counts actual recordings rather than testing for the directory. The recorder
+// creates the directory on startup, so a run that recorded nothing — every
+// provider erroring, say — would otherwise leave behind an empty folder that
+// silently disables this guard for every run after it.
+const recordedCount = existsSync(cassetteDir)
+  ? readdirSync(cassetteDir).filter((f) => f.endsWith('.json')).length
+  : 0
+const canSpend = cassetteMode !== 'cassette' || recordedCount === 0
+if (canSpend && !process.env.EVAL_ALLOW_SPEND) {
+  console.error('Refusing to run: with no recordings yet, this makes paid relay calls')
+  console.error('and spends OpenAlex credits.')
   console.error('')
-  console.error('  Retrieval and scoring only (free — academic APIs, no relay):')
+  console.error('  Retrieval and scoring only (still pays for detection):')
   console.error('    EVAL_ALLOW_SPEND=1 EVAL_SKIP_CRITIQUE=1 npm run evaluate')
   console.error('')
-  console.error('  Full run including detection and critique (paid):')
+  console.error('  Full run including critique (most expensive):')
   console.error('    EVAL_ALLOW_SPEND=1 npm run evaluate')
   console.error('')
+  console.error('After one run, provider responses are recorded and every re-run is free.')
   console.error('Rebuilding the preview from an existing report costs nothing: npm run preview')
   process.exit(1)
 }
@@ -123,5 +151,20 @@ process.env.EVAL_DATA_DIR = dataDir
 process.env.EVAL_ESSAY_DIR = essayDir
 process.env.EVAL_OUT_DIR = outDir
 
-const { main } = await import(pathToFileURL(bundlePath).href)
-await main()
+// Patched before the bundle is imported, so the harness and every provider
+// under src/ pick it up through the global without knowing it exists.
+announce({ cassetteDir, mode: cassetteMode, skipCritique: Boolean(process.env.EVAL_SKIP_CRITIQUE) })
+const { stats } = installHttpRecorder({
+  cassetteDir,
+  mode: cassetteMode,
+  relayUrl: process.env.RELAY_URL
+})
+
+try {
+  const { main } = await import(pathToFileURL(bundlePath).href)
+  await main()
+} finally {
+  // In a finally block on purpose: a run that dies partway has still spent
+  // whatever it spent, and that is exactly when you want to know.
+  report(stats)
+}
