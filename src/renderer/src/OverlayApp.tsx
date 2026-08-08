@@ -58,6 +58,184 @@ const BUCKET_COLOR: Record<Bucket, string> = {
   other: '#d6301a'
 }
 
+function withAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+type Underlines = ScreenWatchOverlayUpdateEvent['underlines']
+
+// How long a still-tracked claim keeps its last known rects after an update
+// arrives without them. Comfortably under one POLL_INTERVAL_MS (1200ms), so
+// a claim that has genuinely scrolled away still clears on the next tick.
+const RECT_GRACE_MS = 900
+
+/**
+ * Smooths the one-frame gaps in the underline stream.
+ *
+ * `FindText`/`GetBoundingRectangles` in uia-watch.ps1 intermittently returns
+ * nothing for a claim that is still perfectly visible — mid-reflow, mid-
+ * scroll, or while the target app is repainting. Rendering that literally
+ * makes the underline blink out and back, which reads as the UI being
+ * broken rather than as a missed measurement.
+ *
+ * A claim's previous rects are therefore held for RECT_GRACE_MS, but ONLY
+ * while it is still in `trackedIds` (i.e. the service still considers it a
+ * live claim). A claim that was dismissed, cited or re-detected away
+ * disappears immediately, because for those the empty payload is the truth
+ * rather than a measurement gap.
+ */
+function useStableUnderlines(underlines: Underlines, trackedIds: Set<string>): Underlines {
+  const held = useRef<Map<string, { entry: Underlines[number]; since: number }>>(new Map())
+  const [stable, setStable] = useState<Underlines>(underlines)
+  const sweep = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The previous *payload* (not the merged output). Comparing against the
+  // last real measurement is what makes the hold self-limiting: a claim
+  // missing from two payloads in a row has nothing left to re-hold from, so
+  // it can only ever be held once rather than indefinitely renewed.
+  const lastPayload = useRef<Underlines>(underlines)
+  // Read inside the sweep timer without making it a dependency — the set is
+  // rebuilt every render and would otherwise restart the timer constantly.
+  const trackedRef = useRef(trackedIds)
+  trackedRef.current = trackedIds
+
+  useEffect(() => {
+    const present = new Set(underlines.map((u) => u.id))
+    for (const id of present) held.current.delete(id)
+
+    // Anything in the previous payload that this one dropped, while the
+    // service still tracks it, is treated as a measurement gap and held.
+    // Note this runs directly rather than inside a setState updater: React
+    // defers updaters until render, so doing it there left `held` empty at
+    // the point `recompute` read it, and nothing was ever actually held.
+    const now = Date.now()
+    for (const p of lastPayload.current) {
+      if (present.has(p.id) || held.current.has(p.id)) continue
+      if (trackedRef.current.has(p.id)) held.current.set(p.id, { entry: p, since: now })
+    }
+
+    const recompute = (): void => {
+      const at = Date.now()
+      for (const [id, v] of held.current) {
+        if (!trackedRef.current.has(id) || at - v.since >= RECT_GRACE_MS) held.current.delete(id)
+      }
+      setStable([...underlines, ...[...held.current.values()].map((v) => v.entry)])
+
+      if (sweep.current) clearTimeout(sweep.current)
+      // Re-run exactly when the oldest hold expires, so a held underline
+      // actually clears instead of lingering until the next payload.
+      if (held.current.size > 0) {
+        const oldest = Math.min(...[...held.current.values()].map((v) => v.since))
+        sweep.current = setTimeout(recompute, Math.max(50, RECT_GRACE_MS - (Date.now() - oldest)))
+      }
+    }
+
+    recompute()
+    lastPayload.current = underlines
+
+    return () => {
+      if (sweep.current) clearTimeout(sweep.current)
+    }
+  }, [underlines])
+
+  return stable
+}
+
+/**
+ * One flagged span: a highlighter band plus the line beneath it.
+ *
+ * Movement is a transform rather than left/top so it composites on the GPU
+ * — these sit over another app's window and repaint on every poll, so a
+ * layout-triggering animation here is felt, not just measured.
+ *
+ * The transition is suppressed for large jumps. Rects shift by a few pixels
+ * constantly (typing, reflow) and gliding those looks intentional; but when
+ * the document scrolls, the same rect can move hundreds of pixels, and
+ * animating that sends the underline swooping across unrelated text. Small
+ * delta => glide, large delta => cut.
+ */
+function UnderlineMark({
+  claimId,
+  x,
+  y,
+  width,
+  height,
+  color,
+  hovered
+}: {
+  claimId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string
+  hovered: boolean
+}): JSX.Element {
+  const prev = useRef<{ x: number; y: number } | null>(null)
+
+  const jumped = prev.current === null || Math.abs(x - prev.current.x) > 40 || Math.abs(y - prev.current.y) > 24
+
+  useEffect(() => {
+    prev.current = { x, y }
+  })
+
+  return (
+    <div
+      className="tracely-underline"
+      // Identifies which claim this mark belongs to and whether it is
+      // currently hovered — the overlay has no text content, so without
+      // these its DOM is unreadable when inspecting or preview-testing it.
+      data-claim-id={claimId}
+      data-hovered={hovered ? 'true' : 'false'}
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width,
+        // The band covers the text itself; the extra 4px below leaves room
+        // for the line to sit clear of descenders (g, y, p).
+        height: height + 4,
+        transform: `translate3d(${x}px, ${y}px, 0)`,
+        transition: jumped
+          ? 'none'
+          : 'transform 150ms cubic-bezier(0.22, 1, 0.36, 1), width 150ms cubic-bezier(0.22, 1, 0.36, 1)',
+        willChange: 'transform',
+        pointerEvents: 'none'
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: '0 0 4px 0',
+          // Translucent, not opaque: the overlay window sits ON TOP of the
+          // watched app, so anything solid here would hide the very text it
+          // is meant to be highlighting. This is a highlighter pen, and the
+          // words have to stay readable through it.
+          background: withAlpha(color, 0.16),
+          borderRadius: 3,
+          opacity: hovered ? 1 : 0,
+          transform: hovered ? 'scaleY(1)' : 'scaleY(0.72)',
+          transformOrigin: 'bottom',
+          transition: 'opacity 130ms ease, transform 130ms cubic-bezier(0.22, 1, 0.36, 1)'
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: hovered ? 2.5 : 2,
+          borderRadius: 2,
+          background: color,
+          opacity: hovered ? 1 : 0.85,
+          transition: 'opacity 130ms ease, height 130ms ease'
+        }}
+      />
+    </div>
+  )
+}
+
 const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
   statistic: 'Statistic',
   causal: 'Causal claim',
@@ -1094,6 +1272,11 @@ export default function OverlayApp(): JSX.Element {
   // resolved — dropped from underlines/hover the same way dismissedIds
   // drops a manually-dismissed one, so "fixed" claims stop flagging.
   const citedIds = new Set((widget?.claims ?? []).filter((c) => c.citation).map((c) => c.id))
+  // Everything the service still considers a live claim. Used by
+  // useStableUnderlines to tell "this measurement glitched" (hold the last
+  // rects) apart from "this claim is gone" (drop it now).
+  const trackedIds = new Set((widget?.claims ?? []).map((c) => c.id))
+  const stableUnderlines = useStableUnderlines(underlines, trackedIds)
   const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
 
   const widgetHovered = hover?.kind === 'widget'
@@ -1144,34 +1327,25 @@ export default function OverlayApp(): JSX.Element {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', fontFamily: FONT_STACK }}>
-      {underlines
+      {stableUnderlines
         .filter((u) => !isResolved(u.id))
         .flatMap((u) => {
           const isHovered = claimHovered?.claimId === u.id
           const color = BUCKET_COLOR[bucketFor(u.claimType)]
           return u.rects.map((r, i) => (
-            <div
+            <UnderlineMark
               key={`${u.id}-${i}`}
-              style={{
-                position: 'absolute',
-                // Rounded to whole pixels (the underlying rect arrives
-                // scale-converted from physical UIA coordinates, so it's
-                // rarely already an integer) — a fractional position blurs a
-                // 2px line across two rows of pixels instead of one crisp
-                // one. A small gap below the text's bounding box, rather
-                // than flush against it, keeps the line clear of descenders
-                // (g, y, p) that a tight bounding rect leaves right at its
-                // own bottom edge — flush was reading as "cutting through"
-                // those letters instead of sitting under them.
-                left: Math.round(r.x),
-                top: Math.round(r.y + r.height) + 2,
-                width: Math.round(r.width),
-                height: 2,
-                borderRadius: 2,
-                background: color,
-                opacity: isHovered ? 1 : 0.85,
-                transition: 'opacity 0.12s ease'
-              }}
+              // Rounded to whole pixels (the underlying rect arrives
+              // scale-converted from physical UIA coordinates, so it's
+              // rarely already an integer) — a fractional position blurs a
+              // 2px line across two rows of pixels instead of one crisp one.
+              x={Math.round(r.x)}
+              y={Math.round(r.y)}
+              width={Math.round(r.width)}
+              height={Math.round(r.height)}
+              claimId={u.id}
+              color={color}
+              hovered={isHovered}
             />
           ))
         })}
@@ -1460,6 +1634,19 @@ export default function OverlayApp(): JSX.Element {
         }
         .tracely-popover {
           animation: tracely-popover-in 0.14s ease-out;
+        }
+        @keyframes tracely-underline-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        /* No fill-mode on purpose. This window is never focused and always
+           sits above another app, which is exactly the situation Chromium
+           throttles animation/rAF callbacks in — if this never runs, the
+           mark must still be visible. Base opacity is 1 and the animation
+           only softens the entrance, so the degraded case is "appears
+           instantly" rather than "never appears". */
+        .tracely-underline {
+          animation: tracely-underline-in 0.16s ease;
         }
         .tracely-btn-primary {
           transition: background 0.12s ease, transform 0.08s ease;

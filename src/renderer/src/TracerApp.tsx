@@ -1,19 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { ArrowUpIcon, MenuIcon, PlusIcon, XIcon } from 'lucide-react'
 import type { TracerContext } from '@shared/ipc-contract'
 import type { TracerConversation, TracerMessage } from '@shared/types'
+
+import { AiActions, type AiMessage } from '@/components/ui/ai-actions'
+import { ConversationEmptyState } from '@/components/ui/conversation'
+import { cn } from '@/lib/utils'
 import figmaLogo from './assets/figma-logo.png'
 
-// This window has no shared stylesheet, same as the overlay — it's a small,
-// frameless, always-on-top window with its own visual language, so styles
-// live inline here rather than in styles/index.css. Tokens are copied from
-// OverlayApp.tsx deliberately: Tracer is launched from the Screen Watch
-// widget and should read as the same surface, not a second app.
-const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
-const CARD_BORDER = '1.5px solid #17171b'
-const ACCENT = '#f47b20'
-const INK = '#17171b'
-const MUTED = '#6b6b76'
+// This window is styled with Tailwind, unlike the rest of the renderer,
+// because it hosts the shadcn ai-elements primitives under components/ui/.
+// styles/tracer.css is imported only by tracer.tsx, so Tailwind's preflight
+// reset stays inside this window and cannot reach the main, floating or
+// overlay entries. Tokens (ink/accent/muted/line) are declared there and are
+// the same values OverlayApp.tsx hard-codes: Tracer is launched from the
+// Screen Watch widget and should read as the same surface, not a second app.
 
 const MAX_MESSAGE_CHARS = 2000
 
@@ -28,77 +30,15 @@ const STARTERS = [
   'Explain the difference between correlation and causation in my draft.'
 ]
 
-function Avatar({ role }: { role: 'user' | 'tracer' }): JSX.Element {
-  if (role === 'tracer') {
-    return (
-      <div
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: '50%',
-          background: INK,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0
-        }}
-      >
-        <img
-          src={figmaLogo}
-          alt=""
-          draggable={false}
-          style={{ width: 15, height: 15, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
-        />
-      </div>
-    )
-  }
-  return (
-    <div
-      style={{
-        width: 26,
-        height: 26,
-        borderRadius: '50%',
-        background: 'rgba(0,0,0,0.07)',
-        color: MUTED,
-        fontSize: 11,
-        fontWeight: 700,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0
-      }}
-    >
-      You
-    </div>
-  )
-}
-
-function MessageBubble({ message }: { message: TracerMessage }): JSX.Element {
-  const isTracer = message.role === 'tracer'
-  return (
-    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-      <Avatar role={message.role} />
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: isTracer ? '#fff' : 'rgba(0,0,0,0.035)',
-          border: isTracer ? '1px solid #e8e8ec' : '1px solid transparent',
-          borderRadius: 12,
-          padding: '9px 11px',
-          fontSize: 13.5,
-          lineHeight: 1.55,
-          color: '#1a1a1f',
-          // Tracer's replies are plain prose with paragraph breaks — no
-          // markdown renderer here, so newlines have to survive as-is.
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere'
-        }}
-      >
-        {message.content}
-      </div>
-    </div>
-  )
+// ai-elements speaks the AI SDK's 'user' | 'assistant' vocabulary; Tracely's
+// stored messages say 'user' | 'tracer'. Map at the boundary rather than
+// changing either side.
+function toAiMessages(messages: TracerMessage[]): AiMessage[] {
+  return messages.map((m) => ({
+    id: m.id,
+    from: m.role === 'tracer' ? 'assistant' : 'user',
+    content: m.content
+  }))
 }
 
 export default function TracerApp(): JSX.Element {
@@ -112,7 +52,6 @@ export default function TracerApp(): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [conversations, setConversations] = useState<TracerConversation[]>([])
 
-  const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
 
   const load = useCallback(async (conversationId?: string): Promise<void> => {
@@ -148,32 +87,48 @@ export default function TracerApp(): JSX.Element {
     })
   }, [load])
 
-  useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages, sending])
+  const send = useCallback(
+    async (text: string): Promise<void> => {
+      const trimmed = text.trim()
+      if (!trimmed || !conversation || sending) return
+      setError(null)
+      setSending(true)
+      setDraft('')
+      try {
+        const result = await window.tracely.tracer.send({ conversationId: conversation.id, message: trimmed })
+        setMessages((prev) => [...prev, result.userMessage, result.reply])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        // The question itself was saved server-side even though the reply
+        // failed (see tracerHandlers.ts) — reload so what's on screen matches
+        // what's actually stored, then show the error against it.
+        setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ''))
+        if (conversation) await load(conversation.id)
+      } finally {
+        setSending(false)
+        composerRef.current?.focus()
+      }
+    },
+    [conversation, sending, load]
+  )
 
-  async function send(text: string): Promise<void> {
-    const trimmed = text.trim()
-    if (!trimmed || !conversation || sending) return
-    setError(null)
-    setSending(true)
-    setDraft('')
-    try {
-      const result = await window.tracely.tracer.send({ conversationId: conversation.id, message: trimmed })
-      setMessages((prev) => [...prev, result.userMessage, result.reply])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      // The question itself was saved server-side even though the reply
-      // failed (see tracerHandlers.ts) — reload so what's on screen matches
-      // what's actually stored, then show the error against it.
-      setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ''))
-      if (conversation) await load(conversation.id)
-    } finally {
-      setSending(false)
-      composerRef.current?.focus()
-    }
-  }
+  // Retry re-asks the question that produced a reply, appending a fresh
+  // exchange rather than replacing the old one. Replacing would mean
+  // deleting stored rows, and the previous answer is often the thing the
+  // user wants to compare the new one against.
+  const retry = useCallback(
+    (messageId: string): void => {
+      const index = messages.findIndex((m) => m.id === messageId)
+      if (index < 0) return
+      for (let i = index - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          void send(messages[i].content)
+          return
+        }
+      }
+    },
+    [messages, send]
+  )
 
   async function startNew(): Promise<void> {
     const { conversation: fresh } = await window.tracely.tracer.newConversation()
@@ -209,162 +164,85 @@ export default function TracerApp(): JSX.Element {
     }
   }
 
-  const iconBtn: CSSProperties = {
-    width: 26,
-    height: 26,
-    border: 'none',
-    background: 'rgba(0,0,0,0.06)',
-    borderRadius: '50%',
-    color: MUTED,
-    fontSize: 13,
-    lineHeight: '26px',
-    padding: 0,
-    cursor: 'pointer',
-    flexShrink: 0,
-    WebkitAppRegion: 'no-drag'
-  } as CSSProperties
-
   const canSend = Boolean(draft.trim()) && !sending && relayConfigured
 
+  const iconBtn =
+    'flex size-6.5 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-muted transition-colors hover:bg-black/10 hover:text-ink'
+
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#fff',
-        border: CARD_BORDER,
-        borderRadius: 16,
-        overflow: 'hidden',
-        fontFamily: FONT_STACK
-      }}
-    >
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border-[1.5px] border-ink bg-white font-sans">
       <div
-        style={
-          {
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '0 10px 0 14px',
-            height: 46,
-            background: '#fafafa',
-            borderBottom: '1px solid #eeeef1',
-            flexShrink: 0,
-            // Frameless window — the header is the drag handle.
-            WebkitAppRegion: 'drag'
-          } as CSSProperties
-        }
+        className="flex h-[46px] shrink-0 items-center gap-2 border-b border-line bg-[#fafafa] pl-3.5 pr-2.5"
+        // Frameless window — the header is the drag handle.
+        style={{ WebkitAppRegion: 'drag' } as CSSProperties}
       >
-        <div
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: INK,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
+        <div className="flex size-6 items-center justify-center rounded-full bg-ink">
           <img
             src={figmaLogo}
             alt=""
             draggable={false}
-            style={{ width: 14, height: 14, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
+            className="size-3.5 object-contain brightness-0 invert"
           />
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, lineHeight: 1.2 }}>Tracer</div>
-          <div style={{ fontSize: 10.5, color: MUTED, lineHeight: 1.2 }}>Your writing teacher</div>
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-bold leading-tight text-ink">Tracer</div>
+          <div className="text-[10.5px] leading-tight text-muted">Your writing teacher</div>
         </div>
-        <div style={{ flex: 1 }} />
-        <button style={iconBtn} title="Conversation history" aria-label="Conversation history" onClick={() => void openHistory()}>
-          ☰
-        </button>
-        <button style={iconBtn} title="New conversation" aria-label="New conversation" onClick={() => void startNew()}>
-          +
-        </button>
-        <button style={iconBtn} title="Close" aria-label="Close" onClick={() => void window.tracely.tracer.close()}>
-          ×
-        </button>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+          <button className={iconBtn} title="Conversation history" aria-label="Conversation history" onClick={() => void openHistory()}>
+            <MenuIcon className="size-3.5" />
+          </button>
+          <button className={iconBtn} title="New conversation" aria-label="New conversation" onClick={() => void startNew()}>
+            <PlusIcon className="size-3.5" />
+          </button>
+          <button className={iconBtn} title="Close" aria-label="Close" onClick={() => void window.tracely.tracer.close()}>
+            <XIcon className="size-3.5" />
+          </button>
+        </div>
       </div>
 
-
       {historyOpen ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '10px 14px',
-              borderBottom: '1px solid #eeeef1',
-              flexShrink: 0
-            }}
-          >
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: INK }}>Past conversations</div>
-            <div style={{ flex: 1 }} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center border-b border-line px-3.5 py-2.5">
+            <div className="text-[12.5px] font-bold text-ink">Past conversations</div>
+            <div className="flex-1" />
             <button
               onClick={() => setHistoryOpen(false)}
-              style={{ border: 'none', background: 'none', fontSize: 12, fontWeight: 600, color: MUTED, cursor: 'pointer', padding: 0 }}
+              className="text-xs font-semibold text-muted transition-colors hover:text-ink"
             >
               Done
             </button>
           </div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10 }}>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
             {conversations.length === 0 ? (
-              <div style={{ fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 20 }}>Nothing yet.</div>
+              <div className="mt-5 text-center text-xs text-muted">Nothing yet.</div>
             ) : (
               conversations.map((c) => (
                 <div
                   key={c.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '9px 10px',
-                    borderRadius: 10,
-                    border: '1px solid #eeeef1',
-                    marginBottom: 6,
-                    background: c.id === conversation?.id ? 'rgba(244,123,32,0.07)' : '#fff'
-                  }}
+                  className={cn(
+                    'mb-1.5 flex items-center gap-2 rounded-[10px] border border-line px-2.5 py-2.5',
+                    c.id === conversation?.id ? 'bg-accent/[0.07]' : 'bg-white'
+                  )}
                 >
                   <button
                     onClick={() => {
                       setHistoryOpen(false)
                       void load(c.id)
                     }}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      textAlign: 'left',
-                      border: 'none',
-                      background: 'none',
-                      padding: 0,
-                      cursor: 'pointer'
-                    }}
+                    className="min-w-0 flex-1 text-left"
                   >
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: '#1a1a1f',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {c.title}
-                    </div>
-                    <div style={{ fontSize: 10.5, color: MUTED }}>{new Date(c.updatedAt).toLocaleString()}</div>
+                    <div className="truncate text-[12.5px] font-semibold text-body">{c.title}</div>
+                    <div className="text-[10.5px] text-muted">{new Date(c.updatedAt).toLocaleString()}</div>
                   </button>
                   <button
                     onClick={() => void removeConversation(c.id)}
                     title="Delete conversation"
                     aria-label="Delete conversation"
-                    style={{ border: 'none', background: 'none', color: MUTED, fontSize: 13, cursor: 'pointer', padding: 4 }}
+                    className="p-1 text-muted transition-colors hover:text-danger"
                   >
-                    ×
+                    <XIcon className="size-3.5" />
                   </button>
                 </div>
               ))
@@ -373,73 +251,72 @@ export default function TracerApp(): JSX.Element {
         </div>
       ) : (
         <>
-          <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {messages.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 13.5, lineHeight: 1.55, color: '#1a1a1f' }}>
+          {messages.length === 0 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
+              <ConversationEmptyState>
+                <div className="text-[13.5px] leading-[1.55] text-body">
                   I&rsquo;m Tracer. I won&rsquo;t write your essay for you — I&rsquo;ll explain why something
                   reads as weak, and show you how to fix it yourself.
                 </div>
                 {STARTERS.map((starter) => (
                   <button
                     key={starter}
-                    className="tracer-starter"
                     onClick={() => void send(starter)}
                     disabled={!relayConfigured}
-                    style={{
-                      textAlign: 'left',
-                      border: '1px solid #e8e8ec',
-                      borderRadius: 10,
-                      background: '#fff',
-                      padding: '9px 11px',
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: '#3a3a44',
-                      cursor: relayConfigured ? 'pointer' : 'default',
-                      fontFamily: 'inherit'
-                    }}
+                    className={cn(
+                      'rounded-[10px] border border-line-strong bg-white px-2.5 py-2.5 text-left',
+                      'text-[12.5px] font-semibold text-[#3a3a44] transition-colors',
+                      'hover:border-accent hover:text-ink disabled:cursor-default disabled:opacity-50 disabled:hover:border-line-strong'
+                    )}
                   >
                     {starter}
                   </button>
                 ))}
-              </div>
-            ) : (
-              messages.map((m) => <MessageBubble key={m.id} message={m} />)
-            )}
+              </ConversationEmptyState>
+            </div>
+          ) : (
+            <AiActions
+              messages={toAiMessages(messages)}
+              assistantAvatar={figmaLogo}
+              onRetry={relayConfigured && !sending ? retry : undefined}
+              footer={
+                <>
+                  {sending ? (
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-ink">
+                        <img
+                          src={figmaLogo}
+                          alt=""
+                          draggable={false}
+                          className="size-[15px] object-contain brightness-0 invert"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                        <span
+                          className="inline-block size-[11px] rounded-full border-[1.5px] border-black/10 border-t-accent"
+                          style={{ animation: 'tracer-spin 0.7s linear infinite' }}
+                        />
+                        Thinking…
+                      </div>
+                    </div>
+                  ) : null}
+                  {error ? (
+                    <div className="rounded-[10px] border border-danger/20 bg-danger/[0.08] px-2.5 py-2 text-xs text-danger">
+                      {error}
+                    </div>
+                  ) : null}
+                </>
+              }
+            />
+          )}
 
-            {sending ? (
-              <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
-                <Avatar role="tracer" />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: MUTED }}>
-                  <span className="tracer-spinner" />
-                  Thinking…
-                </div>
-              </div>
-            ) : null}
-
-            {error ? (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: '#d6301a',
-                  background: 'rgba(214,48,26,0.08)',
-                  border: '1px solid rgba(214,48,26,0.2)',
-                  borderRadius: 10,
-                  padding: '8px 10px'
-                }}
-              >
-                {error}
-              </div>
-            ) : null}
-          </div>
-
-          <div style={{ borderTop: '1px solid #eeeef1', padding: 10, flexShrink: 0 }}>
+          <div className="shrink-0 border-t border-line p-2.5">
             {!relayConfigured ? (
-              <div style={{ fontSize: 11.5, color: MUTED, textAlign: 'center', padding: '6px 0' }}>
+              <div className="py-1.5 text-center text-[11.5px] text-muted">
                 Tracer needs a relay. Set RELAY_URL / RELAY_TOKEN and rebuild.
               </div>
             ) : null}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div className="flex items-end gap-2">
               <textarea
                 ref={composerRef}
                 value={draft}
@@ -448,61 +325,28 @@ export default function TracerApp(): JSX.Element {
                 disabled={!relayConfigured}
                 placeholder="Ask Tracer about your writing…"
                 rows={2}
-                style={{
-                  flex: 1,
-                  resize: 'none',
-                  border: '1px solid #e0e0e6',
-                  borderRadius: 12,
-                  padding: '9px 11px',
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                  fontFamily: 'inherit',
-                  color: '#1a1a1f',
-                  outline: 'none',
-                  background: relayConfigured ? '#fff' : '#f6f6f8'
-                }}
+                className={cn(
+                  'flex-1 resize-none rounded-xl border border-[#e0e0e6] px-2.5 py-2.5',
+                  'text-[13px] leading-normal text-body outline-none',
+                  'focus:border-accent disabled:bg-[#f6f6f8]'
+                )}
               />
               <button
                 onClick={() => void send(draft)}
                 disabled={!canSend}
                 title="Send (Enter)"
                 aria-label="Send"
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: canSend ? INK : 'rgba(0,0,0,0.12)',
-                  color: '#fff',
-                  fontSize: 15,
-                  cursor: canSend ? 'pointer' : 'default',
-                  flexShrink: 0
-                }}
+                className={cn(
+                  'flex size-[38px] shrink-0 items-center justify-center rounded-full text-white transition-colors',
+                  canSend ? 'bg-ink' : 'cursor-default bg-black/[0.12]'
+                )}
               >
-                ↑
+                <ArrowUpIcon className="size-4" />
               </button>
             </div>
           </div>
         </>
       )}
-
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
-        .tracer-starter:hover:not(:disabled) { border-color: ${ACCENT}; color: ${INK}; }
-        textarea:focus { border-color: ${ACCENT} !important; }
-        @keyframes tracer-spin { to { transform: rotate(360deg); } }
-        .tracer-spinner {
-          display: inline-block;
-          width: 11px;
-          height: 11px;
-          border: 1.5px solid rgba(0,0,0,0.12);
-          border-top-color: ${ACCENT};
-          border-radius: 50%;
-          animation: tracer-spin 0.7s linear infinite;
-        }
-      `}</style>
     </div>
   )
 }

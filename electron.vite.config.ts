@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: resolve(__dirname, '.env') })
@@ -53,9 +54,18 @@ export default defineConfig({
     }
   },
   renderer: {
-    plugins: [react()],
+    // Tailwind is scoped to the Tracer window by import, not by config: only
+    // `src/renderer/src/styles/tracer.css` pulls it in, and only tracer.tsx
+    // imports that file. The other three entries (index/floating/overlay)
+    // stay on the inline-style + styles/index.css idiom they already use, so
+    // Tailwind's preflight reset can't reach them.
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
+        // shadcn's registry emits `@/components/ui/...` imports verbatim, so
+        // `@` has to resolve to the renderer source root for pasted
+        // components to work without hand-editing every import.
+        '@': resolve(__dirname, 'src/renderer/src'),
         '@renderer': resolve(__dirname, 'src/renderer/src'),
         '@shared': resolve(__dirname, 'src/shared')
       }
