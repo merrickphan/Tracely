@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { BrowserWindow, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { windowTitle } from '../appIdentity'
 import { getAppIconPath } from '../icon'
 
 let mainWindow: BrowserWindow | null = null
@@ -29,7 +30,7 @@ export function createMainWindow(): BrowserWindow {
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
-    title: 'Tracely',
+    title: windowTitle(),
     icon: getAppIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

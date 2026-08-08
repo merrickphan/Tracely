@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { BrowserWindow, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { windowTitle } from '../appIdentity'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import { getAppIconPath } from '../icon'
 
@@ -42,7 +43,7 @@ export function createTracerWindow(): BrowserWindow {
     skipTaskbar: true,
     resizable: true,
     icon: getAppIconPath(),
-    title: 'Tracer',
+    title: windowTitle('Tracer'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

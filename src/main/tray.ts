@@ -1,4 +1,5 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
+import { appDisplayName } from './appIdentity'
 import { getAppIconPath } from './icon'
 import { isScreenWatchEnabled, startScreenWatch, stopScreenWatch } from './services/screenWatch/screenWatchService'
 import { checkForUpdatesNow } from './updater'
@@ -33,7 +34,7 @@ function buildMenu(): Menu {
 export function createTray(): Tray {
   const icon = nativeImage.createFromPath(getAppIconPath()).resize({ width: 32, height: 32 })
   tray = new Tray(icon)
-  tray.setToolTip('Tracely')
+  tray.setToolTip(appDisplayName())
   tray.setContextMenu(buildMenu())
   tray.on('click', () => showMainWindow())
 
