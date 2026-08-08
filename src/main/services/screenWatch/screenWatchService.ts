@@ -723,7 +723,12 @@ export async function findSourceForClaim(claimId: string, query?: string): Promi
 
   const ranked = result.evidence
     .map((item, i) => {
-      const textRelevance = computeTextRelevance(claim.text, `${item.title} ${item.abstract ?? ''}`)
+      // The aggregator's own figure, not a re-derivation. It recomputed word
+      // overlap here, which now disagrees with how the results were actually
+      // ranked: findEvidence scores candidates by embedding similarity when
+      // the model is available, so recomputing coverage would show the user a
+      // match % for a metric that had no part in choosing or ordering these.
+      const textRelevance = item.textRelevance
       const rankRelevance = clamp01(1 - item.relevanceRank / RANK_RELEVANCE_LIMIT)
       const matchPercent = Math.round(100 * clamp01(0.75 * textRelevance + 0.25 * rankRelevance))
       return { item, sourceRef: sourceRefFor(item, i), matchPercent }

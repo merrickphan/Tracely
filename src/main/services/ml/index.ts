@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { Worker } from 'worker_threads'
@@ -37,6 +38,20 @@ function resolveWorkerData(): MlWorkerData {
   }
 }
 
+function workerScriptPath(): string {
+  // The eval harness is not the packaged main process: scripts/evaluate.mjs
+  // bundles the harness on its own into out/eval/, so the worker emitted
+  // beside the main bundle is not there. Without an override the harness would
+  // fall back to lexical scoring and report that embeddings changed nothing —
+  // a silent false negative in the one measurement that gates this work.
+  const override = process.env.TRACELY_ML_WORKER
+  if (override) return override
+
+  // Built as a separate entry (see electron.vite.config.ts) beside the main
+  // bundle.
+  return join(__dirname, 'mlWorker.js')
+}
+
 function disable(reason: string, error?: unknown): void {
   if (!unavailable) {
     console.warn(`[ml] disabled — ${reason}`, error ?? '')
@@ -54,9 +69,7 @@ function ensureWorker(): Worker | null {
   if (unavailable) return null
   if (worker) return worker
 
-  // Built as a separate entry (see electron.vite.config.ts) and emitted beside
-  // the main bundle.
-  const scriptPath = join(__dirname, 'mlWorker.js')
+  const scriptPath = workerScriptPath()
   if (!existsSync(scriptPath)) {
     disable(`worker bundle missing at ${scriptPath}`)
     return null
@@ -148,6 +161,69 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let sum = 0
   for (let i = 0; i < a.length; i++) sum += a[i] * b[i]
   return sum
+}
+
+// Deliberately in memory rather than the SQLite table the plan called for.
+//
+// Two things killed the table. Candidates are embedded inside findEvidence,
+// before any of them exist as `sources` rows — only the eight that survive the
+// cut are upserted afterwards — so there is no source_id to key on at the
+// point the vector is actually needed. And sql.js has no incremental write
+// path: persist() serialises the entire database on every write, so 1536 bytes
+// per paper would tax every unrelated write in the app, forever, growing with
+// the library. The thing it would buy is 1.6ms of recomputation.
+//
+// The arithmetic changes at Phase 3, where passage-level embedding means
+// hundreds of chunks per paper rather than one. Revisit it there, not here.
+const EMBED_CACHE_MAX = 2000
+const embedCache = new Map<string, Float32Array>()
+
+function cacheKey(text: string): string {
+  return createHash('sha256').update(text).digest('base64')
+}
+
+function remember(key: string, vector: Float32Array): void {
+  // Map iterates in insertion order, so the first key is the oldest.
+  if (embedCache.size >= EMBED_CACHE_MAX) {
+    const oldest = embedCache.keys().next().value
+    if (oldest !== undefined) embedCache.delete(oldest)
+  }
+  embedCache.set(key, vector)
+}
+
+/**
+ * embed() with a bounded in-process cache, embedding only what it hasn't seen.
+ *
+ * Worth having because the same paper recurs constantly: across the claims of
+ * one document, across re-analyses as a student edits, and across the four
+ * providers that each return overlapping results for related queries.
+ */
+export async function embedCached(texts: string[]): Promise<Float32Array[] | null> {
+  const keys = texts.map(cacheKey)
+  const missingIndices: number[] = []
+  const seen = new Set<string>()
+  for (let i = 0; i < keys.length; i++) {
+    // Guard against duplicates within one batch as well as across calls —
+    // otherwise the same text present twice is embedded twice.
+    if (!embedCache.has(keys[i]) && !seen.has(keys[i])) {
+      seen.add(keys[i])
+      missingIndices.push(i)
+    }
+  }
+
+  if (missingIndices.length > 0) {
+    const fresh = await embed(missingIndices.map((i) => texts[i]))
+    if (!fresh) return null
+    missingIndices.forEach((_, j) => remember(keys[missingIndices[j]], fresh[j]))
+  }
+
+  const result: Float32Array[] = []
+  for (const key of keys) {
+    const vector = embedCache.get(key)
+    if (!vector) return null
+    result.push(vector)
+  }
+  return result
 }
 
 export function isMlAvailable(): boolean {

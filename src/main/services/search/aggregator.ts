@@ -1,8 +1,9 @@
+import { cosineSimilarity, embedCached } from '../ml'
 import * as crossref from './crossref'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import * as semanticScholar from './semanticScholar'
-import { computeStrengthScore, computeTextRelevance } from './scoring'
+import { computeStrengthScore, computeTextRelevance, type RelevanceMetric } from './scoring'
 import type { NormalizedSourceResult } from './types'
 
 const PER_PROVIDER_LIMIT = 6
@@ -71,6 +72,40 @@ export interface RankedSourceResult extends NormalizedSourceResult {
   textRelevance: number
 }
 
+function candidateText(item: NormalizedSourceResult): string {
+  return `${item.title} ${item.abstract ?? ''}`.trim()
+}
+
+/**
+ * How well each candidate matches the claim, semantically where possible.
+ *
+ * Word overlap cannot fix the failure this exists for. eval/baseline.md
+ * recorded a remote-work claim retrieving remote *sensing* papers; measured on
+ * that exact case, coverage scores the Bloom/Ctrip paper and a satellite
+ * imagery paper **identically at 0.200**, because each shares exactly one of
+ * the claim's five content words. There is no threshold that separates them.
+ * Embeddings score them 0.44 and 0.03.
+ *
+ * One batched call for the claim and every candidate together: the worker
+ * round-trip dominates, so 25 texts at once costs barely more than one.
+ * Falls back to coverage whenever the model is unavailable — the caller is
+ * told which metric came back, because the two need different thresholds.
+ */
+async function computeRelevances(
+  claimText: string,
+  items: NormalizedSourceResult[]
+): Promise<{ values: number[]; metric: RelevanceMetric }> {
+  const texts = items.map(candidateText)
+  const vectors = await embedCached([claimText, ...texts])
+
+  if (!vectors) {
+    return { values: texts.map((text) => computeTextRelevance(claimText, text)), metric: 'lexical' }
+  }
+
+  const claimVector = vectors[0]
+  return { values: vectors.slice(1).map((vector) => cosineSimilarity(claimVector, vector)), metric: 'dense' }
+}
+
 export async function findEvidence(
   query: string,
   claimText: string
@@ -107,10 +142,8 @@ export async function findEvidence(
   // provider ranked its own result highest — see blendedRelevance/
   // computeTextRelevance for why: provider rank alone let confidently wrong
   // top hits pass straight through.
-  const scored = clusters.map((item) => ({
-    item,
-    textRelevance: computeTextRelevance(claimText, `${item.title} ${item.abstract ?? ''}`)
-  }))
+  const { values, metric } = await computeRelevances(claimText, clusters)
+  const scored = clusters.map((item, index) => ({ item, textRelevance: values[index] }))
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
   const topScored = scored.slice(0, MAX_MERGED_RESULTS)
 
@@ -124,7 +157,8 @@ export async function findEvidence(
       year: s.item.year,
       relevanceRank: s.item.relevanceRank,
       textRelevance: s.textRelevance
-    }))
+    })),
+    metric
   )
 
   return { evidence, score, breakdown }

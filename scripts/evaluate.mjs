@@ -35,6 +35,7 @@ const essayDir = isAbsolute(essayArg) ? essayArg : join(repoRoot, essayArg)
 const outDir = join(repoRoot, 'eval', 'reports')
 const dataDir = join(repoRoot, 'out', 'eval', 'data')
 const bundlePath = join(repoRoot, 'out', 'eval', 'harness.mjs')
+const workerPath = join(repoRoot, 'out', 'eval', 'mlWorker.cjs')
 
 if (!existsSync(essayDir)) {
   console.error(`No essay folder at ${essayDir}`)
@@ -82,6 +83,13 @@ await esbuild.build({
   // Left external so node loads them from node_modules at runtime —
   // sql.js in particular ships a wasm sidecar that a bundler would break.
   external: ['sql.js', 'dotenv'],
+  // services/ml falls back to join(__dirname, ...) when no worker override is
+  // set, and __dirname does not exist in an ESM bundle. The override below
+  // means that branch is never taken, but a bundle that would throw on an
+  // unrelated future edit is not worth saving three lines.
+  banner: {
+    js: "import{createRequire as __cr}from'module';import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';const require=__cr(import.meta.url);const __filename=__f(import.meta.url);const __dirname=__d(__filename);"
+  },
   define: {
     __RELAY_URL__: JSON.stringify(process.env.RELAY_URL ?? ''),
     __RELAY_TOKEN__: JSON.stringify(process.env.RELAY_TOKEN ?? ''),
@@ -90,6 +98,26 @@ await esbuild.build({
   }
 })
 
+// The ML worker, bundled separately because worker_threads spawns a file from
+// disk. Without this the harness finds no worker, services/ml disables itself,
+// and retrieval silently falls back to word overlap — the harness would then
+// report that embeddings changed nothing, which is the one wrong answer this
+// measurement must never give.
+//
+// CJS with a .cjs extension: the repo's package.json declares no "type", and
+// the worker reaches @huggingface/transformers through a dynamic import that
+// must stay external rather than being bundled.
+await esbuild.build({
+  entryPoints: [join(repoRoot, 'src', 'main', 'services', 'ml', 'worker.ts')],
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  outfile: workerPath,
+  external: ['@huggingface/transformers']
+})
+
+process.env.TRACELY_ML_WORKER = workerPath
 process.env.EVAL_REPO_ROOT = repoRoot
 process.env.EVAL_DATA_DIR = dataDir
 process.env.EVAL_ESSAY_DIR = essayDir

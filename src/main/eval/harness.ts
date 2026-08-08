@@ -18,9 +18,7 @@ import { basename, join } from 'path'
 import type { Claim, EvidenceItem, Source } from '@shared/types'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
-import { findEvidence } from '../services/search/aggregator'
-import type { NormalizedSourceResult } from '../services/search/types'
-import { computeTextRelevance } from '../services/search/scoring'
+import { findEvidence, type RankedSourceResult } from '../services/search/aggregator'
 import { initDb } from '../services/storage/db'
 import { setAppPaths } from '../services/storage/paths'
 
@@ -92,7 +90,11 @@ function asClaim(detected: DetectedClaim, strengthScore: number, id: string): Cl
   }
 }
 
-function asEvidence(results: NormalizedSourceResult[], claimText: string): EvidenceItem[] {
+// Takes the aggregator's ranked results rather than raw provider ones, so the
+// relevance in the report is the number that actually ordered the evidence.
+// Recomputing it here meant the harness could report a metric the pipeline no
+// longer uses — precisely the drift this eval exists to detect.
+function asEvidence(results: RankedSourceResult[]): EvidenceItem[] {
   return results.map((result, index) => {
     const source: Source = {
       id: `eval-${index}`,
@@ -113,7 +115,7 @@ function asEvidence(results: NormalizedSourceResult[], claimText: string): Evide
     }
     return {
       source,
-      relevanceScore: computeTextRelevance(claimText, `${result.title} ${result.abstract ?? ''}`),
+      relevanceScore: result.textRelevance,
       rank: index
     }
   })
@@ -129,7 +131,7 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
 
   try {
     const { evidence, score, breakdown } = await findEvidence(detected.searchQuery, detected.text)
-    const evidenceItems = asEvidence(evidence, detected.text)
+    const evidenceItems = asEvidence(evidence)
 
     let critique: string | null = null
     let verdict: string | null = null

@@ -20,7 +20,21 @@ const PER_PROVIDER_LIMIT = 6
 // 6-source cap essentially always, pinning 25% of the score at a constant
 // 1.0 for every claim in the app. A claim nothing relevant was found for
 // now actually scores like one.
-export const MIN_COUNTABLE_RELEVANCE = 0.2
+export type RelevanceMetric = 'lexical' | 'dense'
+
+// Two metrics, two floors, because they are not on the same scale. Claim
+// coverage is a fraction of the claim's own words and runs high for a good
+// match; cosine similarity between MiniLM embeddings runs lower and compresses
+// — measured on the eval's own failure case, genuinely relevant papers sat at
+// 0.43-0.54 and irrelevant ones at 0.03-0.23.
+//
+// The dense figure is a starting point from four labelled pairs, not a
+// calibration. It is meant to be moved by what `npm run evaluate` reports, and
+// should not be treated as settled until it has been.
+export const MIN_COUNTABLE_RELEVANCE: Record<RelevanceMetric, number> = {
+  lexical: 0.2,
+  dense: 0.35
+}
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -89,7 +103,13 @@ export interface ScorableItem {
   textRelevance: number
 }
 
-export function computeStrengthScore(items: ScorableItem[]): { score: number; breakdown: ScoreBreakdown } {
+export function computeStrengthScore(
+  items: ScorableItem[],
+  // Which metric produced item.textRelevance. Passed rather than inferred
+  // because the two scales need different floors, and silently applying the
+  // lexical floor to cosine values would let weak matches count as sources.
+  metric: RelevanceMetric = 'lexical'
+): { score: number; breakdown: ScoreBreakdown } {
   if (items.length === 0) {
     const breakdown: ScoreBreakdown = { sourceCount: 0, quality: 0, recency: 0, relevance: 0 }
     return { score: 0, breakdown }
@@ -97,7 +117,7 @@ export function computeStrengthScore(items: ScorableItem[]): { score: number; br
 
   const currentYear = new Date().getFullYear()
 
-  const relevantCount = items.filter((item) => item.textRelevance >= MIN_COUNTABLE_RELEVANCE).length
+  const relevantCount = items.filter((item) => item.textRelevance >= MIN_COUNTABLE_RELEVANCE[metric]).length
   const sourceCount = Math.min(relevantCount, SOURCE_COUNT_CAP) / SOURCE_COUNT_CAP
 
   const quality =
