@@ -37,6 +37,24 @@ export default function EvidenceCard({
 
   return (
     <div className="evidence-card">
+      {/* Only the two decisive verdicts get a badge. 'unclear' is the common
+          case — the paper is on topic but is not evidence either way — and
+          labelling it would put a chip on most of the list, which teaches a
+          reader to stop seeing them. Null means the question was never asked,
+          which is not a finding to report. */}
+      {item.stance === 'supports' || item.stance === 'contradicts' ? (
+        <span
+          className={`evidence-stance evidence-stance-${item.stance}`}
+          title={
+            item.stance === 'contradicts'
+              ? 'This source appears to state the opposite of the claim.'
+              : 'This source appears to back the claim.'
+          }
+        >
+          {item.stance === 'contradicts' ? 'Contradicts' : 'Supports'}
+        </span>
+      ) : null}
+
       <div className="evidence-title">
         {source.url ? (
           <a href={source.url} target="_blank" rel="noreferrer">

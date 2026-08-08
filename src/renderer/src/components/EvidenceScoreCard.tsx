@@ -41,12 +41,17 @@ export default function EvidenceScoreCard({
   score,
   breakdown,
   verdict,
-  critique
+  critique,
+  correction
 }: {
   score: number | null
   breakdown: ScoreBreakdown | null
   verdict: CritiqueVerdict | null
   critique: string | null
+  /** What the sources actually found. Present only when a local entailment
+   *  model flagged a contradiction AND the relay independently confirmed it —
+   *  so by the time this is non-null, two separate checks have agreed. */
+  correction: string | null
 }): JSX.Element {
   return (
     <div className={`evidence-score-card ${verdict ? VERDICT_CLASS[verdict] : ''}`}>
@@ -78,6 +83,17 @@ export default function EvidenceScoreCard({
               </div>
             )
           })}
+        </div>
+      ) : null}
+
+      {/* Above the critique, not inside it. The critique assesses how well the
+          argument is made; this says the sentence is factually wrong and what
+          the literature says instead. Someone who reads one thing on this card
+          should read this one. */}
+      {correction ? (
+        <div className="evidence-correction">
+          <div className="evidence-correction-label">What the sources actually say</div>
+          <p>{correction}</p>
         </div>
       ) : null}
 

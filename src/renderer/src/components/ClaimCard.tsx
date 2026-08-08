@@ -20,6 +20,10 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
   const [loadingEvidence, setLoadingEvidence] = useState(false)
   const [loadingCritique, setLoadingCritique] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Not stored on the claim: unlike critique/verdict there is no column for it,
+  // and a correction is only meaningful alongside the evidence it was derived
+  // from — which is re-fetched anyway whenever this card is opened.
+  const [correction, setCorrection] = useState<string | null>(null)
 
   async function findEvidence(): Promise<void> {
     setLoadingEvidence(true)
@@ -46,6 +50,10 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
     try {
       const res = await tracelyApi.generateCritique(claim.id)
       setClaim((c) => ({ ...c, critique: res.critique, critiqueVerdict: res.verdict }))
+      // Cleared as well as set: re-checking a claim the user has since edited
+      // must not leave the previous correction on screen asserting something
+      // about a sentence that no longer says it.
+      setCorrection(res.correction)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -93,6 +101,7 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
           breakdown={claim.scoreBreakdown}
           verdict={claim.critiqueVerdict}
           critique={claim.critique}
+          correction={correction}
         />
       ) : null}
 

@@ -1593,6 +1593,59 @@ textarea:disabled {
   color: var(--text);
 }
 
+/* The correction is the most consequential thing this app says: it tells a
+   student a sentence they wrote is factually wrong. It is deliberately louder
+   than the critique next to it — a left rule and a wash rather than plain
+   padded text — because it only ever appears when a local entailment model and
+   the relay independently agreed, which is rare and worth stopping for. */
+.evidence-correction {
+  padding: 12px 16px;
+  margin: 0 14px 2px;
+  border-left: 3px solid var(--danger);
+  background: var(--score-low-wash);
+  border-radius: 0 8px 8px 0;
+}
+
+.evidence-correction-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  margin-bottom: 6px;
+}
+
+.evidence-correction p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* Per-source verdicts. Only supports/contradicts are ever rendered — see
+   EvidenceCard for why 'unclear' deliberately gets no chip. */
+.evidence-stance {
+  float: right;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.evidence-stance-supports {
+  background: var(--score-good-wash);
+  color: var(--score-good);
+}
+
+.evidence-stance-contradicts {
+  background: var(--score-low-wash);
+  color: var(--danger);
+}
+
 .evidence-list {
   display: flex;
   flex-direction: column;
