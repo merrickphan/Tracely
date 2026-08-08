@@ -3,7 +3,15 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { Worker } from 'worker_threads'
 import { getAppPaths } from '../storage/paths'
-import { EMBED_DIM, type MlRequest, type MlResponse, type MlWorkerData } from './protocol'
+import {
+  EMBED_DIM,
+  type MlRequest,
+  type MlResponse,
+  type MlWorkerData,
+  type StanceVerdict
+} from './protocol'
+
+export type { Stance, StanceVerdict } from './protocol'
 
 // The first request pays for loading ~23MB of weights plus the onnxruntime
 // binary; later ones are ~10ms. One generous ceiling for the cold case and a
@@ -105,6 +113,21 @@ function ensureWorker(): Worker | null {
   }
 }
 
+function send(request: MlRequest, active: Worker): Promise<MlResponse> {
+  const id = request.id
+  return new Promise<MlResponse>((resolve) => {
+    const timer = setTimeout(
+      () => {
+        pending.delete(id)
+        resolve({ id, ok: false, error: 'timed out' })
+      },
+      everSucceeded ? WARM_TIMEOUT_MS : COLD_TIMEOUT_MS
+    )
+    pending.set(id, { resolve, timer })
+    active.postMessage(request)
+  })
+}
+
 /**
  * Embeds each text, returning L2-normalised vectors — a plain dot product of
  * two results is their cosine similarity.
@@ -120,25 +143,13 @@ export async function embed(texts: string[]): Promise<Float32Array[] | null> {
   const active = ensureWorker()
   if (!active) return null
 
-  const id = nextId++
-  const request: MlRequest = { id, op: 'embed', texts }
-
-  const response = await new Promise<MlResponse>((resolve) => {
-    const timer = setTimeout(
-      () => {
-        pending.delete(id)
-        resolve({ id, ok: false, error: 'timed out' })
-      },
-      everSucceeded ? WARM_TIMEOUT_MS : COLD_TIMEOUT_MS
-    )
-    pending.set(id, { resolve, timer })
-    active.postMessage(request)
-  })
+  const response = await send({ id: nextId++, op: 'embed', texts }, active)
 
   if (!response.ok) {
     console.warn(`[ml] embed failed — ${response.error}`)
     return null
   }
+  if (response.op !== 'embed') return null
 
   const { data, dim } = response
   if (dim !== EMBED_DIM || data.length !== texts.length * dim) {
@@ -224,6 +235,65 @@ export async function embedCached(texts: string[]): Promise<Float32Array[] | nul
     result.push(vector)
   }
   return result
+}
+
+// Asserting "your claim is contradicted by the literature" is the highest-cost
+// output this app can produce — a wrong one is worse for a student than saying
+// nothing. So the bar for contradicts is deliberately higher than for supports.
+//
+// Measured on twelve hand-written pairs, the model's one dangerous error was a
+// 0.64-confidence contradicts on a topically unrelated paper. The relevance
+// gate in the caller catches that case, and this threshold is the second line.
+export const MIN_CONTRADICTION_CONFIDENCE = 0.8
+// Lower than the contradiction bar on purpose, and asymmetric for a reason:
+// wrongly claiming support overstates a student's evidence, while wrongly
+// claiming contradiction tells them a true sentence is false. The second is
+// the one worth being timid about.
+//
+// 0.5 rather than 0.6 because 0.6 was measured to be too strict — the Ctrip
+// remote-work paper, an unambiguous support, scores 0.59 and was being
+// discarded as unclear. Over three classes, 0.5 is still well clear of the
+// 0.33 chance line.
+export const MIN_SUPPORT_CONFIDENCE = 0.5
+
+/**
+ * Asks, for each passage, whether it supports or contradicts the claim.
+ *
+ * Returns `null` rather than throwing when the model is unavailable, like
+ * embed() — a claim with no stance verdict is displayed as unverified, not as
+ * unsupported.
+ *
+ * The caller must only pass passages that already cleared the relevance bar.
+ * An NLI model asked about an unrelated paper does not answer "irrelevant"; it
+ * answers with whichever of entailment/contradiction/neutral fits best, and
+ * that answer is noise. Relevance and stance are separate questions, in that
+ * order.
+ */
+export async function classifyStance(claim: string, passages: string[]): Promise<StanceVerdict[] | null> {
+  if (passages.length === 0) return []
+
+  const active = ensureWorker()
+  if (!active) return null
+
+  const response = await send({ id: nextId++, op: 'stance', claim, passages }, active)
+
+  if (!response.ok) {
+    console.warn(`[ml] stance failed — ${response.error}`)
+    return null
+  }
+  if (response.op !== 'stance' || response.verdicts.length !== passages.length) return null
+
+  // Anything under the bar is reported as unclear rather than as its raw
+  // label, so a low-confidence "contradicts" can never reach a student as one.
+  return response.verdicts.map((verdict) => {
+    if (verdict.stance === 'contradicts' && verdict.confidence < MIN_CONTRADICTION_CONFIDENCE) {
+      return { stance: 'unclear' as const, confidence: verdict.confidence }
+    }
+    if (verdict.stance === 'supports' && verdict.confidence < MIN_SUPPORT_CONFIDENCE) {
+      return { stance: 'unclear' as const, confidence: verdict.confidence }
+    }
+    return verdict
+  })
 }
 
 export function isMlAvailable(): boolean {

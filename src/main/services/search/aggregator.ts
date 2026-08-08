@@ -1,10 +1,15 @@
-import { cosineSimilarity, embedCached } from '../ml'
+import { classifyStance, cosineSimilarity, embedCached, type StanceVerdict } from '../ml'
 import * as crossref from './crossref'
 import { shouldQueryPubmed } from './domainRouter'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import * as semanticScholar from './semanticScholar'
-import { computeStrengthScore, computeTextRelevance, type RelevanceMetric } from './scoring'
+import {
+  computeStrengthScore,
+  computeTextRelevance,
+  MIN_COUNTABLE_RELEVANCE,
+  type RelevanceMetric
+} from './scoring'
 import type { NormalizedSourceResult } from './types'
 
 const PER_PROVIDER_LIMIT = 6
@@ -71,6 +76,43 @@ async function safeSearch(
  */
 export interface RankedSourceResult extends NormalizedSourceResult {
   textRelevance: number
+  /** Whether this source agrees with the claim. Null when stance could not be
+   *  determined — either the model was unavailable or the source did not clear
+   *  the relevance bar, which are different from "unclear" and both mean the
+   *  same thing to a reader: this source is not evidence either way. */
+  stance: StanceVerdict | null
+}
+
+/**
+ * Attaches a stance verdict to the evidence that has earned one.
+ *
+ * Only sources above the relevance floor are asked about. An NLI model given
+ * an unrelated paper does not answer "irrelevant" — it picks whichever of
+ * entailment/contradiction/neutral fits best, and on the twelve-pair test set
+ * the single dangerous error was exactly that: a 0.64 "contradicts" between a
+ * claim about school start times and a paper on chronotype and depression.
+ * Relevance is the gate that keeps that pair from ever being asked about.
+ */
+async function attachStance(
+  claimText: string,
+  scored: { item: NormalizedSourceResult; textRelevance: number }[],
+  metric: RelevanceMetric
+): Promise<(StanceVerdict | null)[]> {
+  const floor = MIN_COUNTABLE_RELEVANCE[metric]
+  const eligible = scored.map((s, index) => ({ index, s })).filter(({ s }) => s.textRelevance >= floor)
+  if (eligible.length === 0) return scored.map(() => null)
+
+  const verdicts = await classifyStance(
+    claimText,
+    eligible.map(({ s }) => candidateText(s.item))
+  )
+  if (!verdicts) return scored.map(() => null)
+
+  const byIndex = new Array<StanceVerdict | null>(scored.length).fill(null)
+  eligible.forEach(({ index }, i) => {
+    byIndex[index] = verdicts[i]
+  })
+  return byIndex
 }
 
 function candidateText(item: NormalizedSourceResult): string {
@@ -154,9 +196,15 @@ export async function findEvidence(
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
   const topScored = scored.slice(0, MAX_MERGED_RESULTS)
 
-  const evidence: RankedSourceResult[] = topScored.map((s) => ({
+  // After the cut to eight, not before: stance is the most expensive local
+  // step and there is no point asking it about candidates that were never
+  // going to be shown.
+  const stances = await attachStance(claimText, topScored, metric)
+
+  const evidence: RankedSourceResult[] = topScored.map((s, index) => ({
     ...s.item,
-    textRelevance: s.textRelevance
+    textRelevance: s.textRelevance,
+    stance: stances[index]
   }))
   const { score, breakdown } = computeStrengthScore(
     topScored.map((s) => ({

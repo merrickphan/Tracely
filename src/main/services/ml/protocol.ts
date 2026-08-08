@@ -10,6 +10,28 @@
 export const EMBED_MODEL_ID = 'Xenova/all-MiniLM-L6-v2'
 export const EMBED_DIM = 384
 
+/**
+ * NLI model used to ask whether a source agrees with a claim.
+ *
+ * Chosen by measurement, not reputation. Against twelve hand-written
+ * (claim, finding) pairs it caught 3 of 4 contradictions, and its one miss was
+ * a null result ("no significant difference"), which is arguably not a
+ * contradiction at all. The obvious alternative, distilbert-base-uncased-mnli,
+ * scored the same overall but caught 1 of 4 — and called a real contradiction
+ * "support" at 0.99 confidence, which is precisely the failure that would tell
+ * a student their wrong claim is right.
+ */
+export const STANCE_MODEL_ID = 'Xenova/nli-deberta-v3-xsmall'
+
+export type Stance = 'supports' | 'contradicts' | 'unclear'
+
+export interface StanceVerdict {
+  stance: Stance
+  /** Probability of the winning class. Callers threshold on this; the worker
+   *  deliberately does not, so the bar can be tuned without a rebuild. */
+  confidence: number
+}
+
 export interface MlWorkerData {
   /** Where transformers.js may write downloaded weights. Must be writable —
    *  node_modules is read-only inside a packaged app. */
@@ -27,15 +49,30 @@ export interface EmbedRequest {
   texts: string[]
 }
 
-export type MlRequest = EmbedRequest
-
-export interface MlSuccess {
+export interface StanceRequest {
   id: number
+  op: 'stance'
+  claim: string
+  passages: string[]
+}
+
+export type MlRequest = EmbedRequest | StanceRequest
+
+export interface EmbedSuccess {
+  id: number
+  op: 'embed'
   ok: true
   /** Flat batch × dim buffer; the host slices it. Transferred rather than
    *  cloned, so the batch size doesn't cost a copy. */
   data: Float32Array
   dim: number
+}
+
+export interface StanceSuccess {
+  id: number
+  op: 'stance'
+  ok: true
+  verdicts: StanceVerdict[]
 }
 
 export interface MlFailure {
@@ -44,4 +81,4 @@ export interface MlFailure {
   error: string
 }
 
-export type MlResponse = MlSuccess | MlFailure
+export type MlResponse = EmbedSuccess | StanceSuccess | MlFailure
