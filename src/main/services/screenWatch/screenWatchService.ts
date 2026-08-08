@@ -34,7 +34,28 @@ import {
 } from './uiaSnapshot'
 
 const POLL_INTERVAL_MS = 1200
-const STABLE_MS = 1200
+// How long the text has to stop changing before it's analyzed. This was
+// 1200ms, which is not "the user finished a thought" — it's the pause
+// between words. Someone drafting an essay clears a 1.2s bar dozens of
+// times per paragraph, and because the cache is keyed on the whole
+// document, every one of those was a guaranteed miss (the text differs by
+// whatever was just typed) and so a full relay call re-analyzing the entire
+// document. 4s is still responsive for someone who has genuinely stopped
+// to think, and removes most of that.
+const STABLE_MS = 4000
+// Floor on time between two analyses regardless of stability. STABLE_MS
+// alone doesn't bound anything: alternating type-pause-type-pause can clear
+// it indefinitely. This is the actual ceiling on Screen Watch's spend —
+// at most one detection per 20s per user while actively writing.
+const MIN_ANALYSIS_INTERVAL_MS = 20_000
+// Re-analyzing after a handful of characters changed re-reads the whole
+// document to discover the same claims plus a partial sentence. Requiring a
+// sentence-sized delta means a detection is triggered by new content, not
+// by a typo fix. (Deletions count: Math.abs.)
+const MIN_TEXT_DELTA_CHARS = 80
+// How many of a detection's claims get their evidence fetched automatically
+// (see triggerEvidenceSearch). The rest search when the user opens them.
+const MAX_AUTO_EVIDENCE_CLAIMS = 3
 const MIN_TEXT_LENGTH = 20
 // User-configurable now (Settings > General > sensitivity) rather than a
 // value we keep re-tuning in code — Screen Watch underlines passively,
@@ -58,6 +79,23 @@ let detecting = false
 let pendingText = ''
 let pendingSince = 0
 let lastAnalyzedText = ''
+let lastAnalysisAt = 0
+
+// Cheap stand-in for an edit distance: the length change, plus whether one
+// text is still a prefix of the other. Rewriting a sentence in place keeps
+// the length nearly identical, so length alone would miss it — but such an
+// edit also breaks the common prefix, which this catches. Good enough to
+// separate "typed a new sentence" from "fixed a typo", which is all the
+// gate below needs to decide.
+function hasMeaningfulDelta(next: string, previous: string): boolean {
+  if (!previous) return true
+  if (Math.abs(next.length - previous.length) >= MIN_TEXT_DELTA_CHARS) return true
+  const shared = next.length < previous.length ? next.length : previous.length
+  let i = 0
+  while (i < shared && next[i] === previous[i]) i++
+  // Everything after the first difference is rewritten text on both sides.
+  return previous.length - i + (next.length - i) >= MIN_TEXT_DELTA_CHARS
+}
 let currentClaims: Claim[] = []
 // Background evidence search result per currently-flagged claim — kicked
 // off right after detection (see triggerEvidenceSearch) rather than waiting
@@ -350,11 +388,14 @@ async function tick(): Promise<void> {
     } else if (
       pendingText.trim().length >= MIN_TEXT_LENGTH &&
       pendingText !== lastAnalyzedText &&
+      hasMeaningfulDelta(pendingText, lastAnalyzedText) &&
       Date.now() - pendingSince >= STABLE_MS &&
+      Date.now() - lastAnalysisAt >= MIN_ANALYSIS_INTERVAL_MS &&
       Date.now() >= retryAfter &&
       !detecting
     ) {
       detecting = true
+      lastAnalysisAt = Date.now()
       const textAtRequestTime = pendingText
       logScreenWatch(`text stable, triggering detectClaims (len ${textAtRequestTime.length})`)
       detectClaims(textAtRequestTime)
@@ -598,7 +639,14 @@ function resolveSourceRef(claimId: string, sourceRef: string): NormalizedSourceR
 // evidenceResultByClaimId independently and triggers its own redraw as soon
 // as it's ready, rather than waiting for every claim's search to finish.
 function triggerEvidenceSearch(claims: Claim[]): void {
-  for (const claim of claims) {
+  // Every claim here costs four provider searches, so a full set of 8 fired
+  // 32 HTTP requests per detection, unprompted, for claims the user may
+  // never look at. That is the main reason Semantic Scholar answers 429 —
+  // its unauthenticated tier is a shared global pool. Claims arrive sorted
+  // by confidence, so the top few are the ones most likely to be opened;
+  // the rest search on demand via refreshEvidenceForClaim when the user
+  // actually hovers one.
+  for (const claim of claims.slice(0, MAX_AUTO_EVIDENCE_CLAIMS)) {
     findEvidence(claim.searchQuery, claim.text)
       .then((result) => {
         // The claim set may have moved on (text changed again, focus moved

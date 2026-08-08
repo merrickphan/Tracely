@@ -1,15 +1,27 @@
 export const MAX_CLAIM_DETECTION_INPUT_CHARS = 6000
 export const MAX_CLAIMS_PER_ANALYSIS = 8
-export const MAX_CRITIQUE_EVIDENCE_ITEMS = 5
+export const MAX_CRITIQUE_EVIDENCE_ITEMS = 4
+// A claim whose retrieval failed still needs a critique, so the relevance
+// filter below only applies while at least this many items survive it.
+export const MIN_CRITIQUE_EVIDENCE_ITEMS = 2
+// Claim coverage below this and the source isn't about the claim — see
+// selectCritiqueEvidence. Deliberately looser than scoring's
+// MIN_COUNTABLE_RELEVANCE (0.2): that decides whether a source counts
+// toward a score, this decides whether the model is even shown it, and
+// wrongly hiding a real source costs more than wrongly including one.
+export const MIN_CRITIQUE_RELEVANCE = 0.15
 // ~200 chars of an abstract is one sentence, and in a structured abstract
 // that sentence is the background ("Adolescent sleep has been widely
 // studied...") — the findings, effect sizes and populations all sit past
-// the cut. The critique prompt asks the model whether the evidence supports
-// the claim and then faults it for being vague, while showing it the part
-// of each paper that contains no evidence. 1200 covers most of a real
-// abstract; at 5 items that's ~1.5k tokens of extra input per critique,
-// which is a rounding error next to being able to answer the question.
-export const MAX_CRITIQUE_ABSTRACT_CHARS = 1200
+// the cut, so the model was being asked whether the evidence supports the
+// claim while shown the part of each paper containing no evidence.
+//
+// 900 rather than a full abstract: 4 relevant items at 900 is ~900 input
+// tokens, against ~1500 for the 5-at-1200 this briefly was. Paired with
+// the relevance filter that's roughly a 40% cut in critique input on the
+// most expensive call in the app, with more of the surviving budget spent
+// on papers that are actually about the claim.
+export const MAX_CRITIQUE_ABSTRACT_CHARS = 900
 
 // Below this, the model itself said it wasn't sure this is even a real,
 // citation-worthy claim (see the prompt's calibration instructions) — no

@@ -26,6 +26,11 @@ import { setAppPaths } from '../services/storage/paths'
 
 interface EvaluatedSource {
   title: string
+  // Rendered by scripts/preview.mjs, which rebuilds the app's own evidence
+  // card from this data — without authors and abstract the preview would be
+  // a lookalike missing the two lines a user actually reads.
+  authors: string[]
+  abstract: string | null
   provider: string
   year: number | null
   venue: string | null
@@ -146,6 +151,8 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
       },
       sources: evidenceItems.map((item) => ({
         title: item.source.title,
+        authors: item.source.authors.map((a) => (a.given ? `${a.given} ${a.family}` : a.family)),
+        abstract: item.source.abstract,
         provider: item.source.provider,
         year: item.source.year,
         venue: item.source.venue,
