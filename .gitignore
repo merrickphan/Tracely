@@ -11,3 +11,8 @@ release/
 .DS_Store
 HANDOFF.md
 *.tsbuildinfo
+
+# Model weights that ship in the installer. Binary, 22MB, and reproducible
+# exactly from a pinned model id — scripts/fetch-models.mjs rebuilds them, and
+# the dist/release scripts run it before electron-builder.
+resources/models/

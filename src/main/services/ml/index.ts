@@ -22,6 +22,13 @@ const WARM_TIMEOUT_MS = 20_000
 
 let worker: Worker | null = null
 let unavailable = false
+// The stance model is deliberately not bundled in the installer (see
+// scripts/fetch-models.mjs), so in a packaged build every stance call fails and
+// that is the expected, supported state — not a fault worth a line of log per
+// claim. Warned once so the reason stays discoverable without the noise.
+// Deliberately not latched into "never ask again": a timeout is also a failure
+// here, and one slow call should not silently disable stance for the session.
+let stanceWarned = false
 let everSucceeded = false
 let nextId = 1
 
@@ -278,7 +285,13 @@ export async function classifyStance(claim: string, passages: string[]): Promise
   const response = await send({ id: nextId++, op: 'stance', claim, passages }, active)
 
   if (!response.ok) {
-    console.warn(`[ml] stance failed — ${response.error}`)
+    if (!stanceWarned) {
+      stanceWarned = true
+      console.warn(
+        `[ml] stance unavailable — ${response.error}. Claims will score without a support factor, ` +
+          `identical to a machine that cannot run the model. Further failures are not logged.`
+      )
+    }
     return null
   }
   if (response.op !== 'stance' || response.verdicts.length !== passages.length) return null

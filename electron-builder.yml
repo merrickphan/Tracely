@@ -6,29 +6,41 @@ directories:
 files:
   - out/**/*
   - package.json
-  # electron-builder packages every production dependency, and
-  # @huggingface/transformers drags in ~380MB: onnxruntime-node carries
-  # prebuilt binaries for all four platforms (211MB), onnxruntime-web another
-  # 130MB of WASM we never reach, and sharp is image decoding for vision
-  # models this app has none of.
+  # The ML stack is INCLUDED as of here, trimmed rather than excluded.
   #
-  # Nothing calls embed() yet, so the whole stack is excluded rather than
-  # trimmed — shipping ~95MB of trimmed-but-unused runtime to every user buys
-  # nothing. services/ml/index.ts degrades to lexical scoring when the worker
-  # can't load, which is exactly what happens here.
+  # It was excluded wholesale through v0.3.76, when nothing called embed().
+  # That stopped being true once dense relevance landed in scoring.ts, and the
+  # exclusion then became a silent regression rather than a saving: the worker
+  # cannot load, services/ml/index.ts degrades to lexical scoring, and the
+  # packaged app quietly runs the old word-overlap path while every measurement
+  # says otherwise. Nothing errors. Do not re-add a blanket exclusion here
+  # without also checking what calls embed().
   #
-  # When Phase 1 wires embeddings into scoring.ts, drop the @huggingface and
-  # onnxruntime-node lines and keep the rest, then prune onnxruntime-node's
-  # other-platform binaries per target (win32-x64 alone is 60MB of the 211MB).
-  #
-  # Matches all of @huggingface, not just transformers: v0.3.76 shipped with
-  # @huggingface/jinja (410KB) because a package-specific glob missed the
-  # transitive dependency.
-  - '!node_modules/@huggingface/**'
-  - '!node_modules/onnxruntime-node/**'
+  # Untrimmed the stack is ~380MB. What is dropped, and why:
+
+  # 202MB of models downloaded during development. The weights that actually
+  # ship are fetched into resources/models by scripts/fetch-models.mjs and
+  # copied via extraResources below.
+  - '!node_modules/@huggingface/transformers/.cache/**'
+  # TypeScript sources and type declarations — dist/ is what gets imported.
+  - '!node_modules/@huggingface/transformers/src/**'
+  - '!node_modules/@huggingface/transformers/types/**'
+
+  # 150MB of onnxruntime binaries for platforms this target is not. Keeping
+  # win32/x64 only. Revisit when a mac build is real — dist:mac needs darwin.
+  - '!node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
+
+  # 128MB of WASM for the browser build. dist/transformers.node.mjs imports
+  # onnxruntime-node and never this, so it is genuinely unreachable here.
   - '!node_modules/onnxruntime-web/**'
-  - '!node_modules/sharp/**'
-  - '!node_modules/@img/**'
+
+  # sharp and @img (~20MB) are NOT excluded, despite being image decoding for
+  # vision models this app does not have. transformers.node.mjs has a
+  # top-level `import sharp from "sharp"`, so excluding it breaks the import
+  # of the whole library — and only in the packaged build, never in dev.
+  # @img already ships win32-x64 alone; npm resolves those per platform.
 extraResources:
   - from: node_modules/sql.js/dist/sql-wasm.wasm
     to: sql-wasm.wasm
@@ -38,16 +50,26 @@ extraResources:
     to: uia-watch.ps1
   - from: resources/scan-apps.ps1
     to: scan-apps.ps1
+  # Populated by scripts/fetch-models.mjs, which the dist/release scripts run
+  # first. Landing here is what makes services/ml/index.ts set
+  # allowRemote=false, so a packaged app never reaches the network for weights
+  # and never blocks a student's first analysis on a download.
+  - from: resources/models
+    to: models
 asarUnpack:
   - '**/*.node'
   - '**/*.wasm'
   # onnxruntime_binding.node loads onnxruntime.dll (and DirectML.dll) from
-  # beside itself at runtime. Unpacking the .node without its DLLs would leave
-  # the binding resolvable and its dependencies not — a failure that only
-  # appears in a packaged build, never in dev. Harmless while the ML stack is
-  # excluded above; required the moment it isn't.
+  # beside itself at runtime, and sharp's binding does the same with its own
+  # DLLs. Unpacking a .node without its DLLs leaves the binding resolvable and
+  # its dependencies not — a failure that only appears in a packaged build,
+  # never in dev.
   - '**/*.dll'
 npmRebuild: false
+# Verifies the packed app can actually run embeddings, before the installer is
+# built or published. See scripts/afterPack.js for why a green build is not
+# sufficient evidence here.
+afterPack: scripts/afterPack.js
 protocols:
   - name: Tracely OAuth callback
     schemes:
