@@ -39,6 +39,19 @@ function toAuthors(authors: S2Author[] | undefined): Author[] {
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
   const apiKey = getConfig().semanticScholarApiKey
+
+  // Without a key, don't ask at all. This is a latency decision backed by two
+  // measurements: across the whole labelled baseline Semantic Scholar
+  // contributed ZERO sources that survived to any evidence list, and the
+  // 1100ms throttle it needs is a per-key promise chain — so on an eight-claim
+  // document the last claim waits nearly nine seconds for its turn to be told
+  // 429 by a pool shared with every anonymous caller on earth.
+  //
+  // Paying nine seconds for nothing is worse than not asking. The moment a key
+  // is present this reverts to a real provider with a real rate limit, and the
+  // key is read from SEMANTIC_SCHOLAR_API_KEY or config.json.
+  if (!apiKey) return []
+
   const params = new URLSearchParams({
     query,
     limit: String(limit),

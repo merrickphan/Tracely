@@ -87,6 +87,11 @@ export interface OpenAlexEnrichment {
 // abstracts are what moved dense relevance separation from 0.192 to 0.238.
 const DOI_BATCH_SIZE = 50
 
+// How many free singleton lookups run at once when the batch path is refused.
+// Eight is well under OpenAlex's hard 100 req/s ceiling and turns what was a
+// 3.1-second serial crawl into roughly one round trip.
+const ENRICH_CONCURRENCY = 8
+
 /** Bare lowercase DOI, with any doi.org/dx.doi.org prefix stripped. Providers
  *  disagree about which form they return, and OpenAlex keys on the bare one. */
 export function normalizeDoi(doi: string): string {
@@ -116,16 +121,33 @@ function toEnrichment(work: OpenAlexWork): OpenAlexEnrichment {
  */
 async function enrichIndividually(dois: string[]): Promise<Map<string, OpenAlexEnrichment>> {
   const found = new Map<string, OpenAlexEnrichment>()
-  for (const doi of dois) {
-    try {
-      await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
-      const res = await fetch(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
-      if (!res.ok) continue
-      found.set(doi, toEnrichment((await res.json()) as OpenAlexWork))
-    } catch {
-      // One unreachable paper must not cost the rest their abstracts.
+
+  // Concurrent, and NOT through throttle('openalex'). That throttle is a
+  // per-key promise chain, so routing these through it serialises every lookup
+  // behind a 150ms gap: measured, one claim issued 17 singleton requests and
+  // spent 3.1 seconds doing it, on a fallback path that runs whenever the
+  // daily budget is spent — which for a keyless user is most of the time.
+  //
+  // Safe because these are a different kind of request. Singletons cost 0
+  // credits, so there is no budget to protect; the only limit that applies is
+  // OpenAlex's hard 100 requests/second, and ENRICH_CONCURRENCY is far below
+  // it. The throttle stays on search, where the budget does apply.
+  const queue = [...dois]
+  const workers = Array.from({ length: Math.min(ENRICH_CONCURRENCY, queue.length) }, async () => {
+    for (;;) {
+      const doi = queue.shift()
+      if (doi === undefined) return
+      try {
+        const res = await fetch(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
+        if (!res.ok) continue
+        found.set(doi, toEnrichment((await res.json()) as OpenAlexWork))
+      } catch {
+        // One unreachable paper must not cost the rest their abstracts.
+      }
     }
-  }
+  })
+
+  await Promise.all(workers)
   return found
 }
 

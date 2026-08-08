@@ -5,6 +5,7 @@ import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey
 import { registerIpcHandlers } from './ipc'
 import { handleOAuthRedirect } from './services/auth/client'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
+import { warmUp as warmUpMl } from './services/ml'
 import { initDb, persist } from './services/storage/db'
 import { setAppPaths } from './services/storage/paths'
 import { getSetting } from './services/storage/settingsRepo'
@@ -91,6 +92,17 @@ if (!gotLock) {
     registerScreenWatchHotkey(getSetting('screenWatchHotkeyAccelerator'))
     initAutoUpdater()
     initScreenWatch()
+
+    // Same reasoning as the hidden Tracer window above: pay the one-time cost
+    // at boot rather than in front of the user. Measured, the first
+    // findEvidence call spent 10.0 seconds on local work against ~1.2s for
+    // later ones — worker spawn, the transformers import, onnxruntime init and
+    // ~22MB of weights, all of it once. Reads as "the app is slow to find
+    // sources" when it is really "the model is loading".
+    //
+    // Deliberately not awaited: nothing here depends on it, and a failure just
+    // means the first analysis takes the old path.
+    warmUpMl()
 
     // Cold start via the protocol (app wasn't already running) delivers the
     // URL as a plain argv entry instead of 'second-instance'/'open-url'.
