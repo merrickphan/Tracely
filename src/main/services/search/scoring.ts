@@ -173,17 +173,26 @@ export function computeStrengthScore(
       return sum + (0.75 * item.textRelevance + 0.25 * rankRelevance)
     }, 0) / items.length
 
-  // `null` means the question was never asked, so a document analysed on a
-  // machine without the model keeps its old scoring rather than being pushed
-  // toward zero by an absent factor.
-  const stanceKnown = items.some((item) => item.stance !== null)
   const supporting = items.filter((item) => item.stance === 'supports').length
   const contradicting = items.filter((item) => item.stance === 'contradicts').length
-  const support = stanceKnown
+
+  // Deliberately "produced a decisive verdict", not "was asked". An entailment
+  // model that answers `unclear` for everything carries no information, and
+  // treating that as a real zero would be actively wrong: support is weighted
+  // 0.4, so a permanently-zero support factor silently caps every claim in the
+  // app near 60 however well evidenced it is.
+  //
+  // That is not hypothetical. Measured against the labelled baseline with real
+  // abstracts, the zero-shot NLI model returned `unclear` for all 21 sources it
+  // was asked about — at whole-abstract and sentence granularity alike. Until a
+  // model fine-tuned on SciFact replaces it, this branch is the common case,
+  // and it must degrade to the old scoring rather than deflate it.
+  const stanceDecided = supporting > 0 || contradicting > 0
+  const support = stanceDecided
     ? clamp01((supporting - CONTRADICTION_WEIGHT * contradicting) / SUPPORT_CAP)
     : 0
 
-  const w = stanceKnown ? WEIGHTS_WITH_STANCE : WEIGHTS_WITHOUT_STANCE
+  const w = stanceDecided ? WEIGHTS_WITH_STANCE : WEIGHTS_WITHOUT_STANCE
 
   const breakdown: ScoreBreakdown = { sourceCount, quality, recency, relevance, support }
   const weighted =
