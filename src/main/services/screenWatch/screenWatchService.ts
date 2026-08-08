@@ -15,7 +15,7 @@ import { detectClaims } from '../ai/claimDetection'
 import { generateCritique } from '../ai/critique'
 import { formatCitation } from '../citations'
 import { formatInTextCitation } from '../citations/inText'
-import { findEvidence } from '../search/aggregator'
+import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
@@ -647,7 +647,7 @@ function triggerEvidenceSearch(claims: Claim[]): void {
   // the rest search on demand via refreshEvidenceForClaim when the user
   // actually hovers one.
   for (const claim of claims.slice(0, MAX_AUTO_EVIDENCE_CLAIMS)) {
-    findEvidence(claim.searchQuery, claim.text)
+    findEvidenceCached(claim.searchQuery, claim.text)
       .then((result) => {
         // The claim set may have moved on (text changed again, focus moved
         // to a different app) by the time this resolves — a result for a
@@ -669,7 +669,7 @@ function triggerEvidenceSearch(claims: Claim[]): void {
 export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWatchClaimEvidence | null> {
   const claim = currentClaims.find((c) => c.id === claimId)
   if (!claim) return null
-  const result = await findEvidence(claim.searchQuery, claim.text)
+  const result = await findEvidenceCached(claim.searchQuery, claim.text)
   if (!currentClaims.some((c) => c.id === claimId)) return null
   evidenceResultByClaimId.set(claimId, { evidence: result.evidence, score: result.score })
   redrawOverlay()
@@ -708,7 +708,7 @@ function clamp01(value: number): number {
 }
 
 // The focused, single-claim search behind the overlay's "Find a source"
-// action — same findEvidence call Refresh Evidence already uses, but with a
+// action — same cached evidence lookup Refresh Evidence already uses, but with a
 // per-item match % (the same text-relevance/rank blend computeStrengthScore
 // uses internally for the whole claim, just surfaced per candidate here)
 // so the user can pick one specific source to cite instead of browsing a
@@ -717,7 +717,7 @@ function clamp01(value: number): number {
 export async function findSourceForClaim(claimId: string, query?: string): Promise<ScreenWatchSourceCandidate[]> {
   const claim = currentClaims.find((c) => c.id === claimId)
   if (!claim) return []
-  const result = await findEvidence(query ?? claim.searchQuery, claim.text)
+  const result = await findEvidenceCached(query ?? claim.searchQuery, claim.text)
   if (!currentClaims.some((c) => c.id === claimId)) return []
   findSourceResultByClaimId.set(claimId, result.evidence)
 

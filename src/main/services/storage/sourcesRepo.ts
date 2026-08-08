@@ -62,9 +62,17 @@ export interface NewSource {
 // mixed-case suffix, another normalizes it), and an exact-string match here
 // let those show up as two separate Source rows for what's really one
 // article once evidence accumulates across multiple analyses over time.
+export function normalizeDoi(doi: string): string {
+  return doi.toLowerCase().trim()
+}
+
+// Matches the stored doi_key column rather than computing lower(trim(doi))
+// per row. Same semantics, but a function applied to a column makes the
+// UNIQUE(doi) index unusable, so this was a full table scan of an
+// ever-growing table for every result of every search.
 export function findByDoi(doi: string): Source | null {
-  const row = queryOne<SourceRow>('SELECT * FROM sources WHERE lower(trim(doi)) = $doi', {
-    $doi: doi.toLowerCase().trim()
+  const row = queryOne<SourceRow>('SELECT * FROM sources WHERE doi_key = $key', {
+    $key: normalizeDoi(doi)
   })
   return row ? toDomain(row) : null
 }
@@ -83,11 +91,22 @@ export function upsertSource(input: NewSource): Source {
   const id = randomUUID()
   const createdAt = new Date().toISOString()
   run(
-    `INSERT INTO sources (id, doi, title, authors, year, venue, venue_type, url, pdf_url, abstract, provider, provider_id, citation_count, oa_status, raw_json, created_at)
-     VALUES ($id, $doi, $title, $authors, $year, $venue, $venueType, $url, $pdfUrl, $abstract, $provider, $providerId, $citationCount, $oaStatus, $raw, $createdAt)`,
+    // raw_json is deliberately not written. It held each provider's entire
+    // response payload — an OpenAlex work carries a full inverted abstract
+    // index, several KB per paper — and nothing in the app has ever read it
+    // back: there is no `raw` field on the Source domain type and no query
+    // selects the column. Because sql.js rewrites the whole database file on
+    // every write, that dead payload was a permanent tax on every unrelated
+    // write, growing with the library. Every field the app actually uses is
+    // already normalized into its own column, and anything else can be
+    // re-fetched. The column is kept so existing rows stay readable; a
+    // migration nulls them out.
+    `INSERT INTO sources (id, doi, doi_key, title, authors, year, venue, venue_type, url, pdf_url, abstract, provider, provider_id, citation_count, oa_status, created_at)
+     VALUES ($id, $doi, $doiKey, $title, $authors, $year, $venue, $venueType, $url, $pdfUrl, $abstract, $provider, $providerId, $citationCount, $oaStatus, $createdAt)`,
     {
       $id: id,
       $doi: input.doi,
+      $doiKey: input.doi ? normalizeDoi(input.doi) : null,
       $title: input.title,
       $authors: JSON.stringify(input.authors),
       $year: input.year,
@@ -100,7 +119,6 @@ export function upsertSource(input: NewSource): Source {
       $providerId: input.providerId,
       $citationCount: input.citationCount,
       $oaStatus: input.oaStatus,
-      $raw: input.raw ? JSON.stringify(input.raw) : null,
       $createdAt: createdAt
     }
   )

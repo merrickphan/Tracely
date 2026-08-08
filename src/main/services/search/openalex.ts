@@ -1,4 +1,5 @@
 import type { Author, VenueType } from '@shared/types'
+import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import { getSetting } from '../storage/settingsRepo'
 import type { NormalizedSourceResult } from './types'
 
@@ -68,6 +69,7 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
     ...(mailto ? { mailto } : {})
   })
 
+  await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
   const res = await fetch(`https://api.openalex.org/works?${params.toString()}`)
   if (!res.ok) {
     console.warn(`[search:openalex] ${res.status} ${res.statusText} — no results for "${query}"`)

@@ -42,9 +42,27 @@ if (!existsSync(essayDir)) {
   process.exit(1)
 }
 
-if (!process.env.RELAY_URL && !process.env.EVAL_SKIP_CRITIQUE) {
+// Every run of this script bills the OpenAI account behind the relay: one
+// detect-claims call per essay plus one critique per claim, and the cache
+// does not save you across a cache-key bump. Five runs in one afternoon is
+// a visible line on the bill, which is exactly how this guard came to
+// exist. Spending is now opt-in per invocation rather than the default.
+if (!process.env.EVAL_ALLOW_SPEND) {
+  console.error('Refusing to run: this harness makes paid relay calls.')
+  console.error('')
+  console.error('  Retrieval and scoring only (free — academic APIs, no relay):')
+  console.error('    EVAL_ALLOW_SPEND=1 EVAL_SKIP_CRITIQUE=1 npm run evaluate')
+  console.error('')
+  console.error('  Full run including detection and critique (paid):')
+  console.error('    EVAL_ALLOW_SPEND=1 npm run evaluate')
+  console.error('')
+  console.error('Rebuilding the preview from an existing report costs nothing: npm run preview')
+  process.exit(1)
+}
+
+if (!process.env.RELAY_URL) {
   console.error('RELAY_URL is not set in .env — claim detection cannot run.')
-  console.error('Set it, or run with EVAL_SKIP_CRITIQUE=1 to skip only the critique calls.')
+  console.error('(If you disabled it deliberately, restore it from .env.backup-before-killswitch.)')
   process.exit(1)
 }
 

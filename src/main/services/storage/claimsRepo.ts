@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { Claim, ClaimType, CritiqueVerdict, ScoreBreakdown } from '@shared/types'
-import { queryAll, queryOne, run } from './db'
+import { queryAll, queryOne, run, transaction } from './db'
 
 interface ClaimRow {
   id: string
@@ -41,35 +41,39 @@ export interface NewClaim {
 
 export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
   const createdAt = new Date().toISOString()
-  return claims.map((c) => {
-    const id = randomUUID()
-    run(
-      `INSERT INTO claims (id, analysis_id, text, claim_type, confidence, search_query, created_at)
-       VALUES ($id, $analysisId, $text, $type, $confidence, $query, $createdAt)`,
-      {
-        $id: id,
-        $analysisId: analysisId,
-        $text: c.text,
-        $type: c.claimType,
-        $confidence: c.confidence,
-        $query: c.searchQuery,
-        $createdAt: createdAt
+  // Batched: up to 8 claims per analysis, each of which was its own
+  // full-database serialization to disk.
+  return transaction(() =>
+    claims.map((c) => {
+      const id = randomUUID()
+      run(
+        `INSERT INTO claims (id, analysis_id, text, claim_type, confidence, search_query, created_at)
+         VALUES ($id, $analysisId, $text, $type, $confidence, $query, $createdAt)`,
+        {
+          $id: id,
+          $analysisId: analysisId,
+          $text: c.text,
+          $type: c.claimType,
+          $confidence: c.confidence,
+          $query: c.searchQuery,
+          $createdAt: createdAt
+        }
+      )
+      return {
+        id,
+        analysisId,
+        text: c.text,
+        claimType: c.claimType,
+        confidence: c.confidence,
+        searchQuery: c.searchQuery,
+        strengthScore: null,
+        scoreBreakdown: null,
+        critique: null,
+        critiqueVerdict: null,
+        createdAt
       }
-    )
-    return {
-      id,
-      analysisId,
-      text: c.text,
-      claimType: c.claimType,
-      confidence: c.confidence,
-      searchQuery: c.searchQuery,
-      strengthScore: null,
-      scoreBreakdown: null,
-      critique: null,
-      critiqueVerdict: null,
-      createdAt
-    }
-  })
+    })
+  )
 }
 
 export function getClaimsByAnalysis(analysisId: string): Claim[] {

@@ -12,7 +12,18 @@ export interface SentenceSpan {
  */
 export function splitSentences(text: string): SentenceSpan[] {
   const spans: SentenceSpan[] = []
-  const boundary = /[.!?]+["')\]]*(?:\s+|$)/g
+  // The closing group covers curly quotes (’ ”) as well as straight
+  // ones. Word and Google Docs — Screen Watch's whole reason for existing —
+  // emit curly by default, so `He said "it works."` used to end the sentence
+  // at the period and orphan the closing quote onto the front of the next
+  // span. Detection selects claims by sentence index, so every span after
+  // the first quotation in a document was subtly wrong.
+  //
+  // The second alternative treats a newline as a boundary even with no
+  // terminal punctuation, which is what headings, titles and bullet
+  // fragments look like; without it a heading was glued onto the first
+  // sentence of the paragraph below it and the pair got flagged as one claim.
+  const boundary = /(?:[.!?]+["'’”)\]]*(?:\s+|$))|(?:\n+)/g
   let start = 0
   let match: RegExpExecArray | null
 

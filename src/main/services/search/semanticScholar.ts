@@ -1,4 +1,5 @@
 import type { Author, VenueType } from '@shared/types'
+import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import { getConfig } from '../storage/config'
 import type { NormalizedSourceResult } from './types'
 
@@ -44,6 +45,7 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
     fields: 'title,abstract,year,authors,venue,publicationTypes,externalIds,citationCount,openAccessPdf,url'
   })
 
+  await throttle('semanticscholar', PROVIDER_MIN_INTERVAL_MS.semanticscholar)
   const res = await fetch(`https://api.semanticscholar.org/graph/v1/paper/search?${params.toString()}`, {
     headers: apiKey ? { 'x-api-key': apiKey } : {}
   })

@@ -1,9 +1,9 @@
 import type { Author } from '@shared/types'
-import { throttle } from './rateLimiter'
+import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import type { NormalizedSourceResult } from './types'
 
 const EUTILS_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
-const MIN_INTERVAL_MS = 350 // NCBI allows ~3 req/sec unauthenticated
+const MIN_INTERVAL_MS = PROVIDER_MIN_INTERVAL_MS.pubmed
 
 interface EsearchResponse {
   esearchresult?: { idlist?: string[] }

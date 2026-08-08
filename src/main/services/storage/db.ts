@@ -36,7 +36,104 @@ export async function initDb(): Promise<void> {
 
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec(SCHEMA_SQL)
+  runMigrations(db)
+  sweepExpiredCache(db)
   persist()
+}
+
+// Expiry was checked on read and never acted on: getCached returns null for
+// an expired row and leaves it in place, so every evidence search a user has
+// ever run stayed in the file forever. Since the whole database is
+// serialized to disk on every write, dead rows are not merely wasted space —
+// they are a tax on every subsequent write in the app.
+//
+// Once per boot rather than on a timer: this is garbage that accumulates
+// over sessions, not within one, and it costs a single DELETE.
+function sweepExpiredCache(database: Database): void {
+  database.run('DELETE FROM request_cache WHERE expires_at IS NOT NULL AND expires_at < $now', {
+    $now: new Date().toISOString()
+  })
+}
+
+// SCHEMA_SQL is all CREATE TABLE IF NOT EXISTS, so it is a complete no-op
+// against a database that already exists. That is fine for adding a whole
+// new table — it appears on next boot for everyone — but it means editing an
+// existing table's definition silently does nothing for every current user,
+// and the first SELECT or INSERT naming the new column throws at runtime.
+// There was no mechanism to catch that. This is it.
+//
+// Rules: never edit an existing table's definition in SCHEMA_SQL — add a
+// migration here instead. A brand-new database runs SCHEMA_SQL and then
+// every migration, so migrations must be idempotent; addColumnIfMissing
+// handles that for the common case.
+
+interface Migration {
+  version: number
+  describe: string
+  up: (database: Database) => void
+}
+
+function columnExists(database: Database, table: string, column: string): boolean {
+  const stmt = database.prepare(`PRAGMA table_info(${table})`)
+  let found = false
+  while (stmt.step()) {
+    if ((stmt.getAsObject() as { name?: string }).name === column) {
+      found = true
+      break
+    }
+  }
+  stmt.free()
+  return found
+}
+
+function addColumnIfMissing(database: Database, table: string, column: string, decl: string): void {
+  if (columnExists(database, table, column)) return
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`)
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    describe: 'sources.doi_key — case/whitespace-normalized DOI with an index',
+    up: (database) => {
+      // findByDoi matched on lower(trim(doi)), which no index can serve, so
+      // every source encountered in every search was a full table scan of a
+      // table that grows forever. Normalizing on write makes it an index hit.
+      addColumnIfMissing(database, 'sources', 'doi_key', 'TEXT')
+      database.exec('CREATE INDEX IF NOT EXISTS idx_sources_doi_key ON sources(doi_key)')
+      database.exec(
+        "UPDATE sources SET doi_key = lower(trim(doi)) WHERE doi IS NOT NULL AND doi_key IS NULL"
+      )
+    }
+  },
+  {
+    version: 2,
+    describe: 'reclaim sources.raw_json — write-only provider payloads',
+    up: (database) => {
+      // See upsertSource: raw_json was never read back by anything. Existing
+      // installs are carrying several KB per paper of it, and every write
+      // rewrites the whole file. VACUUM is what actually returns the space —
+      // a DELETE/UPDATE alone leaves the pages allocated.
+      database.exec('UPDATE sources SET raw_json = NULL WHERE raw_json IS NOT NULL')
+      database.exec('VACUUM')
+    }
+  }
+]
+
+function runMigrations(database: Database): void {
+  const stmt = database.prepare('PRAGMA user_version')
+  stmt.step()
+  const current = Number(Object.values(stmt.getAsObject())[0] ?? 0)
+  stmt.free()
+
+  for (const migration of MIGRATIONS) {
+    if (migration.version <= current) continue
+    migration.up(database)
+    // Not parameterizable — PRAGMA takes a literal. version is a hardcoded
+    // integer from the table above, never user input.
+    database.exec(`PRAGMA user_version = ${migration.version}`)
+    console.log(`[db] migrated to v${migration.version}: ${migration.describe}`)
+  }
 }
 
 export function getDb(): Database {
@@ -44,10 +141,50 @@ export function getDb(): Database {
   return db
 }
 
+// sql.js holds the database in memory with no incremental write path, so
+// "saving" means serializing the whole thing and rewriting the file. That is
+// fine for one write and ruinous for a loop: a single evidence search
+// upserts a source and links evidence per result, then updates the claim's
+// score, which was ~21 full-database serializations back to back on the main
+// thread. The cost scales with total database size, so it got worse the
+// longer someone used the app, and it would get much worse again once
+// embedding vectors live in here.
+//
+// Depth-counted rather than a boolean so nested transaction() calls collapse
+// into one write instead of the inner one committing early.
+let persistDepth = 0
+let persistPending = false
+
 export function persist(): void {
   if (!db || !dbPath) return
+  if (persistDepth > 0) {
+    persistPending = true
+    return
+  }
   const bytes = db.export()
   writeFileSync(dbPath, Buffer.from(bytes))
+}
+
+/**
+ * Runs `fn` with disk writes deferred, then writes once at the end.
+ *
+ * This is a write-batching helper, NOT a SQL transaction — it does not begin
+ * or roll back anything. If `fn` throws, writes made before the throw are
+ * still in the in-memory database and are still flushed, exactly as they
+ * would have been without this wrapper. The guarantee is only that the file
+ * is rewritten once rather than N times.
+ */
+export function transaction<T>(fn: () => T): T {
+  persistDepth++
+  try {
+    return fn()
+  } finally {
+    persistDepth--
+    if (persistDepth === 0 && persistPending) {
+      persistPending = false
+      persist()
+    }
+  }
 }
 
 export type SqlParams = Record<string, SqlValue> | SqlValue[]
@@ -78,6 +215,10 @@ export function resetDatabase(): void {
   getDb().exec(
     'DELETE FROM claim_evidence; DELETE FROM citations; DELETE FROM library_items; DELETE FROM claims; DELETE FROM analyses; DELETE FROM sources; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
   )
+  // Deleting rows does not shrink a SQLite file, so without this a user who
+  // clears everything for privacy reasons still ships the same
+  // multi-megabyte file around, and every write still pays for its size.
+  getDb().exec('VACUUM')
   persist()
 }
 
@@ -89,5 +230,6 @@ export function clearAnalysisHistory(): void {
   getDb().exec(
     'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
   )
+  getDb().exec('VACUUM')
   persist()
 }

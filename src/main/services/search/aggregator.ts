@@ -59,10 +59,22 @@ async function safeSearch(
   }
 }
 
+/**
+ * A merged result with its claim-coverage score attached (see
+ * computeTextRelevance). Callers used to have to re-derive a relevance
+ * number and got it wrong — evidenceHandlers computed `1 - rank/length`,
+ * i.e. the provider's own rank, which is not what results were sorted by
+ * and not what critique.ts filters on. Carrying the real value out of the
+ * one place that computes it removes that whole class of drift.
+ */
+export interface RankedSourceResult extends NormalizedSourceResult {
+  textRelevance: number
+}
+
 export async function findEvidence(
   query: string,
   claimText: string
-): Promise<{ evidence: NormalizedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
+): Promise<{ evidence: RankedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
   const results = await Promise.all([
     safeSearch('openalex', openalex.search, query),
     safeSearch('crossref', crossref.search, query),
@@ -102,7 +114,10 @@ export async function findEvidence(
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
   const topScored = scored.slice(0, MAX_MERGED_RESULTS)
 
-  const evidence = topScored.map((s) => s.item)
+  const evidence: RankedSourceResult[] = topScored.map((s) => ({
+    ...s.item,
+    textRelevance: s.textRelevance
+  }))
   const { score, breakdown } = computeStrengthScore(
     topScored.map((s) => ({
       venueType: s.item.venueType,
