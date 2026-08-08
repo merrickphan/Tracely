@@ -24,7 +24,13 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/main/index.ts') }
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          // Second entry rather than a chunk of the main bundle: worker_threads
+          // needs a real file on disk to spawn, and services/ml/index.ts
+          // resolves it as mlWorker.js beside the main bundle.
+          mlWorker: resolve(__dirname, 'src/main/services/ml/worker.ts')
+        }
       }
     },
     resolve: {
