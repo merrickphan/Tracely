@@ -4,19 +4,14 @@ const DEFAULTS: Record<string, string> = {
   defaultCitationStyle: 'APA',
   hotkeyAccelerator: 'CommandOrControl+Shift+F',
   // Contact address sent to Crossref as `mailto`, which routes identified
-  // callers into its polite pool and throttles anonymous traffic. Sent to
-  // OpenAlex too, harmlessly — see below.
+  // callers into its polite pool and throttles anonymous traffic. Crossref
+  // only — OpenAlex removed the parameter when it replaced the polite pool
+  // with a metered budget, so sending it there is dead weight.
   //
   // A real default rather than '' because nothing ever set it: there is no
   // Settings field for it, so every install ran anonymous against Crossref.
   // Read through politePoolMailto(), not getSetting(), so a stored blank
   // cannot shadow it.
-  //
-  // This does NOT fix OpenAlex. OpenAlex replaced its polite pool with a
-  // metered budget: a request costs $0.001, and an anonymous caller gets
-  // $0.10/day. Its 429 body says so outright — "Insufficient budget… Resets at
-  // midnight UTC". mailto buys nothing there; an API key raises the daily
-  // budget to $1. See openalexApiKey.
   crossrefMailto: 'info@jointracely.com',
   enableStrengthSummaries: 'false',
   screenWatchEnabled: 'false',

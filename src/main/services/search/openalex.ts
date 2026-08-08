@@ -1,6 +1,5 @@
 import type { Author, VenueType } from '@shared/types'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
-import { politePoolMailto } from '../storage/settingsRepo'
 import type { NormalizedSourceResult } from './types'
 
 interface OpenAlexAuthorship {
@@ -62,16 +61,14 @@ function reconstructAbstract(index: Record<string, number[]> | null | undefined)
 }
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
-  // Sent for identification only. OpenAlex no longer runs a polite pool — it
-  // meters by budget now ($0.001/request, $0.10/day anonymous, $1/day with a
-  // free API key), so this does not affect the rate limit. Kept because it is
-  // free, and because being identifiable is what lets a provider contact you
-  // instead of blocking you.
-  const mailto = politePoolMailto()
+  // No mailto here, deliberately — OpenAlex removed the parameter along with
+  // the polite pool: "No more email parameter in your calls—it was never
+  // secure and couldn't scale." It meters by budget now, and a search costs 10
+  // credits ($0.001) against $0.10/day without a key or $1/day with one.
+  // Crossref still honours mailto; OpenAlex ignores it.
   const params = new URLSearchParams({
     search: query,
-    per_page: String(limit),
-    ...(mailto ? { mailto } : {})
+    per_page: String(limit)
   })
 
   await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
