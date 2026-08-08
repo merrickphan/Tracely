@@ -1,6 +1,7 @@
 node_modules/
 out/
 release/
+release-preview/
 .env
 .env.backup*
 .env.release
