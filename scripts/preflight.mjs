@@ -100,11 +100,25 @@ const endpoints = new Set([...union.matchAll(/'([a-z0-9][a-z0-9-]*)'/g)].map((m)
 // Guarded: a worktree with no .env at all is the normal state for a freshly
 // created agent worktree (.env is gitignored), and an unhandled ENOENT here
 // would crash preflight instead of reporting the actual problem.
-let relayUrl = ''
+let env = ''
 try {
-  relayUrl = (readFileSync(join(ROOT, '.env'), 'utf8').match(/^RELAY_URL=(.+)$/m)?.[1] || '').trim()
+  env = readFileSync(join(ROOT, '.env'), 'utf8')
 } catch {
-  relayUrl = ''
+  env = ''
+}
+const envValue = (name) => (env.match(new RegExp(`^${name}=(.+)$`, 'm'))?.[1] || '').trim()
+const relayUrl = envValue('RELAY_URL')
+
+// The relay refuses any call it cannot attribute to a signed-in account, and
+// the app proves who it is with a Supabase access token. Those two values are
+// inlined at build time (electron.vite.config.ts) and default to '' when
+// absent — so a .env missing them produces a build that compiles, launches,
+// signs nobody in, and 401s every AI call. Silent and total, which is exactly
+// the kind of failure that reaches users.
+for (const name of ['SUPABASE_URL', 'SUPABASE_ANON_KEY']) {
+  envValue(name)
+    ? pass(`${name} present`)
+    : fail(`no ${name} in .env — the build could not sign anyone in, so every AI call would 401`)
 }
 
 if (!relayUrl) {
