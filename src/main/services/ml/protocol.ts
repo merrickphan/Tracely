@@ -23,6 +23,31 @@ export const EMBED_DIM = 384
  */
 export const STANCE_MODEL_ID = 'Xenova/nli-deberta-v3-xsmall'
 
+// NOT reranking with a cross-encoder, despite the plan calling for it. The
+// measurement is in out/eval/measure-rrf.mjs and it says no, twice over.
+//
+// Xenova/ms-marco-MiniLM-L-6-v2, scored on the labelled baseline with real
+// abstracts, orders WORSE within a claim than the bi-encoder already shipping
+// here — pairwise concordance 80% against 93%, and fusing the two rankings
+// still lands at 90%. It is better at the rel-vs-marginal distinction (83% vs
+// 67%) and much worse at rel-vs-irrelevant (69% vs 100%), and the second is
+// four times as common.
+//
+// The trap worth naming, because it nearly shipped: an earlier run compared
+// the two by MEAN SCORE per hand label, pooled across every claim, and the
+// cross-encoder separated the labels beautifully. That statistic is the wrong
+// one. A reranker only ever orders candidates WITHIN one claim, so a pooled
+// mean can look excellent while the within-claim ordering it actually produces
+// is worse. Concordance measures the ordering; separation measures a scale
+// nobody uses.
+//
+// The failures are legible: ms-marco is trained on short web-search queries,
+// and a full academic claim is out of distribution. Given "office vacancy
+// rates in American cities" it ranks a paper on *housing* vacancy above one on
+// the post-Covid corporate office — surface term overlap beating the meaning.
+//
+// Revisit with a scientific-domain reranker, not this one.
+
 export type Stance = 'supports' | 'contradicts' | 'unclear'
 
 export interface StanceVerdict {
