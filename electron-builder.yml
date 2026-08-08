@@ -17,10 +17,14 @@ files:
   # nothing. services/ml/index.ts degrades to lexical scoring when the worker
   # can't load, which is exactly what happens here.
   #
-  # When Phase 1 wires embeddings into scoring.ts, drop the first line and keep
-  # the rest, and prune onnxruntime-node's other-platform binaries per target
-  # (win32-x64 alone is 60MB of the 211MB).
-  - '!node_modules/@huggingface/transformers/**'
+  # When Phase 1 wires embeddings into scoring.ts, drop the @huggingface and
+  # onnxruntime-node lines and keep the rest, then prune onnxruntime-node's
+  # other-platform binaries per target (win32-x64 alone is 60MB of the 211MB).
+  #
+  # Matches all of @huggingface, not just transformers: v0.3.76 shipped with
+  # @huggingface/jinja (410KB) because a package-specific glob missed the
+  # transitive dependency.
+  - '!node_modules/@huggingface/**'
   - '!node_modules/onnxruntime-node/**'
   - '!node_modules/onnxruntime-web/**'
   - '!node_modules/sharp/**'
