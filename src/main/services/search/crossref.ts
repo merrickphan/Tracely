@@ -1,6 +1,6 @@
 import type { Author, VenueType } from '@shared/types'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
-import { getSetting } from '../storage/settingsRepo'
+import { politePoolMailto } from '../storage/settingsRepo'
 import type { NormalizedSourceResult } from './types'
 
 interface CrossrefAuthor {
@@ -53,7 +53,7 @@ function stripTags(text: string | undefined): string | null {
 }
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
-  const mailto = getSetting('crossrefMailto')
+  const mailto = politePoolMailto()
   const params = new URLSearchParams({
     query,
     rows: String(limit),

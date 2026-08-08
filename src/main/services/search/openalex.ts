@@ -1,6 +1,6 @@
 import type { Author, VenueType } from '@shared/types'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
-import { getSetting } from '../storage/settingsRepo'
+import { politePoolMailto } from '../storage/settingsRepo'
 import type { NormalizedSourceResult } from './types'
 
 interface OpenAlexAuthorship {
@@ -62,7 +62,12 @@ function reconstructAbstract(index: Record<string, number[]> | null | undefined)
 }
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
-  const mailto = getSetting('crossrefMailto')
+  // Sent for identification only. OpenAlex no longer runs a polite pool — it
+  // meters by budget now ($0.001/request, $0.10/day anonymous, $1/day with a
+  // free API key), so this does not affect the rate limit. Kept because it is
+  // free, and because being identifiable is what lets a provider contact you
+  // instead of blocking you.
+  const mailto = politePoolMailto()
   const params = new URLSearchParams({
     search: query,
     per_page: String(limit),
@@ -72,6 +77,19 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
   await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
   const res = await fetch(`https://api.openalex.org/works?${params.toString()}`)
   if (!res.ok) {
+    // 429 here is a spent daily budget, not a burst limit, and it is worth
+    // saying so plainly: retrying does not help, and the whole provider is
+    // dark until midnight UTC. Without this the only symptom is an evidence
+    // list that is quietly shorter than it should be.
+    if (res.status === 429) {
+      const resetSeconds = Number(res.headers.get('retry-after') ?? 0)
+      const hours = resetSeconds > 0 ? ` — resets in ${(resetSeconds / 3600).toFixed(1)}h` : ''
+      console.warn(
+        `[search:openalex] daily budget exhausted${hours}. Results will be missing OpenAlex ` +
+          `until it resets. A free API key raises the budget from $0.10/day to $1/day.`
+      )
+      return []
+    }
     console.warn(`[search:openalex] ${res.status} ${res.statusText} — no results for "${query}"`)
     return []
   }
