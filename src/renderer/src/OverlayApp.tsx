@@ -212,6 +212,7 @@ const PROVIDER_LABEL: Record<SourceProvider, string> = {
   crossref: 'CR',
   semanticscholar: 'S2',
   pubmed: 'PM',
+  wikipedia: 'W',
   manual: '•'
 }
 
@@ -220,6 +221,10 @@ const PROVIDER_COLOR: Record<SourceProvider, string> = {
   crossref: '#0f766e',
   semanticscholar: '#6d28d9',
   pubmed: '#15803d',
+  // Deliberately the same grey as 'manual' rather than a brand colour. An
+  // encyclopedia entry is orientation, not evidence, and its badge should not
+  // compete for attention with the peer-reviewed sources beside it.
+  wikipedia: '#6b7280',
   manual: '#6b7280'
 }
 

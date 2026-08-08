@@ -1,9 +1,10 @@
 import { classifyStance, cosineSimilarity, embedCached, type StanceVerdict } from '../ml'
 import * as crossref from './crossref'
-import { shouldQueryPubmed } from './domainRouter'
+import { classifyClaim } from './domainRouter'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import * as semanticScholar from './semanticScholar'
+import * as wikipedia from './wikipedia'
 import {
   computeStrengthScore,
   computeTextRelevance,
@@ -215,17 +216,23 @@ export async function findEvidence(
   query: string,
   claimText: string
 ): Promise<{ evidence: RankedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
-  // Asked before the fan-out rather than filtered after: PubMed costs three
+  // Asked before the fan-out rather than filtered after. PubMed costs three
   // requests per claim (esearch, esummary, efetch) and contributed zero
   // relevant sources across the labelled baseline, so for a claim it cannot
-  // answer the cheapest thing is not to ask.
-  const usePubmed = await shouldQueryPubmed(claimText, query)
+  // answer the cheapest thing is not to ask — and the same reasoning now picks
+  // up Wikipedia for the claims the academic providers answer badly.
+  const domain = await classifyClaim(claimText, query)
 
+  // The academic providers run for every claim. They are free, unmetered, and
+  // the product; routing decides what runs IN ADDITION, never what replaces
+  // them. A misrouted claim therefore loses nothing it would otherwise have
+  // had — it just doesn't gain the extra provider.
   const results = await Promise.all([
     safeSearch('openalex', openalex.search, query),
     safeSearch('crossref', crossref.search, query),
     safeSearch('semanticscholar', semanticScholar.search, query),
-    usePubmed ? safeSearch('pubmed', pubmed.search, query) : Promise.resolve([])
+    domain === 'biomedical' ? safeSearch('pubmed', pubmed.search, query) : Promise.resolve([]),
+    domain === 'general' ? safeSearch('wikipedia', wikipedia.search, query) : Promise.resolve([])
   ])
 
   const clusters: NormalizedSourceResult[] = []

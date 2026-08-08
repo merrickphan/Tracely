@@ -49,7 +49,11 @@ export const PROVIDER_MIN_INTERVAL_MS = {
   openalex: 150,
   crossref: 150,
   semanticscholar: 1100,
-  pubmed: 350 // NCBI allows ~3 req/sec unauthenticated
+  pubmed: 350, // NCBI allows ~3 req/sec unauthenticated
+  // Wikimedia publishes no hard number for anonymous API use, asking instead
+  // for a descriptive User-Agent and "reasonable" volume. One request per
+  // claim is already reasonable; this is politeness, not a required limit.
+  wikipedia: 200
 } as const
 
 // NCBI raises the ceiling to 10 req/sec for requests carrying an api_key.

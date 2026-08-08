@@ -6,6 +6,11 @@ const VENUE_TIER_WEIGHT: Record<VenueType, number> = {
   conference: 0.8,
   book: 0.6,
   preprint: 0.5,
+  // Deliberately barely above 'other'. An encyclopedia article is a genuine
+  // help for orienting on a claim and is not something a student should cite,
+  // and the score should say the second part. Its real value is the primary
+  // sources it points to.
+  reference: 0.35,
   other: 0.3
 }
 

@@ -30,9 +30,27 @@ export type CritiqueVerdict =
   | 'weak'
   | 'unsupported'
 
-export type VenueType = 'journal' | 'conference' | 'preprint' | 'book' | 'other'
+// 'reference' exists because not every checkable claim is a scientific one. A
+// date, a definition, or what an organisation does is answered by an
+// encyclopedia, and answered badly by the peer-reviewed literature — the
+// labelled baseline retrieved transistor lithography papers for a claim about
+// the printing press.
+export type VenueType =
+  | 'journal'
+  | 'conference'
+  | 'preprint'
+  | 'book'
+  /** Tertiary reference work. Useful orientation, not citable evidence. */
+  | 'reference'
+  | 'other'
 
-export type SourceProvider = 'openalex' | 'crossref' | 'semanticscholar' | 'pubmed' | 'manual'
+export type SourceProvider =
+  | 'openalex'
+  | 'crossref'
+  | 'semanticscholar'
+  | 'pubmed'
+  | 'wikipedia'
+  | 'manual'
 
 export interface Author {
   given?: string
