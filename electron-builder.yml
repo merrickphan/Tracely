@@ -6,6 +6,25 @@ directories:
 files:
   - out/**/*
   - package.json
+  # electron-builder packages every production dependency, and
+  # @huggingface/transformers drags in ~380MB: onnxruntime-node carries
+  # prebuilt binaries for all four platforms (211MB), onnxruntime-web another
+  # 130MB of WASM we never reach, and sharp is image decoding for vision
+  # models this app has none of.
+  #
+  # Nothing calls embed() yet, so the whole stack is excluded rather than
+  # trimmed — shipping ~95MB of trimmed-but-unused runtime to every user buys
+  # nothing. services/ml/index.ts degrades to lexical scoring when the worker
+  # can't load, which is exactly what happens here.
+  #
+  # When Phase 1 wires embeddings into scoring.ts, drop the first line and keep
+  # the rest, and prune onnxruntime-node's other-platform binaries per target
+  # (win32-x64 alone is 60MB of the 211MB).
+  - '!node_modules/@huggingface/transformers/**'
+  - '!node_modules/onnxruntime-node/**'
+  - '!node_modules/onnxruntime-web/**'
+  - '!node_modules/sharp/**'
+  - '!node_modules/@img/**'
 extraResources:
   - from: node_modules/sql.js/dist/sql-wasm.wasm
     to: sql-wasm.wasm
@@ -18,6 +37,12 @@ extraResources:
 asarUnpack:
   - '**/*.node'
   - '**/*.wasm'
+  # onnxruntime_binding.node loads onnxruntime.dll (and DirectML.dll) from
+  # beside itself at runtime. Unpacking the .node without its DLLs would leave
+  # the binding resolvable and its dependencies not — a failure that only
+  # appears in a packaged build, never in dev. Harmless while the ML stack is
+  # excluded above; required the moment it isn't.
+  - '**/*.dll'
 npmRebuild: false
 protocols:
   - name: Tracely OAuth callback
