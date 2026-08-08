@@ -53,7 +53,11 @@ console.log('  ' + '-'.repeat(86))
 const counts = { biomedical: 0, statistical: 0, general: 0, scholarly: 0 }
 
 for (const claim of claims) {
-  const subject = `${claim.text} ${claim.query ?? ''}`.trim()
+  // searchQuery, not query. The first version of this script read `claim.query`,
+  // which does not exist in the report — so it silently measured the router on
+  // claim text alone while the app feeds it claim text PLUS the query. The
+  // threshold set from that run was calibrated on the wrong input.
+  const subject = `${claim.text} ${claim.searchQuery ?? ''}`.trim()
   const e = await extract([...flat, subject], { pooling: 'mean', normalize: true })
   const d = e.dims[e.dims.length - 1]
   const vec = (i) => e.data.subarray(i * d, (i + 1) * d)

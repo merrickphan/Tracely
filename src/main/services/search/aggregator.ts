@@ -3,6 +3,7 @@ import * as crossref from './crossref'
 import { classifyClaim } from './domainRouter'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
+import { queryVariants } from './queryVariants'
 import * as semanticScholar from './semanticScholar'
 import * as wikipedia from './wikipedia'
 import {
@@ -227,9 +228,18 @@ export async function findEvidence(
   // the product; routing decides what runs IN ADDITION, never what replaces
   // them. A misrouted claim therefore loses nothing it would otherwise have
   // had — it just doesn't gain the extra provider.
+  // Fanned out on Crossref alone, and that is a cost decision rather than a
+  // quality one. Crossref is free, unmetered, one request per query, and was
+  // the strongest provider in the baseline (45% of its results labelled
+  // relevant, against OpenAlex's 29%). OpenAlex bills 10 credits per search
+  // against a $0.10/day budget, and PubMed costs three requests per query — on
+  // either, a second phrasing would triple a real cost for a measured gain of
+  // one paper in thirteen.
+  const variants = queryVariants(claimText, query)
+
   const results = await Promise.all([
     safeSearch('openalex', openalex.search, query),
-    safeSearch('crossref', crossref.search, query),
+    Promise.all(variants.map((v) => safeSearch('crossref', crossref.search, v))).then((r) => r.flat()),
     safeSearch('semanticscholar', semanticScholar.search, query),
     domain === 'biomedical' ? safeSearch('pubmed', pubmed.search, query) : Promise.resolve([]),
     domain === 'general' ? safeSearch('wikipedia', wikipedia.search, query) : Promise.resolve([])
