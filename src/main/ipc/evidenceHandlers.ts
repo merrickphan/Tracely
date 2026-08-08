@@ -45,8 +45,13 @@ export function registerEvidenceHandlers(): void {
         // order results were actually sorted in, and with the threshold
         // critique.ts filters evidence on.
         const relevanceScore = item.textRelevance
-        linkEvidence(claimId, source.id, relevanceScore, index)
-        return { source, relevanceScore, rank: index }
+        const stance = item.stance?.stance ?? null
+        const stanceConfidence = item.stance?.confidence ?? null
+        // Persisted with the evidence because the critique and correction
+        // steps read evidence back out of the database and would otherwise
+        // have no way to know which sources disagree.
+        linkEvidence(claimId, source.id, relevanceScore, index, stance, stanceConfidence)
+        return { source, relevanceScore, rank: index, stance, stanceConfidence }
       })
       updateClaimScore(claimId, result.score, result.breakdown)
       return items

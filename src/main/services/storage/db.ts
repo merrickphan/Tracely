@@ -117,6 +117,22 @@ const MIGRATIONS: Migration[] = [
       database.exec('UPDATE sources SET raw_json = NULL WHERE raw_json IS NOT NULL')
       database.exec('VACUUM')
     }
+  },
+  {
+    version: 3,
+    describe: 'claim_evidence.stance — whether each source agrees with the claim',
+    up: (database) => {
+      // Stance is computed during the evidence search, where the model output
+      // is in hand, but it is needed later by the critique and correction
+      // steps, which read evidence back from the database and would otherwise
+      // have no idea which sources disagree. Persisted here rather than in its
+      // own table because a verdict is meaningless without the exact claim
+      // wording it was computed against — so it should live and die with the
+      // claim, and be cleared by "Clear Analysis History" like any other
+      // record of what the user wrote.
+      addColumnIfMissing(database, 'claim_evidence', 'stance', 'TEXT')
+      addColumnIfMissing(database, 'claim_evidence', 'stance_confidence', 'REAL')
+    }
   }
 ]
 

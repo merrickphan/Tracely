@@ -615,7 +615,17 @@ function synthesizeSourceFromResult(item: NormalizedSourceResult, rank: number):
 
 function synthesizeEvidenceItem(item: NormalizedSourceResult, rank: number): EvidenceItem {
   const source = synthesizeSourceFromResult(item, rank)
-  return { source, relevanceScore: 1 - rank / Math.max(1, item.relevanceRank + 1), rank }
+  // Stance is null rather than carried across: this synthesises an
+  // EvidenceItem from a raw provider result that was never scored against a
+  // specific claim, so there is no verdict to report and asserting one would
+  // be inventing it.
+  return {
+    source,
+    relevanceScore: 1 - rank / Math.max(1, item.relevanceRank + 1),
+    rank,
+    stance: null,
+    stanceConfidence: null
+  }
 }
 
 // Looks a citation-flow sourceRef back up across both places a result could

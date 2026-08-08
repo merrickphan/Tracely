@@ -1,4 +1,5 @@
 import type { ScoreBreakdown, VenueType } from '@shared/types'
+import type { Stance } from '../ml/protocol'
 
 const VENUE_TIER_WEIGHT: Record<VenueType, number> = {
   journal: 1.0,
@@ -97,11 +98,43 @@ export interface ScorableItem {
   venueType: VenueType | null
   year: number | null
   relevanceRank: number
-  // Word-overlap relevance against the claim (see computeTextRelevance) —
-  // computed by the caller once per item since it needs the claim text,
-  // which this module otherwise has no reason to depend on.
+  // Relevance against the claim — dense or lexical, see the `metric` argument
+  // to computeStrengthScore. Computed by the caller once per item since it
+  // needs the claim text, which this module otherwise has no reason to
+  // depend on.
   textRelevance: number
+  // Whether this source agrees with the claim. `null` means the question was
+  // never answered — the model was unavailable, or the source did not clear
+  // the relevance bar — which is different from 'unclear', where it was asked
+  // and the answer was "this is not evidence either way".
+  stance: Stance | null
 }
+
+// How many confidently-supporting sources count as a fully supported claim.
+// Three rather than the six used for sourceCount: a claim with three papers
+// that actually say what it says is well evidenced, and the old count factor
+// was measuring how many results four providers happened to return.
+const SUPPORT_CAP = 3
+
+// Each contradicting source cancels two supporting ones. Not symmetry —
+// finding a paper that says the opposite is a stronger signal about a claim
+// than finding another that agrees, because agreement is also what a vague or
+// unfalsifiable claim attracts.
+const CONTRADICTION_WEIGHT = 2
+
+// A claim with published evidence against it cannot present as well-supported
+// no matter how good the journals are or how recent. Without this the venue
+// and recency factors alone floor a contradicted claim near 45.
+const CONTRADICTED_SCORE_CAP = 30
+
+// Stance-aware weights. Support carries the most because it is the only factor
+// that asks the question a reader cares about; venue tier and publication year
+// are proxies that a claim can score well on while being wrong.
+const WEIGHTS_WITH_STANCE = { support: 0.4, relevance: 0.25, sourceCount: 0.15, quality: 0.15, recency: 0.05 }
+
+// Unchanged from before stance existed, so a machine that cannot run the model
+// scores exactly as it did rather than drifting to a different scale.
+const WEIGHTS_WITHOUT_STANCE = { support: 0, relevance: 0.3, sourceCount: 0.25, quality: 0.3, recency: 0.15 }
 
 export function computeStrengthScore(
   items: ScorableItem[],
@@ -111,7 +144,7 @@ export function computeStrengthScore(
   metric: RelevanceMetric = 'lexical'
 ): { score: number; breakdown: ScoreBreakdown } {
   if (items.length === 0) {
-    const breakdown: ScoreBreakdown = { sourceCount: 0, quality: 0, recency: 0, relevance: 0 }
+    const breakdown: ScoreBreakdown = { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 }
     return { score: 0, breakdown }
   }
 
@@ -140,9 +173,43 @@ export function computeStrengthScore(
       return sum + (0.75 * item.textRelevance + 0.25 * rankRelevance)
     }, 0) / items.length
 
-  const breakdown: ScoreBreakdown = { sourceCount, quality, recency, relevance }
-  const weighted = 0.25 * sourceCount + 0.3 * quality + 0.15 * recency + 0.3 * relevance
-  const score = Math.round(100 * clamp01(weighted))
+  // `null` means the question was never asked, so a document analysed on a
+  // machine without the model keeps its old scoring rather than being pushed
+  // toward zero by an absent factor.
+  const stanceKnown = items.some((item) => item.stance !== null)
+  const supporting = items.filter((item) => item.stance === 'supports').length
+  const contradicting = items.filter((item) => item.stance === 'contradicts').length
+  const support = stanceKnown
+    ? clamp01((supporting - CONTRADICTION_WEIGHT * contradicting) / SUPPORT_CAP)
+    : 0
+
+  const w = stanceKnown ? WEIGHTS_WITH_STANCE : WEIGHTS_WITHOUT_STANCE
+
+  const breakdown: ScoreBreakdown = { sourceCount, quality, recency, relevance, support }
+  const weighted =
+    w.sourceCount * sourceCount +
+    w.quality * quality +
+    w.recency * recency +
+    w.relevance * relevance +
+    w.support * support
+
+  let score = Math.round(100 * clamp01(weighted))
+
+  // The case this whole rewrite exists for. eval/baseline.md recorded the
+  // claim with ZERO relevant sources scoring 78/100 — the highest in the run —
+  // because venue tier, year and count know nothing about whether anyone
+  // actually agrees. A claim the literature argues against must not read as
+  // strong, and the weighted average alone will not do that: good journals and
+  // recent dates floor it around 45.
+  // Only when the balance actually runs against the claim, not on any dissent
+  // at all. Real literature contains contrarian papers, and capping on the
+  // first one scored "three papers agree, one disagrees" identically to "one
+  // paper disagrees and nothing supports it" — both landed on exactly 30. The
+  // CONTRADICTION_WEIGHT above is what handles ordinary disagreement; this cap
+  // is for the case where the evidence found is net against.
+  if (contradicting > 0 && contradicting >= supporting) {
+    score = Math.min(score, CONTRADICTED_SCORE_CAP)
+  }
 
   return { score, breakdown }
 }

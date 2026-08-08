@@ -77,6 +77,11 @@ export interface CritiqueGenerateRequest {
 export interface CritiqueGenerateResponse {
   critique: string
   verdict: CritiqueVerdict
+  /** What the sources actually found, when the claim is contradicted and that
+   *  contradiction was confirmed. Null in every other case, including when the
+   *  local model flagged one and the relay declined to confirm it — a
+   *  correction is only ever shown when two independent checks agree. */
+  correction: string | null
 }
 
 export interface LibrarySaveRequest {

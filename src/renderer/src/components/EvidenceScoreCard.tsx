@@ -19,11 +19,17 @@ const VERDICT_CLASS: Record<CritiqueVerdict, string> = {
   contradicted: 'evidence-verdict-danger'
 }
 
+// Support leads because it is the only factor that answers the question a
+// reader is actually asking. The other four are proxies — a claim can score
+// well on venue tier and publication year while the literature disagrees with
+// it, which is how the worst-evidenced claim in eval/baseline.md ended up with
+// the highest score in the run.
 const BREAKDOWN_STATS: { key: keyof ScoreBreakdown; label: string }[] = [
+  { key: 'support', label: 'Support' },
+  { key: 'relevance', label: 'Relevance' },
   { key: 'sourceCount', label: 'Sources' },
   { key: 'quality', label: 'Quality' },
-  { key: 'recency', label: 'Recency' },
-  { key: 'relevance', label: 'Relevance' }
+  { key: 'recency', label: 'Recency' }
 ]
 
 // Replaces what used to be a single <strong>verdict</strong> + one long

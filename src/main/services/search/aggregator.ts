@@ -207,11 +207,12 @@ export async function findEvidence(
     stance: stances[index]
   }))
   const { score, breakdown } = computeStrengthScore(
-    topScored.map((s) => ({
+    topScored.map((s, index) => ({
       venueType: s.item.venueType,
       year: s.item.year,
       relevanceRank: s.item.relevanceRank,
-      textRelevance: s.textRelevance
+      textRelevance: s.textRelevance,
+      stance: stances[index]?.stance ?? null
     })),
     metric
   )

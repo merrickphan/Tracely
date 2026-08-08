@@ -65,6 +65,10 @@ export interface ScoreBreakdown {
   quality: number
   recency: number
   relevance: number
+  /** Balance of sources that support the claim against those that contradict
+   *  it. 0 when no source was confidently either — which is different from,
+   *  and much more common than, being contradicted. */
+  support: number
 }
 
 export interface Source {
@@ -85,10 +89,19 @@ export interface Source {
   createdAt: string
 }
 
+/** Whether a source agrees with the claim it was found for. `null` on
+ *  EvidenceItem means the question was never answered — the model was
+ *  unavailable, or the source did not clear the relevance bar — which is
+ *  different from 'unclear', where it was asked and the answer was "this is
+ *  not evidence either way". */
+export type EvidenceStance = 'supports' | 'contradicts' | 'unclear'
+
 export interface EvidenceItem {
   source: Source
   relevanceScore: number
   rank: number
+  stance: EvidenceStance | null
+  stanceConfidence: number | null
 }
 
 export interface Citation {

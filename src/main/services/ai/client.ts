@@ -33,7 +33,11 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function requestOnce<T>(endpoint: 'detect-claims' | 'critique' | 'tracer', body: unknown): Promise<T> {
+// Derived from callRelay rather than repeated. The literal union has to stay
+// spelled out in callRelay's own signature because scripts/preflight.mjs reads
+// it from the source to decide which routes to verify against production, and
+// a second copy here could silently fall behind it.
+async function requestOnce<T>(endpoint: Parameters<typeof callRelay>[0], body: unknown): Promise<T> {
   const response = await fetch(`${__RELAY_URL__}/api/${endpoint}`, {
     method: 'POST',
     headers: {
@@ -55,7 +59,15 @@ async function requestOnce<T>(endpoint: 'detect-claims' | 'critique' | 'tracer',
   return (await response.json()) as T
 }
 
-export async function callRelay<T>(endpoint: 'detect-claims' | 'critique' | 'tracer', body: unknown): Promise<T> {
+// Widening this union is what tells preflight there is a new endpoint to
+// verify against production — scripts/preflight.mjs reads this type rather
+// than a hardcoded list, so a release cannot ship a client calling a route the
+// relay has not deployed. That check exists because v0.3.73 shipped a headline
+// feature whose endpoint 404'd.
+export async function callRelay<T>(
+  endpoint: 'detect-claims' | 'critique' | 'tracer' | 'correction',
+  body: unknown
+): Promise<T> {
   if (!__RELAY_URL__) {
     throw new RelayError('This build has no relay configured. Set RELAY_URL/RELAY_TOKEN and rebuild.')
   }

@@ -15,7 +15,7 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
-import type { Claim, EvidenceItem, Source } from '@shared/types'
+import type { Claim, EvidenceItem, ScoreBreakdown, Source } from '@shared/types'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
 import { findEvidence, type RankedSourceResult } from '../services/search/aggregator'
@@ -47,7 +47,7 @@ interface EvaluatedClaim {
   confidence: number
   searchQuery: string
   strengthScore: number
-  breakdown: { sourceCount: number; quality: number; recency: number; relevance: number }
+  breakdown: ScoreBreakdown
   sources: EvaluatedSource[]
   critique: string | null
   verdict: string | null
@@ -116,7 +116,9 @@ function asEvidence(results: RankedSourceResult[]): EvidenceItem[] {
     return {
       source,
       relevanceScore: result.textRelevance,
-      rank: index
+      rank: index,
+      stance: result.stance?.stance ?? null,
+      stanceConfidence: result.stance?.confidence ?? null
     }
   })
 }
@@ -149,7 +151,8 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
         sourceCount: round(breakdown.sourceCount),
         quality: round(breakdown.quality),
         recency: round(breakdown.recency),
-        relevance: round(breakdown.relevance)
+        relevance: round(breakdown.relevance),
+        support: round(breakdown.support)
       },
       sources: evidenceItems.map((item) => ({
         title: item.source.title,
@@ -176,7 +179,7 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
     return {
       ...base,
       strengthScore: 0,
-      breakdown: { sourceCount: 0, quality: 0, recency: 0, relevance: 0 },
+      breakdown: { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 },
       sources: [],
       critique: null,
       verdict: null,
@@ -272,7 +275,7 @@ function toMarkdown(essays: EvaluatedEssay[]): string {
       lines.push(
         `- **Type** ${claim.claimType} · **detector confidence** ${claim.confidence} · **strength** ${claim.strengthScore}/100`,
         `- **Query** \`${claim.searchQuery}\``,
-        `- **Breakdown** count ${claim.breakdown.sourceCount} · quality ${claim.breakdown.quality} · recency ${claim.breakdown.recency} · relevance ${claim.breakdown.relevance}`,
+        `- **Breakdown** support ${claim.breakdown.support} · relevance ${claim.breakdown.relevance} · count ${claim.breakdown.sourceCount} · quality ${claim.breakdown.quality} · recency ${claim.breakdown.recency}`,
         '- [ ] genuinely citation-worthy?',
         ''
       )
