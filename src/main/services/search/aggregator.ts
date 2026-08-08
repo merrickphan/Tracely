@@ -1,5 +1,6 @@
 import { cosineSimilarity, embedCached } from '../ml'
 import * as crossref from './crossref'
+import { shouldQueryPubmed } from './domainRouter'
 import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import * as semanticScholar from './semanticScholar'
@@ -110,11 +111,17 @@ export async function findEvidence(
   query: string,
   claimText: string
 ): Promise<{ evidence: RankedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
+  // Asked before the fan-out rather than filtered after: PubMed costs three
+  // requests per claim (esearch, esummary, efetch) and contributed zero
+  // relevant sources across the labelled baseline, so for a claim it cannot
+  // answer the cheapest thing is not to ask.
+  const usePubmed = await shouldQueryPubmed(claimText, query)
+
   const results = await Promise.all([
     safeSearch('openalex', openalex.search, query),
     safeSearch('crossref', crossref.search, query),
     safeSearch('semanticscholar', semanticScholar.search, query),
-    safeSearch('pubmed', pubmed.search, query)
+    usePubmed ? safeSearch('pubmed', pubmed.search, query) : Promise.resolve([])
   ])
 
   const clusters: NormalizedSourceResult[] = []

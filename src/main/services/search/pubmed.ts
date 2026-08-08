@@ -135,12 +135,51 @@ async function fetchAbstracts(ids: string[]): Promise<Map<string, string>> {
   }
 }
 
+// Terms that carry no indexing value in PubMed and actively break matching.
+// Years are the worst of them: esearch maps a bare "2014" onto a date-ish
+// field and ANDs it in, which almost nothing satisfies.
+const QUERY_NOISE = new Set([
+  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'with', 'as', 'is', 'are', 'was', 'were',
+  'be', 'by', 'from', 'at', 'into', 'about', 'than', 'this', 'that', 'these', 'those', 'it', 'its',
+  'study', 'studies', 'research', 'paper', 'article', 'findings', 'found', 'effect', 'effects', 'impact',
+  'role', 'use', 'using', 'between', 'among', 'during', 'after', 'before', 'new', 'recommendation',
+  'statistics', 'evidence', 'show', 'shows'
+])
+
+/**
+ * Rewrites a natural-language search query into something esearch can answer.
+ *
+ * esearch runs Automatic Term Mapping across the whole string and ANDs the
+ * pieces together, so a long query with proper nouns and a year produces a
+ * conjunction nothing satisfies and returns *nothing at all*. Measured across
+ * the thirteen labelled claims, the raw query returned zero results for 10 of
+ * them — including every claim on the adolescent-sleep essay, which is
+ * squarely PubMed's domain. Simplifying takes that to 3 of 13, and the sleep
+ * claims start returning the papers they should have all along.
+ *
+ * Capped at five terms because each additional term is another AND. This is
+ * deliberately lossy; the domain router is what stops the loss from mattering,
+ * by only sending claims here that PubMed could answer in the first place.
+ */
+export function toPubmedQuery(query: string): string {
+  const terms = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !QUERY_NOISE.has(word) && !/^\d+$/.test(word))
+
+  const unique = [...new Set(terms)].slice(0, 5)
+  // Nothing usable left — hand back the original rather than an empty term,
+  // which esearch answers with a 400.
+  return unique.length > 0 ? unique.join(' AND ') : query
+}
+
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
   await throttle('pubmed', minIntervalMs())
   const searchParams = withKey(
     new URLSearchParams({
       db: 'pubmed',
-      term: query,
+      term: toPubmedQuery(query),
       retmax: String(limit),
       retmode: 'json'
     })
