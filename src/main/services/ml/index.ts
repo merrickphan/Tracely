@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { existsSync } from 'fs'
-import { join } from 'path'
+import { join, sep } from 'path'
 import { Worker } from 'worker_threads'
 import { getAppPaths } from '../storage/paths'
 import {
@@ -64,7 +64,21 @@ function workerScriptPath(): string {
 
   // Built as a separate entry (see electron.vite.config.ts) beside the main
   // bundle.
-  return join(__dirname, 'mlWorker.js')
+  const packed = join(__dirname, 'mlWorker.js')
+
+  // In a packaged build __dirname is inside app.asar, and a worker_threads
+  // entry script is read by native code that does not go through Electron's
+  // asar-aware fs patches. So the worker is also listed in asarUnpack and the
+  // real file on disk is preferred when it exists.
+  //
+  // Belt and braces on purpose: this is the failure mode that only appears in
+  // a packaged build, and when it fires services/ml disables itself and the
+  // app degrades silently to lexical scoring — which is exactly the bug that
+  // shipped in v0.3.76 and went unnoticed, just with a different cause.
+  const unpacked = packed.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`)
+  if (unpacked !== packed && existsSync(unpacked)) return unpacked
+
+  return packed
 }
 
 function disable(reason: string, error?: unknown): void {

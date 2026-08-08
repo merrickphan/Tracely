@@ -59,6 +59,12 @@ extraResources:
 asarUnpack:
   - '**/*.node'
   - '**/*.wasm'
+  # worker_threads reads its entry script in native code, which does not go
+  # through Electron's asar-aware fs patches — so a worker living inside the
+  # archive may simply fail to start, in the packaged build only. When it does,
+  # services/ml disables itself and retrieval degrades silently to lexical
+  # scoring, which is the same invisible failure v0.3.76 shipped with.
+  - out/main/mlWorker.js
   # onnxruntime_binding.node loads onnxruntime.dll (and DirectML.dll) from
   # beside itself at runtime, and sharp's binding does the same with its own
   # DLLs. Unpacking a .node without its DLLs leaves the binding resolvable and

@@ -59,6 +59,16 @@ const EXPECTATIONS = [
   ['onnxruntime-web', false, '128MB of browser WASM the node entry never imports']
 ]
 
+// The worker must exist as a REAL FILE, not just as an entry in the archive.
+// worker_threads reads its entry script in native code that bypasses
+// Electron's asar-aware fs patches, so a worker inside app.asar can fail to
+// start in the packaged build alone — and when it does, services/ml disables
+// itself and retrieval degrades silently to lexical scoring.
+const unpackedWorker = join(RESOURCES, 'app.asar.unpacked', 'out', 'main', 'mlWorker.js')
+if (!existsSync(unpackedWorker)) {
+  fail(`ML worker is not unpacked at ${unpackedWorker} — add out/main/mlWorker.js to asarUnpack`)
+}
+
 let bad = 0
 for (const [fragment, wanted, why] of EXPECTATIONS) {
   const found = count(fragment)
