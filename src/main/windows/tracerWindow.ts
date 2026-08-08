@@ -62,6 +62,13 @@ export function createTracerWindow(): BrowserWindow {
 
   // Hidden rather than destroyed, same as the floating window — reopening
   // Tracer should be instant and shouldn't re-run the whole renderer boot.
+
+  // A page's <title> replaces the window title the moment it loads, so the
+  // `title` option above was being silently overwritten by 'Tracely' from the
+  // HTML — which is why a preview build still called itself Tracely in the
+  // taskbar and Alt-Tab. Found by launching both builds and reading the real
+  // window titles; the code looked correct.
+  win.on('page-title-updated', (event) => event.preventDefault())
   win.on('close', (event) => {
     event.preventDefault()
     win.hide()
