@@ -1,9 +1,28 @@
 import type { Author } from '@shared/types'
-import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
+import { getConfig } from '../storage/config'
+import { PROVIDER_MIN_INTERVAL_MS, PUBMED_KEYED_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import type { NormalizedSourceResult } from './types'
 
 const EUTILS_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
-const MIN_INTERVAL_MS = PROVIDER_MIN_INTERVAL_MS.pubmed
+
+// Without a key NCBI meters by IP, which on a school or library network is
+// shared with every other student behind the same gateway — the one place
+// this app's per-user request volume stops being per-user. A key is free from
+// an NCBI account, meters against the key instead, and raises the ceiling
+// from ~3 to ~10 requests/second.
+//
+// Read per call rather than captured at module load: config resolves lazily
+// through getAppPaths(), and a key set in Settings must take effect without a
+// restart.
+function withKey(params: URLSearchParams): URLSearchParams {
+  const key = getConfig().ncbiApiKey
+  if (key) params.set('api_key', key)
+  return params
+}
+
+function minIntervalMs(): number {
+  return getConfig().ncbiApiKey ? PUBMED_KEYED_MIN_INTERVAL_MS : PROVIDER_MIN_INTERVAL_MS.pubmed
+}
 
 interface EsearchResponse {
   esearchresult?: { idlist?: string[] }
@@ -98,13 +117,15 @@ async function fetchAbstracts(ids: string[]): Promise<Map<string, string>> {
   // Abstracts are an enrichment — a failure here should cost the text, not
   // the results, so this never throws into the caller.
   try {
-    await throttle('pubmed', MIN_INTERVAL_MS)
-    const params = new URLSearchParams({
-      db: 'pubmed',
-      id: ids.join(','),
-      retmode: 'xml',
-      rettype: 'abstract'
-    })
+    await throttle('pubmed', minIntervalMs())
+    const params = withKey(
+      new URLSearchParams({
+        db: 'pubmed',
+        id: ids.join(','),
+        retmode: 'xml',
+        rettype: 'abstract'
+      })
+    )
     const res = await fetch(`${EUTILS_BASE}/efetch.fcgi?${params.toString()}`)
     if (!res.ok) return new Map()
     return parseAbstracts(await res.text())
@@ -115,13 +136,15 @@ async function fetchAbstracts(ids: string[]): Promise<Map<string, string>> {
 }
 
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
-  await throttle('pubmed', MIN_INTERVAL_MS)
-  const searchParams = new URLSearchParams({
-    db: 'pubmed',
-    term: query,
-    retmax: String(limit),
-    retmode: 'json'
-  })
+  await throttle('pubmed', minIntervalMs())
+  const searchParams = withKey(
+    new URLSearchParams({
+      db: 'pubmed',
+      term: query,
+      retmax: String(limit),
+      retmode: 'json'
+    })
+  )
   const searchRes = await fetch(`${EUTILS_BASE}/esearch.fcgi?${searchParams.toString()}`)
   if (!searchRes.ok) {
     console.warn(`[search:pubmed] ${searchRes.status} ${searchRes.statusText} — no results for "${query}"`)
@@ -131,8 +154,10 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
   const ids = searchData.esearchresult?.idlist ?? []
   if (ids.length === 0) return []
 
-  await throttle('pubmed', MIN_INTERVAL_MS)
-  const summaryParams = new URLSearchParams({ db: 'pubmed', id: ids.join(','), retmode: 'json' })
+  await throttle('pubmed', minIntervalMs())
+  const summaryParams = withKey(
+    new URLSearchParams({ db: 'pubmed', id: ids.join(','), retmode: 'json' })
+  )
   const summaryRes = await fetch(`${EUTILS_BASE}/esummary.fcgi?${summaryParams.toString()}`)
   if (!summaryRes.ok) return []
   const summaryData = (await summaryRes.json()) as EsummaryResponse

@@ -51,3 +51,9 @@ export const PROVIDER_MIN_INTERVAL_MS = {
   semanticscholar: 1100,
   pubmed: 350 // NCBI allows ~3 req/sec unauthenticated
 } as const
+
+// NCBI raises the ceiling to 10 req/sec for requests carrying an api_key.
+// Kept next to the unauthenticated figure so the two can't drift apart, and
+// held slightly under the stated limit because the ceiling is enforced on
+// their side against wall-clock arrival, not our send time.
+export const PUBMED_KEYED_MIN_INTERVAL_MS = 110

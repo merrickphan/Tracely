@@ -54,8 +54,9 @@ export async function search(query: string, limit = 6): Promise<NormalizedSource
     // every anonymous caller worldwide, so 429 is the normal case without a
     // key, not an anomaly — an eval run saw it answer 4 of 14 queries. It
     // used to return [] silently, which is indistinguishable from "no papers
-    // exist" and quietly cost a quarter of the evidence base. The free key
-    // is already supported (Settings -> Semantic Scholar API key).
+    // exist" and quietly cost a quarter of the evidence base. A free key is
+    // read from SEMANTIC_SCHOLAR_API_KEY, or config.json if set there — there
+    // is no Settings field for it yet, despite what this comment once said.
     console.warn(`[search:semanticscholar] ${res.status} ${res.statusText} — no results for "${query}"`)
     return []
   }
