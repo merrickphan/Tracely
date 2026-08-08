@@ -115,6 +115,68 @@ async function attachStance(
   return byIndex
 }
 
+/**
+ * Fills in what the discovering provider didn't know, from OpenAlex, by DOI.
+ *
+ * Runs BEFORE relevance is computed, which is the point: an abstract is most of
+ * what the embedding model has to work with, and adding one changes the ranking
+ * rather than just the card. Measured on the labelled baseline, sources with
+ * abstracts separated relevant from irrelevant at 0.238 against 0.192 on titles
+ * alone.
+ *
+ * Crossref finds the most relevant papers (45% of its results were labelled
+ * relevant against OpenAlex's 29%) but hardcodes `pdfUrl: null`, `oaStatus:
+ * null`, and carried an abstract for only 24% of the baseline where OpenAlex
+ * had 90%. Discovery and metadata are different jobs and the providers are good
+ * at different ones.
+ *
+ * Mutates in place rather than returning copies — these objects are local to
+ * this function's caller and nothing else holds a reference yet.
+ */
+async function enrichFromOpenAlex(items: NormalizedSourceResult[]): Promise<void> {
+  // Only ask about what is actually missing. A record OpenAlex itself returned
+  // already has everything this could add.
+  const needy = items.filter(
+    (item) => item.doi !== null && (item.abstract === null || item.pdfUrl === null || item.oaStatus === null)
+  )
+  if (needy.length === 0) return
+
+  const enrichments = await openalex.enrichByDoi(needy.map((item) => item.doi as string))
+  if (enrichments.size === 0) return
+
+  for (const item of needy) {
+    const found = enrichments.get(openalex.normalizeDoi(item.doi as string))
+    if (!found) continue
+
+    // Never overwrite what a provider already supplied — this is a backfill,
+    // not a correction. The discovering provider saw the record in its own
+    // context and its abstract may be the better one.
+    item.abstract ??= found.abstract
+    item.pdfUrl ??= found.pdfUrl
+    item.oaStatus ??= found.oaStatus
+    item.url ??= found.landingPageUrl
+    item.venueType ??= found.venueType
+    item.citationCount ??= found.citationCount
+  }
+
+  // Crossref and PubMed do not flag retractions, so before this the only
+  // protection was OpenAlex's own search filter — which never saw the papers
+  // the other providers found. A retracted paper is the worst possible
+  // evidence: the literature has formally withdrawn it.
+  const retracted = new Set(
+    [...enrichments].filter(([, value]) => value.retracted).map(([doi]) => doi)
+  )
+  if (retracted.size > 0) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const doi = items[i].doi
+      if (doi && retracted.has(openalex.normalizeDoi(doi))) {
+        console.warn(`[search] dropping retracted paper: ${items[i].title}`)
+        items.splice(i, 1)
+      }
+    }
+  }
+}
+
 function candidateText(item: NormalizedSourceResult): string {
   return `${item.title} ${item.abstract ?? ''}`.trim()
 }
@@ -186,6 +248,8 @@ export async function findEvidence(
       }
     }
   }
+
+  await enrichFromOpenAlex(clusters)
 
   // Ranked (and capped) by relevance to the claim itself, not just whichever
   // provider ranked its own result highest — see blendedRelevance/

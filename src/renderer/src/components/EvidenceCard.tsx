@@ -35,6 +35,14 @@ export default function EvidenceCard({
 
   const { source } = item
 
+  // A doi.org link is a redirect to a publisher page that is often paywalled,
+  // and it is what every Crossref result carries — which is most of them, since
+  // Crossref finds the most relevant papers. When OpenAlex says a free copy
+  // exists, send the reader there instead: a source you can actually read is
+  // worth more than a correctly-formatted one you can't.
+  const openAccessUrl = source.oaStatus && source.oaStatus !== 'closed' ? source.pdfUrl : null
+  const primaryUrl = openAccessUrl ?? source.url
+
   return (
     <div className="evidence-card">
       {/* Only the two decisive verdicts get a badge. 'unclear' is the common
@@ -56,8 +64,8 @@ export default function EvidenceCard({
       ) : null}
 
       <div className="evidence-title">
-        {source.url ? (
-          <a href={source.url} target="_blank" rel="noreferrer">
+        {primaryUrl ? (
+          <a href={primaryUrl} target="_blank" rel="noreferrer">
             {source.title}
           </a>
         ) : (
@@ -69,6 +77,7 @@ export default function EvidenceCard({
         {source.year ? ` · ${source.year}` : ''}
         {source.venue ? ` · ${source.venue}` : ''}
         {source.venueType ? ` · ${source.venueType}` : ''}
+        {openAccessUrl ? <span className="evidence-oa">Free full text</span> : null}
       </div>
       {source.abstract ? <p className="evidence-abstract">{source.abstract.slice(0, 280)}…</p> : null}
       <div className="evidence-actions">

@@ -1674,6 +1674,20 @@ textarea:disabled {
   margin-top: 2px;
 }
 
+/* Reads as a property of the source rather than a badge competing with the
+   stance chip above it — whether you can read the paper is useful context,
+   not a verdict. */
+.evidence-oa {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--score-good-wash);
+  color: var(--score-good);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .evidence-abstract {
   font-size: 13px;
   margin: 8px 0;

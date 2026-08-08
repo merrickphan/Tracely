@@ -60,6 +60,123 @@ function reconstructAbstract(index: Record<string, number[]> | null | undefined)
   return text || null
 }
 
+/** What a DOI lookup can add to a record another provider found first. */
+export interface OpenAlexEnrichment {
+  abstract: string | null
+  pdfUrl: string | null
+  oaStatus: string | null
+  landingPageUrl: string | null
+  venueType: VenueType | null
+  citationCount: number | null
+  retracted: boolean
+}
+
+// OpenAlex bills by operation, and the difference is 10x. Measured against the
+// live X-RateLimit-Credits-Required header rather than inferred from the docs:
+//
+//   search=...                 10 credits
+//   filter=title.search:...    10 credits   (the search is the cost, not the shape)
+//   filter=doi:a|b|c            1 credit    (up to 100 DOIs in one call)
+//   /works/doi:...              0 credits   (returned 200 with the budget at $0)
+//
+// So looking up papers we already have DOIs for is close to free, while
+// discovering them is the expensive part. That is the whole reason this
+// function exists: let Crossref and PubMed — which are free and unmetered —
+// do discovery, then use OpenAlex for what it is uniquely good at. It carried
+// abstracts for 90% of the labelled baseline where Crossref managed 24%, and
+// abstracts are what moved dense relevance separation from 0.192 to 0.238.
+const DOI_BATCH_SIZE = 50
+
+/** Bare lowercase DOI, with any doi.org/dx.doi.org prefix stripped. Providers
+ *  disagree about which form they return, and OpenAlex keys on the bare one. */
+export function normalizeDoi(doi: string): string {
+  return doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim().toLowerCase()
+}
+
+function toEnrichment(work: OpenAlexWork): OpenAlexEnrichment {
+  return {
+    abstract: reconstructAbstract(work.abstract_inverted_index),
+    pdfUrl: work.primary_location?.pdf_url ?? null,
+    oaStatus: work.open_access?.oa_status ?? null,
+    landingPageUrl: work.primary_location?.landing_page_url ?? null,
+    venueType: toVenueType(work.primary_location?.source?.type),
+    citationCount: work.cited_by_count ?? null,
+    retracted: work.is_retracted === true
+  }
+}
+
+/**
+ * Free singleton fallback, one request per DOI.
+ *
+ * Worth the extra round trips because singleton gets cost 0 credits and keep
+ * working when the daily budget is spent — verified by fetching a paper
+ * successfully while `search` was returning 429 with $0 remaining. So a heavy
+ * user who has exhausted their budget still gets abstracts and open-access
+ * links, just more slowly.
+ */
+async function enrichIndividually(dois: string[]): Promise<Map<string, OpenAlexEnrichment>> {
+  const found = new Map<string, OpenAlexEnrichment>()
+  for (const doi of dois) {
+    try {
+      await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
+      const res = await fetch(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
+      if (!res.ok) continue
+      found.set(doi, toEnrichment((await res.json()) as OpenAlexWork))
+    } catch {
+      // One unreachable paper must not cost the rest their abstracts.
+    }
+  }
+  return found
+}
+
+/**
+ * Looks up papers by DOI and returns what OpenAlex knows about them.
+ *
+ * Keyed by normalized DOI. A DOI that OpenAlex has never seen is simply absent
+ * from the map rather than being an error — enrichment is additive, and a
+ * source with no abstract is still a source.
+ */
+export async function enrichByDoi(dois: string[]): Promise<Map<string, OpenAlexEnrichment>> {
+  const unique = [...new Set(dois.map(normalizeDoi).filter(Boolean))]
+  if (unique.length === 0) return new Map()
+
+  const found = new Map<string, OpenAlexEnrichment>()
+
+  for (let i = 0; i < unique.length; i += DOI_BATCH_SIZE) {
+    const batch = unique.slice(i, i + DOI_BATCH_SIZE)
+    try {
+      await throttle('openalex', PROVIDER_MIN_INTERVAL_MS.openalex)
+      const params = new URLSearchParams({
+        filter: `doi:${batch.join('|')}`,
+        per_page: String(batch.length)
+      })
+      const res = await fetch(`https://api.openalex.org/works?${params.toString()}`)
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          // The batch costs a credit and the budget is gone, but singletons
+          // cost nothing and still answer. Degrade to those rather than
+          // dropping abstracts for the rest of the day.
+          for (const [doi, enrichment] of await enrichIndividually(batch)) found.set(doi, enrichment)
+          continue
+        }
+        console.warn(`[search:openalex] enrichment ${res.status} ${res.statusText} for ${batch.length} DOIs`)
+        continue
+      }
+
+      const data = (await res.json()) as { results?: OpenAlexWork[] }
+      for (const work of data.results ?? []) {
+        if (!work.doi) continue
+        found.set(normalizeDoi(work.doi), toEnrichment(work))
+      }
+    } catch (error) {
+      console.warn('[search:openalex] enrichment failed', error)
+    }
+  }
+
+  return found
+}
+
 export async function search(query: string, limit = 6): Promise<NormalizedSourceResult[]> {
   // No mailto here, deliberately — OpenAlex removed the parameter along with
   // the polite pool: "No more email parameter in your calls—it was never
