@@ -20,7 +20,6 @@
     "verify-packaged-ml": "node scripts/verify-packaged-ml.mjs",
     "ship": "node scripts/ship.mjs",
     "ship:preview": "node scripts/ship-preview.mjs",
-    "ship:preview:all": "node scripts/ship-preview-all.mjs",
     "evaluate": "node scripts/evaluate.mjs",
     "preview": "node scripts/preview.mjs",
     "check:eval-bundle": "node scripts/check-eval-bundle.mjs"

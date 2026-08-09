@@ -29,22 +29,38 @@ Claim detection and critique require a deployed Tracely Relay. Copy `.env.exampl
 
 ## Branches and releasing
 
-Three agents work in parallel from git worktrees sharing one `.git`
-(`Tracely-agent1/2/3` under `C:\Users\merri\`), each on its own `agentN-work`
-branch. A `Stop` hook auto-commits and pushes each agent's branch at the end of
-every turn, so work is never left only in a working tree.
+One workspace, `C:\Users\merri\Tracely-agent1`, on `main`. Work happens on
+`feat/*` branches. A `Stop` hook auto-commits and pushes the current branch at
+the end of every turn, so work is never left only in a working tree.
 
 - **`main` is the integration branch and the only branch releases are cut
-  from.** It advances by deliberate merge, never by an agent working directly
-  on it — the auto-commit hook refuses to run there for exactly that reason.
-- **Sync from `main` before starting a task** (`git fetch && git merge
-  origin/main`). Skipping this is not theoretical: the Figma Settings work was
-  built twice, once on a `0.3.47` base and once on `0.3.54+`, and one copy is
-  now orphaned on `origin/agent2-work`.
-- **Merge into `main` when a feature is done, not when a release is due.** All
-  three agents touch `services/ai/`, `shared/types.ts` and
-  `shared/ipc-contract.ts`; long-lived branches across those files is how
-  conflicts get expensive.
+  from.** It advances by deliberate merge. `.claude/hooks/guard-edit.sh` refuses
+  edits to `src/`, `scripts/` and the build config while on `main`, because
+  `electron-builder` packages the working tree rather than `HEAD` — an
+  uncommitted edit there can reach an installer without ever being committed.
+- **Merge into `main` when a feature is done, not when a release is due.**
+  `npm run ship` no longer merges anything; it publishes what is already on
+  `main`. Release time should not also be integration time.
+- **Parallel work uses throwaway worktrees, not permanent ones.** Subagents
+  launched with `isolation: "worktree"` get their own checkout and clean up
+  after themselves. Three standing worktrees with a file-ownership contract were
+  retired in favour of this: the contract needed maintaining, branches drifted
+  24 commits behind, and 421 lines once sat uncommitted in two of them because
+  each worktree registered the auto-commit hook separately.
+
+**Two rules survive from the old ownership contract, because both were written
+after something broke:**
+
+- **`package.json`'s `version` line belongs to `npm run ship` alone.** Never
+  edit it by hand.
+- **The ML packaging rules in `electron-builder.yml`** — the `@huggingface` and
+  `onnxruntime` globs, `asarUnpack` of `out/main/mlWorker.js`, `extraResources`
+  for `resources/models`, and the `afterPack` hook — are load-bearing and
+  easy to "tidy" into breakage. v0.3.76 shipped with the entire ML stack
+  excluded, silently degraded to word-overlap ranking, and nothing errored.
+  `scripts/verify-packaged-ml.mjs` runs in `afterPack` to make that failure
+  loud; leave it wired.
+- **Shared files (`src/shared/*`) are additive.** Add, don't restructure.
 
 ### Releasing
 

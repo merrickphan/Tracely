@@ -31,39 +31,42 @@ const die = (msg) => {
   process.exit(1)
 }
 
-if (out('git status --porcelain')) die('Uncommitted work in agent1. Commit or stash it first.')
+if (out('git status --porcelain')) die('Uncommitted work. Commit or stash it first.')
 
-console.log('\n1/5  Collecting agent work onto main')
-run('git checkout main')
-// Local refs, not origin/*: the three worktrees share one .git, so these are
-// always exactly what each agent last committed, and origin/agent2-work still
-// carries a stale superseded commit that conflicts.
-for (const b of ['agent1-work', 'agent2-work', 'agent3-work']) {
-  try {
-    run(`git merge --no-edit ${b}`)
-  } catch {
-    try { run('git merge --abort') } catch { /* nothing to abort */ }
-    die(`Merge conflict on ${b}. Resolve it, then run npm run ship again.`)
-  }
+// Ship releases what is already on main; it does not gather anything.
+//
+// This used to merge agent1-work, agent2-work and agent3-work first, which
+// meant release time was also integration time — the moment a conflict or a
+// half-finished feature was most expensive to discover. Features now reach main
+// when they are done, and a release is only ever a decision to publish what is
+// already there.
+const branch = out('git rev-parse --abbrev-ref HEAD')
+if (branch !== 'main') {
+  die(
+    `On '${branch}', not main.\n\n` +
+      `Releases are cut from main only. Land your work first:\n\n` +
+      `  git checkout main && git merge --no-ff ${branch} && git push\n\n` +
+      `then run npm run ship again.`
+  )
 }
 
 // Before bumping, not after: a blocked ship should cost nothing, and bumping
 // first burns a version number on every failed attempt.
-console.log('\n2/5  Checking everything is releasable')
+console.log('\n1/4  Checking everything is releasable')
 try {
   run('npm run preflight', { env: { ...SHIP_ENV, PREFLIGHT_SKIP_VERSION: '1' } })
 } catch {
   die('Not releasable — nothing was changed. Fix the above and run npm run ship again.')
 }
 
-console.log('\n3/5  Bumping version')
+console.log('\n2/4  Bumping version')
 run('npm version patch --no-git-tag-version')
 const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 run(`git commit -am "Release v${version}"`)
 run('git push origin main')
 console.log(`     v${version}`)
 
-console.log('\n4/5  Loading GH_TOKEN')
+console.log('\n3/4  Loading GH_TOKEN')
 // electron-builder does not read .env.release itself; --publish silently
 // no-ops without a token, producing a "successful" release nobody receives.
 const envFile = join(ROOT, '.env.release')
@@ -71,7 +74,7 @@ if (!existsSync(envFile)) die('.env.release not found — GH_TOKEN is required t
 const token = readFileSync(envFile, 'utf8').match(/^GH_TOKEN=(.+)$/m)?.[1]?.trim()
 if (!token) die('No GH_TOKEN in .env.release.')
 
-console.log('\n5/5  Build + publish')
+console.log('\n4/4  Build + publish')
 run('npm run release:win', { env: { ...SHIP_ENV, GH_TOKEN: token } })
 
 console.log(`\nPublished v${version}. Users are offered it within 6 hours.\n`)
