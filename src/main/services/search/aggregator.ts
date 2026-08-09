@@ -55,16 +55,44 @@ function findDuplicateIndex(clusters: NormalizedSourceResult[], item: Normalized
   return clusters.findIndex((c) => (doi !== null && normalizedDoi(c) === doi) || titleYearKey(c) === titleYear)
 }
 
+// Upper bound on how long one provider may hold up a search. Nothing else
+// bounded this: none of the four provider modules passed a signal or a
+// timeout to `fetch`, so a provider that accepted the connection and then
+// stalled held the whole `findEvidence` open indefinitely — and because the
+// Screen Watch popover shows a loading state until the search resolves,
+// "loading articles" could simply never finish.
+//
+// Generous rather than tight, because the wait includes rateLimiter
+// throttling before the request goes out (Semantic Scholar serialises at
+// 1100ms per call, so several concurrent claims queue behind each other).
+const PROVIDER_TIMEOUT_MS = 6000
+
 async function safeSearch(
   name: string,
   fn: (query: string, limit?: number) => Promise<NormalizedSourceResult[]>,
   query: string
 ): Promise<NormalizedSourceResult[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    return await fn(query, PER_PROVIDER_LIMIT)
+    // A race rather than an AbortSignal: the four provider modules don't
+    // take one, and threading it through all of them (PubMed alone makes
+    // three sequential requests) is a much larger change than the problem
+    // needs. The abandoned request finishes into nothing — wasteful, but
+    // only on the path where the provider was already failing us.
+    return await Promise.race([
+      fn(query, PER_PROVIDER_LIMIT),
+      new Promise<NormalizedSourceResult[]>((resolve) => {
+        timer = setTimeout(() => {
+          console.warn(`[search:${name}] timed out after ${PROVIDER_TIMEOUT_MS}ms`)
+          resolve([])
+        }, PROVIDER_TIMEOUT_MS)
+      })
+    ])
   } catch (error) {
     console.error(`[search:${name}]`, error)
     return []
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 
