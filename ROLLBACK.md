@@ -178,6 +178,31 @@ Two consequences worth holding onto:
 A rollback path nobody has walked is a guess, not a plan — the same lesson the
 branch guard taught, having silently denied the merge it was written to permit.
 
-Once, on staging: deploy a deliberately broken relay commit, confirm the app
-fails, run `vercel rollback`, confirm it recovers. Twenty minutes, and it turns
-this document into something you have actually done.
+**Last run: 2026-08-09, on staging. It works.**
+
+| Step | Result |
+|---|---|
+| `vercel rollback` to the previous deployment | 2s |
+| Outage reproduced | 503, misconfigured relay |
+| `vercel rollback` forward to the good deployment | 3s |
+| Recovery verified | 400, auth passing |
+
+Two things that run made obvious:
+
+**You do not need to author a broken build.** Rolling back to a deployment that
+predates a fix reproduces the real outage using real history. `vercel rollback`
+takes an explicit deployment URL and moves in *both* directions, so the same
+command undoes the drill.
+
+**Verify recovery with an empty body, not a real request.** Posting
+`{"text":""}` to `/api/detect-claims` passes `isAuthorized`, `resolveUser` and
+the rate limit, then fails schema validation at line 32 — before `reserveUsage`
+and before OpenAI. A **400 proves authentication resolved** and costs nothing.
+A 503 means the relay is misconfigured; a 401 means the token was rejected.
+
+```bash
+$t = "<APP_SHARED_TOKEN>"; $at = "<a valid access token>"; try { (Invoke-WebRequest "https://tracely-relay-staging.vercel.app/api/detect-claims" -Method POST -ContentType "application/json" -Headers @{ "x-tracely-token" = $t; Authorization = "Bearer $at" } -Body '{"text":""}' -UseBasicParsing).StatusCode } catch { [int]$_.Exception.Response.StatusCode }
+```
+
+Re-run the drill after any change to `resolveUser`, the Vercel project wiring,
+or the deployment protection settings.
