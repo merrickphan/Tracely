@@ -114,7 +114,7 @@ export function AiActions({
   return (
     <Conversation className={cn('w-full', className)}>
       <ConversationContent>
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <Message
             className={message.from === 'assistant' ? 'items-start' : 'items-end'}
             from={message.from}
@@ -124,7 +124,13 @@ export function AiActions({
             <MessageContent>{message.content}</MessageContent>
             {message.from === 'assistant' ? (
               <Actions className="-ml-1.5">
-                {onRetry ? (
+                {/*
+                  Newest reply only. Retry discards the exchange it replaces, so
+                  offering it on an older message would ask the user to destroy
+                  every turn after it — with the button giving no hint that it
+                  does more than re-ask one question.
+                */}
+                {onRetry && index === messages.length - 1 ? (
                   <Action label="Retry" onClick={() => onRetry(message.id)}>
                     <RefreshCcwIcon className="size-4" />
                   </Action>

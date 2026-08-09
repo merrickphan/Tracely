@@ -112,22 +112,50 @@ export default function TracerApp(): JSX.Element {
     [conversation, sending, load]
   )
 
-  // Retry re-asks the question that produced a reply, appending a fresh
-  // exchange rather than replacing the old one. Replacing would mean
-  // deleting stored rows, and the previous answer is often the thing the
-  // user wants to compare the new one against.
+  // Retry replaces the exchange it re-asks, rather than appending a second copy
+  // of the question.
+  //
+  // This used to call send() with the old question, which reads as the gentler
+  // option — nothing is deleted, and you can compare the two answers. But every
+  // turn re-sends the whole conversation as history, so an appended retry asks
+  // the model the same question *with the answer you just rejected sitting in
+  // its context*. The most likely result is a variation on the answer you
+  // didn't want, which makes the button look broken rather than useless.
+  //
+  // Main deletes the discarded pair before re-running (popLastExchange), so the
+  // stored transcript and what's on screen stay the same thing. Only the newest
+  // reply offers Retry — ai-actions.tsx enforces that — because popLastExchange
+  // discards from the last question onward.
   const retry = useCallback(
-    (messageId: string): void => {
-      const index = messages.findIndex((m) => m.id === messageId)
-      if (index < 0) return
-      for (let i = index - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          void send(messages[i].content)
-          return
-        }
+    async (messageId: string): Promise<void> => {
+      if (!conversation || sending) return
+      // Guard as well as hide. The button is only rendered on the last message,
+      // but a stale render could still fire this for an earlier one, and the
+      // cost of being wrong here is silently deleting later turns.
+      if (messages.length === 0 || messages[messages.length - 1].id !== messageId) return
+
+      setError(null)
+      setSending(true)
+      // Optimistic, matching what main is about to do. Leaving them up would
+      // show the rejected answer beside its replacement, and the transcript
+      // would no longer match what is stored.
+      setMessages((prev) => prev.slice(0, -2))
+      try {
+        const result = await window.tracely.tracer.retry({ conversationId: conversation.id })
+        setMessages((prev) => [...prev, result.userMessage, result.reply])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ''))
+        // The optimistic removal above may not match what actually happened —
+        // popLastExchange could have committed before the model call failed.
+        // Reload rather than guess.
+        await load(conversation.id)
+      } finally {
+        setSending(false)
+        composerRef.current?.focus()
       }
     },
-    [messages, send]
+    [conversation, sending, messages, load]
   )
 
   async function startNew(): Promise<void> {
@@ -278,7 +306,7 @@ export default function TracerApp(): JSX.Element {
             <AiActions
               messages={toAiMessages(messages)}
               assistantAvatar={figmaLogo}
-              onRetry={relayConfigured && !sending ? retry : undefined}
+              onRetry={relayConfigured && !sending ? (id) => void retry(id) : undefined}
               footer={
                 <>
                   {sending ? (
