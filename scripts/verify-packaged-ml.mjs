@@ -12,10 +12,17 @@
 // require a real vector back.
 
 import { createRequire } from 'module'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { Worker } from 'worker_threads'
+import { loadEnv } from './env.mjs'
+
+// afterPack spawns this as a bare node process, so nothing has read .env yet.
+// Loading it here is what lets the relay-host check below know which relay this
+// build is supposed to be talking to — and env.mjs picks .env.staging on its own
+// when TRACELY_ENV says so, so a preview build is checked against staging.
+loadEnv({ quiet: true })
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
 const WORKER = join(REPO, 'out', 'main', 'mlWorker.js')
@@ -56,7 +63,8 @@ const EXPECTATIONS = [
   ['onnxruntime-node/bin/napi-v6/win32/arm64', false, 'wrong architecture'],
   ['onnxruntime-node/bin/napi-v6/darwin', false, 'wrong platform'],
   ['onnxruntime-node/bin/napi-v6/linux', false, 'wrong platform'],
-  ['onnxruntime-web', false, '128MB of browser WASM the node entry never imports']
+  ['onnxruntime-web', false, '128MB of browser WASM the node entry never imports'],
+  ['out/eval', false, '114MB of eval harness — dev tooling the app never loads']
 ]
 
 // The worker must exist as a REAL FILE, not just as an entry in the archive.
@@ -84,6 +92,44 @@ for (const [fragment, wanted, why] of EXPECTATIONS) {
 }
 if (bad > 0) fail(`${bad} packaging expectation(s) not met`)
 console.log(`PASS  app.asar contents — ${EXPECTATIONS.length} packaging expectations met`)
+
+// One relay per installer, and it must be this build's relay.
+//
+// The environment split is enforced at build time by inlining RELAY_URL into
+// the bundle, so a build that also carries some *other* relay's host has broken
+// the guarantee. That happened: out/ is not cleaned between environment
+// switches, so a staging preview shipped out/eval bundles still pointing at
+// folio-relay with the production shared token.
+//
+// It went unnoticed because the check we were running grepped out/main/index.js
+// alone. This one reads the whole archive, which is the only version of the
+// question that means anything — the leak was never in the file being checked.
+const expectedRelay = (() => {
+  try {
+    return new URL(process.env.RELAY_URL ?? '').host.toLowerCase()
+  } catch {
+    return ''
+  }
+})()
+if (!expectedRelay) fail('RELAY_URL is unset or unparseable — cannot tell which relay this build should use')
+
+const archive = readFileSync(ASAR).toString('latin1')
+// Deliberately narrow: any *.vercel.app host with "relay" in the name. Broad
+// enough to catch both projects, narrow enough that an unrelated dependency
+// mentioning vercel.app cannot turn a release red for nothing.
+const relayHosts = [...new Set((archive.match(/[a-z0-9-]*relay[a-z0-9.-]*\.vercel\.app/gi) ?? []).map((h) => h.toLowerCase()))]
+const foreign = relayHosts.filter((host) => host !== expectedRelay)
+if (foreign.length > 0) {
+  fail(
+    `app.asar carries ${foreign.length} foreign relay host(s): ${foreign.join(', ')}\n` +
+      `      This build targets ${expectedRelay}. Something stale is being packaged —\n` +
+      `      try deleting out/ and rebuilding, then check the files globs.`
+  )
+}
+if (!archive.includes(expectedRelay)) {
+  fail(`app.asar does not contain ${expectedRelay} at all — the define block did not take`)
+}
+console.log(`PASS  one relay in app.asar — ${expectedRelay}`)
 
 // allowRemote:false is the whole point. It mirrors what index.ts sets when it
 // finds a bundled models dir, and it means a missing weight file fails here

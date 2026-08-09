@@ -6,6 +6,22 @@ directories:
 files:
   - out/**/*
   - package.json
+  # 114MB — 45% of the installer — of eval harness. scripts/evaluate.mjs bundles
+  # itself into out/eval so plain node can resolve sql.js and the ML stack; it is
+  # dev tooling and the app never loads it. It was shipping to every user along
+  # with fixture databases and an 8.4MB NLI tokenizer.
+  #
+  # Worse in a preview build. out/ is not cleaned between environment switches,
+  # so the staging installer carried out/eval bundles built against PRODUCTION —
+  # folio-relay's host and shared token, from before per-user auth existed. A
+  # staging build shipping production configuration is the exact thing the
+  # environment split exists to prevent, and the leak check missed it because it
+  # only ever grepped out/main/index.js.
+  #
+  # Excluding a whole directory here is what broke v0.3.76. This one is safe for
+  # a reason that one was not: nothing in src/ imports it. verify-packaged-ml.mjs
+  # now asserts both its absence and that no foreign relay host is in the asar.
+  - '!out/eval/**'
   # The ML stack is INCLUDED as of here, trimmed rather than excluded.
   #
   # It was excluded wholesale through v0.3.76, when nothing called embed().
