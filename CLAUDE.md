@@ -48,6 +48,13 @@ the end of every turn, so work is never left only in a working tree.
   24 commits behind, and 421 lines once sat uncommitted in two of them because
   each worktree registered the auto-commit hook separately.
 
+### When a release goes wrong
+
+See **[ROLLBACK.md](ROLLBACK.md)**. The short version: the relay reverts in
+seconds with `vercel rollback`, the desktop app cannot be reverted at all
+(electron-updater will not downgrade), so the first question in any incident is
+whether the relay can fix it instead.
+
 **Two rules survive from the old ownership contract, because both were written
 after something broke:**
 
