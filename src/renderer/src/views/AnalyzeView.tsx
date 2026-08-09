@@ -395,6 +395,7 @@ function DocumentEditor({
 
 export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
   const [sourceType, setSourceType] = useState<SourceType>('document')
+  const sourceInputRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
   const [docEditorOpen, setDocEditorOpen] = useState(false)
   const [docName, setDocName] = useState('')
@@ -425,6 +426,17 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
       return
     }
     void runDetection(text)
+  }
+
+  function selectSourceType(next: SourceType): void {
+    setSourceType(next)
+    setClaims(null)
+    setError(null)
+
+    // Move directly into the corresponding input after either a mouse click
+    // or the native button's Enter/Space activation. Besides being convenient,
+    // this makes the state transition unambiguous for keyboard users.
+    requestAnimationFrame(() => sourceInputRef.current?.focus())
   }
 
   if (docEditorOpen) {
@@ -462,8 +474,11 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
           {SOURCE_TILES.map((tile) => (
             <button
               key={tile.id}
+              type="button"
               className={`source-tile ${sourceType === tile.id ? 'active' : ''}`}
-              onClick={() => setSourceType(tile.id)}
+              aria-pressed={sourceType === tile.id}
+              aria-controls="analyze-source-input"
+              onClick={() => selectSourceType(tile.id)}
             >
               <tile.icon size={22} />
               {tile.label}
@@ -472,6 +487,8 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         </div>
 
         <TextArea
+          id="analyze-source-input"
+          ref={sourceInputRef}
           size="lg"
           placeholder={SOURCE_PLACEHOLDER[sourceType]}
           value={text}

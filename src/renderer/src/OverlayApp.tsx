@@ -1372,7 +1372,18 @@ export default function OverlayApp(): JSX.Element {
   })
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', fontFamily: FONT_STACK }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        fontFamily: FONT_STACK,
+        // Native hit-testing is toggled by hoverTracking.ts. Keep the DOM's
+        // transparent remainder inert as a second boundary; visible controls
+        // below opt themselves back in.
+        pointerEvents: 'none'
+      }}
+    >
       {stableUnderlines
         .filter((u) => !isResolved(u.id))
         .flatMap((u) => {
@@ -1432,7 +1443,8 @@ export default function OverlayApp(): JSX.Element {
                   transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  pointerEvents: 'auto'
                 }}
               >
                 <LogoBg size={30} />
@@ -1483,7 +1495,8 @@ export default function OverlayApp(): JSX.Element {
                   boxShadow: CARD_SHADOW,
                   overflow: 'hidden',
                   display: 'flex',
-                  flexDirection: 'column'
+                  flexDirection: 'column',
+                  pointerEvents: 'auto'
                 }}
               >
                 <div
@@ -1626,7 +1639,8 @@ export default function OverlayApp(): JSX.Element {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 10,
-                  color: '#1c1c1c'
+                  color: '#1c1c1c',
+                  pointerEvents: 'auto'
                 }}
               >
                 {flow ? (

@@ -1,7 +1,8 @@
 import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
-import { getOverlayWindow } from '../../windows/overlayWindow'
+import { getMainWindow } from '../../windows/mainWindow'
+import { getOverlayWindow, setOverlayMouseEventsCaptured } from '../../windows/overlayWindow'
 import { isTracerWindowFocused } from '../../windows/tracerWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
 import type { ScreenRect } from './uiaSnapshot'
@@ -43,7 +44,6 @@ const LEAVE_GRACE_MS = 200
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
 let hoveredKey: string | null = null
-let mouseEventsCaptured = false
 // While a widget drag is in progress the cursor moves freely around the
 // whole screen, well outside the widget's own (small, or not-yet-updated)
 // hit-test rect — normal poll-based hit-testing would toggle click-through
@@ -53,15 +53,7 @@ let mouseEventsCaptured = false
 let dragActive = false
 
 function setCaptureMouseEvents(capture: boolean): void {
-  if (capture === mouseEventsCaptured) return
-  mouseEventsCaptured = capture
-  const win = getOverlayWindow()
-  if (!win || win.isDestroyed()) return
-  if (capture) {
-    win.setIgnoreMouseEvents(false)
-  } else {
-    win.setIgnoreMouseEvents(true, { forward: true })
-  }
+  setOverlayMouseEventsCaptured(capture)
 }
 
 export function setDragActive(active: boolean): void {
@@ -80,10 +72,10 @@ function clearHover(): void {
     clearTimeout(leaveTimer)
     leaveTimer = null
   }
-  if (hoveredKey === null) return
+  const hadHover = hoveredKey !== null
   hoveredKey = null
   setCaptureMouseEvents(false)
-  sendHover(null)
+  if (hadHover) sendHover(null)
 }
 
 function within(point: { x: number; y: number }, rect: ScreenRect, pad: number): boolean {
@@ -96,6 +88,16 @@ function within(point: { x: number; y: number }, rect: ScreenRect, pad: number):
 }
 
 function poll(): void {
+  // The overlay is at the screen-saver always-on-top level, above the main
+  // Tracely window. Release native capture whenever main owns focus so a stale
+  // Screen Watch target can never turn transparent overlay pixels into a click
+  // shield over Tracely's own controls.
+  if (getMainWindow()?.isFocused()) {
+    dragActive = false
+    clearHover()
+    return
+  }
+
   if (dragActive) return
 
   // While the user is typing to Tracer, the frozen underlines behind that
