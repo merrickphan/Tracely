@@ -50,6 +50,7 @@ export const IPC = {
   TRACER_OPEN: 'tracer:open',
   TRACER_CLOSE: 'tracer:close',
   TRACER_SEND: 'tracer:send',
+  TRACER_RETRY: 'tracer:retry',
   TRACER_GET_CONVERSATION: 'tracer:getConversation',
   TRACER_LIST_CONVERSATIONS: 'tracer:listConversations',
   TRACER_NEW_CONVERSATION: 'tracer:newConversation',
