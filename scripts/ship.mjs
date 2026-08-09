@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * One-command release: merge every agent's work, bump, publish.
+ * One-command release: check, bump, build, publish.
+ *
+ * It merges nothing. Integration happens when a feature is done, not when a
+ * release is due, so this only publishes what is already on main.
  *
  * The steps are ordered so the irreversible one is last and gated. preflight
  * runs inside release:win and refuses to publish unless main is clean, in
