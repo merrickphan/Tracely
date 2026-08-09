@@ -70,6 +70,12 @@ type Underlines = ScreenWatchOverlayUpdateEvent['underlines']
 // a claim that has genuinely scrolled away still clears on the next tick.
 const RECT_GRACE_MS = 900
 
+// How long the cursor must rest on a claim before its evidence search
+// starts. Long enough that crossing a paragraph doesn't fire a search per
+// claim; short enough that the search is already running by the time
+// someone has read the popover's first line.
+const HOVER_SEARCH_DWELL_MS = 220
+
 /**
  * Smooths the one-frame gaps in the underline stream.
  *
@@ -206,17 +212,25 @@ function UnderlineMark({
       <div
         style={{
           position: 'absolute',
-          inset: '0 0 4px 0',
+          // Extends 2px above the text's own bounding box. A band clipped
+          // exactly to the glyph box reads as a background colour change;
+          // a little air above it reads as a highlighter stroke.
+          inset: '-2px 0 3px 0',
           // Translucent, not opaque: the overlay window sits ON TOP of the
           // watched app, so anything solid here would hide the very text it
           // is meant to be highlighting. This is a highlighter pen, and the
           // words have to stay readable through it.
-          background: withAlpha(color, 0.16),
+          //
+          // 0.30, not the 0.16 this started at — that composited to about
+          // rgb(253,236,222) over white, which is invisible in practice
+          // next to black body text. Anything past ~0.35 starts fighting
+          // the text for contrast.
+          background: withAlpha(color, 0.3),
           borderRadius: 3,
           opacity: hovered ? 1 : 0,
           transform: hovered ? 'scaleY(1)' : 'scaleY(0.72)',
           transformOrigin: 'bottom',
-          transition: 'opacity 130ms ease, transform 130ms cubic-bezier(0.22, 1, 0.36, 1)'
+          transition: 'opacity 110ms ease, transform 110ms cubic-bezier(0.22, 1, 0.36, 1)'
         }}
       />
       <div
@@ -225,11 +239,11 @@ function UnderlineMark({
           left: 0,
           right: 0,
           bottom: 0,
-          height: hovered ? 2.5 : 2,
+          height: hovered ? 3 : 2,
           borderRadius: 2,
           background: color,
           opacity: hovered ? 1 : 0.85,
-          transition: 'opacity 130ms ease, height 130ms ease'
+          transition: 'opacity 110ms ease, height 110ms ease'
         }}
       />
     </div>
@@ -1298,6 +1312,36 @@ export default function OverlayApp(): JSX.Element {
         citation: null
       })
     : null
+  // Start the evidence search when the cursor settles on a claim, rather
+  // than waiting for a click on "Find Evidence".
+  //
+  // Only the top MAX_AUTO_EVIDENCE_CLAIMS claims are pre-fetched after
+  // detection (a full set costs four provider searches each, which is what
+  // makes Semantic Scholar answer 429). Everything below that used to sit
+  // at "no evidence yet" until the user clicked, and only then began a cold
+  // four-provider search — so the wait for articles started when the user
+  // asked for them instead of when they showed interest.
+  //
+  // The dwell delay is what keeps this honest about API cost: sweeping the
+  // cursor across a paragraph must not fire a search per claim it crosses.
+  // Attempts are recorded whether or not they succeed, so a failing claim
+  // re-searches only via the explicit button.
+  const autoSearchedIds = useRef<Set<string>>(new Set())
+  const hoveredClaimId = claimHovered?.claimId ?? null
+  const needsEvidence = claimHoveredSummary?.evidence == null
+  useEffect(() => {
+    if (!hoveredClaimId || !needsEvidence) return
+    if (autoSearchedIds.current.has(hoveredClaimId)) return
+    const id = window.setTimeout(() => {
+      autoSearchedIds.current.add(hoveredClaimId)
+      void findEvidenceFor(hoveredClaimId)
+    }, HOVER_SEARCH_DWELL_MS)
+    return () => window.clearTimeout(id)
+    // findEvidenceFor is stable enough for this purpose — it only closes
+    // over setState functions, which React guarantees are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredClaimId, needsEvidence])
+
   const claimHoveredPos = claimHovered ? popoverPosition(claimHovered.anchor) : null
   const popoverRef = useRef<HTMLDivElement>(null)
   const lastReportedPopoverKey = useRef<string | null>(null)
