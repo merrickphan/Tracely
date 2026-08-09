@@ -5,6 +5,7 @@ import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey
 import { registerIpcHandlers } from './ipc'
 import { setAccessTokenProvider } from './services/ai/identity'
 import { getSupabase, handleOAuthRedirect, isAuthConfigured } from './services/auth/client'
+import { warmUpUia } from './services/screenWatch/uiaSnapshot'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { warmUp as warmUpMl } from './services/ml'
 import { initDb, persist } from './services/storage/db'
@@ -103,6 +104,13 @@ if (!gotLock) {
     registerScreenWatchHotkey(getSetting('screenWatchHotkeyAccelerator'))
     initAutoUpdater()
     initScreenWatch()
+    // Same "pay it at boot, not in front of the user" reasoning as the
+    // hidden Tracer window above and the ML worker below: the first
+    // uia-watch.ps1 run costs ~1160ms against ~380ms for later ones, and
+    // without this that penalty lands on the moment Screen Watch is turned
+    // on and the user is waiting for the widget. Loads assemblies only —
+    // it reads no window text (see warmUpUia).
+    warmUpUia()
 
     // Same reasoning as the hidden Tracer window above: pay the one-time cost
     // at boot rather than in front of the user. Measured, the first

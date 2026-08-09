@@ -483,6 +483,15 @@ export interface TracerSendResponse {
   reply: TracerMessage
 }
 
+export interface TracerRetryRequest {
+  conversationId: string
+}
+// Retry re-asks the last question rather than appending a second copy of it,
+// so the stored conversation stays a clean transcript — the discarded pair is
+// deleted before the new turn runs. Same response shape as send: the renderer
+// drops its last two messages and appends these.
+export type TracerRetryResponse = TracerSendResponse
+
 export interface TracerGetConversationRequest {
   // Omit to get (or lazily create) the most recent conversation.
   conversationId?: string

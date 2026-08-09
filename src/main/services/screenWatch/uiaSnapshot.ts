@@ -67,6 +67,48 @@ function getScriptPath(): string {
     : join(process.resourcesPath, 'uia-watch.ps1')
 }
 
+let warmedUp = false
+
+/**
+ * Loads PowerShell and the three UI Automation assemblies into the OS file
+ * cache ahead of the first real snapshot.
+ *
+ * Measured on this machine: the first `uia-watch.ps1` run costs ~1160ms,
+ * subsequent ones ~380ms. Nearly all of that first-run penalty is process
+ * startup plus JIT/assembly loading, and it lands squarely on the moment
+ * the user turns Screen Watch on and waits for the widget to appear.
+ *
+ * Deliberately runs `Add-Type` only, and NOT a snapshot: warming must not
+ * read anything from any window. Screen Watch is opt-in precisely because
+ * it reads other apps' text, and a warm-up that took a real snapshot would
+ * be doing that before the user opted in.
+ *
+ * Fire-and-forget: nothing waits on it, and a failure just means the first
+ * real call pays the cost it would have paid anyway.
+ */
+export function warmUpUia(): void {
+  if (warmedUp || process.platform !== 'win32') return
+  warmedUp = true
+  try {
+    const child = spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        'Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName System.Windows.Forms; exit'
+      ],
+      { windowsHide: true, stdio: 'ignore' }
+    )
+    child.on('error', () => {})
+    child.unref()
+  } catch {
+    // Warming is best-effort by definition.
+  }
+}
+
 /**
  * Spawns uia-watch.ps1 with the given extra args and returns its parsed
  * single-line JSON result. Spawned fresh per call (rather than kept alive)

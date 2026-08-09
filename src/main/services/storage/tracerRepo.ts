@@ -115,6 +115,34 @@ export function addMessage(conversationId: string, role: TracerRole, content: st
   return message
 }
 
+/**
+ * Removes the most recent user message and everything after it, returning
+ * that message's text so the caller can re-ask it. Backs "Retry": a retried
+ * turn should replace the answer you didn't like, not append a duplicate
+ * question to the transcript — and since the whole prior conversation is
+ * re-sent as history on every turn (see costGuard's history cap), leaving the
+ * discarded pair in place would also feed the rejected answer back to the
+ * model as context for its replacement.
+ *
+ * Returns null when there is no user message to retry.
+ */
+export function popLastExchange(conversationId: string): string | null {
+  const last = queryOne<MessageRow>(
+    "SELECT * FROM tracer_messages WHERE conversation_id = $id AND role = 'user' ORDER BY created_at DESC LIMIT 1",
+    { $id: conversationId }
+  )
+  if (!last) return null
+
+  // `>=` on created_at rather than deleting by id: it takes the reply (and
+  // any later rows) with it in one statement. Ties on the timestamp can only
+  // be the same turn's own reply, which is exactly what should go too.
+  run('DELETE FROM tracer_messages WHERE conversation_id = $id AND created_at >= $from', {
+    $id: conversationId,
+    $from: last.created_at
+  })
+  return last.content
+}
+
 export function deleteConversation(id: string): void {
   // Messages go with it via ON DELETE CASCADE (foreign keys are enabled in
   // db.ts's initDb).

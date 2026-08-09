@@ -85,6 +85,8 @@ import type {
   TracerNewConversationResponse,
   TracerOpenRequest,
   TracerOpenResponse,
+  TracerRetryRequest,
+  TracerRetryResponse,
   TracerSendRequest,
   TracerSendResponse,
   WindowTargetRequest,
@@ -203,6 +205,7 @@ const api = {
     open: (req: TracerOpenRequest): Promise<TracerOpenResponse> => ipcRenderer.invoke(IPC.TRACER_OPEN, req),
     close: (): Promise<TracerCloseResponse> => ipcRenderer.invoke(IPC.TRACER_CLOSE, {}),
     send: (req: TracerSendRequest): Promise<TracerSendResponse> => ipcRenderer.invoke(IPC.TRACER_SEND, req),
+    retry: (req: TracerRetryRequest): Promise<TracerRetryResponse> => ipcRenderer.invoke(IPC.TRACER_RETRY, req),
     getConversation: (req: TracerGetConversationRequest): Promise<TracerGetConversationResponse> =>
       ipcRenderer.invoke(IPC.TRACER_GET_CONVERSATION, req),
     listConversations: (): Promise<TracerListConversationsResponse> =>
