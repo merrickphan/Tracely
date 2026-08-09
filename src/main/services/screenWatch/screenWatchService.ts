@@ -21,6 +21,7 @@ import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
+import { getFloatingWindow } from '../../windows/floatingWindow'
 import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
@@ -146,6 +147,10 @@ export interface HoverTarget {
   // SCREENWATCH_OVERLAY_UPDATE — for positioning the tooltip in the overlay
   // renderer without any unit conversion there.
   rectsWindowLocal: ScreenRect[]
+  // Only the collapsed launcher's badge/shadow extends beyond its base rect.
+  // The expanded panel uses zero so transparent pixels around it never gain
+  // native mouse capture.
+  capturePadding?: number
 }
 
 let hoverTargets: HoverTarget[] = []
@@ -506,8 +511,9 @@ const WIDGET_SIZE = 56
 // with where the focused control or text cursor currently is.
 const EDGE_MARGIN = 24
 // Single-claim panel — big enough for the full action card (claim text,
-// evidence row, Find Evidence/Critique Argument buttons, and the critique
-// result once run), no scrolling. Must match OverlayApp.tsx's
+// evidence row, Check Claim/Find Evidence buttons, and the critique
+// result once run), with scrolling only when the watched window forces the
+// panel below its ideal size. Must match OverlayApp.tsx's
 // POPOVER_WIDTH/EST_HEIGHT-equivalent sizing intent for the same content.
 const SINGLE_PANEL_WIDTH = 400
 const SINGLE_PANEL_HEIGHT = 400
@@ -519,7 +525,7 @@ const SINGLE_PANEL_HEIGHT = 400
 // just reintroduce clipping — the renderer scrolls internally only past
 // that cap. Mirrored client-side in OverlayApp.tsx (GRID_*) — keep in sync.
 const GRID_CARD_WIDTH = 364
-const GRID_CARD_HEIGHT = 176
+const GRID_CARD_HEIGHT = 108
 const GRID_GAP = 10
 const GRID_HEADER_HEIGHT = 44
 const GRID_PADDING = 18
@@ -703,7 +709,7 @@ export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWa
   return leanEvidence(claimId)
 }
 
-// User-initiated only (the overlay's "Critique Argument" button) — unlike
+// User-initiated only (the overlay's "Check Claim" button) — unlike
 // evidence search this hits the paid relay, so it never runs automatically
 // for passive background reading.
 export async function critiqueClaim(claimId: string): Promise<{ critique: string; verdict: CritiqueVerdict }> {
@@ -841,8 +847,9 @@ function updateOverlayAndWidget(
 ): void {
   // A snapshot may finish after the user has opened Tracely. Do not let that
   // stale external-window result re-show the screen-saver-level overlay over
-  // main between its immediate focus handler and the next UIA poll.
-  if (getMainWindow()?.isFocused()) {
+  // main or the floating claim checker between their immediate focus handlers
+  // and the next UIA poll.
+  if (getMainWindow()?.isFocused() || getFloatingWindow()?.isFocused()) {
     hideOverlay()
     return
   }
@@ -929,13 +936,22 @@ function updateOverlayAndWidget(
     width: WIDGET_SIZE,
     height: WIDGET_SIZE
   }
-  const panelSize =
+  const desiredPanelSize =
     widgetViewMode === 'all'
       ? computeAllPanelSize(claims.length)
       : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
+  // Some watched windows are narrower/shorter than the ideal 400px card. The
+  // overlay itself is clipped to that window, so an unclamped panel makes its
+  // right/bottom actions unreachable. Keep a small inset and let the renderer
+  // scroll the content when the full card does not fit.
+  const panelInset = Math.min(8, Math.floor(Math.min(winBounds.width, winBounds.height) / 4))
+  const panelSize = {
+    width: Math.min(desiredPanelSize.width, Math.max(1, winBounds.width - panelInset * 2)),
+    height: Math.min(desiredPanelSize.height, Math.max(1, winBounds.height - panelInset * 2))
+  }
   const panelLocalAnchored: ScreenRect = {
-    x: Math.max(0, winBounds.width - panelSize.width - EDGE_MARGIN),
-    y: Math.max(0, winBounds.height - panelSize.height - EDGE_MARGIN),
+    x: Math.max(panelInset, winBounds.width - panelSize.width - EDGE_MARGIN),
+    y: Math.max(panelInset, winBounds.height - panelSize.height - EDGE_MARGIN),
     width: panelSize.width,
     height: panelSize.height
   }
@@ -944,7 +960,12 @@ function updateOverlayAndWidget(
   // A user-dragged position overrides the anchor until the widget collapses
   // or a new control/app comes into focus (see widgetManualPos above).
   const activeLocal: ScreenRect = widgetManualPos
-    ? { x: widgetManualPos.x, y: widgetManualPos.y, width: anchoredLocal.width, height: anchoredLocal.height }
+    ? {
+        x: Math.min(Math.max(0, widgetManualPos.x), Math.max(0, winBounds.width - anchoredLocal.width)),
+        y: Math.min(Math.max(0, widgetManualPos.y), Math.max(0, winBounds.height - anchoredLocal.height)),
+        width: anchoredLocal.width,
+        height: anchoredLocal.height
+      }
     : anchoredLocal
   // Must add the overlay's own origin (the focused app window's logical
   // top-left, windowLogical), not display.bounds — the overlay is sized to
@@ -1009,18 +1030,12 @@ function updateOverlayAndWidget(
       totalInfoCount
     }
   }
-  // Re-sending an unchanged payload every poll tick (every 1.2s, even when
-  // nothing on screen actually changed) forces the renderer to re-render
-  // the whole overlay tree for no reason — on a transparent always-on-top
-  // window that's a plausible source of visible flicker. Skip the send
-  // (and the resulting re-render) when nothing observable changed.
-  const payloadKey = JSON.stringify(payload)
-  if (payloadKey === lastSentPayloadKey) return
-  lastSentPayloadKey = payloadKey
 
-  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
-  emitTracerContext()
-
+  // Native hit-testing uses absolute coordinates and must be refreshed even
+  // when the renderer payload is unchanged. Moving the watched window changes
+  // these coordinates without changing any window-local rect in `payload`; an
+  // early dedupe return here previously left the visible panel at its new
+  // position while clicks were still tested against its old position.
   const claimTargets = underlines
     .map((u, idx) => {
       const claim = claims.find((c) => c.id === u.id)
@@ -1043,10 +1058,26 @@ function updateOverlayAndWidget(
     text: fullText,
     claimType: 'factual',
     rectsAbsolute: [activeAbsolute],
-    rectsWindowLocal: [activeLocal]
+    rectsWindowLocal: [activeLocal],
+    capturePadding: widgetExpanded ? 0 : 5
   }
 
-  hoverTargets = [...claimTargets, widgetTarget]
+  // The widget is painted above underlines, so it must win overlapping native
+  // hit tests. Once expanded, do not let a hidden underline behind the panel
+  // open a competing popover over its controls.
+  hoverTargets = widgetExpanded ? [widgetTarget] : [widgetTarget, ...claimTargets]
+
+  // Re-sending an unchanged payload every poll tick (every 1.2s, even when
+  // nothing on screen actually changed) forces the renderer to re-render
+  // the whole overlay tree for no reason — on a transparent always-on-top
+  // window that's a plausible source of visible flicker. Skip the send
+  // (and the resulting re-render) when nothing observable changed.
+  const payloadKey = JSON.stringify(payload)
+  if (payloadKey === lastSentPayloadKey) return
+  lastSentPayloadKey = payloadKey
+
+  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
+  emitTracerContext()
 }
 
 /**
