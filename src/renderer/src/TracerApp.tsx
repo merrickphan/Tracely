@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import type { TracerContext } from '@shared/ipc-contract'
 import type { TracerConversation, TracerMessage } from '@shared/types'
 import figmaLogo from './assets/figma-logo.png'
@@ -27,6 +27,80 @@ const STARTERS = [
   'What makes my argument here weak?',
   'Explain the difference between correlation and causation in my draft.'
 ]
+
+// Hand-rolled inline SVG rather than an icon dependency, same convention as
+// components/icons.tsx — kept local here because this window deliberately
+// shares no module with the main-window renderer (see the note above).
+function CopyIcon({ size = 14 }: { size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M5.5 15H5a1.5 1.5 0 01-1.5-1.5v-9A1.5 1.5 0 015 3h9A1.5 1.5 0 0115.5 4.5V5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function CheckIcon({ size = 14 }: { size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M5 12.5l4.5 4.5L19 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function RetryIcon({ size = 14 }: { size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M20 12a8 8 0 11-2.4-5.7" strokeLinecap="round" />
+      <path d="M20 4v4.5h-4.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// The action row under a Tracer reply. `label` is both the tooltip and the
+// accessible name — these are icon-only buttons, so without it they announce
+// as nothing at all.
+function Actions({ children }: { children: ReactNode }): JSX.Element {
+  return <div style={{ display: 'flex', gap: 2, marginTop: 4, marginLeft: 35 }}>{children}</div>
+}
+
+function Action({
+  label,
+  onClick,
+  disabled,
+  children
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  children: ReactNode
+}): JSX.Element {
+  return (
+    <button
+      className="tracer-action"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 26,
+        height: 26,
+        border: 'none',
+        borderRadius: 7,
+        background: 'transparent',
+        color: MUTED,
+        padding: 0,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1
+      }}
+    >
+      {children}
+    </button>
+  )
+}
 
 function Avatar({ role }: { role: 'user' | 'tracer' }): JSX.Element {
   if (role === 'tracer') {
@@ -73,30 +147,33 @@ function Avatar({ role }: { role: 'user' | 'tracer' }): JSX.Element {
   )
 }
 
-function MessageBubble({ message }: { message: TracerMessage }): JSX.Element {
+function MessageBubble({ message, actions }: { message: TracerMessage; actions?: ReactNode }): JSX.Element {
   const isTracer = message.role === 'tracer'
   return (
-    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-      <Avatar role={message.role} />
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: isTracer ? '#fff' : 'rgba(0,0,0,0.035)',
-          border: isTracer ? '1px solid #e8e8ec' : '1px solid transparent',
-          borderRadius: 12,
-          padding: '9px 11px',
-          fontSize: 13.5,
-          lineHeight: 1.55,
-          color: '#1a1a1f',
-          // Tracer's replies are plain prose with paragraph breaks — no
-          // markdown renderer here, so newlines have to survive as-is.
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere'
-        }}
-      >
-        {message.content}
+    <div>
+      <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+        <Avatar role={message.role} />
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: isTracer ? '#fff' : 'rgba(0,0,0,0.035)',
+            border: isTracer ? '1px solid #e8e8ec' : '1px solid transparent',
+            borderRadius: 12,
+            padding: '9px 11px',
+            fontSize: 13.5,
+            lineHeight: 1.55,
+            color: '#1a1a1f',
+            // Tracer's replies are plain prose with paragraph breaks — no
+            // markdown renderer here, so newlines have to survive as-is.
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere'
+          }}
+        >
+          {message.content}
+        </div>
       </div>
+      {actions}
     </div>
   )
 }
@@ -111,6 +188,9 @@ export default function TracerApp(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [conversations, setConversations] = useState<TracerConversation[]>([])
+  // Which reply is currently showing the "copied" checkmark. Id rather than a
+  // boolean so copying a second reply doesn't leave two ticks on screen.
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -172,6 +252,39 @@ export default function TracerApp(): JSX.Element {
     } finally {
       setSending(false)
       composerRef.current?.focus()
+    }
+  }
+
+  async function copyReply(message: TracerMessage): Promise<void> {
+    await navigator.clipboard.writeText(message.content)
+    setCopiedId(message.id)
+  }
+
+  // Reset the checkmark on a timer rather than leaving it stuck as the
+  // button's permanent state — it's feedback, not a mode.
+  useEffect(() => {
+    if (!copiedId) return
+    const timer = window.setTimeout(() => setCopiedId(null), 1600)
+    return () => window.clearTimeout(timer)
+  }, [copiedId])
+
+  async function retry(): Promise<void> {
+    if (!conversation || sending) return
+    setError(null)
+    setSending(true)
+    // Main deletes the discarded question/answer pair and re-asks, so drop
+    // both here too — otherwise the old reply stays on screen next to its
+    // replacement and the transcript no longer matches what's stored.
+    setMessages((prev) => prev.slice(0, -2))
+    try {
+      const result = await window.tracely.tracer.retry({ conversationId: conversation.id })
+      setMessages((prev) => [...prev, result.userMessage, result.reply])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ''))
+      await load(conversation.id)
+    } finally {
+      setSending(false)
     }
   }
 
@@ -404,7 +517,32 @@ export default function TracerApp(): JSX.Element {
                 ))}
               </div>
             ) : (
-              messages.map((m) => <MessageBubble key={m.id} message={m} />)
+              messages.map((m, i) => {
+                // Retry is offered only on the newest reply. `popLastExchange`
+                // discards from the last question onward, so retrying an
+                // earlier turn would silently delete everything after it.
+                const isLatestReply = m.role === 'tracer' && i === messages.length - 1
+                return (
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    actions={
+                      m.role === 'tracer' ? (
+                        <Actions>
+                          <Action label={copiedId === m.id ? 'Copied' : 'Copy'} onClick={() => void copyReply(m)}>
+                            {copiedId === m.id ? <CheckIcon /> : <CopyIcon />}
+                          </Action>
+                          {isLatestReply ? (
+                            <Action label="Retry" onClick={() => void retry()} disabled={sending || !relayConfigured}>
+                              <RetryIcon />
+                            </Action>
+                          ) : null}
+                        </Actions>
+                      ) : null
+                    }
+                  />
+                )
+              })
             )}
 
             {sending ? (
@@ -439,7 +577,11 @@ export default function TracerApp(): JSX.Element {
                 Tracer needs a relay. Set RELAY_URL / RELAY_TOKEN and rebuild.
               </div>
             ) : null}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            {/* One bordered surface containing both the textarea and the send
+                row, rather than a box beside a button — the whole thing lights
+                up on focus, so it reads as a single input the way the rest of
+                the chat reads as single bubbles. */}
+            <div className={`tracer-composer${relayConfigured ? '' : ' is-disabled'}`}>
               <textarea
                 ref={composerRef}
                 value={draft}
@@ -449,38 +591,50 @@ export default function TracerApp(): JSX.Element {
                 placeholder="Ask Tracer about your writing…"
                 rows={2}
                 style={{
-                  flex: 1,
+                  width: '100%',
                   resize: 'none',
-                  border: '1px solid #e0e0e6',
-                  borderRadius: 12,
-                  padding: '9px 11px',
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
                   fontSize: 13,
                   lineHeight: 1.5,
                   fontFamily: 'inherit',
                   color: '#1a1a1f',
-                  outline: 'none',
-                  background: relayConfigured ? '#fff' : '#f6f6f8'
+                  outline: 'none'
                 }}
               />
-              <button
-                onClick={() => void send(draft)}
-                disabled={!canSend}
-                title="Send (Enter)"
-                aria-label="Send"
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: canSend ? INK : 'rgba(0,0,0,0.12)',
-                  color: '#fff',
-                  fontSize: 15,
-                  cursor: canSend ? 'pointer' : 'default',
-                  flexShrink: 0
-                }}
-              >
-                ↑
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                {/* Only worth showing as the cap gets close — a counter that's
+                    always on turns a writing box into a form field. */}
+                <div style={{ fontSize: 10.5, color: MUTED, minWidth: 0 }}>
+                  {draft.length > MAX_MESSAGE_CHARS - 200
+                    ? `${MAX_MESSAGE_CHARS - draft.length} characters left`
+                    : 'Enter to send · Shift+Enter for a new line'}
+                </div>
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => void send(draft)}
+                  disabled={!canSend}
+                  title="Send (Enter)"
+                  aria-label="Send"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: canSend ? INK : 'rgba(0,0,0,0.12)',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 14,
+                    cursor: canSend ? 'pointer' : 'default',
+                    flexShrink: 0
+                  }}
+                >
+                  ↑
+                </button>
+              </div>
             </div>
           </div>
         </>
@@ -491,7 +645,18 @@ export default function TracerApp(): JSX.Element {
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
         .tracer-starter:hover:not(:disabled) { border-color: ${ACCENT}; color: ${INK}; }
-        textarea:focus { border-color: ${ACCENT} !important; }
+        .tracer-action:hover:not(:disabled) { background: rgba(0,0,0,0.06); color: ${INK}; }
+        .tracer-composer {
+          border: 1px solid #e0e0e6;
+          border-radius: 14px;
+          background: #fff;
+          padding: 10px 11px;
+          transition: border-color 0.12s ease;
+        }
+        /* The textarea has no border of its own now, so focus has to be
+           reflected by the wrapper or there'd be no focus indicator at all. */
+        .tracer-composer:focus-within { border-color: ${ACCENT}; }
+        .tracer-composer.is-disabled { background: #f6f6f8; }
         @keyframes tracer-spin { to { transform: rotate(360deg); } }
         .tracer-spinner {
           display: inline-block;
