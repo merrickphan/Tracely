@@ -229,6 +229,12 @@ export interface ScreenWatchStatus {
   claimCount: number
   lastError: string | null
   blockedApp: string | null
+  // The relay refused the call because it could not identify the user — an
+  // expired session, or none at all. Separate from lastError because it is the
+  // one failure the user can act on, and because nothing rendered lastError:
+  // a signed-out app looked exactly like a slow one, right down to claims
+  // simply never appearing.
+  authRequired: boolean
 }
 export type ScreenWatchSetEnabledResponse = ScreenWatchStatus
 export type ScreenWatchGetStatusRequest = Record<string, never>
