@@ -839,6 +839,14 @@ function updateOverlayAndWidget(
   claims: Claim[],
   fullText: string
 ): void {
+  // A snapshot may finish after the user has opened Tracely. Do not let that
+  // stale external-window result re-show the screen-saver-level overlay over
+  // main between its immediate focus handler and the next UIA poll.
+  if (getMainWindow()?.isFocused()) {
+    hideOverlay()
+    return
+  }
+
   lastUpdateInputs = { windowRect, claimRects, claims, fullText }
 
   const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
