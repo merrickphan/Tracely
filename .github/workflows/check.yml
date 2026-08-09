@@ -1,0 +1,39 @@
+name: check
+
+# Catches a broken main between releases. preflight already runs typecheck
+# before every release, so this is the weaker of the two repos' CI — the relay's
+# matters more, because Vercel will deploy a type-broken relay to production.
+#
+# Restricted to PRs and main rather than every push: `npm ci` here pulls
+# Electron, transformers.js and onnxruntime, which is minutes, not seconds.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: typecheck
+        run: npm run typecheck
+
+      # Guards the eval harness, which is the project's only quality gate. It
+      # breaks in a way typecheck cannot see: importing anything that reaches
+      # Electron pulls the binary shim into a bundle meant for plain node, and
+      # the eval then fails at runtime rather than at build.
+      - name: eval bundle has no Electron
+        run: npm run check:eval-bundle
+
+# Deliberately not here: building the installer (slow, and afterPack already
+# gates it locally) and anything that spends money. CI that costs per run is CI
+# that gets switched off.
