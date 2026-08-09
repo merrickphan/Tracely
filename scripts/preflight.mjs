@@ -86,7 +86,21 @@ try {
   else if (ahead !== '0') fail(`${ahead} commit(s) not pushed — push before releasing`)
   else pass(`in sync with origin/${targetBranch}`)
 } catch {
-  fail('could not compare against origin (offline?)')
+  // A brand-new branch is the common case here, not a network problem, and
+  // "offline?" sent you looking in entirely the wrong place. git says
+  // "couldn't find remote ref" for this, so separate the two rather than
+  // reporting the rarer cause for both.
+  let existsOnRemote = true
+  try {
+    existsOnRemote = git(`ls-remote --heads origin ${targetBranch}`).length > 0
+  } catch {
+    existsOnRemote = false
+  }
+  if (!existsOnRemote) {
+    fail(`branch '${targetBranch}' has never been pushed — run: git push -u origin ${targetBranch}`)
+  } else {
+    fail('could not compare against origin (offline?)')
+  }
 }
 
 // 4. The two automated correctness checks this project has.
