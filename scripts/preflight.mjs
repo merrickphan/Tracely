@@ -17,6 +17,7 @@ import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadEnv } from './env.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const RELEASE_BRANCH = 'main'
@@ -38,6 +39,17 @@ const fail = (m) => {
 const git = (args) => execSync(`git ${args}`, { cwd: ROOT, encoding: 'utf8' }).trim()
 
 console.log(PREVIEW ? '\nPreview preflight\n' : '\nRelease preflight\n')
+
+// Before any check runs, say which backend every check below is about.
+//
+// This has to happen here rather than being assumed, because preflight used to
+// read `.env` unconditionally. Once ship-preview builds against staging, that
+// meant the most valuable check in this file — "is the relay actually up?",
+// written after v0.3.73 shipped a 404 — would have verified the production
+// relay while the build pointed somewhere else entirely. A green preflight for
+// an environment the build isn't using is worse than no preflight.
+loadEnv({ root: ROOT })
+console.log()
 
 // 1. Releasing from a work branch would ship whatever that agent was mid-way
 //    through, under a version number that claims to be the integration branch.
@@ -77,12 +89,23 @@ try {
   fail('could not compare against origin (offline?)')
 }
 
-// 4. The only automated correctness check this project has.
+// 4. The two automated correctness checks this project has.
 try {
   execSync('npm run typecheck', { cwd: ROOT, stdio: 'pipe' })
   pass('typecheck')
 } catch (e) {
   fail(`typecheck failed:\n${(e.stdout?.toString() || e.message).trim()}`)
+}
+
+// Guards the eval harness, which is the project's only quality gate — and the
+// eval breaks in a way typecheck cannot see, by pulling Electron into a bundle
+// meant to run on plain node. CI runs this too, but CI can sit red for a week
+// without stopping a release, and preflight cannot.
+try {
+  execSync('npm run check:eval-bundle', { cwd: ROOT, stdio: 'pipe' })
+  pass('eval bundle has no Electron')
+} catch (e) {
+  fail(`eval bundle check failed:\n${(e.stdout?.toString() || e.message).trim()}`)
 }
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
@@ -97,16 +120,11 @@ const clientSrc = readFileSync(join(ROOT, 'src/main/services/ai/client.ts'), 'ut
 const union = clientSrc.match(/callRelay<[^>]*>\(\s*endpoint:\s*([^,)]+)/)?.[1] ?? ''
 const endpoints = new Set([...union.matchAll(/'([a-z0-9][a-z0-9-]*)'/g)].map((m) => m[1]))
 
-// Guarded: a worktree with no .env at all is the normal state for a freshly
-// created agent worktree (.env is gitignored), and an unhandled ENOENT here
-// would crash preflight instead of reporting the actual problem.
-let env = ''
-try {
-  env = readFileSync(join(ROOT, '.env'), 'utf8')
-} catch {
-  env = ''
-}
-const envValue = (name) => (env.match(new RegExp(`^${name}=(.+)$`, 'm'))?.[1] || '').trim()
+// loadEnv() at the top already read the correct file for this environment and
+// exited if it was missing, so these read from process.env rather than being
+// parsed out of `.env` a second time by hand. The old second parse was how
+// preflight could end up checking a different file than the build used.
+const envValue = (name) => (process.env[name] ?? '').trim()
 const relayUrl = envValue('RELAY_URL')
 
 // The relay refuses any call it cannot attribute to a signed-in account, and

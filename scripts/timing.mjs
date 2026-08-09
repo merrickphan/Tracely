@@ -10,11 +10,11 @@
 import { mkdirSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import dotenv from 'dotenv'
 import * as esbuild from 'esbuild'
+import { loadEnv, relayDefines } from './env.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-dotenv.config({ path: join(repoRoot, '.env') })
+loadEnv({ root: repoRoot })
 
 const bundlePath = join(repoRoot, 'out', 'eval', 'timing.mjs')
 const workerPath = join(repoRoot, 'out', 'eval', 'mlWorker.cjs')
@@ -32,12 +32,7 @@ await esbuild.build({
   banner: {
     js: "import{createRequire as __cr}from'module';import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';const require=__cr(import.meta.url);const __filename=__f(import.meta.url);const __dirname=__d(__filename);"
   },
-  define: {
-    __RELAY_URL__: JSON.stringify(process.env.RELAY_URL ?? ''),
-    __RELAY_TOKEN__: JSON.stringify(process.env.RELAY_TOKEN ?? ''),
-    __SUPABASE_URL__: JSON.stringify(process.env.SUPABASE_URL ?? ''),
-    __SUPABASE_ANON_KEY__: JSON.stringify(process.env.SUPABASE_ANON_KEY ?? '')
-  }
+  define: relayDefines()
 })
 
 await esbuild.build({

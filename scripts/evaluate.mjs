@@ -26,12 +26,36 @@
 import { existsSync, mkdirSync, readdirSync } from 'fs'
 import { dirname, isAbsolute, join, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import dotenv from 'dotenv'
 import * as esbuild from 'esbuild'
 import { announce, installHttpRecorder, report } from './eval-http.mjs'
+import { ENV_NAME, cassetteDir as cassettesFor, loadEnv, relayDefines } from './env.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-dotenv.config({ path: join(repoRoot, '.env') })
+loadEnv({ root: repoRoot })
+
+// The eval is pinned to production on purpose.
+//
+// It measures retrieval and scoring quality against hand labels in
+// eval/baseline.md, and those numbers are only comparable across runs if the
+// backend behind them never moves. Two environments would silently split the
+// baseline into two incomparable halves.
+//
+// It would also just fail: identity.ts borrows the desktop app's session, and
+// supabase-js keys that file by Supabase project ref — so a staging-built eval
+// asks the production session file for a key it does not contain, gets nothing,
+// omits the Authorization header, and 401s on every paid call while reporting
+// nothing about why.
+if (ENV_NAME === 'staging' && !process.env.EVAL_ALLOW_STAGING) {
+  console.error('Refusing to run: TRACELY_ENV=staging.')
+  console.error('')
+  console.error('The eval is pinned to production so its numbers stay comparable')
+  console.error('against eval/baseline.md, and it borrows the production app\'s')
+  console.error('session — which a staging build cannot read.')
+  console.error('')
+  console.error('Unset TRACELY_ENV, or set EVAL_ALLOW_STAGING=1 if you really mean it')
+  console.error('(and sign in to the Tracely Preview app first).')
+  process.exit(1)
+}
 
 function argValue(flag) {
   const index = process.argv.indexOf(flag)
@@ -51,7 +75,15 @@ if (!existsSync(essayDir)) {
   process.exit(1)
 }
 
-const cassetteDir = join(repoRoot, 'out', 'eval', 'cassettes')
+// Namespaced by environment, and that is load-bearing rather than tidy.
+//
+// Cassette keys hash the request URL, which includes the relay host. Switching
+// environment therefore invalidates every relay recording at once — but the
+// spend guard below decides whether to demand EVAL_ALLOW_SPEND by *counting*
+// recordings. A flat directory would still hold the old environment's files, so
+// the guard would read "recordings exist, this run is free" and wave through a
+// run where every single relay call goes live and paid.
+const cassetteDir = cassettesFor(join(repoRoot, 'out', 'eval'))
 const cassetteMode = process.env.EVAL_NO_CASSETTE ? 'off' : process.env.EVAL_REFRESH ? 'refresh' : 'cassette'
 
 // A first run bills the OpenAI account behind the relay — one detect-claims
@@ -118,12 +150,7 @@ await esbuild.build({
   banner: {
     js: "import{createRequire as __cr}from'module';import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';const require=__cr(import.meta.url);const __filename=__f(import.meta.url);const __dirname=__d(__filename);"
   },
-  define: {
-    __RELAY_URL__: JSON.stringify(process.env.RELAY_URL ?? ''),
-    __RELAY_TOKEN__: JSON.stringify(process.env.RELAY_TOKEN ?? ''),
-    __SUPABASE_URL__: JSON.stringify(process.env.SUPABASE_URL ?? ''),
-    __SUPABASE_ANON_KEY__: JSON.stringify(process.env.SUPABASE_ANON_KEY ?? '')
-  }
+  define: relayDefines()
 })
 
 // The ML worker, bundled separately because worker_threads spawns a file from
