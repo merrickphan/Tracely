@@ -44,7 +44,12 @@ ask() {
 
 if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
   case "$cmd" in
-    *"git commit"*|*"git merge"*|*"git push"*|*"git rebase"*)
+    # `git merge` is deliberately NOT here. Landing a reviewed branch means
+    # checking out main and merging into it, so denying merge-on-main banned
+    # the one way main is supposed to advance — the guard forbade the workflow
+    # it exists to enforce. Anything genuinely dangerous about a merge is
+    # covered by the commit/rebase/force-push rules that remain.
+    *"git commit"*|*"git rebase"*)
       # npm run ship is exempt: it commits the version bump on main by design,
       # and it runs git inside execSync, so this hook never sees those calls —
       # it only sees the single `npm run ship` invocation.
@@ -53,8 +58,14 @@ if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
 Work on a branch instead:
   git checkout -b feat/<what-you-are-doing>
 
-To release what is already on main, run: npm run ship"
+To land a finished branch:  git merge --no-ff <branch>
+To release what is on main: npm run ship"
       ;;
+    # Pushing main is legitimate — it is how a merge reaches origin — but it is
+    # also the moment work becomes public and, for the relay, the moment a
+    # deploy fires. Worth a beat, not a wall.
+    *"git push"*)
+      ask "Pushing ${branch}. For the relay this deploys to production immediately; for the app it is what npm run ship publishes from." ;;
   esac
 fi
 
