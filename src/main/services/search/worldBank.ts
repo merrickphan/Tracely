@@ -13,6 +13,7 @@ import type { NormalizedSourceResult } from './types'
 
 const API_ROOT = 'https://api.worldbank.org/v2'
 const WORLD_DEVELOPMENT_INDICATORS_SOURCE = '2'
+const INDEX_BATCH_SIZE = 256
 
 // Measured by eval/scripts/probe-statistical.mjs. At 0.55 the representative
 // claims that matched were paired with the intended indicator and the claim
@@ -36,7 +37,8 @@ interface IndexedIndicator {
 }
 
 let cataloguePromise: Promise<WorldBankIndicator[]> | null = null
-let indexPromise: Promise<IndexedIndicator[] | null> | null = null
+let index: IndexedIndicator[] | null = null
+let indexPromise: Promise<void> | null = null
 
 function readIndicatorResponse(value: unknown): WorldBankIndicator[] {
   if (!Array.isArray(value) || !Array.isArray(value[1])) return []
@@ -86,30 +88,53 @@ async function buildIndex(): Promise<IndexedIndicator[] | null> {
   // putting all ~1,500 names into the shared 2,000-entry evidence cache would
   // only evict useful claim and source embeddings. Nothing reads the catalogue
   // vectors from that cache again.
-  const vectors = await embed(indicators.map((indicator) => indicator.name))
+  //
+  // Keep the batches below the same limit used by probe-statistical.mjs. One
+  // 1,500-text worker request can exceed the warm-call timeout; if that
+  // happens there is no partial result to retain and every later retry starts
+  // the entire pass again.
+  const vectors: Float32Array[] = []
+  for (let offset = 0; offset < indicators.length; offset += INDEX_BATCH_SIZE) {
+    const batch = indicators.slice(offset, offset + INDEX_BATCH_SIZE)
+    const batchVectors = await embed(batch.map((indicator) => indicator.name))
 
-  // Semantic matching is the confidence gate, not an optional ranking
-  // enhancement here. If the model cannot run, staying quiet is safer than a
-  // keyword fallback that confuses closely related indicators.
-  if (!vectors) return null
+    // Semantic matching is the confidence gate, not an optional ranking
+    // enhancement here. If the model cannot run, staying quiet is safer than
+    // a keyword fallback that confuses closely related indicators.
+    if (!batchVectors) return null
+    vectors.push(...batchVectors)
+  }
+
   return indicators.map((indicator, index) => ({ indicator, vector: vectors[index] }))
 }
 
-function getIndex(): Promise<IndexedIndicator[] | null> {
-  if (!indexPromise) {
+function startIndexBuild(): void {
+  if (!index && !indexPromise) {
     indexPromise = buildIndex()
       .then((result) => {
-        // A model call may time out without disabling the worker. Let the next
-        // claim retry instead of memoising a transient null for the session.
-        if (result === null) indexPromise = null
-        return result
+        // A model call may time out without disabling the worker. A null result
+        // deliberately leaves the index unready so the next claim can retry.
+        if (result) index = result
       })
       .catch((error) => {
+        // Warm-up is intentionally fire-and-forget. Report the failure without
+        // creating an unhandled rejection; a later statistical claim retries.
+        console.warn('[search:worldbank] index warm-up failed', error)
+      })
+      .finally(() => {
         indexPromise = null
-        throw error
       })
   }
-  return indexPromise
+}
+
+/** Starts the catalogue download and index build without delaying app boot. */
+export function warmUp(): void {
+  startIndexBuild()
+}
+
+/** Whether a statistical search can include World Bank in this request. */
+export function isReady(): boolean {
+  return index !== null
 }
 
 function description(indicator: WorldBankIndicator): string | null {
@@ -127,8 +152,15 @@ function description(indicator: WorldBankIndicator): string | null {
  * geography, date, direction, and unit qualifiers.
  */
 export async function search(claimText: string): Promise<NormalizedSourceResult[]> {
-  const index = await getIndex()
-  if (!index || index.length === 0) return []
+  // A provider search has a six-second budget, while the cold catalogue and
+  // embedding pass takes longer. Never make a claim wait for that background
+  // work: start it if boot did not, stay silent for this request, and let the
+  // aggregator avoid caching the intentionally incomplete result.
+  if (!index) {
+    startIndexBuild()
+    return []
+  }
+  if (index.length === 0) return []
 
   const claimVectors = await embedCached([claimText])
   if (!claimVectors) return []

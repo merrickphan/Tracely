@@ -3,9 +3,11 @@ import type { Stance } from '../ml/protocol'
 
 const VENUE_TIER_WEIGHT: Record<VenueType, number> = {
   journal: 1.0,
-  // A primary, maintained statistical series can settle a numerical claim as
-  // directly as a journal article can settle a research claim.
-  dataset: 1.0,
+  // The World Bank result currently identifies a relevant official series but
+  // not the observation, geography or year that would settle the claim. It is
+  // stronger than a general reference page, but not journal-equivalent until
+  // the evidence card carries the actual value being asserted.
+  dataset: 0.65,
   conference: 0.8,
   book: 0.6,
   preprint: 0.5,

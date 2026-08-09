@@ -14,13 +14,14 @@ export interface EvidenceResult {
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
 function cacheKey(query: string, claimText: string): string {
-  // v4: statistical claims may now include a World Bank indicator. Without a
-  // bump, a v3 cache hit would hide the new provider for up to 24 hours.
+  // v5: World Bank results no longer enter stance classification and datasets
+  // have a lower quality weight. A v4 hit would preserve both old behaviours
+  // for up to 24 hours.
   //
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v4::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v5::${query}::${claimText}`).digest('hex')
 }
 
 /**
@@ -45,7 +46,7 @@ export async function findEvidenceCached(query: string, claimText: string): Prom
   const cached = getCached<EvidenceResult>(key)
   if (cached) return cached
 
-  const result = await findEvidence(query, claimText)
-  setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
+  const { cacheable, ...result } = await findEvidence(query, claimText)
+  if (cacheable) setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
   return result
 }

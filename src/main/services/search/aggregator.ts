@@ -130,7 +130,9 @@ async function attachStance(
   metric: RelevanceMetric
 ): Promise<(StanceVerdict | null)[]> {
   const floor = MIN_COUNTABLE_RELEVANCE[metric]
-  const eligible = scored.map((s, index) => ({ index, s })).filter(({ s }) => s.textRelevance >= floor)
+  const eligible = scored
+    .map((s, index) => ({ index, s }))
+    .filter(({ s }) => s.item.provider !== 'worldbank' && s.textRelevance >= floor)
   if (eligible.length === 0) return scored.map(() => null)
 
   const verdicts = await classifyStance(
@@ -214,9 +216,10 @@ function candidateText(item: NormalizedSourceResult): string {
 
 function relevanceText(item: NormalizedSourceResult): string {
   // The World Bank gate was calibrated against indicator names. Its source
-  // note is useful context on the card and for stance, but can be several
-  // paragraphs of methodology whose vocabulary dilutes the specific measure
-  // during a second embedding pass.
+  // note is useful context on the card, but can be several paragraphs of
+  // methodology whose vocabulary dilutes the specific measure during a second
+  // embedding pass. It is deliberately excluded from stance classification:
+  // a definition cannot support or contradict a claim about an observation.
   return item.provider === 'worldbank' ? item.title : candidateText(item)
 }
 
@@ -253,13 +256,19 @@ async function computeRelevances(
 export async function findEvidence(
   query: string,
   claimText: string
-): Promise<{ evidence: RankedSourceResult[]; score: number; breakdown: ReturnType<typeof computeStrengthScore>['breakdown'] }> {
+): Promise<{
+  evidence: RankedSourceResult[]
+  score: number
+  breakdown: ReturnType<typeof computeStrengthScore>['breakdown']
+  cacheable: boolean
+}> {
   // Asked before the fan-out rather than filtered after. PubMed costs three
   // requests per claim (esearch, esummary, efetch) and contributed zero
   // relevant sources across the labelled baseline, so for a claim it cannot
   // answer the cheapest thing is not to ask — and the same reasoning now picks
   // up Wikipedia for the claims the academic providers answer badly.
   const domain = await classifyClaim(claimText, query)
+  const worldBankReady = domain !== 'statistical' || worldBank.isReady()
 
   // The academic providers run for every claim. They are free, unmetered, and
   // the product; routing decides what runs IN ADDITION, never what replaces
@@ -338,5 +347,8 @@ export async function findEvidence(
     metric
   )
 
-  return { evidence, score, breakdown }
+  // A cold World Bank index makes a statistical result intentionally partial.
+  // Returning the academic evidence is useful, but caching that partial set for
+  // 24 hours would prevent the warmed provider from ever being consulted.
+  return { evidence, score, breakdown, cacheable: worldBankReady }
 }
