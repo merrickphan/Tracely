@@ -1,0 +1,14 @@
+# core.autocrlf is true on this machine, so anything committed without a rule
+# here comes back out of git with CRLF line endings. For shell scripts that is
+# fatal rather than cosmetic: bash reads the trailing \r as part of the command
+# and dies with `$'\r': command not found`.
+#
+# That failure mode is especially bad for the hooks in .claude/hooks/, because a
+# hook that crashes on startup exits non-zero without ever running its check —
+# and a guardrail that silently stops guarding is worse than not having one.
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+
+# Same reasoning: run in bash, must not carry CRLF.
+*.bash text eol=lf
