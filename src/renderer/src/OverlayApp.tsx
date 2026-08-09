@@ -405,6 +405,7 @@ const PROVIDER_LABEL: Record<SourceProvider, string> = {
   semanticscholar: 'S2',
   pubmed: 'PM',
   wikipedia: 'W',
+  worldbank: 'WB',
   manual: '•'
 }
 
@@ -417,6 +418,7 @@ const PROVIDER_COLOR: Record<SourceProvider, string> = {
   // encyclopedia entry is orientation, not evidence, and its badge should not
   // compete for attention with the peer-reviewed sources beside it.
   wikipedia: '#6b7280',
+  worldbank: '#0071bc',
   manual: '#6b7280'
 }
 

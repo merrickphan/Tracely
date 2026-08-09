@@ -3,6 +3,9 @@ import type { Stance } from '../ml/protocol'
 
 const VENUE_TIER_WEIGHT: Record<VenueType, number> = {
   journal: 1.0,
+  // A primary, maintained statistical series can settle a numerical claim as
+  // directly as a journal article can settle a research claim.
+  dataset: 1.0,
   conference: 0.8,
   book: 0.6,
   preprint: 0.5,

@@ -6,6 +6,7 @@ import * as pubmed from './pubmed'
 import { queryVariants } from './queryVariants'
 import * as semanticScholar from './semanticScholar'
 import * as wikipedia from './wikipedia'
+import * as worldBank from './worldBank'
 import {
   computeStrengthScore,
   computeTextRelevance,
@@ -211,6 +212,14 @@ function candidateText(item: NormalizedSourceResult): string {
   return `${item.title} ${item.abstract ?? ''}`.trim()
 }
 
+function relevanceText(item: NormalizedSourceResult): string {
+  // The World Bank gate was calibrated against indicator names. Its source
+  // note is useful context on the card and for stance, but can be several
+  // paragraphs of methodology whose vocabulary dilutes the specific measure
+  // during a second embedding pass.
+  return item.provider === 'worldbank' ? item.title : candidateText(item)
+}
+
 /**
  * How well each candidate matches the claim, semantically where possible.
  *
@@ -230,7 +239,7 @@ async function computeRelevances(
   claimText: string,
   items: NormalizedSourceResult[]
 ): Promise<{ values: number[]; metric: RelevanceMetric }> {
-  const texts = items.map(candidateText)
+  const texts = items.map(relevanceText)
   const vectors = await embedCached([claimText, ...texts])
 
   if (!vectors) {
@@ -270,7 +279,10 @@ export async function findEvidence(
     Promise.all(variants.map((v) => safeSearch('crossref', crossref.search, v))).then((r) => r.flat()),
     safeSearch('semanticscholar', semanticScholar.search, query),
     domain === 'biomedical' ? safeSearch('pubmed', pubmed.search, query) : Promise.resolve([]),
-    domain === 'general' ? safeSearch('wikipedia', wikipedia.search, query) : Promise.resolve([])
+    domain === 'general' ? safeSearch('wikipedia', wikipedia.search, query) : Promise.resolve([]),
+    // The match threshold was calibrated against full claim sentences, not
+    // the shorter search query generated for scholarly APIs.
+    domain === 'statistical' ? safeSearch('worldbank', worldBank.search, claimText) : Promise.resolve([])
   ])
 
   const clusters: NormalizedSourceResult[] = []
