@@ -12,6 +12,7 @@ import type {
 import type { CitationStyle, Claim, CritiqueVerdict, EvidenceItem, Source } from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
+import { isAuthError } from '../ai/client'
 import { generateCritique } from '../ai/critique'
 import { formatCitation } from '../citations'
 import { formatInTextCitation } from '../citations/inText'
@@ -126,6 +127,10 @@ let citationByClaimId = new Map<string, { inTextCitation: string; worksCitedEntr
 let currentSpans: ClaimSpanRequest[] = []
 let retryAfter = 0
 let lastError: string | null = null
+// Tracked separately from lastError because it is the one failure the user can
+// fix, and because it must survive being shown: a signed-out app previously
+// looked identical to a slow one.
+let authRequired = false
 const RETRY_COOLDOWN_MS = 5000
 let lastSkipReason: string | null = null
 
@@ -251,6 +256,7 @@ let lastStatus: ScreenWatchStatus = {
   supportsUnderlines: false,
   claimCount: 0,
   lastError: null,
+  authRequired,
   blockedApp: null
 }
 
@@ -318,6 +324,7 @@ async function tick(): Promise<void> {
         supportsUnderlines: false,
         claimCount: 0,
         lastError,
+        authRequired,
         blockedApp: null
       })
       return
@@ -354,6 +361,7 @@ async function tick(): Promise<void> {
         supportsUnderlines: false,
         claimCount: 0,
         lastError,
+        authRequired,
         blockedApp: null
       })
       return
@@ -374,6 +382,7 @@ async function tick(): Promise<void> {
         supportsUnderlines: false,
         claimCount: 0,
         lastError,
+        authRequired,
         blockedApp: snapshot.processName
       })
       return
@@ -406,6 +415,7 @@ async function tick(): Promise<void> {
           const confident = detected.filter((c) => c.confidence >= getMinClaimConfidence())
           currentClaims = confident.map(synthesizeClaim)
           lastError = null
+          authRequired = false
           logScreenWatch(
             `detected ${detected.length} claim(s), ${confident.length} above confidence threshold: ` +
               `${currentClaims.map((c) => JSON.stringify(c.text)).join(', ')}`
@@ -432,7 +442,13 @@ async function tick(): Promise<void> {
         .catch((err) => {
           retryAfter = Date.now() + RETRY_COOLDOWN_MS
           lastError = err instanceof Error ? err.message : String(err)
-          logScreenWatch(`detectClaims failed: ${lastError}`)
+          // A 401 is not a transient fault to retry past — it will keep failing
+          // until the user signs in, and it is the failure they can actually
+          // do something about. Flagged so the UI can say so rather than
+          // silently underlining nothing, which is indistinguishable from the
+          // app being slow.
+          authRequired = isAuthError(err)
+          logScreenWatch(`detectClaims failed${authRequired ? ' (auth)' : ''}: ${lastError}`)
         })
         .finally(() => {
           detecting = false
@@ -474,6 +490,7 @@ async function tick(): Promise<void> {
       supportsUnderlines: snapshot.supportsTextPattern,
       claimCount: currentClaims.length,
       lastError,
+      authRequired,
       blockedApp: null
     })
   } finally {
@@ -1090,6 +1107,7 @@ export function stopScreenWatch(): void {
     supportsUnderlines: false,
     claimCount: 0,
     lastError: null,
+    authRequired,
     blockedApp: null
   })
 }

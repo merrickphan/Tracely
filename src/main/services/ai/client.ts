@@ -30,6 +30,20 @@ export class RelayError extends Error {
   }
 }
 
+/**
+ * Is this failure "you are not signed in" rather than "something broke"?
+ *
+ * Worth distinguishing because it is now the most likely runtime failure —
+ * every endpoint refuses a caller it cannot attribute — and it is the only one
+ * the user can fix themselves. Everything else (502, timeout, quota) is either
+ * transient or out of their hands; this one needs them to do something, and
+ * silence makes it look like the app is merely slow.
+ */
+export function isAuthError(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status
+  return status === 401 || status === 403
+}
+
 // Transient conditions worth one retry: a dropped connection, the relay
 // briefly overloaded (503/504), or its own soft rate limit (429, which
 // clears within its rolling window) — none of these reached OpenAI, so

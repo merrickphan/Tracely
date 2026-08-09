@@ -42,11 +42,24 @@ export default function HomeView({
       <span className="home-el home-title">Tracely</span>
       {firstName ? <span className="home-el home-greeting">Hey, {firstName}!</span> : null}
 
+      {/*
+        Signed-out takes over the heading rather than sitting somewhere quieter.
+        Every AI call needs an account now, so this state means nothing works —
+        and it used to present as claims simply never appearing, which reads as
+        the app being slow rather than as something the user can fix. The whole
+        status object was already arriving here; nothing rendered any of it.
+      */}
       <h2 className="home-el home-heading">
-        {screenWatch?.enabled ? 'Tracely is running and ready.' : 'Tracely is off.'}
+        {screenWatch?.authRequired
+          ? 'Sign in to continue.'
+          : screenWatch?.enabled
+            ? 'Tracely is running and ready.'
+            : 'Tracely is off.'}
       </h2>
       <p className="home-el home-subtext">
-        Start typing in an website or document, and Tracely will start analyzing the content.
+        {screenWatch?.authRequired
+          ? 'Your session has expired, so Tracely cannot check anything right now. Sign in again and it will pick up where it left off.'
+          : 'Start typing in an website or document, and Tracely will start analyzing the content.'}
       </p>
 
       <img src={homeCog} className="home-el home-cogicon" alt="" />

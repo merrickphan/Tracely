@@ -338,6 +338,7 @@ export const screenWatchStatus: ScreenWatchStatus = {
   supportsUnderlines: true,
   claimCount: screenWatchClaims.length,
   lastError: null,
+  authRequired: false,
   blockedApp: null
 }
 

@@ -32,10 +32,29 @@ function userDataDir(appName: string): string | null {
   return process.env.HOME ? join(process.env.HOME, '.config', appName) : null
 }
 
-// The stable build first, then the preview one — either is a real signed-in
-// account, and a machine with only the preview installed should still work.
+// Electron derives userData from package.json's `name`, which is lowercase
+// `tracely` — and `tracely-preview` for the preview build, via
+// `-c.extraMetadata.name` in the preview:win script. NOT the productName
+// ("Tracely", "Tracely Preview").
+//
+// These were previously capitalised. That worked only because Windows paths are
+// case-insensitive, so it was a latent bug that would surface as "no signed-in
+// session found" the first time anyone ran the eval on macOS — where the real
+// directory is ~/Library/Application Support/tracely and the lookup would miss
+// it entirely.
+const STABLE_APP = 'tracely'
+const PREVIEW_APP = 'tracely-preview'
+
+// The eval is pinned to production (evaluate.mjs refuses TRACELY_ENV=staging),
+// so the stable app's session is the one that matches the Supabase project this
+// bundle was built against. The preview app is only a fallback for a machine
+// that has nothing else installed — and if that session belongs to a different
+// project, supabase-js will simply not find its key, which is why the caller
+// verifies it actually got a session rather than trusting the file's existence.
 function sessionFile(): string | null {
-  for (const name of ['Tracely', 'Tracely-preview']) {
+  const preferPreview = process.env.TRACELY_ENV === 'staging'
+  const order = preferPreview ? [PREVIEW_APP, STABLE_APP] : [STABLE_APP, PREVIEW_APP]
+  for (const name of order) {
     const dir = userDataDir(name)
     if (!dir) continue
     const path = join(dir, 'auth-session.json')
@@ -85,9 +104,26 @@ export function appSessionTokenProvider(): (() => Promise<string | null>) | null
     auth: { storage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
   })
 
+  let warned = false
   return async () => {
     const { data } = await client.auth.getSession()
-    return data.session?.access_token ?? null
+    const token = data.session?.access_token ?? null
+    // Say so, once, rather than returning null into a wall of 401s.
+    //
+    // A session file exists — that is why we got this far — but supabase-js
+    // keys it by project ref, so a file written against a different Supabase
+    // project yields nothing here and looks identical to being signed out. The
+    // harness's own "no session" message never printed in that case, because
+    // appSessionTokenProvider had already returned non-null.
+    if (!token && !warned) {
+      warned = true
+      console.warn(
+        `\n[eval] Found ${path} but it holds no session for this build's Supabase project.\n` +
+          `       It was probably written by a build pointed somewhere else.\n` +
+          `       Sign in to the app once and re-run; paid relay calls will 401 until then.\n`
+      )
+    }
+    return token
   }
 }
 

@@ -3,7 +3,7 @@ import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { getMainWindow } from '../../windows/mainWindow'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { AuthUser } from '@shared/types'
-import { fileSessionStorage } from './sessionStore'
+import { fileSessionStorage, pruneForeignSessions } from './sessionStore'
 
 // Electron's bundled Node (v20.x as of Electron 32) has no native
 // WebSocket global — supabase-js's Realtime client requires one internally
@@ -38,6 +38,11 @@ export function getSupabase(): ReturnType<typeof createClient> {
   if (!__SUPABASE_URL__ || !__SUPABASE_ANON_KEY__) {
     throw new Error('This build has no Supabase project configured. Set SUPABASE_URL/SUPABASE_ANON_KEY and rebuild.')
   }
+  // Before the client reads storage, not after: a build that has changed
+  // Supabase projects since it last ran (a preview channel repointed at
+  // staging, say) otherwise leaves the previous project's session sitting in
+  // the same file, unusable and indistinguishable from being signed in.
+  pruneForeignSessions(new URL(__SUPABASE_URL__).hostname.split('.')[0])
   client = createClient(__SUPABASE_URL__, __SUPABASE_ANON_KEY__, {
     auth: {
       storage: fileSessionStorage,
