@@ -2,9 +2,12 @@ node_modules/
 out/
 release/
 release-preview/
+# Glob, not a list. The old form named .env, .env.backup* and .env.release
+# individually, so .env.staging — added when staging became a real
+# environment — would have been committed on the next `git add -A`.
 .env
-.env.backup*
-.env.release
+.env.*
+!.env.example
 *.db
 *.db-journal
 *.db-wal
@@ -17,3 +20,21 @@ HANDOFF.md
 # exactly from a pinned model id — scripts/fetch-models.mjs rebuilds them, and
 # the dist/release scripts run it before electron-builder.
 resources/models/
+
+# Claude Code. The directory itself is tracked on purpose — settings.json,
+# hooks/ and commands/ are project configuration and every contributor should
+# get the same ones. Only per-machine state is ignored.
+#
+# .claude/worktrees/ matters most: subagents launched with worktree isolation
+# create throwaway checkouts there, and without this line each one becomes a
+# candidate for `git add -A`.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/routines/.state/
+.claude/scheduled_tasks.*
+.claude/agent-registry.json
+.claude/agent-memory-local/
+.claude/first-run
+.claude/assistant-daemon-state.json

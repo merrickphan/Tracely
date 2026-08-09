@@ -13,7 +13,17 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const run = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts })
+// Every child of a production ship gets TRACELY_ENV=production, pinned here and
+// never inherited from the shell.
+//
+// This is the most dangerous thing in the environment split. If TRACELY_ENV
+// were left over as 'staging' from an earlier `ship:preview`, this script would
+// build a *production* release against the staging relay and staging Supabase,
+// publish it to latest.yml, and every installed copy would take it inside six
+// hours. The relay URL is inlined at build time with no runtime path back to
+// it, so nobody could see what happened until users started failing to sign in.
+const SHIP_ENV = { ...process.env, TRACELY_ENV: 'production' }
+const run = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', env: SHIP_ENV, ...opts })
 const out = (cmd) => execSync(cmd, { cwd: ROOT, encoding: 'utf8' }).trim()
 
 const die = (msg) => {
@@ -41,7 +51,7 @@ for (const b of ['agent1-work', 'agent2-work', 'agent3-work']) {
 // first burns a version number on every failed attempt.
 console.log('\n2/5  Checking everything is releasable')
 try {
-  run('npm run preflight', { env: { ...process.env, PREFLIGHT_SKIP_VERSION: '1' } })
+  run('npm run preflight', { env: { ...SHIP_ENV, PREFLIGHT_SKIP_VERSION: '1' } })
 } catch {
   die('Not releasable — nothing was changed. Fix the above and run npm run ship again.')
 }
@@ -62,6 +72,6 @@ const token = readFileSync(envFile, 'utf8').match(/^GH_TOKEN=(.+)$/m)?.[1]?.trim
 if (!token) die('No GH_TOKEN in .env.release.')
 
 console.log('\n5/5  Build + publish')
-run('npm run release:win', { env: { ...process.env, GH_TOKEN: token } })
+run('npm run release:win', { env: { ...SHIP_ENV, GH_TOKEN: token } })
 
 console.log(`\nPublished v${version}. Users are offered it within 6 hours.\n`)

@@ -2,26 +2,32 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import dotenv from 'dotenv'
+import { loadEnv, relayDefines } from './scripts/env.mjs'
 
-dotenv.config({ path: resolve(__dirname, '.env') })
+// Which .env is read — and therefore which backend this build talks to — is
+// decided by TRACELY_ENV in scripts/env.mjs, not here. ship.mjs pins it to
+// production and ship-preview.mjs pins it to staging, so neither can be
+// influenced by whatever happens to be in the shell.
+//
+// loadEnv prints the environment it chose. That line is the only place the
+// answer appears: these constants are inlined into the main bundle with no
+// runtime path back to them, so without it a build aimed at the wrong backend
+// looks exactly like a correct one.
+loadEnv()
 
 // Baked into the compiled main-process bundle at build time. There is no
 // runtime/user-editable path to these values — only whoever runs
 // `npm run dist:win` with a given .env controls which relay the app talks to.
-const RELAY_URL = JSON.stringify(process.env.RELAY_URL ?? '')
-const RELAY_TOKEN = JSON.stringify(process.env.RELAY_TOKEN ?? '')
-const SUPABASE_URL = JSON.stringify(process.env.SUPABASE_URL ?? '')
-const SUPABASE_ANON_KEY = JSON.stringify(process.env.SUPABASE_ANON_KEY ?? '')
+const { __RELAY_URL__, __RELAY_TOKEN__, __SUPABASE_URL__, __SUPABASE_ANON_KEY__ } = relayDefines()
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     define: {
-      __RELAY_URL__: RELAY_URL,
-      __RELAY_TOKEN__: RELAY_TOKEN,
-      __SUPABASE_URL__: SUPABASE_URL,
-      __SUPABASE_ANON_KEY__: SUPABASE_ANON_KEY
+      __RELAY_URL__,
+      __RELAY_TOKEN__,
+      __SUPABASE_URL__,
+      __SUPABASE_ANON_KEY__
     },
     build: {
       rollupOptions: {

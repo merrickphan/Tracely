@@ -51,7 +51,12 @@ console.log(`\n1/5  Preview from '${branch}'`)
 // Before the bump, so a blocked preview costs nothing rather than burning a
 // version number on every failed attempt — same ordering as ship.mjs.
 console.log('\n2/5  Checking everything is releasable')
-const previewEnv = { ...process.env, PREFLIGHT_PREVIEW: '1' }
+// TRACELY_ENV is set here rather than expected from the shell, for the same
+// reason ship.mjs pins it to production: on Windows `TRACELY_ENV=x npm run ...`
+// does not work through cmd.exe, and an environment that depends on the caller
+// remembering a prefix is not an environment. Passing it in the spawned env
+// inherits all the way down through preview:win -> electron-vite build.
+const previewEnv = { ...process.env, PREFLIGHT_PREVIEW: '1', TRACELY_ENV: 'staging' }
 try {
   run('npm run preflight', { env: { ...previewEnv, PREFLIGHT_SKIP_VERSION: '1' } })
 } catch {
