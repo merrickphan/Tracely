@@ -16,6 +16,12 @@ release-preview/
 HANDOFF.md
 *.tsbuildinfo
 
+# electron-vite writes a timestamped copy of the config next to it while
+# bundling, and does not always clean it up. The autocommit hook runs
+# `git add -A`, so one of these was committed the first time it appeared.
+electron.vite.config.*.mjs
+electron.vite.config.*.js
+
 # Model weights that ship in the installer. Binary, 22MB, and reproducible
 # exactly from a pinned model id — scripts/fetch-models.mjs rebuilds them, and
 # the dist/release scripts run it before electron-builder.
