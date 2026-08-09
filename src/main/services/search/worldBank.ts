@@ -1,4 +1,4 @@
-import { cosineSimilarity, embedCached } from '../ml'
+import { cosineSimilarity, embed, embedCached } from '../ml'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import type { NormalizedSourceResult } from './types'
 
@@ -82,7 +82,11 @@ function getCatalogue(): Promise<WorldBankIndicator[]> {
 
 async function buildIndex(): Promise<IndexedIndicator[] | null> {
   const indicators = await getCatalogue()
-  const vectors = await embedCached(indicators.map((indicator) => indicator.name))
+  // The completed index owns these vectors for the rest of the process, so
+  // putting all ~1,500 names into the shared 2,000-entry evidence cache would
+  // only evict useful claim and source embeddings. Nothing reads the catalogue
+  // vectors from that cache again.
+  const vectors = await embed(indicators.map((indicator) => indicator.name))
 
   // Semantic matching is the confidence gate, not an optional ranking
   // enhancement here. If the model cannot run, staying quiet is safer than a
