@@ -243,6 +243,29 @@ export function createMockApi(
         tracerMsgs = [...tracerMsgs, userMessage, reply]
         return result
       },
+      // Mirrors the real handler: the discarded exchange is dropped from the
+      // transcript before the replacement is appended, so a retry replaces the
+      // answer you didn't like rather than appending a second copy of the
+      // question. Reviewing the retry state in the preview harness only tells
+      // you anything if it behaves that way here too.
+      retry: async (req) => {
+        const previous = [...tracerMsgs].reverse().find((m) => m.role === 'user')
+        if (!previous) throw new Error('Nothing to retry')
+
+        const kept = tracerMsgs.slice(0, tracerMsgs.findIndex((m) => m.id === previous.id))
+        const userMessage = { ...previous, id: `pm${nextId++}`, createdAt: fx.T0 }
+        const reply = {
+          id: `pm${nextId++}`,
+          conversationId: req.conversationId,
+          role: 'tracer' as const,
+          content:
+            'This is a retried preview reply — deliberately different from the first, so you can see that the old answer was replaced rather than a second one appended.',
+          createdAt: fx.T0
+        }
+        const result = await relay('tracer.retry', { userMessage, reply })
+        tracerMsgs = [...kept, userMessage, reply]
+        return result
+      },
       getConversation: (req) =>
         ok('tracer.getConversation', {
           conversation: fx.tracerConversations.find((c) => c.id === req.conversationId) ?? fx.tracerConversations[0],
