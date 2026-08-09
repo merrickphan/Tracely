@@ -55,7 +55,7 @@ something other than 404**, and the version is strictly above the latest
 published GitHub release.
 
 That relay check is the important one. **The desktop app and the relay
-(`C:\Users\merri\Folio-relay`, deployed to Vercel) must ship together**, and
+(`C:\Users\merri\Tracely-relay`, deployed to Vercel) must ship together**, and
 nothing else enforces it: v0.3.73 was committed, typechecked and building
 cleanly with Tracer's `/api/tracer` returning 404 in production. Deploy the
 relay first, then release the client. The version check matters for the

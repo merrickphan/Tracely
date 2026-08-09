@@ -12,7 +12,7 @@ export declare const ENV_FILE: string
 export interface EnvInfo {
   name: 'production' | 'staging'
   file: string
-  /** Host of RELAY_URL, e.g. folio-relay.vercel.app. Empty when unset. */
+  /** Host of RELAY_URL, e.g. tracely-relay.vercel.app. Empty when unset. */
   relayHost: string
   /** Supabase project ref — the first label of the project host. */
   supabaseRef: string
