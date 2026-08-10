@@ -15,23 +15,23 @@ export function setQuitting(value: boolean): void {
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    // Fixed to the Figma design's own frame size (870x606) — the app IS
-    // the frame, not a resizable OS window with the frame floating inside
-    // it. No minimize/maximize either: the design has no such chrome, only
-    // its own in-content close button (see HomeView/AnalyzeView).
-    width: 870,
-    height: 606,
-    resizable: false,
-    maximizable: false,
-    minimizable: false,
+    // The signed-in dashboard uses a desktop sidebar/content layout. Start at
+    // the reference canvas size while allowing the responsive renderer to
+    // adapt down to a compact laptop-sized window.
+    width: 1360,
+    height: 860,
+    minWidth: 760,
+    minHeight: 600,
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
     show: false,
     frame: false,
-    // Transparent so only the CSS-rounded card is visible — otherwise the
-    // OS window itself stays a plain opaque rectangle behind/around the
-    // rounded content and its square corners show through.
-    transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
+    // The dashboard fills the whole window, so an opaque warm-white backing
+    // avoids transparency artifacts while resizing or maximizing.
+    transparent: false,
+    backgroundColor: '#fbfaf7',
+    hasShadow: true,
     title: windowTitle(),
     icon: getAppIconPath(),
     webPreferences: {

@@ -30,10 +30,10 @@ const SURFACES: Surface[] = [
   {
     id: 'main',
     label: 'Main window',
-    hint: 'index.html · 870 × 606 · Home / Analyze / Settings',
+    hint: 'index.html · 1360 × 860 · Dashboard / Sessions / Screen Watch',
     src: '/index.html',
-    width: 870,
-    height: 606
+    width: 1360,
+    height: 860
   },
   {
     id: 'tracer',

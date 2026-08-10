@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@shared/types'
-import AnalyzeView from './views/AnalyzeView'
-import HomeView from './views/HomeView'
+import DashboardView from './views/DashboardView'
 import LoginView from './views/LoginView'
 import NamePromptView from './views/NamePromptView'
 import SettingsView from './views/SettingsView'
@@ -25,15 +24,13 @@ function gateFor(user: AuthUser | null, configured: boolean): AuthGateState {
   return 'ready'
 }
 
-// No window-level chrome at all — the BrowserWindow itself is fixed to the
-// Figma frame's own size and isn't resizable/minimizable/maximizable (see
-// createMainWindow), so there's nothing here to control beyond what each
-// view already draws itself (Home's close-X, Analyze's close-X, Settings'
-// Back link) — exactly what the Figma design shows and nothing else.
+// Authentication still gates the renderer exactly as before. Once ready, the
+// main BrowserWindow uses the dashboard shell; the established settings
+// workspace stays available from that shell rather than being duplicated.
 export default function App(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('home')
   const [gate, setGate] = useState<AuthGateState>('checking')
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [legacySettingsOpen, setLegacySettingsOpen] = useState(false)
 
   useEffect(() => {
     tracelyApi.getSettings().then((s) => {
@@ -56,6 +53,7 @@ export default function App(): JSX.Element {
     return tracelyApi.onAuthStateChanged((u) => {
       setUser(u)
       setGate(gateFor(u, true))
+      if (!u) setLegacySettingsOpen(false)
     })
   }, [])
 
@@ -89,13 +87,18 @@ export default function App(): JSX.Element {
     )
   }
 
+  if (legacySettingsOpen) {
+    return (
+      <div className="dashboard-legacy-settings">
+        <SettingsView onNavigate={() => setLegacySettingsOpen(false)} />
+      </div>
+    )
+  }
+
   return (
-    <div className="app-shell">
-      <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
-        {tab === 'home' ? <HomeView onNavigate={setTab} firstName={user?.firstName ?? null} /> : null}
-        {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} /> : null}
-        {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
-      </main>
-    </div>
+    <DashboardView
+      firstName={user?.firstName?.trim() || 'Braden'}
+      onOpenPreferences={() => setLegacySettingsOpen(true)}
+    />
   )
 }

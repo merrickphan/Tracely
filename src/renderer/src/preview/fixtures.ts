@@ -29,9 +29,9 @@ export const T0 = '2026-03-14T16:20:00.000Z'
 
 export const user: AuthUser = {
   id: 'u_preview',
-  email: 'merrick@example.edu',
-  firstName: 'Merrick',
-  username: 'merrick'
+  email: 'braden@example.edu',
+  firstName: 'Braden',
+  username: 'braden'
 }
 
 // Local display profile — deliberately separate from `user` above, which is
