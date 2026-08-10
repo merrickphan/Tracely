@@ -924,8 +924,15 @@ function CitationFlowCard({
         </div>
         {state.showWorksCited ? (
           <div style={{ border: '1px solid #eeeef1', borderRadius: 10, padding: '8px 10px', background: '#fafafa' }}>
+            {/*
+              "Added to Works Cited" was not true. Only the in-text form is
+              written into the document; nothing appends to a works-cited list,
+              and citationByClaimId is per-session and never persisted — a
+              student reads that phrase as "the list at the end of my essay".
+              This labels the string below it, which is what it actually is.
+            */}
             <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-              Added to Works Cited
+              Works Cited entry — copy into your reference list
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.5, color: '#3a3a3a' }}>{state.citation.worksCitedEntry}</div>
           </div>
@@ -938,7 +945,7 @@ function CitationFlowCard({
             Done
           </button>
           <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
-            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+            {state.showWorksCited ? 'Hide full citation' : 'View full citation'}
           </button>
           <button
             className="tracely-btn-secondary"
