@@ -669,72 +669,13 @@ input[type='range']::-webkit-slider-runnable-track {
   font-size: 20px;
 }
 
-.home-flagcard {
-  left: 35px;
-  top: 413px;
-  width: 414px;
-  height: 145px;
-  background: #fff;
-  border: 1px solid #000;
-  border-radius: 17px;
-}
+/* `.home-flagcard*` rules removed with the hardcoded placeholder card. */
 
-.home-flagcard-checkbox {
-  position: absolute;
-  left: 41px;
-  top: 112px;
-  width: 16px;
-  height: 12px;
-  border: 1.5px solid rgba(0, 0, 0, 0.6);
-  border-radius: 2px;
-}
 
-.home-flagcard-checkbox-lid {
-  position: absolute;
-  left: 39px;
-  top: 107px;
-  width: 20px;
-  height: 2px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 1px;
-}
 
-.home-flagcard-quote {
-  position: absolute;
-  left: 19px;
-  top: 13px;
-  width: 387px;
-  font-size: 16px;
-  line-height: 1.35;
-  color: #000;
-  margin: 0;
-}
 
-.home-flagcard-dismiss,
-.home-flagcard-insights {
-  position: absolute;
-  top: 104px;
-  height: 25px;
-  border: none;
-  border-radius: 18px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
 
-.home-flagcard-dismiss {
-  left: 28px;
-  width: 102px;
-  background: #d9d9d9;
-  color: #000;
-}
 
-.home-flagcard-insights {
-  left: 250px;
-  width: 136px;
-  background: linear-gradient(90deg, #ff8a00, #ff3d00);
-  color: #fff;
-}
 
 .home-worktext {
   left: 550px;
@@ -1378,17 +1319,8 @@ textarea:disabled {
   cursor: default;
 }
 
-.docedit-share,
-.docedit-more {
-  border: none;
-  background: transparent;
-  color: #5c5c5c;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: default;
-  padding: 4px 6px;
-  flex-shrink: 0;
-}
+/* `.docedit-share` / `.docedit-more` removed with the two permanently-disabled
+   buttons they styled. */
 
 .docedit-body-wrap {
   position: relative;
@@ -2658,4 +2590,55 @@ textarea:disabled {
 
 .settings-panel-content {
   animation: panel-fade-in 0.16s ease-out;
+}
+
+/* Settings > Preferences — global-shortcut capture field. Reads as an input
+   but is a button, because it captures a key chord rather than text. */
+.settings-hotkey {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.settings-hotkey:hover {
+  border-color: var(--accent);
+}
+.settings-hotkey-capturing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+  color: var(--muted);
+}
+
+/* Extra breathing room where a grid follows body copy rather than a header. */
+.settings-panel-grid-spaced {
+  margin-top: 18px;
+}
+
+/* Settings > Privacy — one row per destructive action. */
+.settings-danger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.settings-danger-row > div:first-child {
+  min-width: 0;
 }

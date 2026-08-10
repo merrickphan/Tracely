@@ -72,23 +72,18 @@ export default function HomeView({
         New Session
       </button>
 
-      {/* Static, non-functional — matches the Figma design exactly, both
-          buttons are display-only. */}
-      <div className="home-el home-flagcard">
-        <div className="home-flagcard-checkbox-lid" />
-        <div className="home-flagcard-checkbox" />
-        <p className="home-flagcard-quote">
-          &ldquo;Their quality of life has decreased as approximately 60% of jobs avoid
-          traveling or applying to jobs, and one in ten are too afraid to even seek medical
-          care.&rdquo;
-        </p>
-        <button className="home-flagcard-dismiss" type="button">
-          Dismiss
-        </button>
-        <button className="home-flagcard-insights" type="button">
-          See insights
-        </button>
-      </div>
+      {/*
+        A "flagged claim" card sat here showing a hardcoded quote — an invented
+        statistic about 60% of jobs — above a decorative checkbox and two
+        buttons with no onClick at all. A fabricated figure presented as a real
+        flagged claim is the last thing that belongs on the home screen of a
+        tool whose entire job is checking whether figures are real.
+
+        Making it genuine needs a "most recent flagged claim" query, and there
+        is no API for it: analyses and claims are persisted, but `analyze.get`
+        needs an id and nothing lists them. That belongs with the history
+        surface, not with a placeholder.
+      */}
 
       <span className="home-el home-worktext">You choose where Tracely works</span>
       <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">

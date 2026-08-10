@@ -309,8 +309,11 @@ export interface ScreenWatchClaimSummary {
 // Screen Watch's evidence.
 export interface ScreenWatchFindSourceRequest {
   claimId: string
-  // When set, re-runs the search with this text instead of the claim's own
-  // searchQuery — backs the citation picker's "search again" box.
+  // Retained, unused. It described a "search again" box in the citation
+  // picker that does not exist and architecturally cannot: the overlay window
+  // is `focusable: false` by design, so it can never host a text input. Every
+  // caller sends only { claimId }. Kept rather than deleted because
+  // src/shared/* is additive per CLAUDE.md.
   query?: string
 }
 export interface ScreenWatchSourceCandidate {
