@@ -85,6 +85,21 @@ export default function HomeView({
         surface, not with a placeholder.
       */}
 
+      {/* The way into the saved sources. Until now nothing in the app could
+          reach them — "Save to Library" wrote rows no screen displayed. */}
+      <svg className="home-el home-libraryicon" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M6 4h12a1 1 0 011 1v15l-7-3.5L5 20V5a1 1 0 011-1z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <button className="home-el home-link home-link-library" onClick={() => onNavigate('library')}>
+        Library
+      </button>
+
+
       <span className="home-el home-worktext">You choose where Tracely works</span>
       <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">
         <path

@@ -130,7 +130,19 @@ export function createMockApi(
     },
     library: {
       save: () => ok('library.save', { item: fx.libraryItems[0] }),
-      list: () => ok('library.list', { items: fx.libraryItems }),
+      // Honours `search` rather than always returning everything, so the
+      // Library view's no-results state is reachable in the preview. Roughly
+      // what libraryRepo.listLibrary matches on.
+      list: (req) =>
+        ok('library.list', {
+          items: req.search
+            ? fx.libraryItems.filter((i) =>
+                `${i.source.title} ${i.source.authors.map((a) => a.family).join(' ')} ${i.notes ?? ''}`
+                  .toLowerCase()
+                  .includes(req.search!.toLowerCase())
+              )
+            : fx.libraryItems
+        }),
       get: () => ok('library.get', { item: fx.libraryItems[0], citations: fx.citations }),
       update: () => ok('library.update', { item: fx.libraryItems[0] }),
       remove: () => ok('library.remove', { ok: true as const })

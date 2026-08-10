@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@shared/types'
 import AnalyzeView from './views/AnalyzeView'
+import LibraryView from './views/LibraryView'
 import HomeView from './views/HomeView'
 import LoginView from './views/LoginView'
 import NamePromptView from './views/NamePromptView'
@@ -9,7 +10,7 @@ import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 
-export type Tab = 'home' | 'analyze' | 'settings'
+export type Tab = 'home' | 'analyze' | 'library' | 'settings'
 
 // 'checking': initial auth lookup hasn't resolved yet. 'signedOut'/
 // 'needsName' gate the whole app behind LoginView/NamePromptView. 'ready'
@@ -103,6 +104,7 @@ export default function App(): JSX.Element {
       <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
         {tab === 'home' ? <HomeView onNavigate={setTab} firstName={user?.firstName ?? null} /> : null}
         {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} /> : null}
+        {tab === 'library' ? <LibraryView onNavigate={setTab} /> : null}
         {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
       </main>
     </div>
