@@ -11,6 +11,7 @@ import type {
   Density,
   FontSize,
   EvidenceItem,
+  DocumentRecord,
   LibraryItem,
   ScoreBreakdown,
   SourceProvider,
@@ -582,5 +583,33 @@ export type AuthUpdateUsernameResponse = AuthSignResponse
 
 export type AuthDeleteAccountRequest = Record<string, never>
 export interface AuthDeleteAccountResponse {
+  ok: true
+}
+
+export interface DocumentsListResponse {
+  documents: DocumentRecord[]
+}
+export interface DocumentsGetRequest {
+  id: string
+}
+export interface DocumentsGetResponse {
+  document: DocumentRecord | null
+}
+export interface DocumentsLatestResponse {
+  document: DocumentRecord | null
+}
+export interface DocumentsSaveRequest {
+  /** Absent for a document that has never been saved. */
+  id?: string | null
+  title: string
+  bodyHtml: string
+}
+export interface DocumentsSaveResponse {
+  document: DocumentRecord
+}
+export interface DocumentsRemoveRequest {
+  id: string
+}
+export interface DocumentsRemoveResponse {
   ok: true
 }

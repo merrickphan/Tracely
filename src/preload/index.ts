@@ -38,6 +38,14 @@ import type {
   LibraryListResponse,
   LibraryRemoveRequest,
   LibraryRemoveResponse,
+  DocumentsGetRequest,
+  DocumentsGetResponse,
+  DocumentsLatestResponse,
+  DocumentsListResponse,
+  DocumentsRemoveRequest,
+  DocumentsRemoveResponse,
+  DocumentsSaveRequest,
+  DocumentsSaveResponse,
   LibrarySaveRequest,
   LibrarySaveResponse,
   LibraryUpdateRequest,
@@ -128,6 +136,16 @@ const api = {
       ipcRenderer.invoke(IPC.LIBRARY_UPDATE, req),
     remove: (req: LibraryRemoveRequest): Promise<LibraryRemoveResponse> =>
       ipcRenderer.invoke(IPC.LIBRARY_REMOVE, req)
+  },
+  documents: {
+    list: (): Promise<DocumentsListResponse> => ipcRenderer.invoke(IPC.DOCUMENTS_LIST, {}),
+    get: (req: DocumentsGetRequest): Promise<DocumentsGetResponse> =>
+      ipcRenderer.invoke(IPC.DOCUMENTS_GET, req),
+    latest: (): Promise<DocumentsLatestResponse> => ipcRenderer.invoke(IPC.DOCUMENTS_LATEST, {}),
+    save: (req: DocumentsSaveRequest): Promise<DocumentsSaveResponse> =>
+      ipcRenderer.invoke(IPC.DOCUMENTS_SAVE, req),
+    remove: (req: DocumentsRemoveRequest): Promise<DocumentsRemoveResponse> =>
+      ipcRenderer.invoke(IPC.DOCUMENTS_REMOVE, req)
   },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET, {}),

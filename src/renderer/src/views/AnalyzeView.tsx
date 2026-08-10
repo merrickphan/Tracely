@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Claim } from '@shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Claim, DocumentRecord } from '@shared/types'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import TextArea from '../components/TextArea'
@@ -107,7 +107,9 @@ function DocumentEditor({
   onRunInsights,
   insightsLoading,
   claims,
-  error
+  error,
+  initialDoc,
+  onSaved
 }: {
   docName: string
   onDocNameChange: (v: string) => void
@@ -116,6 +118,12 @@ function DocumentEditor({
   insightsLoading: boolean
   claims: Claim[] | null
   error: string | null
+  /** The document being reopened, or null for a new one. */
+  initialDoc: DocumentRecord | null
+  /** Every successful save, so the parent's idea of "the latest document"
+   *  cannot go stale — it fetches once, and without this, leaving and
+   *  re-entering the editor restored the body as it was at app start. */
+  onSaved: (doc: DocumentRecord) => void
 }): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null)
   const colorInputRef = useRef<HTMLInputElement>(null)
@@ -212,9 +220,81 @@ function DocumentEditor({
       editor.innerHTML = ''
     }
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
+    queueSave()
   }
 
   const bodyText = (): string => editorRef.current?.innerText ?? ''
+
+  // ---- Persistence -------------------------------------------------------
+  //
+  // The body lives in an uncontrolled contentEditable node (a controlled one
+  // would reset the caret on every keystroke), which meant it existed ONLY in
+  // that node: pressing Back unmounted the component and destroyed the work
+  // with no warning, and reopening gave a blank editor.
+  //
+  // Autosave rather than a save button, because the thing that lost work was
+  // a navigation the user had no reason to think was destructive.
+
+  const [docId, setDocId] = useState<string | null>(initialDoc?.id ?? null)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(initialDoc ? 'saved' : 'idle')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Read inside the debounced timer without making it a dependency.
+  const docNameRef = useRef(docName)
+  docNameRef.current = docName
+
+  const flushSave = useCallback(async (): Promise<void> => {
+    const editor = editorRef.current
+    if (!editor) return
+    const bodyHtml = editor.innerHTML
+    // Never create a row for an editor the user opened and never typed in.
+    if (!docId && !bodyHtml.trim() && !docNameRef.current.trim()) return
+    setSaveState('saving')
+    try {
+      const res = await tracelyApi.saveDocument({
+        id: docId,
+        title: docNameRef.current,
+        bodyHtml
+      })
+      setDocId(res.document.id)
+      onSaved(res.document)
+      setSaveState('saved')
+    } catch {
+      // Leave the indicator on "saving" rather than claiming a save that did
+      // not happen. The next keystroke retries.
+      setSaveState('idle')
+    }
+  }, [docId, onSaved])
+
+  // 900ms: long enough that a burst of typing is one write, short enough that
+  // almost nothing is at risk. Every db.run() re-serializes the entire SQLite
+  // image (storage/db.ts), so per-keystroke saving would rewrite the whole
+  // database file per character.
+  const queueSave = useCallback((): void => {
+    setSaveState('idle')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => void flushSave(), 900)
+  }, [flushSave])
+
+  // Restore the last document into the uncontrolled node exactly once.
+  useEffect(() => {
+    if (initialDoc && editorRef.current) {
+      editorRef.current.innerHTML = initialDoc.bodyHtml
+      handleInput()
+    }
+    // Mount only: re-running would clobber whatever the user has since typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // A pending debounce must not be lost to unmount — that is the exact case
+  // this whole section exists to fix.
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current)
+        void flushSave()
+      }
+    }
+  }, [flushSave])
 
   return (
     <div className="docedit-view">
@@ -229,7 +309,11 @@ function DocumentEditor({
           className="docedit-name"
           placeholder="Doc name"
           value={docName}
-          onChange={(e) => onDocNameChange(e.target.value)}
+          onChange={(e) => {
+            onDocNameChange(e.target.value)
+            // Renaming is an edit too — it used to feed nothing but this input.
+            queueSave()
+          }}
         />
         <div className="docedit-divider" />
         <select
@@ -346,6 +430,9 @@ function DocumentEditor({
           ) : null}
         </div>
         <div className="docedit-spacer" />
+        <span className="docedit-savestate">
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
+        </span>
         <button
           className="docedit-insights"
           onClick={() => onRunInsights(bodyText())}
@@ -398,6 +485,20 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   const [text, setText] = useState('')
   const [docEditorOpen, setDocEditorOpen] = useState(false)
   const [docName, setDocName] = useState('')
+  // The document to reopen. Fetched once so "Create Document" can continue the
+  // last one instead of silently starting a blank page over the top of it —
+  // there was no way to get back to previous work at all before, because there
+  // was no previous work: it lived in a DOM node that unmounting destroyed.
+  const [latestDoc, setLatestDoc] = useState<DocumentRecord | null>(null)
+  const [latestDocLoaded, setLatestDocLoaded] = useState(false)
+
+  useEffect(() => {
+    tracelyApi
+      .getLatestDocument()
+      .then((res) => setLatestDoc(res.document))
+      .catch(() => {})
+      .finally(() => setLatestDocLoaded(true))
+  }, [])
   const [claims, setClaims] = useState<Claim[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -418,7 +519,10 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
 
   function handleCta(): void {
     if (sourceType === 'document') {
-      setDocName(text.trim())
+      // A typed name starts a new document; an empty box continues the last
+      // one, which is the only way back into previous work.
+      const named = text.trim()
+      setDocName(named || latestDoc?.title || '')
       setClaims(null)
       setError(null)
       setDocEditorOpen(true)
@@ -441,6 +545,9 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   if (docEditorOpen) {
     return (
       <DocumentEditor
+        // Remounts when the target document changes, so the restore-once
+        // effect inside runs against the right body.
+        key={text.trim() ? 'new' : (latestDoc?.id ?? 'new')}
         docName={docName}
         onDocNameChange={setDocName}
         onBack={() => setDocEditorOpen(false)}
@@ -448,6 +555,8 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         insightsLoading={loading}
         claims={claims}
         error={error}
+        initialDoc={text.trim() ? null : latestDoc}
+        onSaved={setLatestDoc}
       />
     )
   }
@@ -500,9 +609,9 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
             variant="primary"
             className="analyze-cta"
             onClick={handleCta}
-            disabled={loading || (sourceType !== 'document' && !text.trim())}
+            disabled={loading || (sourceType === "document" ? !latestDocLoaded : !text.trim())}
           >
-            {SOURCE_CTA[sourceType]}
+            {sourceType === 'document' && !latestDocLoaded ? 'Loading…' : SOURCE_CTA[sourceType]}
           </Button>
           {claims ? (
             <span className="muted">
