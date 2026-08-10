@@ -29,11 +29,12 @@ export function MessageContent({ className, ...props }: ComponentProps<'div'>): 
     <div
       className={cn(
         'max-w-full rounded-xl px-3 py-2.5 text-[13.5px] leading-[1.55] text-body',
-        // Tracer's replies are plain prose with paragraph breaks — there is
-        // no markdown renderer in this window, so newlines have to survive
-        // as-is. `overflow-wrap: anywhere` keeps a pasted URL from forcing
-        // the whole panel wider than the window.
-        '[overflow-wrap:anywhere] whitespace-pre-wrap',
+        // No `whitespace-pre-wrap` here: the content is a `MarkdownText`, which
+        // sets it per paragraph. Setting it on the bubble as well would make the
+        // blank line *between* two paragraphs render on top of the gap between
+        // them. `overflow-wrap: anywhere` keeps a pasted URL from forcing the
+        // whole panel wider than the window.
+        '[overflow-wrap:anywhere]',
         'group-data-[from=assistant]:border group-data-[from=assistant]:border-line-strong',
         'group-data-[from=assistant]:bg-white',
         'group-data-[from=user]:bg-black/[0.035]',

@@ -154,8 +154,12 @@ export const claims: Claim[] = [
     strengthScore: 34,
     // Low support is what makes this a 34: one source agrees, one disagrees.
     scoreBreakdown: { sourceCount: 3, quality: 0.8, recency: 0.9, relevance: 0.6, support: 0.1 },
+    // Carries markdown on purpose. The relay's prompts neither request nor
+    // forbid it and gpt-4.1 emits it freely, so this is what the surface
+    // actually receives — keeping it here means the preview exercises
+    // MarkdownText rather than a sanitised version of production output.
     critique:
-      'The cited work is cross-sectional, so it cannot separate "screen time causes depression" from "depressed teenagers use their phones more." State the association, or find a longitudinal source.',
+      'The cited work is **cross-sectional**, so it cannot separate "screen time causes depression" from "depressed teenagers use their phones more."\n\nTwo ways forward:\n\n- State the *association* rather than the cause.\n- Find a longitudinal source that measures screen time first.',
     critiqueVerdict: 'weak',
     createdAt: T0
   },
@@ -257,8 +261,11 @@ export const tracerMessages: TracerMessage[] = [
     id: 'tm4',
     conversationId: 'tc1',
     role: 'tracer',
+    // tm2 above is deliberately markdown-free and this one deliberately is not:
+    // together they cover both halves of the rendering contract — plain prose
+    // must survive verbatim, and markdown must actually render.
     content:
-      'That is your call, not mine — but deleting is usually the weaker move. The observation underneath the sentence is real and worth keeping; it is only the causal verb that overreaches.\n\nTry rewriting it yourself with the weakest verb you can still defend, then check: would the sentence survive if a reader looked up your source?',
+      'That is your call, not mine — but **deleting is usually the weaker move**. The observation underneath the sentence is real and worth keeping; it is only the causal verb that overreaches.\n\nTry this instead:\n\n1. Rewrite it with the weakest verb you can still defend.\n2. Check whether the sentence would survive a reader looking up your source.\n\nNote that `is associated with` is not a hedge — it is a *more precise* claim than "causes", and you can defend it.',
     createdAt: T0
   }
 ]

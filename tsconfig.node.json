@@ -16,5 +16,9 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "electron.vite.config.ts"]
+  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "electron.vite.config.ts"],
+  // See the matching note in tsconfig.web.json — `npm test` runs these through
+  // Node directly, and they import with an explicit `.ts` extension that `tsc`
+  // would reject without `allowImportingTsExtensions`.
+  "exclude": ["src/**/*.test.ts"]
 }

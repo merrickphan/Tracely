@@ -11,6 +11,7 @@ import type {
   ScreenWatchWidget
 } from '@shared/ipc-contract'
 import figmaLogo from './assets/figma-logo.png'
+import MarkdownText from './components/MarkdownText'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
@@ -659,7 +660,9 @@ function ClaimActionCard({
           >
             {VERDICT_LABEL[claim.critiqueVerdict]}
           </div>
-          <div style={{ padding: '10px 12px', fontSize: 12.5, lineHeight: 1.55, color: '#3a3a3a' }}>{claim.critique}</div>
+          <MarkdownText style={{ padding: '10px 12px', fontSize: 12.5, lineHeight: 1.55, color: '#3a3a3a' }}>
+            {claim.critique}
+          </MarkdownText>
         </div>
       ) : null}
     </>
@@ -787,7 +790,7 @@ function ProblemCard({
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
         <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>{title}</div>
       </div>
-      <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{description}</div>
+      <MarkdownText style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{description}</MarkdownText>
       <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
           {primaryLabel}
