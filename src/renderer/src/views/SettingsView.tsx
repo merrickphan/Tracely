@@ -1,5 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { AccentColor, AppSettings, AuthUser, Density, FontSize, Theme } from '@shared/types'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type {
+  AccentColor,
+  AppSettings,
+  AuthUser,
+  CitationStyle,
+  Density,
+  FontSize,
+  Theme
+} from '@shared/types'
 import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
@@ -10,6 +19,7 @@ import {
   UserIcon,
   SunIcon,
   SlidersIcon,
+  ShieldIcon,
   SignOutIcon,
   BackIcon
 } from '../components/icons'
@@ -25,29 +35,79 @@ const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
   { id: 'purple', label: 'Purple', swatch: 'linear-gradient(135deg, #c084fc, #a855f7)' }
 ]
 
-// Two kinds of section live here, and the difference matters when editing:
+/**
+ * Records the next key chord pressed, as an Electron accelerator string
+ * ("Control+Shift+T").
+ *
+ * A capture field rather than a text input: an accelerator is a syntax most
+ * people do not know, and a typo produces a shortcut that silently never fires.
+ * The main process refuses to persist one the OS will not grant — already
+ * claimed by another app, or malformed — so the displayed value snapping back
+ * to the previous chord is how a rejection shows up.
+ */
+function HotkeyField({
+  value,
+  onCapture
+}: {
+  value: string
+  onCapture: (accelerator: string) => void
+}): JSX.Element {
+  const [capturing, setCapturing] = useState(false)
+
+  function onKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>): void {
+    if (!capturing) return
+    e.preventDefault()
+    if (e.key === 'Escape') {
+      setCapturing(false)
+      return
+    }
+    // Modifiers alone are not a shortcut — wait for the real key.
+    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return
+
+    const parts: string[] = []
+    if (e.ctrlKey) parts.push('Control')
+    if (e.altKey) parts.push('Alt')
+    if (e.shiftKey) parts.push('Shift')
+    if (e.metaKey) parts.push('Super')
+    // Electron wants a bare uppercase letter/digit, or a named key.
+    parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key)
+    // A global shortcut with no modifier would swallow that key everywhere.
+    if (parts.length < 2) return
+
+    setCapturing(false)
+    onCapture(parts.join('+'))
+  }
+
+  return (
+    <button
+      type="button"
+      className={`settings-hotkey ${capturing ? 'settings-hotkey-capturing' : ''}`}
+      onClick={() => setCapturing(true)}
+      onBlur={() => setCapturing(false)}
+      onKeyDown={onKeyDown}
+    >
+      {capturing ? 'Press a shortcut…' : value}
+    </button>
+  )
+}
+
+// Every section here is real: each control is wired through IPC to settingsRepo
+// or profileHandlers, persists, and has a consumer that reads it back.
 //
-//  - Profile / Appearance / Preferences are REAL — each control is wired
-//    through IPC to settingsRepo or profileHandlers and persists.
-//  - Notifications / Security / Integrations / Billing are STATIC MOCKUPS
-//    reproducing the Figma frames (SettingsPage - Notifications/Security/
-//    Integrations/Billing) verbatim, sample values and all. Their selects
-//    hold local state so they respond to clicks; their "Save changes"
-//    buttons are deliberate no-ops. Restored on explicit instruction after
-//    having been removed once.
-//
-//    Caveat worth knowing before extending these: they were written against
-//    a pre-Supabase base, when Tracely genuinely had no accounts. Auth now
-//    exists (AuthPanel/DangerZone above, main/services/auth), so Security in
-//    particular could be made real — recovery email, active sessions and
-//    sign-out all have something behind them now. Billing still does not
-//    (no payments), and Integrations has no OAuth providers wired up.
-type Section = 'profile' | 'appearance' | 'preferences'
+// That is now the standard for this file. Four more sections used to exist —
+// Notifications, Security, Integrations, Billing — reproducing Figma frames
+// verbatim with sample values, selects holding local state nothing read, and
+// deliberate no-op "Save changes" buttons. They were removed rather than
+// finished, because none of them had anything behind them: no notification
+// code, no OAuth provider, no payments. If any of that is ever built, add the
+// section back with the feature, not before it.
+type Section = 'profile' | 'appearance' | 'preferences' | 'privacy'
 
 const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
   { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'appearance', label: 'Appearance', icon: SunIcon },
-  { id: 'preferences', label: 'Preferences', icon: SlidersIcon }
+  { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
+  { id: 'privacy', label: 'Privacy', icon: ShieldIcon }
 ]
 
 export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
@@ -69,6 +129,55 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       setSettings(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null)
+
+  /**
+   * The main process only persists an accelerator the OS actually granted, so
+   * "did it stick?" is answered by reading it back out of the response rather
+   * than by a separate error channel.
+   */
+  async function saveHotkey(
+    key: 'hotkeyAccelerator' | 'screenWatchHotkeyAccelerator',
+    accelerator: string
+  ): Promise<void> {
+    setHotkeyError(null)
+    try {
+      const updated = await tracelyApi.setSettings({ [key]: accelerator })
+      setSettings(updated)
+      if (updated[key] !== accelerator) {
+        setHotkeyError(`${accelerator} is already used by another app — keeping ${updated[key]}.`)
+      }
+    } catch (err) {
+      setHotkeyError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // Both Privacy actions are irreversible and there is no copy anywhere else,
+  // so each goes through the existing ConfirmDialog rather than firing on click.
+  const [clearConfirm, setClearConfirm] = useState<'history' | 'all' | null>(null)
+  const [clearing, setClearing] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
+  const [clearDone, setClearDone] = useState<string | null>(null)
+
+  async function runClear(scope: 'history' | 'all'): Promise<void> {
+    setClearing(true)
+    setClearError(null)
+    setClearDone(null)
+    try {
+      await tracelyApi.clearHistory(scope === 'all')
+      setClearDone(
+        scope === 'all'
+          ? 'History, saved sources, citations and Tracer conversations deleted.'
+          : 'Analysis history and Tracer conversations deleted. Saved sources kept.'
+      )
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClearing(false)
+      setClearConfirm(null)
     }
   }
 
@@ -94,23 +203,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     applyFontSize(fontSize)
     setSettings((s) => (s ? { ...s, fontSize } : s))
     void save({ fontSize })
-  }
-
-  const [appearanceSaving, setAppearanceSaving] = useState(false)
-
-  async function saveAppearance(): Promise<void> {
-    if (!settings) return
-    setAppearanceSaving(true)
-    try {
-      await save({
-        theme: settings.theme,
-        accentColor: settings.accentColor,
-        density: settings.density,
-        fontSize: settings.fontSize
-      })
-    } finally {
-      setAppearanceSaving(false)
-    }
   }
 
   // Real, locally-persisted (see profileHandlers.ts) — not tied to any
@@ -310,13 +402,32 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
           />
         ) : null}
 
+        {clearConfirm ? (
+          <ConfirmDialog
+            title={clearConfirm === 'all' ? 'Delete everything?' : 'Clear analysis history?'}
+            message={
+              clearConfirm === 'all'
+                ? 'Deletes every past analysis, every source you saved, every citation generated, and all Tracer conversations. This machine holds the only copy.'
+                : 'Deletes every past analysis and its claims and evidence, plus your Tracer conversations. Saved sources are kept.'
+            }
+            confirmLabel={clearConfirm === 'all' ? 'Delete everything' : 'Clear history'}
+            danger
+            busy={clearing}
+            // The wider one takes the library with it and cannot be undone, so
+            // it gets the same type-to-confirm gate as deleting an account.
+            requireText={clearConfirm === 'all' ? 'DELETE' : undefined}
+            onConfirm={() => void runClear(clearConfirm)}
+            onCancel={() => setClearConfirm(null)}
+          />
+        ) : null}
+
         <div className="settings-panel">
           {section === 'profile' && profile ? (
             <div key="profile" className="settings-panel-content">
               {authUser ? <AuthPanel user={authUser} /> : null}
               <div className="settings-panel-header">
                 <h3>Profile</h3>
-                <p>How others see you across the platform.</p>
+                <p>Your name, shown on this machine. Nothing here leaves it.</p>
               </div>
               <div className="settings-avatar-row">
                 {profile.avatarUrl ? (
@@ -363,13 +474,13 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                     onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
                   />
                 </SettingsField>
-                <SettingsField label="Bio" full>
-                  <textarea
-                    value={profile.bio}
-                    placeholder="Say something about yourself"
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  />
-                </SettingsField>
+                {/*
+                  No "Bio" field. It persisted fine and had no possible reader:
+                  Tracely is local-first with no account page, no profile
+                  anyone else sees, and nothing that could display a bio to a
+                  second person — because there is no second person. Left in, it
+                  invited someone to write something that goes nowhere.
+                */}
               </div>
               {profileError ? <p className="error-text">{profileError}</p> : null}
               <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
@@ -423,9 +534,13 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                   </select>
                 </SettingsField>
               </div>
-              <Button variant="dark" onClick={saveAppearance} disabled={appearanceSaving}>
-                {appearanceSaving ? 'Saving…' : 'Save changes'}
-              </Button>
+              {/*
+                No "Save changes" button. changeTheme/changeAccentColor/
+                changeDensity/changeFontSize each persist on change already, so
+                the button re-sent the values that were already stored and could
+                never alter any state — a control whose only possible effect was
+                a spinner.
+              */}
             </div>
           ) : null}
 
@@ -488,6 +603,95 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 Screen Watch only reads text in apps you check below — nothing is enabled anywhere until you pick
                 it. Uncheck an app any time to stop it from being read.
               </p>
+
+              {/*
+                Everything below already worked end to end — persisted, and read
+                by a real consumer — and simply had no control anywhere in the
+                app. screenWatchService.ts even carried a comment pointing at
+                "Settings > General > sensitivity", a section that never existed.
+              */}
+              <div className="settings-panel-grid settings-panel-grid-spaced">
+                <SettingsField label="Analyze clipboard shortcut">
+                  <HotkeyField
+                    value={settings.hotkeyAccelerator}
+                    onCapture={(a) => void saveHotkey('hotkeyAccelerator', a)}
+                  />
+                </SettingsField>
+                <SettingsField label="Toggle Screen Watch shortcut">
+                  <HotkeyField
+                    value={settings.screenWatchHotkeyAccelerator}
+                    onCapture={(a) => void saveHotkey('screenWatchHotkeyAccelerator', a)}
+                  />
+                </SettingsField>
+                <SettingsField label="Default citation style">
+                  <select
+                    value={settings.defaultCitationStyle}
+                    onChange={(e) => void save({ defaultCitationStyle: e.target.value as CitationStyle })}
+                  >
+                    <option value="APA">APA</option>
+                    <option value="MLA">MLA</option>
+                    <option value="Chicago">Chicago</option>
+                  </select>
+                </SettingsField>
+                <SettingsField label={`Claim sensitivity — ${Math.round(settings.claimSensitivity * 100)}%`}>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={0.9}
+                    step={0.05}
+                    value={settings.claimSensitivity}
+                    onChange={(e) => void save({ claimSensitivity: Number(e.target.value) })}
+                  />
+                </SettingsField>
+              </div>
+              {hotkeyError ? <p className="error-text">{hotkeyError}</p> : null}
+              <p className="muted settings-app-note">
+                A lower sensitivity flags more sentences, including borderline ones. Screen Watch underlines
+                passively, without you asking about any one sentence, so over-flagging is more annoying here than
+                in a session you started yourself.
+              </p>
+            </div>
+          ) : null}
+
+          {section === 'privacy' ? (
+            <div key="privacy" className="settings-panel-content">
+              <div className="settings-panel-header">
+                <h3>Privacy</h3>
+                <p>
+                  Everything Tracely stores lives on this machine. These delete it — there is no copy anywhere
+                  else, and neither can be undone.
+                </p>
+              </div>
+              <div className="settings-danger-list">
+                <div className="settings-danger-row">
+                  <div>
+                    <div className="settings-toggle-row-title">Clear analysis history</div>
+                    <div className="settings-toggle-row-subtitle">
+                      Deletes past analyses, their claims and evidence. Saved sources stay.
+                    </div>
+                  </div>
+                  <Button variant="secondary" onClick={() => setClearConfirm('history')} disabled={clearing}>
+                    Clear history
+                  </Button>
+                </div>
+                <div className="settings-danger-row">
+                  <div>
+                    <div className="settings-toggle-row-title">Clear history and library</div>
+                    <div className="settings-toggle-row-subtitle">
+                      Everything above, plus every source you saved and every citation generated.
+                    </div>
+                  </div>
+                  <Button variant="secondary" onClick={() => setClearConfirm('all')} disabled={clearing}>
+                    Clear everything
+                  </Button>
+                </div>
+              </div>
+              <p className="muted settings-app-note">
+                Both also delete your Tracer conversations, because those quote your own writing back at you —
+                leaving them behind would defeat the point of the control.
+              </p>
+              {clearError ? <p className="error-text">{clearError}</p> : null}
+              {clearDone ? <p className="muted">{clearDone}</p> : null}
             </div>
           ) : null}
 
