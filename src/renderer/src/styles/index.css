@@ -790,13 +790,16 @@ textarea:disabled {
 /* New Session source-type picker (Analyze tab, pre-analysis state) */
 .analyze-view {
   position: relative;
-  width: 868px;
-  height: 606px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   background: #fff;
   border: 1px solid #000;
   border-radius: 28px;
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-app-region: drag;
 }
 
@@ -839,17 +842,15 @@ textarea:disabled {
 }
 
 .analyze-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 868px;
-  height: 604px;
+  position: static;
+  width: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: center;
-  padding: 0 64px 16px;
+  padding: 88px 64px 48px;
 }
 
 .analyze-heading {
@@ -868,10 +869,11 @@ textarea:disabled {
 
 .source-tile-row {
   display: grid;
-  grid-template-columns: repeat(3, 196px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 32px;
-  width: 620px;
+  width: 100%;
+  max-width: 620px;
 }
 
 .source-tile {
@@ -880,7 +882,7 @@ textarea:disabled {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 196px;
+  width: 100%;
   height: 104px;
   padding: 20px 8px;
   border: 1px solid var(--border);
@@ -928,6 +930,72 @@ textarea:disabled {
 
 .source-tile svg {
   opacity: 0.85;
+}
+
+.analyze-feedback {
+  width: 100%;
+  max-width: 620px;
+  margin: 18px 0 0;
+}
+
+.analyze-results {
+  width: 100%;
+  max-width: 620px;
+  margin-top: 24px;
+  text-align: left;
+  -webkit-app-region: no-drag;
+}
+
+.analyze-results .claim-card {
+  padding: 20px 22px;
+  border-radius: 16px;
+}
+
+.analyze-results .claim-actions {
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.analyze-results .claim-actions .btn {
+  flex: 1 1 180px;
+  min-height: 44px;
+}
+
+@media (max-width: 680px) {
+  .analyze-input {
+    padding: 68px 24px 36px;
+  }
+
+  .source-tile-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .source-tile {
+    flex-direction: row;
+    height: 72px;
+    padding: 14px 18px;
+  }
+
+  .analyze-input-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .analyze-cta {
+    width: 100%;
+  }
+
+  .analyze-results .claim-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analyze-results .claim-actions .btn {
+    flex: none;
+    width: 100%;
+  }
 }
 
 .source-unavailable-note {
