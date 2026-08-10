@@ -511,21 +511,21 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
             </span>
           ) : null}
         </div>
+
+        {error ? <p className="error-text analyze-feedback">{error}</p> : null}
+
+        {claims && claims.length === 0 ? (
+          <p className="muted analyze-feedback">No checkable claims detected in this text.</p>
+        ) : null}
+
+        {claims && claims.length > 0 ? (
+          <section className="results-panel analyze-results" aria-live="polite">
+            {claims.map((claim) => (
+              <ClaimCard key={claim.id} claim={claim} />
+            ))}
+          </section>
+        ) : null}
       </section>
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      {claims && claims.length === 0 ? (
-        <p className="muted">No checkable claims detected in this text.</p>
-      ) : null}
-
-      {claims ? (
-        <section className="results-panel">
-          {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} />
-          ))}
-        </section>
-      ) : null}
     </div>
   )
 }
