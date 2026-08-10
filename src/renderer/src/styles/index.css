@@ -1198,9 +1198,20 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.08);
 }
 
+/* Was `background: var(--accent-wash)`, which is rgba(244,123,32,0.07) in the
+   default theme — a 7% wash over a 4% grey button, i.e. no perceptible
+   difference between "bold is on" and "bold is off". A formatting toggle has
+   to read as pressed at a glance, so this uses the solid accent at a weight
+   that survives being a 22px button. */
 .docedit-toolbtn.active {
-  background: var(--accent-wash);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.docedit-toolbtn.active:hover {
+  background: var(--accent);
+  filter: brightness(0.94);
 }
 
 .docedit-toolbtn.bold {
@@ -1373,8 +1384,18 @@ textarea:disabled {
   font-weight: 600;
 }
 
+/* `.docedit-wordcount` is position:absolute with a solid white background,
+   pinned bottom-left — and a positioned element paints over a static sibling
+   regardless of DOM order. This <p> is that static sibling, so the first ~80px
+   of every failure message ("Relay request failed: …") rendered underneath the
+   badge and the error read as truncated nonsense, or as nothing happening at
+   all. `.docedit-results` already solves this for itself with position+z-index;
+   this needs the same, plus left room so short messages clear the badge. */
 .docedit-error {
-  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+  padding: 10px 24px 10px 130px;
+  margin: 0;
 }
 
 .docedit-results {

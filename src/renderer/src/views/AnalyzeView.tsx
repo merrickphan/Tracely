@@ -137,6 +137,33 @@ function DocumentEditor({
   const [align, setAlign] = useState<Align>('left')
   const [alignMenuOpen, setAlignMenuOpen] = useState(false)
 
+  // Pull the toolbar's lit/unlit state from the browser's own command state,
+  // which is the only thing that actually knows it — execCommand('bold') with
+  // a collapsed caret sets a *pending* typing style, so there is nothing in
+  // the DOM to read and nothing React can derive it from.
+  const syncFormatState = useCallback((): void => {
+    const editor = editorRef.current
+    if (!editor || document.activeElement !== editor) return
+    const bold = document.queryCommandState('bold')
+    const italic = document.queryCommandState('italic')
+    const underline = document.queryCommandState('underline')
+    // Functional + identity-preserving, because this also runs on every
+    // keystroke: returning a fresh object literal unconditionally would
+    // re-render the editor on each character for no reason.
+    setFormat((prev) =>
+      prev.bold === bold && prev.italic === italic && prev.underline === underline
+        ? prev
+        : { bold, italic, underline }
+    )
+    setAlign(
+      document.queryCommandState('justifyCenter')
+        ? 'center'
+        : document.queryCommandState('justifyRight')
+          ? 'right'
+          : 'left'
+    )
+  }, [])
+
   useEffect(() => {
     function handleSelectionChange(): void {
       const editor = editorRef.current
@@ -145,22 +172,11 @@ function DocumentEditor({
       if (sel && sel.rangeCount > 0) {
         savedRangeRef.current = sel.getRangeAt(0).cloneRange()
       }
-      setFormat({
-        bold: document.queryCommandState('bold'),
-        italic: document.queryCommandState('italic'),
-        underline: document.queryCommandState('underline')
-      })
-      setAlign(
-        document.queryCommandState('justifyCenter')
-          ? 'center'
-          : document.queryCommandState('justifyRight')
-            ? 'right'
-            : 'left'
-      )
+      syncFormatState()
     }
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [])
+  }, [syncFormatState])
 
   useEffect(() => {
     if (!alignMenuOpen) return
@@ -195,6 +211,10 @@ function DocumentEditor({
   function exec(command: string, value?: string): void {
     focusAndRestore()
     document.execCommand(command, false, value)
+    // Toggling at a collapsed caret changes no selection, so no
+    // 'selectionchange' event follows and the toolbar would stay unlit while
+    // the command is genuinely active. Read the state back directly instead.
+    syncFormatState()
   }
 
   function applyFontSize(px: number): void {
@@ -220,6 +240,9 @@ function DocumentEditor({
       editor.innerHTML = ''
     }
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
+    // Typing can end a pending style (Enter starts a fresh block), so the
+    // toolbar has to follow the caret, not just explicit toolbar clicks.
+    syncFormatState()
     queueSave()
   }
 
@@ -343,6 +366,8 @@ function DocumentEditor({
         </select>
         <button
           className={`docedit-toolbtn bold ${format.bold ? 'active' : ''}`}
+          aria-pressed={format.bold}
+          title="Bold"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('bold')}
         >
@@ -350,6 +375,8 @@ function DocumentEditor({
         </button>
         <button
           className={`docedit-toolbtn underline ${format.underline ? 'active' : ''}`}
+          aria-pressed={format.underline}
+          title="Underline"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('underline')}
         >
@@ -357,6 +384,8 @@ function DocumentEditor({
         </button>
         <button
           className={`docedit-toolbtn italic ${format.italic ? 'active' : ''}`}
+          aria-pressed={format.italic}
+          title="Italic"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('italic')}
         >
