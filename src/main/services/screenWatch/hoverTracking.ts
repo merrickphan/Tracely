@@ -79,6 +79,19 @@ function clearHover(): void {
   if (hadHover) sendHover(null)
 }
 
+/**
+ * Drops any active hover, releasing native mouse capture and telling the
+ * overlay to close its popover.
+ *
+ * Exported for `clearOverlay` in screenWatchService: clearing the overlay
+ * payload alone is not enough, because OverlayApp synthesizes a popover from
+ * the hover event when the payload's claim list has no match — so the card
+ * would keep floating over an overlay with nothing else left on it.
+ */
+export function clearHoverState(): void {
+  clearHover()
+}
+
 function within(point: { x: number; y: number }, rect: ScreenRect, pad: number): boolean {
   return (
     point.x >= rect.x - pad &&
