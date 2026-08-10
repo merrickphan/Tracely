@@ -1,7 +1,9 @@
 import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
-import { getOverlayWindow } from '../../windows/overlayWindow'
+import { getFloatingWindow } from '../../windows/floatingWindow'
+import { getMainWindow } from '../../windows/mainWindow'
+import { getOverlayWindow, setOverlayMouseEventsCaptured } from '../../windows/overlayWindow'
 import { isTracerWindowFocused } from '../../windows/tracerWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
 import type { ScreenRect } from './uiaSnapshot'
@@ -24,9 +26,9 @@ const PAD_TOP = 2
 const PAD_BOTTOM = 3
 // The collapsed launcher circle's badge pokes a few px past the circle's own
 // bounds (see WIDGET_SIZE in screenWatchService.ts), and needs a small pad
-// to stay clickable; the expanded panel is a large self-contained rect that
-// doesn't need extra padding beyond a comfortable margin.
-const WIDGET_PAD = 10
+// to stay clickable. The target explicitly overrides this to zero for the
+// expanded panel so transparent pixels around it remain click-through.
+const WIDGET_PAD = 5
 // Once a claim's popover is open, its REAL rendered rect (reported by the
 // renderer via setActivePopoverRect — see screenWatchService.ts) is used to
 // decide whether the cursor is still "in" it, with just this small comfort
@@ -43,7 +45,6 @@ const LEAVE_GRACE_MS = 200
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let leaveTimer: ReturnType<typeof setTimeout> | null = null
 let hoveredKey: string | null = null
-let mouseEventsCaptured = false
 // While a widget drag is in progress the cursor moves freely around the
 // whole screen, well outside the widget's own (small, or not-yet-updated)
 // hit-test rect — normal poll-based hit-testing would toggle click-through
@@ -53,15 +54,7 @@ let mouseEventsCaptured = false
 let dragActive = false
 
 function setCaptureMouseEvents(capture: boolean): void {
-  if (capture === mouseEventsCaptured) return
-  mouseEventsCaptured = capture
-  const win = getOverlayWindow()
-  if (!win || win.isDestroyed()) return
-  if (capture) {
-    win.setIgnoreMouseEvents(false)
-  } else {
-    win.setIgnoreMouseEvents(true, { forward: true })
-  }
+  setOverlayMouseEventsCaptured(capture)
 }
 
 export function setDragActive(active: boolean): void {
@@ -80,10 +73,10 @@ function clearHover(): void {
     clearTimeout(leaveTimer)
     leaveTimer = null
   }
-  if (hoveredKey === null) return
+  const hadHover = hoveredKey !== null
   hoveredKey = null
   setCaptureMouseEvents(false)
-  sendHover(null)
+  if (hadHover) sendHover(null)
 }
 
 function within(point: { x: number; y: number }, rect: ScreenRect, pad: number): boolean {
@@ -96,6 +89,16 @@ function within(point: { x: number; y: number }, rect: ScreenRect, pad: number):
 }
 
 function poll(): void {
+  // The overlay is at the screen-saver always-on-top level, above both
+  // interactive Tracely windows. Release native capture whenever either owns
+  // focus so a stale Screen Watch target can never turn transparent pixels
+  // into a click shield over Tracely's controls.
+  if (getMainWindow()?.isFocused() || getFloatingWindow()?.isFocused()) {
+    dragActive = false
+    clearHover()
+    return
+  }
+
   if (dragActive) return
 
   // While the user is typing to Tracer, the frozen underlines behind that
@@ -124,7 +127,7 @@ function poll(): void {
   if (activeClaimId) {
     const activeTarget = targets.find((t) => t.claimId === activeClaimId)
     if (activeTarget) {
-      const pad = activeTarget.kind === 'widget' ? WIDGET_PAD : PAD_SIDE
+      const pad = activeTarget.kind === 'widget' ? (activeTarget.capturePadding ?? WIDGET_PAD) : PAD_SIDE
       const onUnderline = activeTarget.rectsAbsolute.some((r) => within(cursor, r, pad))
       const popover = getActivePopoverRect()
       const inPopover =
@@ -147,9 +150,10 @@ function poll(): void {
   let match: (typeof targets)[number] | null = null
   let matchedRectIndex = 0
   for (const t of targets) {
-    const padSide = t.kind === 'widget' ? WIDGET_PAD : PAD_SIDE
-    const padTop = t.kind === 'widget' ? WIDGET_PAD : PAD_TOP
-    const padBottom = t.kind === 'widget' ? WIDGET_PAD : PAD_BOTTOM
+    const widgetPad = t.capturePadding ?? WIDGET_PAD
+    const padSide = t.kind === 'widget' ? widgetPad : PAD_SIDE
+    const padTop = t.kind === 'widget' ? widgetPad : PAD_TOP
+    const padBottom = t.kind === 'widget' ? widgetPad : PAD_BOTTOM
     const idx = t.rectsAbsolute.findIndex(
       (r) =>
         cursor.x >= r.x - padSide &&
