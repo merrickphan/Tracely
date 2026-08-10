@@ -5,8 +5,10 @@ import { logScreenWatch } from '../services/screenWatch/debugLog'
 
 let overlayWindow: BrowserWindow | null = null
 let currentBoundsKey: string | null = null
+let mouseEventsCaptured = false
 
 function createOverlayWindow(): BrowserWindow {
+  mouseEventsCaptured = false
   const win = new BrowserWindow({
     show: false,
     frame: false,
@@ -46,6 +48,8 @@ function createOverlayWindow(): BrowserWindow {
 
   win.on('closed', () => {
     overlayWindow = null
+    currentBoundsKey = null
+    mouseEventsCaptured = false
   })
 
   overlayWindow = win
@@ -54,6 +58,30 @@ function createOverlayWindow(): BrowserWindow {
 
 export function getOverlayWindow(): BrowserWindow | null {
   return overlayWindow
+}
+
+/**
+ * Switches the native overlay between click-through and interactive modes.
+ *
+ * This state lives beside the BrowserWindow rather than in hoverTracking so
+ * hiding the overlay can synchronously release native mouse capture. Otherwise
+ * a hidden-then-shown overlay can retain `setIgnoreMouseEvents(false)` and its
+ * transparent area becomes an invisible click shield until the next cursor
+ * poll repairs it.
+ */
+export function setOverlayMouseEventsCaptured(capture: boolean): void {
+  const win = overlayWindow
+  if (!win || win.isDestroyed()) {
+    mouseEventsCaptured = false
+    return
+  }
+  if (capture === mouseEventsCaptured) return
+  mouseEventsCaptured = capture
+  if (capture) {
+    win.setIgnoreMouseEvents(false)
+  } else {
+    win.setIgnoreMouseEvents(true, { forward: true })
+  }
 }
 
 // Sized/positioned to the focused app's own window rect (logical/DIP
@@ -74,5 +102,8 @@ export function showOverlayOnWindow(bounds: Rectangle): BrowserWindow {
 }
 
 export function hideOverlay(): void {
+  // Always return to click-through before hiding. The next show must start
+  // safe even if it occurs before hoverTracking's next 80ms poll.
+  setOverlayMouseEventsCaptured(false)
   if (overlayWindow?.isVisible()) overlayWindow.hide()
 }

@@ -2,7 +2,7 @@ import { ipcMain, shell } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type { ShellOpenExternalResponse, WindowTargetResponse } from '@shared/ipc-contract'
-import { getFloatingWindow } from '../windows/floatingWindow'
+import { getFloatingWindow, showFloatingWindow } from '../windows/floatingWindow'
 import { getMainWindow, showMainWindow } from '../windows/mainWindow'
 
 const targetSchema = z.object({ target: z.enum(['main', 'floating']) })
@@ -24,7 +24,7 @@ export function registerWindowHandlers(): void {
     if (target === 'main') {
       showMainWindow()
     } else {
-      resolveWindow(target)?.show()
+      showFloatingWindow()
     }
     return { ok: true }
   })

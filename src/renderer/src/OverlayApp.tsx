@@ -285,7 +285,7 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
 }
 
 // Sized to comfortably fit the full action card (claim text, evidence row,
-// Find Evidence/Critique Argument buttons, and — once run — the critique
+// Check Claim/Find Evidence buttons, and — once run — the critique
 // result), not just a couple of lines like the original glance-only popup.
 const POPOVER_WIDTH = 380
 // Estimated, not measured — real height varies with claim/critique text
@@ -298,18 +298,30 @@ const POPOVER_GAP = 10
 function popoverPosition(anchor: { x: number; y: number; width: number; height: number }): {
   left: number
   top: number
-  placeAbove: boolean
+  width: number
+  maxHeight: number
 } {
+  const viewportPadding = 8
+  const width = Math.min(POPOVER_WIDTH, Math.max(1, window.innerWidth - viewportPadding * 2))
+  const maxHeight = Math.max(1, window.innerHeight - viewportPadding * 2)
+  const estimatedHeight = Math.min(POPOVER_EST_HEIGHT, maxHeight)
   const spaceBelow = window.innerHeight - (anchor.y + anchor.height)
   const spaceAbove = anchor.y
-  const placeAbove = spaceBelow < POPOVER_EST_HEIGHT + POPOVER_GAP && spaceAbove > spaceBelow
+  const placeAbove = spaceBelow < estimatedHeight + POPOVER_GAP && spaceAbove > spaceBelow
 
-  const left = Math.min(Math.max(8, anchor.x), window.innerWidth - POPOVER_WIDTH - 8)
-  const top = placeAbove
-    ? Math.max(8, anchor.y - POPOVER_EST_HEIGHT - POPOVER_GAP)
+  const left = Math.min(
+    Math.max(viewportPadding, anchor.x),
+    Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+  )
+  const desiredTop = placeAbove
+    ? anchor.y - estimatedHeight - POPOVER_GAP
     : anchor.y + anchor.height + POPOVER_GAP
+  const top = Math.min(
+    Math.max(viewportPadding, desiredTop),
+    Math.max(viewportPadding, window.innerHeight - estimatedHeight - viewportPadding)
+  )
 
-  return { left, top, placeAbove }
+  return { left, top, width, maxHeight }
 }
 
 // Mirrors computeAllPanelSize/GRID_* in screenWatchService.ts — "Show all"
@@ -558,7 +570,7 @@ function verdictWash(verdict: CritiqueVerdict): string {
 }
 
 // The full card used by the widget panel — claim text, live evidence with
-// real article titles, and the Find Evidence / Critique Argument actions.
+// real article titles, and the Check Claim / Find Evidence actions.
 // `context` controls how much this card assumes: 'panel' (the widget you
 // deliberately opened) is the only place this renders now — the hover
 // popup uses the lighter ProblemCard/CitationFlowCard below instead of this
@@ -578,7 +590,7 @@ function ClaimActionCard({
   onCritique: () => void
 }): JSX.Element {
   const findLabel = evidenceBusy ? 'Searching…' : claim.evidence ? 'Refresh Evidence' : 'Find Evidence'
-  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Re-check Argument' : 'Critique Argument'
+  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Check Again' : 'Check Claim'
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -602,22 +614,34 @@ function ClaimActionCard({
       </div>
       <EvidenceRow claim={claim} />
       <ArticleList claim={claim} />
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <button
           className="tracely-btn-primary"
-          onClick={onFindEvidence}
-          disabled={evidenceBusy}
-          style={{ ...PRIMARY_BTN_STYLE, opacity: evidenceBusy ? 0.6 : 1, cursor: evidenceBusy ? 'default' : 'pointer' }}
+          onClick={onCritique}
+          disabled={critiqueBusy}
+          style={{
+            ...PRIMARY_BTN_STYLE,
+            flex: '1 1 150px',
+            whiteSpace: 'nowrap',
+            opacity: critiqueBusy ? 0.6 : 1,
+            cursor: critiqueBusy ? 'default' : 'pointer'
+          }}
         >
-          {findLabel}
+          {critiqueLabel}
         </button>
         <button
           className="tracely-btn-secondary"
-          onClick={onCritique}
-          disabled={critiqueBusy}
-          style={{ ...SECONDARY_BTN_STYLE, opacity: critiqueBusy ? 0.6 : 1, cursor: critiqueBusy ? 'default' : 'pointer' }}
+          onClick={onFindEvidence}
+          disabled={evidenceBusy}
+          style={{
+            ...SECONDARY_BTN_STYLE,
+            flex: '1 1 150px',
+            whiteSpace: 'nowrap',
+            opacity: evidenceBusy ? 0.6 : 1,
+            cursor: evidenceBusy ? 'default' : 'pointer'
+          }}
         >
-          {critiqueLabel}
+          {findLabel}
         </button>
       </div>
       {claim.critique && claim.critiqueVerdict ? (
@@ -643,8 +667,8 @@ function ClaimActionCard({
 }
 
 // Clicking a card switches to the single-claim view focused on it (see
-// selectedClaimId in OverlayApp) — that's where Find Evidence/Critique
-// Argument live. Simplified to dot + header + quote (no inline evidence
+// selectedClaimId in OverlayApp) — that's where Check Claim/Find Evidence
+// actions live. Simplified to dot + header + quote (no inline evidence
 // preview) to match the "All Claims List" mockup's plain row style.
 function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onClick: () => void }): JSX.Element {
   return (
@@ -654,7 +678,8 @@ function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onC
       title="View this claim"
       style={{
         boxSizing: 'border-box',
-        width: GRID_CARD_WIDTH,
+        width: '100%',
+        maxWidth: GRID_CARD_WIDTH,
         height: GRID_CARD_HEIGHT,
         border: '1px solid #e5e5ea',
         borderRadius: 14,
@@ -1372,7 +1397,18 @@ export default function OverlayApp(): JSX.Element {
   })
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', fontFamily: FONT_STACK }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        fontFamily: FONT_STACK,
+        // Native hit-testing is toggled by hoverTracking.ts. Keep the DOM's
+        // transparent remainder inert as a second boundary; visible controls
+        // below opt themselves back in.
+        pointerEvents: 'none'
+      }}
+    >
       {stableUnderlines
         .filter((u) => !isResolved(u.id))
         .flatMap((u) => {
@@ -1432,7 +1468,8 @@ export default function OverlayApp(): JSX.Element {
                   transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  pointerEvents: 'auto'
                 }}
               >
                 <LogoBg size={30} />
@@ -1483,47 +1520,78 @@ export default function OverlayApp(): JSX.Element {
                   boxShadow: CARD_SHADOW,
                   overflow: 'hidden',
                   display: 'flex',
-                  flexDirection: 'column'
+                  flexDirection: 'column',
+                  pointerEvents: 'auto'
                 }}
               >
                 <div
-                  onMouseDown={(e) => startWidgetDrag(e, { width: widget.rect.width, height: widget.rect.height })}
-                  title="Drag to move"
                   style={{
                     boxSizing: 'border-box',
                     height: GRID_HEADER_HEIGHT,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: '0 10px 0 14px',
-                    cursor: 'grab',
+                    padding: '0 10px',
                     background: '#fafafa',
                     borderBottom: '1px solid #eeeef1',
                     flexShrink: 0
                   }}
                 >
                   {widget.viewMode === 'all' ? (
-                    <button className="tracely-btn-text" onClick={showSingle} style={TEXT_BTN_STYLE}>
+                    <button
+                      className="tracely-btn-text"
+                      onClick={showSingle}
+                      style={{ ...TEXT_BTN_STYLE, flexShrink: 0 }}
+                    >
                       ← Back
                     </button>
-                  ) : (
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#17171b' }}>
-                      {widget.claimCount} claim{widget.claimCount === 1 ? '' : 's'} flagged
-                    </div>
-                  )}
+                  ) : null}
                   <div
+                    onMouseDown={(e) =>
+                      startWidgetDrag(e, { width: widget.rect.width, height: widget.rect.height })
+                    }
+                    title="Drag to move"
                     style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#f47b20',
-                      background: 'rgba(244, 123, 32, 0.1)',
-                      borderRadius: 999,
-                      padding: '2px 8px'
+                      alignSelf: 'stretch',
+                      minWidth: 0,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingLeft: widget.viewMode === 'all' ? 2 : 4,
+                      cursor: 'grab'
                     }}
                   >
-                    {widget.totalInfoCount} found
+                    {widget.viewMode === 'single' ? (
+                      <div
+                        style={{
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: '#17171b'
+                        }}
+                      >
+                        {widget.claimCount} claim{widget.claimCount === 1 ? '' : 's'} flagged
+                      </div>
+                    ) : null}
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#f47b20',
+                        background: 'rgba(244, 123, 32, 0.1)',
+                        borderRadius: 999,
+                        padding: '2px 8px',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}
+                    >
+                      {widget.totalInfoCount} found
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }} />
                   <button
                     onClick={toggleWidgetExpanded}
                     title="Close"
@@ -1547,7 +1615,16 @@ export default function OverlayApp(): JSX.Element {
                   </button>
                 </div>
 
-                <div style={{ boxSizing: 'border-box', flex: 1, minHeight: 0, padding: GRID_PADDING, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    boxSizing: 'border-box',
+                    flex: 1,
+                    minHeight: 0,
+                    padding: GRID_PADDING,
+                    overflowX: 'hidden',
+                    overflowY: widget.viewMode === 'single' ? 'auto' : 'hidden'
+                  }}
+                >
                   {visibleClaims.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
                       <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center' }}>No claims flagged yet.</div>
@@ -1563,7 +1640,7 @@ export default function OverlayApp(): JSX.Element {
                       </button>
                     </div>
                   ) : widget.viewMode === 'single' && topClaim ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%' }}>
                       <ClaimActionCard
                         claim={topClaim}
                         evidenceBusy={busyEvidenceIds.has(topClaim.id)}
@@ -1573,16 +1650,20 @@ export default function OverlayApp(): JSX.Element {
                       />
                       {actionError ? <div style={{ fontSize: 11.5, color: '#d6301a' }}>{actionError}</div> : null}
                       <div style={{ flex: 1 }} />
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         <button
                           className="tracely-btn-secondary"
                           onClick={() => void window.tracely.tracer.open({ claimId: topClaim.id })}
-                          style={{ ...SECONDARY_BTN_STYLE, flex: 1 }}
+                          style={{ ...SECONDARY_BTN_STYLE, flex: '1 1 130px' }}
                         >
                           Ask Tracer
                         </button>
                         {visibleClaims.length > 1 ? (
-                          <button className="tracely-btn-secondary" onClick={showAll} style={{ ...SECONDARY_BTN_STYLE, flex: 1 }}>
+                          <button
+                            className="tracely-btn-secondary"
+                            onClick={showAll}
+                            style={{ ...SECONDARY_BTN_STYLE, flex: '1 1 130px' }}
+                          >
                             Show all ({visibleClaims.length})
                           </button>
                         ) : null}
@@ -1617,7 +1698,8 @@ export default function OverlayApp(): JSX.Element {
                   position: 'absolute',
                   left: pos.left,
                   top: pos.top,
-                  width: POPOVER_WIDTH,
+                  width: pos.width,
+                  maxHeight: pos.maxHeight,
                   background: '#fff',
                   border: CARD_BORDER,
                   borderRadius: 18,
@@ -1626,7 +1708,10 @@ export default function OverlayApp(): JSX.Element {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 10,
-                  color: '#1c1c1c'
+                  color: '#1c1c1c',
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                  pointerEvents: 'auto'
                 }}
               >
                 {flow ? (
@@ -1649,6 +1734,7 @@ export default function OverlayApp(): JSX.Element {
                     claim={claimHoveredSummary}
                     onSuggestFix={() => {
                       selectClaim(claimHoveredSummary.id)
+                      setHover(null)
                       void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
                     }}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}

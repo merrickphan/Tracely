@@ -890,11 +890,20 @@ textarea:disabled {
   font-size: 14px;
   font-weight: 400;
   cursor: pointer;
+  /* .analyze-view is the frameless window's drag region. Mark the whole
+     control subtree explicitly so Electron never treats a click on the icon
+     or label as an attempt to drag the window. */
+  -webkit-app-region: no-drag;
   transition:
     border-color 0.12s ease,
     background 0.12s ease,
     color 0.12s ease,
     transform 0.08s ease;
+}
+
+.source-tile * {
+  -webkit-app-region: no-drag;
+  pointer-events: none;
 }
 
 .source-tile:hover {
@@ -903,6 +912,11 @@ textarea:disabled {
 
 .source-tile:active {
   transform: scale(0.98);
+}
+
+.source-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .source-tile.active {
