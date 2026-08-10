@@ -16,6 +16,7 @@ import { isAuthError } from '../ai/client'
 import { generateCritique } from '../ai/critique'
 import { formatCitation } from '../citations'
 import { formatInTextCitation } from '../citations/inText'
+import { findCitationInsertPoint } from '../citations/insertPoint'
 import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
@@ -812,11 +813,23 @@ export async function insertCitationForClaim(
 
   const span = currentSpans.find((s) => s.id === claimId)
   if (!span) throw new Error('Could not locate this claim in the document anymore — try again.')
-  const insertOffset = span.start + span.length
+
   const fullText = lastUpdateInputs?.fullText ?? ''
+  // Fail closed. uia-watch.ps1 skips the staleness check entirely when the
+  // expected snippet is empty, so an empty fullText here meant inserting blind
+  // at a possibly-stale offset rather than refusing.
+  if (!fullText) throw new Error('Could not locate this claim in the document anymore — try again.')
+
+  // Not `span.start + span.length`: that lands after the sentence's full stop,
+  // which is what produced "…low weight. (Smith, 2020)".
+  const { offset: insertOffset, prefix } = findCitationInsertPoint(fullText, span.start + span.length)
+  // Must come from the ADJUSTED offset — comparing live text at the new offset
+  // against a snippet taken from the old one makes uia-watch.ps1's staleness
+  // check abort every insert with "the document changed since this claim was
+  // located".
   const expectedSnippet = fullText.slice(insertOffset, insertOffset + 30)
 
-  const result = await insertCitationText(insertOffset, ` ${inTextCitation}`, expectedSnippet)
+  const result = await insertCitationText(insertOffset, `${prefix}${inTextCitation}`, expectedSnippet)
   if (!result.ok) throw new Error(result.error)
 
   const citation: ScreenWatchClaimCitation = { inTextCitation, worksCitedEntry }

@@ -19,5 +19,12 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/index.d.ts"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/index.d.ts"],
+  // `npm test` runs these directly through Node's type stripping. Typechecking
+  // them here would mean adding "node" to `types` above, which drags Node's
+  // globals into the renderer program and degrades inference across every
+  // renderer file — the same trap CLAUDE.md documents for importing the preload
+  // implementation. The modules under test are still typechecked; the tests are
+  // not.
+  "exclude": ["src/**/*.test.ts"]
 }
