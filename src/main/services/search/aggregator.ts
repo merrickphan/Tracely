@@ -31,8 +31,15 @@ function blendedRelevance(item: NormalizedSourceResult, textRelevance: number): 
   return 0.75 * textRelevance + 0.25 * rankRelevance
 }
 
+// Separators are DROPPED, not collapsed to a space, because providers disagree
+// about where the word boundaries in a title even are. Crossref returned the
+// same AEA trial registration twice — "Evidence fromA CHINESE EXPERIMENT" and
+// "Evidence from\nA CHINESE EXPERIMENT" — and mapping runs of non-alphanumerics
+// to a space preserves exactly that difference ("froma" vs "from a"), so the
+// pair survived into one claim's evidence list as two sources. Deleting the
+// separators makes both "...evidencefromachineseexperiment".
 function normalizeTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
 function normalizedDoi(item: NormalizedSourceResult): string | null {

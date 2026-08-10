@@ -24,8 +24,8 @@
 import { pathToFileURL } from 'url'
 import { REPO } from './paths.mjs'
 
-// `wants` is a substring the CORRECT indicator's name must contain, or null
-// when no free authoritative statistic exists and the right behaviour is
+// `wants` lists substrings the CORRECT indicator's name must ALL contain, or
+// null when no free authoritative statistic exists and the right behaviour is
 // silence.
 //
 // Checking the name rather than just "did it match something" is the whole
@@ -34,14 +34,22 @@ import { REPO } from './paths.mjs'
 // with "Poverty gap at $8.30 a day", when extreme poverty is the $2.15 line.
 // A plausible-but-wrong statistic under an authoritative banner is worse than
 // no answer, because it is exactly the citation a student will not re-check.
+//
+// The substrings are ALL-of rather than one-of for the same reason, found the
+// same way. A single `wants: 'Population'` scored the India claim RIGHT
+// against "Population density (people per sq. km of land area)", which does
+// not measure which country is most populous. At the shipped 0.55 floor that
+// claim is silent so the mistake was invisible — but it would have credited a
+// wrong answer to anyone running this script to justify LOWERING the floor,
+// which is the only reason to run it.
 const CLAIMS = [
-  { text: 'The unemployment rate in the United States fell below four percent in 2023.', wants: 'Unemployment' },
-  { text: 'Global life expectancy has risen by more than twenty years since 1960.', wants: 'Life expectancy' },
-  { text: 'Carbon dioxide emissions per capita in the United States have declined since 2000.', wants: 'per capita' },
-  { text: 'More than ninety percent of adults in South Korea use the internet.', wants: 'Internet' },
-  { text: 'India overtook China as the most populous country in the world.', wants: 'Population' },
-  { text: 'Access to electricity in sub-Saharan Africa remains below sixty percent.', wants: 'Access to electricity' },
-  { text: 'The share of the world living in extreme poverty has fallen sharply since 1990.', wants: '$2.15' },
+  { text: 'The unemployment rate in the United States fell below four percent in 2023.', wants: ['Unemployment', 'total'] },
+  { text: 'Global life expectancy has risen by more than twenty years since 1960.', wants: ['Life expectancy at birth'] },
+  { text: 'Carbon dioxide emissions per capita in the United States have declined since 2000.', wants: ['Carbon dioxide', 'per capita'] },
+  { text: 'More than ninety percent of adults in South Korea use the internet.', wants: ['Individuals using the Internet'] },
+  { text: 'India overtook China as the most populous country in the world.', wants: ['Population, total'] },
+  { text: 'Access to electricity in sub-Saharan Africa remains below sixty percent.', wants: ['Access to electricity'] },
+  { text: 'The share of the world living in extreme poverty has fallen sharply since 1990.', wants: ['$2.15'] },
   { text: 'Commercial office vacancy rates in major American cities reached record highs.', wants: null }
 ]
 
@@ -107,7 +115,7 @@ for (const claim of CLAIMS) {
   if (!matched) {
     verdict = 'silent'
     silent++
-  } else if (claim.wants && name.includes(claim.wants)) {
+  } else if (claim.wants && claim.wants.every((fragment) => name.includes(fragment))) {
     verdict = 'RIGHT'
     right++
   } else {

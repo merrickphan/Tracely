@@ -21,6 +21,8 @@ import { generateCritique } from '../services/ai/critique'
 import { setAccessTokenProvider } from '../services/ai/identity'
 import { appSessionTokenProvider, noSessionMessage } from './identity'
 import { findEvidence, type RankedSourceResult } from '../services/search/aggregator'
+import { warmUp as warmUpMl } from '../services/ml'
+import { isReady as worldBankReady, warmUp as warmUpWorldBank } from '../services/search/worldBank'
 import { initDb } from '../services/storage/db'
 import { setAppPaths } from '../services/storage/paths'
 
@@ -311,6 +313,38 @@ function toMarkdown(essays: EvaluatedEssay[]): string {
   return lines.join('\n')
 }
 
+// Measured at ~2.6s for the whole 1,498-name catalogue through the packaged
+// worker, so this bound is slack rather than a real budget.
+const WORLD_BANK_WARM_TIMEOUT_MS = 60_000
+
+// Mirrors the app's boot sequence (main/index.ts), and the World Bank half is
+// load-bearing rather than a speed optimisation.
+//
+// worldBank.search() returns [] outright while its index is cold and kicks the
+// build off in the background. A 13-claim run finishes long before that lands,
+// so without warming here the provider contributes nothing to any report no
+// matter how well it works — it returned 0 of 104 sources on 2026-08-09 and
+// the report read as though the provider had been measured and found useless.
+async function warmProviders(): Promise<void> {
+  warmUpMl()
+  warmUpWorldBank()
+
+  const deadline = Date.now() + WORLD_BANK_WARM_TIMEOUT_MS
+  while (!worldBankReady() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+
+  // Not fatal: the other five providers still answer, and a run that reports
+  // slightly less is better than one that refuses to report at all. But say so,
+  // because "no World Bank rows" otherwise looks like a quality result.
+  if (!worldBankReady()) {
+    console.warn(
+      `World Bank index did not warm within ${WORLD_BANK_WARM_TIMEOUT_MS / 1000}s — ` +
+        'statistical claims in this run cannot return a dataset.'
+    )
+  }
+}
+
 export async function main(): Promise<void> {
   const repoRoot = process.env.EVAL_REPO_ROOT
   const dataDir = process.env.EVAL_DATA_DIR
@@ -341,6 +375,8 @@ export async function main(): Promise<void> {
   if (files.length === 0) {
     throw new Error(`No .txt or .md essays found in ${essayDir}`)
   }
+
+  await warmProviders()
 
   console.log(`Evaluating ${files.length} essay(s) from ${essayDir}\n`)
 
