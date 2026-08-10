@@ -5,6 +5,7 @@ import type {
   AnalyzeDetectClaimsResponse,
   AnalyzeGetResultRequest,
   AnalyzeGetResultResponse,
+  AnalyzeListSessionsResponse,
   AuthDeleteAccountResponse,
   AuthGetUserResponse,
   AuthSignInRequest,
@@ -99,7 +100,9 @@ const api = {
     detectClaims: (req: AnalyzeDetectClaimsRequest): Promise<AnalyzeDetectClaimsResponse> =>
       ipcRenderer.invoke(IPC.ANALYZE_DETECT_CLAIMS, req),
     getResult: (req: AnalyzeGetResultRequest): Promise<AnalyzeGetResultResponse> =>
-      ipcRenderer.invoke(IPC.ANALYZE_GET_RESULT, req)
+      ipcRenderer.invoke(IPC.ANALYZE_GET_RESULT, req),
+    listSessions: (): Promise<AnalyzeListSessionsResponse> =>
+      ipcRenderer.invoke(IPC.ANALYZE_LIST_SESSIONS, {})
   },
   evidence: {
     find: (req: EvidenceFindRequest): Promise<EvidenceFindResponse> =>

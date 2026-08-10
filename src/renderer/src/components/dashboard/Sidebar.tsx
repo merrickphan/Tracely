@@ -1,7 +1,8 @@
-import { CircleHelp, Clock3, Eye, Home, Settings, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { CircleHelp, Clock3, Eye, Home, Settings, type LucideIcon } from 'lucide-react'
+import figmaLogo from '../../assets/figma-logo.png'
 
-export type DashboardPage = 'home' | 'sessions' | 'screen-watch' | 'settings' | 'help' | 'session'
-type SidebarPage = Exclude<DashboardPage, 'session'>
+export type DashboardPage = 'home' | 'sessions' | 'new-session' | 'screen-watch' | 'settings' | 'help' | 'session'
+export type SidebarPage = Exclude<DashboardPage, 'session' | 'new-session'>
 
 interface NavItem {
   id: SidebarPage
@@ -45,9 +46,7 @@ export default function Sidebar({
   return (
     <aside className="dashboard-sidebar">
       <div className="dashboard-sidebar-brand">
-        <span className="dashboard-sidebar-mark" aria-hidden="true">
-          <ShieldCheck size={25} strokeWidth={2.1} />
-        </span>
+        <img src={figmaLogo} className="dashboard-sidebar-logo" alt="" />
         <span className="dashboard-wordmark">Tracely</span>
       </div>
 

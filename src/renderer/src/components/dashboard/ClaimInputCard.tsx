@@ -1,8 +1,7 @@
 import { useState, type FormEvent, type RefObject } from 'react'
 import { ArrowRight, Clipboard, LoaderCircle } from 'lucide-react'
-import type { DashboardMode } from '../../data/dashboardMockData'
 import { tracelyApi } from '../../lib/api'
-import ModeSelector from './ModeSelector'
+import ModeSelector, { type DashboardMode } from './ModeSelector'
 
 export const MAX_CLAIM_CHARACTERS = 10_000
 

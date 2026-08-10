@@ -3,6 +3,7 @@
 // like "this venue name wraps to three lines" or "an et-al author list
 // overflows the card", and placeholder text hides exactly those.
 import type {
+  AnalysisSessionSummary,
   ProfileInfo,
   ScreenWatchClaimSummary,
   ScreenWatchOverlayUpdateEvent,
@@ -29,9 +30,9 @@ export const T0 = '2026-03-14T16:20:00.000Z'
 
 export const user: AuthUser = {
   id: 'u_preview',
-  email: 'braden@example.edu',
-  firstName: 'Braden',
-  username: 'braden'
+  email: 'merrick@example.edu',
+  firstName: 'Merrick',
+  username: 'merrickhan'
 }
 
 // Local display profile — deliberately separate from `user` above, which is
@@ -40,6 +41,7 @@ export const profile: ProfileInfo = {
   firstName: 'Merrick',
   lastName: 'Han',
   bio: 'High-school senior building tools for people who have to cite things.',
+  phone: '',
   avatarUrl: null
 }
 
@@ -53,7 +55,7 @@ export const settings: AppSettings = {
   fontSize: 'medium',
   claimSensitivity: 0.5,
   screenWatchHotkeyAccelerator: 'Control+Shift+W',
-  screenWatchAllowedApps: 'WINWORD.EXE\nchrome.exe'
+  screenWatchAllowedApps: 'WINWORD.EXE,chrome.exe'
 }
 
 export const sources: Source[] = [
@@ -184,6 +186,63 @@ export const claims: Claim[] = [
     critique: null,
     critiqueVerdict: null,
     createdAt: T0
+  }
+]
+
+export const sessionHistory: AnalysisSessionSummary[] = [
+  {
+    analysis: {
+      id: 'history-sleep',
+      sourceText: 'Consistent sleep improves academic performance for students.',
+      origin: 'main',
+      createdAt: T0
+    },
+    claims: [
+      {
+        ...claims[0],
+        id: 'history-sleep-claim',
+        analysisId: 'history-sleep',
+        text: 'Consistent sleep improves academic performance for students.',
+        strengthScore: 82,
+        critiqueVerdict: 'well-supported'
+      }
+    ]
+  },
+  {
+    analysis: {
+      id: 'history-renewable',
+      sourceText: 'Renewable energy is now cheaper than fossil fuels in every country.',
+      origin: 'main',
+      createdAt: '2026-03-13T22:18:00.000Z'
+    },
+    claims: [
+      {
+        ...claims[1],
+        id: 'history-renewable-claim',
+        analysisId: 'history-renewable',
+        text: 'Renewable energy is now cheaper than fossil fuels in every country.',
+        strengthScore: 54,
+        critiqueVerdict: 'partially-supported'
+      }
+    ]
+  },
+  {
+    analysis: {
+      id: 'history-social',
+      sourceText: 'Social media has permanently shortened everyone’s attention span.',
+      origin: 'main',
+      createdAt: '2024-05-12T16:03:00.000Z'
+    },
+    claims: [
+      {
+        ...claims[2],
+        id: 'history-social-claim',
+        analysisId: 'history-social',
+        text: 'Social media has permanently shortened everyone’s attention span.',
+        strengthScore: null,
+        critiqueVerdict: 'unsupported'
+      }
+    ]
   }
 ]
 

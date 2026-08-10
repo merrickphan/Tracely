@@ -3,7 +3,6 @@ import type { AuthUser } from '@shared/types'
 import DashboardView from './views/DashboardView'
 import LoginView from './views/LoginView'
 import NamePromptView from './views/NamePromptView'
-import SettingsView from './views/SettingsView'
 import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize } from './lib/appearance'
 import { tracelyApi } from './lib/api'
@@ -30,7 +29,6 @@ function gateFor(user: AuthUser | null, configured: boolean): AuthGateState {
 export default function App(): JSX.Element {
   const [gate, setGate] = useState<AuthGateState>('checking')
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [legacySettingsOpen, setLegacySettingsOpen] = useState(false)
 
   useEffect(() => {
     tracelyApi.getSettings().then((s) => {
@@ -53,7 +51,6 @@ export default function App(): JSX.Element {
     return tracelyApi.onAuthStateChanged((u) => {
       setUser(u)
       setGate(gateFor(u, true))
-      if (!u) setLegacySettingsOpen(false)
     })
   }, [])
 
@@ -87,18 +84,5 @@ export default function App(): JSX.Element {
     )
   }
 
-  if (legacySettingsOpen) {
-    return (
-      <div className="dashboard-legacy-settings">
-        <SettingsView onNavigate={() => setLegacySettingsOpen(false)} />
-      </div>
-    )
-  }
-
-  return (
-    <DashboardView
-      firstName={user?.firstName?.trim() || 'Braden'}
-      onOpenPreferences={() => setLegacySettingsOpen(true)}
-    />
-  )
+  return <DashboardView firstName={user?.firstName?.trim() || 'there'} />
 }

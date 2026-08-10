@@ -10,6 +10,7 @@ const setSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   bio: z.string().optional(),
+  phone: z.string().max(80).optional(),
   avatarDataUrl: z.string().nullable().optional()
 })
 
@@ -34,6 +35,7 @@ function buildProfile(): ProfileGetResponse {
     firstName: getSetting('profileFirstName'),
     lastName: getSetting('profileLastName'),
     bio: getSetting('profileBio'),
+    phone: getSetting('profilePhone'),
     // Cache-busted so the renderer's <img> actually reloads after a
     // re-upload replaces the same filename on disk.
     avatarUrl: file ? `file://${file.replace(/\\/g, '/')}?v=${Date.now()}` : null
@@ -49,6 +51,7 @@ export function registerProfileHandlers(): void {
     if (patch.firstName !== undefined) setSetting('profileFirstName', patch.firstName)
     if (patch.lastName !== undefined) setSetting('profileLastName', patch.lastName)
     if (patch.bio !== undefined) setSetting('profileBio', patch.bio)
+    if (patch.phone !== undefined) setSetting('profilePhone', patch.phone)
 
     if (patch.avatarDataUrl === null) {
       for (const ext of ['png', 'jpg', 'jpeg']) {

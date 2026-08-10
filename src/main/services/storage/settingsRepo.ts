@@ -26,7 +26,8 @@ const DEFAULTS: Record<string, string> = {
   // works anywhere until the user explicitly picks apps in Settings >
   // Preferences. Comma-separated, case-insensitive. Empty means nothing is
   // enabled yet.
-  screenWatchAllowedApps: ''
+  screenWatchAllowedApps: '',
+  profilePhone: ''
 }
 
 export function getSetting(key: string): string {

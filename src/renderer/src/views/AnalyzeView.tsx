@@ -393,8 +393,17 @@ function DocumentEditor({
   )
 }
 
-export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
-  const [sourceType, setSourceType] = useState<SourceType>('document')
+export default function AnalyzeView({
+  onNavigate,
+  sourceTypes = ['document', 'url', 'text'],
+  onAnalysisCreated
+}: {
+  onNavigate: (tab: Tab) => void
+  sourceTypes?: SourceType[]
+  onAnalysisCreated?: (analysisId: string) => void
+}): JSX.Element {
+  const visibleSourceTiles = SOURCE_TILES.filter((tile) => sourceTypes.includes(tile.id))
+  const [sourceType, setSourceType] = useState<SourceType>(sourceTypes[0] ?? 'document')
   const sourceInputRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
   const [docEditorOpen, setDocEditorOpen] = useState(false)
@@ -410,6 +419,7 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
     try {
       const res = await tracelyApi.detectClaims(source, 'main')
       setClaims(res.claims)
+      onAnalysisCreated?.(res.analysisId)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -471,7 +481,7 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         <h2 className="analyze-heading">Start a new session</h2>
         <p className="analyze-subheading">Choose a source for Tracely to analyze.</p>
         <div className="source-tile-row">
-          {SOURCE_TILES.map((tile) => (
+          {visibleSourceTiles.map((tile) => (
             <button
               key={tile.id}
               type="button"

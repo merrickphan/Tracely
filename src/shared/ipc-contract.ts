@@ -40,6 +40,15 @@ export interface AnalyzeGetResultResponse {
   claims: Claim[]
 }
 
+export type AnalyzeListSessionsRequest = Record<string, never>
+export interface AnalysisSessionSummary {
+  analysis: Analysis
+  claims: Claim[]
+}
+export interface AnalyzeListSessionsResponse {
+  sessions: AnalysisSessionSummary[]
+}
+
 export interface EvidenceFindRequest {
   claimId: string
 }
@@ -165,6 +174,7 @@ export interface ProfileInfo {
   firstName: string
   lastName: string
   bio: string
+  phone: string
   // file:// URL to the locally-stored avatar image, or null if none set.
   avatarUrl: string | null
 }
@@ -174,6 +184,7 @@ export interface ProfileSetRequest {
   firstName?: string
   lastName?: string
   bio?: string
+  phone?: string
   // Raw data URL (e.g. "data:image/png;base64,...") from a freshly-picked
   // file, written to disk server-side; pass null to remove the avatar.
   // Omit entirely to leave the existing avatar untouched.

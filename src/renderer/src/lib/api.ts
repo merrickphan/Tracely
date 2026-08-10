@@ -14,6 +14,7 @@ export const tracelyApi = {
     call(window.tracely.analyze.detectClaims({ text, origin })),
   getAnalysisResult: (analysisId: string) =>
     call(window.tracely.analyze.getResult({ analysisId })),
+  listAnalysisSessions: () => call(window.tracely.analyze.listSessions()),
 
   findEvidence: (claimId: string) => call(window.tracely.evidence.find({ claimId })),
   getEvidenceForClaim: (claimId: string) =>

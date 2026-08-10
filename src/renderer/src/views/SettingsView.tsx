@@ -1,265 +1,238 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
-import type { AccentColor, AppSettings, AuthUser, Density, FontSize, Theme } from '@shared/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
-import AuthPanel from '../components/AuthPanel'
+import type { AccentColor, AppSettings, AuthUser, Density, FontSize, Theme } from '@shared/types'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
-import {
-  UserIcon,
-  SunIcon,
-  SlidersIcon,
-  BellIcon,
-  ShieldIcon,
-  LinkIcon,
-  CardIcon,
-  SignOutIcon,
-  BackIcon
-} from '../components/icons'
+import { applyAccentColor, applyDensity, applyFontSize } from '../lib/appearance'
 import { tracelyApi } from '../lib/api'
 import { applyTheme } from '../lib/theme'
-import { applyAccentColor, applyDensity, applyFontSize } from '../lib/appearance'
 import type { Tab } from '../App'
 
-const ACCENT_COLORS: { id: AccentColor; label: string; swatch: string }[] = [
-  { id: 'orange', label: 'Orange', swatch: 'linear-gradient(135deg, #ffaf01, #ff6a00)' },
-  { id: 'blue', label: 'Blue', swatch: 'linear-gradient(135deg, #60a5fa, #3b82f6)' },
-  { id: 'green', label: 'Green', swatch: 'linear-gradient(135deg, #4ade80, #22c55e)' },
-  { id: 'purple', label: 'Purple', swatch: 'linear-gradient(135deg, #c084fc, #a855f7)' }
+type Section =
+  | 'profile'
+  | 'appearance'
+  | 'preferences'
+  | 'notifications'
+  | 'security'
+  | 'integrations'
+  | 'billing'
+
+const SECTIONS: { id: Section; label: string }[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'preferences', label: 'Preferences' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'security', label: 'Security' },
+  { id: 'integrations', label: 'Integrations' },
+  { id: 'billing', label: 'Billing' }
 ]
 
-// Two kinds of section live here, and the difference matters when editing:
-//
-//  - Profile / Appearance / Preferences are REAL — each control is wired
-//    through IPC to settingsRepo or profileHandlers and persists.
-//  - Notifications / Security / Integrations / Billing are STATIC MOCKUPS
-//    reproducing the Figma frames (SettingsPage - Notifications/Security/
-//    Integrations/Billing) verbatim, sample values and all. Their selects
-//    hold local state so they respond to clicks; their "Save changes"
-//    buttons are deliberate no-ops. Restored on explicit instruction after
-//    having been removed once.
-//
-//    Caveat worth knowing before extending these: they were written against
-//    a pre-Supabase base, when Tracely genuinely had no accounts. Auth now
-//    exists (AuthPanel/DangerZone above, main/services/auth), so Security in
-//    particular could be made real — recovery email, active sessions and
-//    sign-out all have something behind them now. Billing still does not
-//    (no payments), and Integrations has no OAuth providers wired up.
-type Section = 'profile' | 'appearance' | 'preferences' | 'notifications' | 'security' | 'integrations' | 'billing'
-
-const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
-  { id: 'profile', label: 'Profile', icon: UserIcon },
-  { id: 'appearance', label: 'Appearance', icon: SunIcon },
-  { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
-  { id: 'notifications', label: 'Notifications', icon: BellIcon },
-  { id: 'security', label: 'Security', icon: ShieldIcon },
-  { id: 'integrations', label: 'Integrations', icon: LinkIcon },
-  { id: 'billing', label: 'Billing', icon: CardIcon }
+const ACCENT_COLORS: { id: AccentColor; label: string; color: string }[] = [
+  { id: 'orange', label: 'Orange', color: '#ff4f00' },
+  { id: 'blue', label: 'Blue', color: '#3b82f6' },
+  { id: 'green', label: 'Green', color: '#22c55e' },
+  { id: 'purple', label: 'Purple', color: '#a855f7' }
 ]
 
-export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
+function UnavailableValue({ children }: { children: string }): JSX.Element {
+  return <div className="settings-static-value is-unavailable">{children}</div>
+}
+
+export default function SettingsView({
+  onNavigate,
+  embedded = false
+}: {
+  onNavigate: (tab: Tab) => void
+  embedded?: boolean
+}): JSX.Element {
   const [section, setSection] = useState<Section>('profile')
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    tracelyApi
-      .getSettings()
-      .then(setSettings)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-  }, [])
-
-  async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
-    setError(null)
-    try {
-      const updated = await tracelyApi.setSettings(patch)
-      setSettings(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  function changeTheme(theme: Theme): void {
-    applyTheme(theme)
-    setSettings((s) => (s ? { ...s, theme } : s))
-    void save({ theme })
-  }
-
-  function changeAccentColor(accentColor: AccentColor): void {
-    applyAccentColor(accentColor)
-    setSettings((s) => (s ? { ...s, accentColor } : s))
-    void save({ accentColor })
-  }
-
-  function changeDensity(density: Density): void {
-    applyDensity(density)
-    setSettings((s) => (s ? { ...s, density } : s))
-    void save({ density })
-  }
-
-  function changeFontSize(fontSize: FontSize): void {
-    applyFontSize(fontSize)
-    setSettings((s) => (s ? { ...s, fontSize } : s))
-    void save({ fontSize })
-  }
-
-  const [appearanceSaving, setAppearanceSaving] = useState(false)
-
-  async function saveAppearance(): Promise<void> {
-    if (!settings) return
-    setAppearanceSaving(true)
-    try {
-      await save({
-        theme: settings.theme,
-        accentColor: settings.accentColor,
-        density: settings.density,
-        fontSize: settings.fontSize
-      })
-    } finally {
-      setAppearanceSaving(false)
-    }
-  }
-
-  // Real, locally-persisted (see profileHandlers.ts) — not tied to any
-  // account, just local display preferences + an avatar image file.
   const [profile, setProfile] = useState<ProfileInfo | null>(null)
-  const [profileSaving, setProfileSaving] = useState(false)
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
+  const [installedApps, setInstalledApps] = useState<ScannedApp[] | null>(null)
+  const [manualApp, setManualApp] = useState('')
+  const [username, setUsername] = useState('')
+  const [loadingError, setLoadingError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [preferencesError, setPreferencesError] = useState<string | null>(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [appearanceSaving, setAppearanceSaving] = useState(false)
+  const [screenWatchToggling, setScreenWatchToggling] = useState(false)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  const [signOutBusy, setSignOutBusy] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    tracelyApi
-      .getProfile()
-      .then(setProfile)
-      .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
+    void Promise.all([tracelyApi.getSettings(), tracelyApi.getProfile(), tracelyApi.getAuthUser()])
+      .then(([nextSettings, nextProfile, auth]) => {
+        setSettings(nextSettings)
+        setProfile(nextProfile)
+        setAuthUser(auth.user)
+        setUsername(auth.user?.username ?? '')
+      })
+      .catch((caught) => setLoadingError(caught instanceof Error ? caught.message : String(caught)))
   }, [])
 
+  useEffect(() => {
+    void tracelyApi.getScreenWatchStatus().then(setScreenWatch).catch((caught) => {
+      setPreferencesError(caught instanceof Error ? caught.message : String(caught))
+    })
+    return tracelyApi.onScreenWatchStatus(setScreenWatch)
+  }, [])
+
+  useEffect(() => tracelyApi.onAuthStateChanged(setAuthUser), [])
+
+  useEffect(() => {
+    if (section !== 'preferences' || installedApps !== null) return
+    void tracelyApi
+      .scanInstalledApps()
+      .then((response) => setInstalledApps(response.found))
+      .catch((caught) => setPreferencesError(caught instanceof Error ? caught.message : String(caught)))
+  }, [installedApps, section])
+
+  const allowedApps = useMemo(
+    () =>
+      (settings?.screenWatchAllowedApps ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    [settings?.screenWatchAllowedApps]
+  )
+
+  const knownApps = useMemo(() => {
+    const scanned = installedApps ?? []
+    const scannedExe = new Set(scanned.map((app) => app.exe.toLowerCase()))
+    return [
+      ...scanned,
+      ...allowedApps
+        .filter((exe) => !scannedExe.has(exe.toLowerCase()))
+        .map((exe) => ({ name: exe, exe }))
+    ].sort((left, right) => left.name.localeCompare(right.name))
+  }, [allowedApps, installedApps])
+
   async function saveProfile(): Promise<void> {
-    if (!profile) return
+    if (!profile || profileSaving) return
     setProfileSaving(true)
     setProfileError(null)
     try {
       const updated = await tracelyApi.setProfile({
         firstName: profile.firstName,
         lastName: profile.lastName,
-        bio: profile.bio
+        bio: profile.bio,
+        phone: profile.phone
       })
       setProfile(updated)
-    } catch (err) {
-      setProfileError(err instanceof Error ? err.message : String(err))
+
+      if (authUser && profile.firstName.trim() && profile.firstName.trim() !== authUser.firstName) {
+        const response = await tracelyApi.updateAuthName(profile.firstName.trim())
+        setAuthUser(response.user)
+      }
+      const requestedUsername = username.trim()
+      if (authUser && requestedUsername && requestedUsername !== (authUser.username ?? '')) {
+        const response = await tracelyApi.updateAuthUsername(requestedUsername)
+        setAuthUser(response.user)
+      }
+    } catch (caught) {
+      setProfileError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setProfileSaving(false)
     }
   }
 
-  function handleAvatarFile(file: File): void {
-    if (file.size > 2 * 1024 * 1024) {
-      setProfileError('Avatar image must be 2 MB or smaller')
-      return
+  async function saveAppearance(): Promise<void> {
+    if (!settings || appearanceSaving) return
+    setAppearanceSaving(true)
+    setLoadingError(null)
+    try {
+      setSettings(
+        await tracelyApi.setSettings({
+          theme: settings.theme,
+          accentColor: settings.accentColor,
+          density: settings.density,
+          fontSize: settings.fontSize
+        })
+      )
+    } catch (caught) {
+      setLoadingError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setAppearanceSaving(false)
     }
-    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-      setProfileError('Avatar must be a JPG or PNG image')
+  }
+
+  function changeTheme(theme: Theme): void {
+    applyTheme(theme)
+    setSettings((current) => (current ? { ...current, theme } : current))
+  }
+
+  function changeAccentColor(accentColor: AccentColor): void {
+    applyAccentColor(accentColor)
+    setSettings((current) => (current ? { ...current, accentColor } : current))
+  }
+
+  function changeFontSize(fontSize: FontSize): void {
+    applyFontSize(fontSize)
+    setSettings((current) => (current ? { ...current, fontSize } : current))
+  }
+
+  function changeDensity(density: Density): void {
+    applyDensity(density)
+    setSettings((current) => (current ? { ...current, density } : current))
+  }
+
+  function handleAvatarFile(file: File): void {
+    if (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg'].includes(file.type)) {
+      setProfileError('Choose a JPG or PNG image no larger than 2 MB.')
       return
     }
     const reader = new FileReader()
     reader.onload = () => {
-      const dataUrl = reader.result as string
-      setProfileError(null)
-      tracelyApi
-        .setProfile({ avatarDataUrl: dataUrl })
+      void tracelyApi
+        .setProfile({ avatarDataUrl: String(reader.result) })
         .then(setProfile)
-        .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
+        .catch((caught) => setProfileError(caught instanceof Error ? caught.message : String(caught)))
     }
     reader.readAsDataURL(file)
   }
 
-  // --- Preferences: Screen Watch on/off (moved here from the Home page
-  // heading, which used to double as a click-to-toggle control) + the app
-  // allowlist, backed by the same screenWatchAllowedApps setting and
-  // settings:scanInstalledApps IPC that already existed before this UI
-  // surface was added.
-  const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
-  const [screenWatchToggling, setScreenWatchToggling] = useState(false)
-  const [installedApps, setInstalledApps] = useState<ScannedApp[] | null>(null)
-  const [manualApp, setManualApp] = useState('')
-  const [prefsError, setPrefsError] = useState<string | null>(null)
-
-  useEffect(() => {
-    tracelyApi.getScreenWatchStatus().then(setScreenWatch)
-    return tracelyApi.onScreenWatchStatus(setScreenWatch)
-  }, [])
-
   async function toggleScreenWatch(): Promise<void> {
     if (!screenWatch || screenWatchToggling) return
     setScreenWatchToggling(true)
+    setPreferencesError(null)
     try {
-      const status = await tracelyApi.setScreenWatchEnabled(!screenWatch.enabled)
-      setScreenWatch(status)
+      setScreenWatch(await tracelyApi.setScreenWatchEnabled(!screenWatch.enabled))
+    } catch (caught) {
+      setPreferencesError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setScreenWatchToggling(false)
     }
   }
 
-  useEffect(() => {
-    if (section !== 'preferences' || installedApps !== null) return
-    tracelyApi
-      .scanInstalledApps()
-      .then((res) => setInstalledApps(res.found))
-      .catch((err) => setPrefsError(err instanceof Error ? err.message : String(err)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section])
-
-  const allowedApps = (settings?.screenWatchAllowedApps ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  // Scanned apps (with a real display name) plus any allowed exe that
-  // wasn't found by the scan (e.g. manually added, or a portable app) —
-  // those fall back to showing their exe name as the label since there's
-  // no friendly name known for them.
-  const scanned = installedApps ?? []
-  const scannedExeSet = new Set(scanned.map((a) => a.exe.toLowerCase()))
-  const knownApps = [
-    ...scanned,
-    ...allowedApps.filter((exe) => !scannedExeSet.has(exe.toLowerCase())).map((exe) => ({ name: exe, exe }))
-  ].sort((a, b) => a.name.localeCompare(b.name))
-
   async function setAppAllowed(exe: string, allowed: boolean): Promise<void> {
-    setPrefsError(null)
-    const current = new Set(allowedApps.map((a) => a.toLowerCase()))
-    if (allowed) current.add(exe.toLowerCase())
-    else current.delete(exe.toLowerCase())
+    if (!settings) return
+    const next = new Set(allowedApps.map((value) => value.toLowerCase()))
+    if (allowed) next.add(exe.toLowerCase())
+    else next.delete(exe.toLowerCase())
+    setPreferencesError(null)
     try {
-      await save({ screenWatchAllowedApps: Array.from(current).join(',') })
-    } catch (err) {
-      setPrefsError(err instanceof Error ? err.message : String(err))
+      setSettings(await tracelyApi.setSettings({ screenWatchAllowedApps: [...next].join(',') }))
+    } catch (caught) {
+      setPreferencesError(caught instanceof Error ? caught.message : String(caught))
     }
   }
 
-  async function addManualApp(): Promise<void> {
+  function addManualApp(): void {
     const exe = manualApp.trim()
     if (!exe) return
-    setManualApp('')
-    if (!knownApps.some((a) => a.exe.toLowerCase() === exe.toLowerCase())) {
-      setInstalledApps((prev) => [...(prev ?? []), { name: exe, exe }])
+    if (!knownApps.some((app) => app.exe.toLowerCase() === exe.toLowerCase())) {
+      setInstalledApps((current) => [...(current ?? []), { name: exe, exe }])
     }
-    // Newly-added apps aren't automatically allowed — adding them here just
-    // makes them checkable; the user still has to check the box.
+    setManualApp('')
   }
 
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-  const [signOutBusy, setSignOutBusy] = useState(false)
-
-  useEffect(() => {
-    tracelyApi.getAuthUser().then((res) => setAuthUser(res.user))
-    return tracelyApi.onAuthStateChanged(setAuthUser)
-  }, [])
-
-  async function sidebarSignOut(): Promise<void> {
-    if (!authUser) return
+  async function signOut(): Promise<void> {
     setSignOutBusy(true)
     try {
       await tracelyApi.signOut()
@@ -269,526 +242,315 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     }
   }
 
-  // --- Static mockup sections (see the Section comment above). These hold
-  // local-only state purely so the selects respond when clicked; nothing is
-  // read back, persisted, or sent anywhere.
-  const [mockEmailNotifications, setMockEmailNotifications] = useState('All activity')
-  const [mockPushNotifications, setMockPushNotifications] = useState('All activity')
-  const [mockSmsAlerts, setMockSmsAlerts] = useState('Off')
-  const [mockNotificationSchedule, setMockNotificationSchedule] = useState('Off')
-  const [mockTwoFactor, setMockTwoFactor] = useState('Enabled via Authenticator app')
-  const [mockPlan, setMockPlan] = useState('Pro — $20/month')
-
-  if (!settings) {
-    return <div className="settings-view">{error ? <p className="error-text">{error}</p> : <p>Loading…</p>}</div>
+  if (!settings || !profile) {
+    return (
+      <div className="dashboard-settings-loading" role="status">
+        {loadingError ?? 'Loading settings…'}
+      </div>
+    )
   }
 
   return (
-    <div className="settings-view">
-      <div className="settings-shell">
-        <aside className="settings-sidebar">
-          <div className="settings-sidebar-header">
-            <button className="settings-back-link" onClick={() => onNavigate('home')}>
-              <BackIcon /> Back
-            </button>
-            <h2>Settings</h2>
-          </div>
-          <nav className="settings-nav">
-            {NAV.map((n) => (
-              <Fragment key={n.id}>
-                <button
-                  className={`settings-nav-item ${section === n.id ? 'active' : ''}`}
-                  onClick={() => setSection(n.id)}
-                >
-                  <n.icon size={15} />
-                  {n.label}
-                </button>
-              </Fragment>
-            ))}
-          </nav>
-          {authUser ? (
-            <div className="settings-sidebar-footer">
-              <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
-                <SignOutIcon size={15} /> Sign out
-              </button>
+    <div className={`dashboard-settings ${embedded ? 'is-embedded' : ''}`}>
+      {!embedded ? (
+        <button type="button" className="dashboard-back-button" onClick={() => onNavigate('home')}>
+          Back
+        </button>
+      ) : null}
+      <header className="dashboard-page-heading">
+        <h1>Settings</h1>
+        <p>Manage your Tracely profile, appearance, privacy, and preferences.</p>
+      </header>
+
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        {SECTIONS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={section === item.id}
+            className={section === item.id ? 'is-active' : ''}
+            onClick={() => setSection(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <section className="settings-content-card" aria-live="polite">
+        {section === 'profile' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Profile</h2>
+              <p>Update your personal details.</p>
             </div>
-          ) : null}
-        </aside>
-
-        {confirmingSignOut ? (
-          <ConfirmDialog
-            title="Sign out?"
-            message="You'll need to sign back in to use Tracely again."
-            confirmLabel="Sign out"
-            danger
-            busy={signOutBusy}
-            onConfirm={sidebarSignOut}
-            onCancel={() => setConfirmingSignOut(false)}
-          />
-        ) : null}
-
-        <div className="settings-panel">
-          {section === 'profile' && profile ? (
-            <div key="profile" className="settings-panel-content">
-              {authUser ? <AuthPanel user={authUser} /> : null}
-              <div className="settings-panel-header">
-                <h3>Profile</h3>
-                <p>How others see you across the platform.</p>
-              </div>
-              <div className="settings-avatar-row">
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" className="settings-avatar settings-avatar-photo" />
-                ) : (
-                  <div className="settings-avatar">
-                    {(profile.firstName[0] ?? '') + (profile.lastName[0] ?? '') || '?'}
-                  </div>
-                )}
-                <div className="settings-avatar-meta">
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) handleAvatarFile(file)
-                      e.target.value = ''
-                    }}
-                  />
-                  <button
-                    className="settings-avatar-upload"
-                    type="button"
-                    onClick={() => avatarInputRef.current?.click()}
-                  >
-                    Upload photo
-                  </button>
-                  <p>JPG or PNG · max 2 MB</p>
-                </div>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="First name">
-                  <input
-                    value={profile.firstName}
-                    placeholder="First name"
-                    onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                  />
-                </SettingsField>
-                <SettingsField label="Last name">
-                  <input
-                    value={profile.lastName}
-                    placeholder="Last name"
-                    onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                  />
-                </SettingsField>
-                <SettingsField label="Bio" full>
-                  <textarea
-                    value={profile.bio}
-                    placeholder="Say something about yourself"
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  />
-                </SettingsField>
-              </div>
-              {profileError ? <p className="error-text">{profileError}</p> : null}
-              <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
-                {profileSaving ? 'Saving…' : 'Save changes'}
-              </Button>
-              {authUser ? <DangerZone user={authUser} /> : null}
-            </div>
-          ) : null}
-
-          {section === 'appearance' ? (
-            <div key="appearance" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Appearance</h3>
-                <p>Customize how Tracely looks for you.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Theme">
-                  <select value={settings.theme} onChange={(e) => changeTheme(e.target.value as Theme)}>
-                    <option value="system">System default</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Accent color">
-                  <div className="accent-swatch-row">
-                    {ACCENT_COLORS.map((c) => (
-                      <button
-                        key={c.id}
-                        className={`accent-swatch ${settings.accentColor === c.id ? 'accent-swatch-active' : ''}`}
-                        style={{ background: c.swatch }}
-                        title={c.label}
-                        onClick={() => changeAccentColor(c.id)}
-                      />
-                    ))}
-                  </div>
-                </SettingsField>
-                <SettingsField label="Font size">
-                  <select
-                    value={settings.fontSize}
-                    onChange={(e) => changeFontSize(e.target.value as FontSize)}
-                  >
-                    <option value="small">Small</option>
-                    <option value="medium">Medium</option>
-                    <option value="large">Large</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Density">
-                  <select value={settings.density} onChange={(e) => changeDensity(e.target.value as Density)}>
-                    <option value="comfortable">Comfortable spacing across lists and cards</option>
-                    <option value="compact">Compact spacing across lists and cards</option>
-                  </select>
-                </SettingsField>
-              </div>
-              <Button variant="dark" onClick={saveAppearance} disabled={appearanceSaving}>
-                {appearanceSaving ? 'Saving…' : 'Save changes'}
-              </Button>
-            </div>
-          ) : null}
-
-          {section === 'preferences' ? (
-            <div key="preferences" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Preferences</h3>
-                <p>Turn Screen Watch on or off, and choose which apps it's allowed to read text from.</p>
-              </div>
-              <label className="settings-toggle-row">
-                <div>
-                  <div className="settings-toggle-row-title">Screen Watch</div>
-                  <div className="settings-toggle-row-subtitle">
-                    {screenWatch?.enabled ? 'On — reading focused apps for flagged claims.' : 'Off.'}
-                  </div>
-                </div>
+            <div className="settings-avatar-row">
+              {profile.avatarUrl ? (
+                <img className="settings-avatar" src={profile.avatarUrl} alt="Current profile" />
+              ) : (
+                <span className="settings-avatar" aria-hidden="true">
+                  {(profile.firstName[0] ?? authUser?.firstName?.[0] ?? '?').toUpperCase()}
+                </span>
+              )}
+              <div>
                 <input
-                  type="checkbox"
-                  checked={screenWatch?.enabled ?? false}
-                  disabled={!screenWatch || screenWatchToggling}
-                  onChange={toggleScreenWatch}
-                />
-              </label>
-              <div className="settings-app-grid">
-                {installedApps === null ? (
-                  <p className="muted">Scanning installed apps…</p>
-                ) : knownApps.length === 0 ? (
-                  <p className="muted">No apps found. Add one by name below.</p>
-                ) : (
-                  knownApps.map((app: ScannedApp) => {
-                    const allowed = allowedApps.some((a) => a.toLowerCase() === app.exe.toLowerCase())
-                    return (
-                      <label key={app.exe} className="settings-app-check" title={app.exe}>
-                        <input
-                          type="checkbox"
-                          checked={allowed}
-                          onChange={(e) => void setAppAllowed(app.exe, e.target.checked)}
-                        />
-                        <span className="settings-app-check-name">{app.name}</span>
-                      </label>
-                    )
-                  })
-                )}
-              </div>
-              <div className="settings-app-add">
-                <input
-                  value={manualApp}
-                  placeholder="Add an app by .exe name (e.g. notepad.exe)"
-                  onChange={(e) => setManualApp(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void addManualApp()
+                  ref={avatarInputRef}
+                  className="sr-only"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) handleAvatarFile(file)
+                    event.target.value = ''
                   }}
                 />
-                <Button variant="secondary" onClick={addManualApp}>
-                  Add
+                <button type="button" className="settings-upload-button" onClick={() => avatarInputRef.current?.click()}>
+                  Change photo
+                </button>
+                <p>JPG or PNG, up to 2 MB.</p>
+              </div>
+            </div>
+            <div className="settings-panel-grid">
+              <SettingsField label="First name">
+                <input
+                  value={profile.firstName}
+                  autoComplete="given-name"
+                  onChange={(event) => setProfile({ ...profile, firstName: event.target.value })}
+                />
+              </SettingsField>
+              <SettingsField label="Last name">
+                <input
+                  value={profile.lastName}
+                  autoComplete="family-name"
+                  onChange={(event) => setProfile({ ...profile, lastName: event.target.value })}
+                />
+              </SettingsField>
+              <SettingsField label="Username" full>
+                <input
+                  id="profile-username"
+                  value={username}
+                  autoComplete="username"
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+              </SettingsField>
+              <SettingsField label="Bio" full>
+                <textarea
+                  value={profile.bio}
+                  rows={3}
+                  onChange={(event) => setProfile({ ...profile, bio: event.target.value })}
+                />
+              </SettingsField>
+              <SettingsField label="Email address">
+                <input value={authUser?.email ?? ''} readOnly aria-readonly="true" />
+              </SettingsField>
+              <SettingsField label="Phone number">
+                <input
+                  value={profile.phone}
+                  type="tel"
+                  autoComplete="tel"
+                  onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
+                />
+              </SettingsField>
+            </div>
+            {profileError ? <p className="dashboard-form-error">{profileError}</p> : null}
+            <div className="settings-actions">
+              <Button variant="dark" onClick={() => void saveProfile()} disabled={profileSaving}>
+                {profileSaving ? 'Saving…' : 'Save changes'}
+              </Button>
+              {authUser ? (
+                <Button variant="secondary" onClick={() => setConfirmingSignOut(true)}>
+                  Sign out
                 </Button>
-              </div>
-              {prefsError ? <p className="error-text">{prefsError}</p> : null}
-              <p className="muted settings-app-note">
-                Screen Watch only reads text in apps you check below — nothing is enabled anywhere until you pick
-                it. Uncheck an app any time to stop it from being read.
-              </p>
+              ) : null}
             </div>
-          ) : null}
+            {authUser ? <DangerZone user={authUser} /> : null}
+          </div>
+        ) : null}
 
-          {section === 'notifications' ? (
-            <div key="notifications" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Notifications</h3>
-                <p>Choose what updates you receive and how.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Email notifications">
-                  <select
-                    value={mockEmailNotifications}
-                    onChange={(e) => setMockEmailNotifications(e.target.value)}
-                  >
-                    <option>All activity</option>
-                    <option>Mentions only</option>
-                    <option>Weekly digest</option>
-                    <option>Off</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Push notifications">
-                  <select value={mockPushNotifications} onChange={(e) => setMockPushNotifications(e.target.value)}>
-                    <option>All activity</option>
-                    <option>Mentions only</option>
-                    <option>Off</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="SMS alerts" full>
-                  <select value={mockSmsAlerts} onChange={(e) => setMockSmsAlerts(e.target.value)}>
-                    <option>Off</option>
-                    <option>Urgent only</option>
-                    <option>All activity</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Notification schedule" full>
-                  <select
-                    value={mockNotificationSchedule}
-                    onChange={(e) => setMockNotificationSchedule(e.target.value)}
-                  >
-                    <option>Off</option>
-                    <option>Weekdays, 9am – 6pm</option>
-                    <option>Custom hours</option>
-                  </select>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
+        {section === 'appearance' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Appearance</h2>
+              <p>Customize how Tracely looks for you.</p>
             </div>
-          ) : null}
-
-          {section === 'security' ? (
-            <div key="security" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Security</h3>
-                <p>Keep your account safe and see where you&rsquo;re signed in.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Two-factor authentication">
-                  <select value={mockTwoFactor} onChange={(e) => setMockTwoFactor(e.target.value)}>
-                    <option>Enabled via Authenticator app</option>
-                    <option>Enabled via SMS</option>
-                    <option>Disabled</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Recovery email">
-                  <div className="settings-static-value">backup@example.com</div>
-                </SettingsField>
-                <SettingsField label="Active sessions" full>
-                  <div className="settings-static-value">2 devices signed in</div>
-                </SettingsField>
-                <SettingsField label="Recent login activity" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    San Luis Obispo, CA · Chrome on macOS · 2 hours ago
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
+            <div className="settings-panel-grid">
+              <SettingsField label="Theme">
+                <select value={settings.theme} onChange={(event) => changeTheme(event.target.value as Theme)}>
+                  <option value="system">System default</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </SettingsField>
+              <SettingsField label="Accent color">
+                <div className="settings-color-options" role="radiogroup" aria-label="Accent color">
+                  {ACCENT_COLORS.map((color) => (
+                    <button
+                      key={color.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={settings.accentColor === color.id}
+                      aria-label={color.label}
+                      className={settings.accentColor === color.id ? 'is-selected' : ''}
+                      style={{ backgroundColor: color.color }}
+                      onClick={() => changeAccentColor(color.id)}
+                    />
+                  ))}
+                </div>
+              </SettingsField>
+              <SettingsField label="Font size" full>
+                <select value={settings.fontSize} onChange={(event) => changeFontSize(event.target.value as FontSize)}>
+                  <option value="small">Small</option>
+                  <option value="medium">Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </SettingsField>
+              <SettingsField label="Density" full>
+                <select value={settings.density} onChange={(event) => changeDensity(event.target.value as Density)}>
+                  <option value="comfortable">Comfortable spacing across lists and cards</option>
+                  <option value="compact">Compact spacing across lists and cards</option>
+                </select>
+              </SettingsField>
             </div>
-          ) : null}
+            <Button variant="dark" onClick={() => void saveAppearance()} disabled={appearanceSaving}>
+              {appearanceSaving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        ) : null}
 
-          {section === 'integrations' ? (
-            <div key="integrations" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Integrations</h3>
-                <p>Connect the tools you use every day.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Google Calendar">
-                  <div className="settings-static-value settings-static-value-good">Connected</div>
-                </SettingsField>
-                <SettingsField label="Nextdoor">
-                  <div className="settings-static-value settings-static-value-good">Connected</div>
-                </SettingsField>
-                <SettingsField label="Gmail" full>
-                  <div className="settings-static-value settings-static-value-good">
-                    Connected · jamie.d@example.com
-                  </div>
-                </SettingsField>
-                <SettingsField label="Available integrations" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    Calendly, Google Drive, Slack — connect more from the marketplace
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
+        {section === 'preferences' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Preferences</h2>
+              <p>Turn Screen Watch on or off, and choose which apps it may read text from.</p>
             </div>
-          ) : null}
-
-          {section === 'billing' ? (
-            <div key="billing" className="settings-panel-content">
-              <div className="settings-panel-header">
-                <h3>Billing</h3>
-                <p>Manage your plan, payment method, and invoices.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Plan">
-                  <select value={mockPlan} onChange={(e) => setMockPlan(e.target.value)}>
-                    <option>Pro — $20/month</option>
-                    <option>Free</option>
-                    <option>Team — $60/month</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Next invoice">
-                  <div className="settings-static-value">Aug 29, 2026</div>
-                </SettingsField>
-                <SettingsField label="Payment method" full>
-                  <div className="settings-static-value">Visa ending in 4242</div>
-                </SettingsField>
-                <SettingsField label="Billing history" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    Download past invoices and manage your payment details
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
+            <label className="settings-toggle-row">
+              <span>
+                <strong>Screen Watch</strong>
+                <small>{screenWatch?.enabled ? 'On — reading focused apps for flagged claims.' : 'Off — not reading app text.'}</small>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={screenWatch?.enabled ?? false}
+                disabled={!screenWatch || screenWatchToggling}
+                onChange={() => void toggleScreenWatch()}
+              />
+            </label>
+            <div className="settings-app-grid" aria-label="Supported applications">
+              {installedApps === null ? <p className="settings-muted">Scanning installed applications…</p> : null}
+              {installedApps !== null && knownApps.length === 0 ? (
+                <p className="settings-muted">No supported applications were found. Add an executable name below.</p>
+              ) : null}
+              {knownApps.map((app) => (
+                <label key={app.exe} className="settings-app-option">
+                  <input
+                    type="checkbox"
+                    checked={allowedApps.some((allowed) => allowed.toLowerCase() === app.exe.toLowerCase())}
+                    onChange={(event) => void setAppAllowed(app.exe, event.target.checked)}
+                  />
+                  <span>{app.name}</span>
+                </label>
+              ))}
             </div>
-          ) : null}
+            <form
+              className="settings-add-app"
+              onSubmit={(event) => {
+                event.preventDefault()
+                addManualApp()
+              }}
+            >
+              <label className="sr-only" htmlFor="settings-add-app-input">Add an application</label>
+              <input
+                id="settings-add-app-input"
+                value={manualApp}
+                placeholder="Add an app by executable name"
+                onChange={(event) => setManualApp(event.target.value)}
+              />
+              <Button type="submit" variant="secondary" disabled={!manualApp.trim()}>Add</Button>
+            </form>
+            <p className="settings-privacy-note">
+              Screen Watch only reads text in apps you explicitly allow. Nothing is enabled until you select it.
+            </p>
+            {preferencesError ? <p className="dashboard-form-error">{preferencesError}</p> : null}
+          </div>
+        ) : null}
 
-          {section === 'notifications' ? (
-            <>
-              <div className="settings-panel-header">
-                <h3>Notifications</h3>
-                <p>Choose what updates you receive and how.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Email notifications">
-                  <select
-                    value={mockEmailNotifications}
-                    onChange={(e) => setMockEmailNotifications(e.target.value)}
-                  >
-                    <option>All activity</option>
-                    <option>Mentions only</option>
-                    <option>Weekly digest</option>
-                    <option>Off</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Push notifications">
-                  <select value={mockPushNotifications} onChange={(e) => setMockPushNotifications(e.target.value)}>
-                    <option>All activity</option>
-                    <option>Mentions only</option>
-                    <option>Off</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="SMS alerts" full>
-                  <select value={mockSmsAlerts} onChange={(e) => setMockSmsAlerts(e.target.value)}>
-                    <option>Off</option>
-                    <option>Urgent only</option>
-                    <option>All activity</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Notification schedule" full>
-                  <select
-                    value={mockNotificationSchedule}
-                    onChange={(e) => setMockNotificationSchedule(e.target.value)}
-                  >
-                    <option>Off</option>
-                    <option>Weekdays, 9am – 6pm</option>
-                    <option>Custom hours</option>
-                  </select>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
-            </>
-          ) : null}
+        {section === 'notifications' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Notifications</h2>
+              <p>Notification delivery is not available in this desktop build yet.</p>
+            </div>
+            <div className="settings-panel-grid">
+              <SettingsField label="Email notifications"><UnavailableValue>Unavailable</UnavailableValue></SettingsField>
+              <SettingsField label="Push notifications"><UnavailableValue>Unavailable</UnavailableValue></SettingsField>
+              <SettingsField label="SMS alerts" full><UnavailableValue>Unavailable</UnavailableValue></SettingsField>
+              <SettingsField label="Notification schedule" full><UnavailableValue>Unavailable</UnavailableValue></SettingsField>
+            </div>
+            <Button variant="dark" disabled>Save changes</Button>
+          </div>
+        ) : null}
 
-          {section === 'security' ? (
-            <>
-              <div className="settings-panel-header">
-                <h3>Security</h3>
-                <p>Keep your account safe and see where you&rsquo;re signed in.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Two-factor authentication">
-                  <select value={mockTwoFactor} onChange={(e) => setMockTwoFactor(e.target.value)}>
-                    <option>Enabled via Authenticator app</option>
-                    <option>Enabled via SMS</option>
-                    <option>Disabled</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Recovery email">
-                  <div className="settings-static-value">backup@example.com</div>
-                </SettingsField>
-                <SettingsField label="Active sessions" full>
-                  <div className="settings-static-value">2 devices signed in</div>
-                </SettingsField>
-                <SettingsField label="Recent login activity" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    San Luis Obispo, CA · Chrome on macOS · 2 hours ago
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
-            </>
-          ) : null}
+        {section === 'security' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Security</h2>
+              <p>Account identity is verified by the current authentication provider.</p>
+            </div>
+            <div className="settings-panel-grid">
+              <SettingsField label="Two-factor authentication"><UnavailableValue>Not exposed by the current auth provider</UnavailableValue></SettingsField>
+              <SettingsField label="Recovery email"><UnavailableValue>Not configured</UnavailableValue></SettingsField>
+              <SettingsField label="Active sessions" full><UnavailableValue>Session details are not available in the app</UnavailableValue></SettingsField>
+              <SettingsField label="Recent login activity" full><UnavailableValue>Login history is not available in the app</UnavailableValue></SettingsField>
+            </div>
+            <Button variant="dark" disabled>Save changes</Button>
+          </div>
+        ) : null}
 
-          {section === 'integrations' ? (
-            <>
-              <div className="settings-panel-header">
-                <h3>Integrations</h3>
-                <p>Connect the tools you use every day.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Google Calendar">
-                  <div className="settings-static-value settings-static-value-good">Connected</div>
-                </SettingsField>
-                <SettingsField label="Nextdoor">
-                  <div className="settings-static-value settings-static-value-good">Connected</div>
-                </SettingsField>
-                <SettingsField label="Gmail" full>
-                  <div className="settings-static-value settings-static-value-good">
-                    Connected · jamie.d@example.com
-                  </div>
-                </SettingsField>
-                <SettingsField label="Available integrations" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    Calendly, Google Drive, Slack — connect more from the marketplace
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
-            </>
-          ) : null}
+        {section === 'integrations' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Integrations</h2>
+              <p>Connected services will appear here when integration support is available.</p>
+            </div>
+            <div className="settings-panel-grid">
+              <SettingsField label="Google Calendar"><UnavailableValue>Coming soon — not connected</UnavailableValue></SettingsField>
+              <SettingsField label="Nextdoor"><UnavailableValue>Coming soon — not connected</UnavailableValue></SettingsField>
+              <SettingsField label="Gmail" full><UnavailableValue>Coming soon — not connected</UnavailableValue></SettingsField>
+            </div>
+            <Button variant="dark" disabled>Save changes</Button>
+          </div>
+        ) : null}
 
-          {section === 'billing' ? (
-            <>
-              <div className="settings-panel-header">
-                <h3>Billing</h3>
-                <p>Manage your plan, payment method, and invoices.</p>
-              </div>
-              <div className="settings-panel-grid">
-                <SettingsField label="Plan">
-                  <select value={mockPlan} onChange={(e) => setMockPlan(e.target.value)}>
-                    <option>Pro — $20/month</option>
-                    <option>Free</option>
-                    <option>Team — $60/month</option>
-                  </select>
-                </SettingsField>
-                <SettingsField label="Next invoice">
-                  <div className="settings-static-value">Aug 29, 2026</div>
-                </SettingsField>
-                <SettingsField label="Payment method" full>
-                  <div className="settings-static-value">Visa ending in 4242</div>
-                </SettingsField>
-                <SettingsField label="Billing history" full>
-                  <div className="settings-static-value settings-static-value-block">
-                    Download past invoices and manage your payment details
-                  </div>
-                </SettingsField>
-              </div>
-              {/* No-op by design — this panel is a static mockup. */}
-              <Button variant="dark">Save changes</Button>
-            </>
-          ) : null}
+        {section === 'billing' ? (
+          <div className="settings-panel-content">
+            <div className="settings-panel-header">
+              <h2>Billing</h2>
+              <p>Billing has not been configured for this desktop application.</p>
+            </div>
+            <div className="settings-panel-grid">
+              <SettingsField label="Plan"><UnavailableValue>No billing plan available</UnavailableValue></SettingsField>
+              <SettingsField label="Next invoice"><UnavailableValue>Not available</UnavailableValue></SettingsField>
+              <SettingsField label="Payment method" full><UnavailableValue>Not available</UnavailableValue></SettingsField>
+              <SettingsField label="Billing history" full><UnavailableValue>No invoices available</UnavailableValue></SettingsField>
+            </div>
+            <Button variant="dark" disabled>Manage billing</Button>
+          </div>
+        ) : null}
 
-          {error ? <p className="error-text">{error}</p> : null}
-        </div>
-      </div>
+        {loadingError ? <p className="dashboard-form-error">{loadingError}</p> : null}
+      </section>
+
+      {confirmingSignOut ? (
+        <ConfirmDialog
+          title="Sign out?"
+          message="You will need to sign back in to use Tracely again."
+          confirmLabel="Sign out"
+          busy={signOutBusy}
+          onConfirm={() => void signOut()}
+          onCancel={() => setConfirmingSignOut(false)}
+        />
+      ) : null}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { MessageSquareText, Search } from 'lucide-react'
-import type { DashboardMode } from '../../data/dashboardMockData'
+
+export type DashboardMode = 'evidence' | 'critique'
 
 const MODES: Array<{
   id: DashboardMode

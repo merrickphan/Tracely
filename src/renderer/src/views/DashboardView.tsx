@@ -1,30 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ScreenWatchStatus } from '@shared/ipc-contract'
-import {
-  ArrowLeft,
-  BookOpen,
-  CheckCircle2,
-  Eye,
-  LifeBuoy,
-  MonitorCheck,
-  Settings2
-} from 'lucide-react'
-import AnalysisResult from '../components/dashboard/AnalysisResult'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { AnalysisSessionSummary, ProfileInfo, ScreenWatchStatus } from '@shared/ipc-contract'
+import { ArrowLeft, BookOpen, Eye, LifeBuoy, MonitorCheck } from 'lucide-react'
+import ClaimCard from '../components/ClaimCard'
 import ClaimInputCard from '../components/dashboard/ClaimInputCard'
 import DashboardHeader from '../components/dashboard/DashboardHeader'
-import DesktopTitleBar from '../components/dashboard/DesktopTitleBar'
+import type { DashboardMode } from '../components/dashboard/ModeSelector'
 import RecentSessions from '../components/dashboard/RecentSessions'
-import Sidebar, { type DashboardPage } from '../components/dashboard/Sidebar'
+import Sidebar, { type DashboardPage, type SidebarPage } from '../components/dashboard/Sidebar'
 import StatusBadge from '../components/dashboard/StatusBadge'
-import {
-  buildDemoSession,
-  type DashboardMode,
-  type DashboardSession
-} from '../data/dashboardMockData'
 import { tracelyApi } from '../lib/api'
-import { loadDashboardSessions, saveDashboardSessions } from '../lib/dashboardSessions'
-
-const DEMO_LOADING_MS = 700
+import { formatSessionDate, sessionEvidenceStatus, sessionTitle } from '../lib/sessionDisplay'
+import AnalyzeView from './AnalyzeView'
+import SettingsView from './SettingsView'
 
 function PageHeading({ title, description }: { title: string; description: string }): JSX.Element {
   return (
@@ -68,7 +55,7 @@ function ScreenWatchPage(): JSX.Element {
       />
       <section className="dashboard-feature-card">
         <span className="dashboard-feature-icon" aria-hidden="true">
-          <MonitorCheck size={26} />
+          <MonitorCheck size={22} />
         </span>
         <div className="dashboard-feature-copy">
           <div className="dashboard-feature-title-row">
@@ -92,43 +79,23 @@ function ScreenWatchPage(): JSX.Element {
   )
 }
 
-function SettingsLanding({ onOpenPreferences }: { onOpenPreferences: () => void }): JSX.Element {
-  return (
-    <div className="dashboard-page">
-      <PageHeading title="Settings" description="Manage your Tracely profile, appearance, privacy, and preferences." />
-      <section className="dashboard-feature-card">
-        <span className="dashboard-feature-icon" aria-hidden="true">
-          <Settings2 size={26} />
-        </span>
-        <div className="dashboard-feature-copy">
-          <h2>Preferences and account</h2>
-          <p>Open the full settings workspace to adjust Screen Watch, appearance, profile, and local data.</p>
-        </div>
-        <button type="button" className="dashboard-secondary-action" onClick={onOpenPreferences}>
-          Open preferences
-        </button>
-      </section>
-    </div>
-  )
-}
-
 function HelpPage(): JSX.Element {
   return (
     <div className="dashboard-page">
-      <PageHeading title="Help & Support" description="Quick guidance for getting useful, transparent results from Tracely." />
+      <PageHeading title="Help & Support" description="Quick guidance for getting transparent results from Tracely." />
       <div className="dashboard-help-grid">
         <section className="dashboard-help-card">
-          <BookOpen size={22} aria-hidden="true" />
+          <BookOpen size={20} aria-hidden="true" />
           <h2>Checking a passage</h2>
           <p>Paste a focused passage, choose a mode, and keep dates and populations in statistical claims.</p>
         </section>
         <section className="dashboard-help-card">
-          <Eye size={22} aria-hidden="true" />
+          <Eye size={20} aria-hidden="true" />
           <h2>Using Screen Watch</h2>
           <p>Enable it only for supported apps where you want Tracely to identify checkable claims.</p>
         </section>
         <section className="dashboard-help-card">
-          <LifeBuoy size={22} aria-hidden="true" />
+          <LifeBuoy size={20} aria-hidden="true" />
           <h2>Reading results</h2>
           <p>Evidence strength measures source quality and relevance; it never guarantees that a claim is true.</p>
         </section>
@@ -137,160 +104,247 @@ function HelpPage(): JSX.Element {
   )
 }
 
-function SessionDetail({ session, onBack }: { session: DashboardSession; onBack: () => void }): JSX.Element {
+function SessionDetail({
+  session,
+  loading,
+  error,
+  onBack,
+  onUpdated
+}: {
+  session: AnalysisSessionSummary
+  loading: boolean
+  error: string | null
+  onBack: () => void
+  onUpdated: () => void
+}): JSX.Element {
   return (
     <article className="dashboard-page dashboard-session-detail">
       <button type="button" className="dashboard-back-button" onClick={onBack}>
-        <ArrowLeft size={17} />
+        <ArrowLeft size={16} />
         Back to sessions
       </button>
       <div className="dashboard-detail-heading">
         <div>
           <span className="dashboard-detail-kicker">Saved session</span>
-          <h1>{session.title}</h1>
-          <time>{session.dateLabel}</time>
+          <h1>{sessionTitle(session)}</h1>
+          <time dateTime={session.analysis.createdAt}>{formatSessionDate(session.analysis.createdAt)}</time>
         </div>
-        <StatusBadge status={session.status} />
+        <StatusBadge status={sessionEvidenceStatus(session)} />
       </div>
       <section className="dashboard-detail-source">
         <h2>Original passage</h2>
-        <p>{session.sourceText}</p>
+        <p>{session.analysis.sourceText}</p>
       </section>
-      <AnalysisResult session={session} />
+      {loading ? <p className="dashboard-page-message">Loading saved claims…</p> : null}
+      {error ? <p className="dashboard-form-error">{error}</p> : null}
+      {!loading && session.claims.length > 0 ? (
+        <section className="dashboard-results" aria-label="Saved claims">
+          {session.claims.map((claim) => (
+            <ClaimCard key={claim.id} claim={claim} onUpdated={onUpdated} />
+          ))}
+        </section>
+      ) : null}
+      {!loading && session.claims.length === 0 ? (
+        <p className="dashboard-page-message">No checkable claims were saved for this session.</p>
+      ) : null}
     </article>
   )
 }
 
-export default function DashboardView({
-  firstName,
-  onOpenPreferences
-}: {
-  firstName: string
-  onOpenPreferences: () => void
-}): JSX.Element {
+export default function DashboardView({ firstName }: { firstName: string }): JSX.Element {
   const [page, setPage] = useState<DashboardPage>('home')
-  const [sessions, setSessions] = useState<DashboardSession[]>(loadDashboardSessions)
-  const [selectedSession, setSelectedSession] = useState<DashboardSession | null>(null)
+  const [sessions, setSessions] = useState<AnalysisSessionSummary[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
+  const [selectedSession, setSelectedSession] = useState<AnalysisSessionSummary | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const [detailBackPage, setDetailBackPage] = useState<'home' | 'sessions'>('home')
   const [text, setText] = useState('')
   const [mode, setMode] = useState<DashboardMode>('evidence')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<DashboardSession | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [checkResult, setCheckResult] = useState<AnalysisSessionSummary | null>(null)
+  const [profile, setProfile] = useState<ProfileInfo | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const analysisTimerRef = useRef<number | null>(null)
+
+  const refreshSessions = useCallback(async (): Promise<void> => {
+    setSessionsError(null)
+    try {
+      const response = await tracelyApi.listAnalysisSessions()
+      setSessions(response.sessions)
+    } catch (caught) {
+      setSessionsError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    saveDashboardSessions(sessions)
-  }, [sessions])
+    void refreshSessions()
+  }, [refreshSessions])
 
-  useEffect(
-    () => () => {
-      if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
-    },
-    []
-  )
+  useEffect(() => {
+    if (page !== 'home') return
+    void tracelyApi.getProfile().then(setProfile).catch(() => {
+      // The account initial remains available when local profile storage is unavailable.
+    })
+  }, [page])
 
-  function navigate(nextPage: Exclude<DashboardPage, 'session'>): void {
+  function navigate(nextPage: SidebarPage): void {
     setPage(nextPage)
     setSelectedSession(null)
   }
 
   function startNewSession(): void {
-    if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
-    analysisTimerRef.current = null
-    setPage('home')
+    setPage('new-session')
+    setSelectedSession(null)
+  }
+
+  function clearHomeCheck(): void {
     setText('')
     setMode('evidence')
-    setLoading(false)
-    setError(null)
-    setResult(null)
+    setCheckError(null)
+    setCheckResult(null)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  function checkText(): void {
+  async function checkText(): Promise<void> {
     const sourceText = text.trim()
     if (!sourceText) {
-      setError('Paste or type a claim before checking it.')
+      setCheckError('Paste or type a claim before checking it.')
       textareaRef.current?.focus()
       return
     }
 
-    if (analysisTimerRef.current !== null) window.clearTimeout(analysisTimerRef.current)
-    setError(null)
-    setResult(null)
-    setLoading(true)
-    analysisTimerRef.current = window.setTimeout(() => {
-      const id = globalThis.crypto?.randomUUID?.() ?? `session-${Date.now()}`
-      const nextSession = buildDemoSession(id, sourceText, mode)
-      setSessions((current) => [nextSession, ...current.filter((session) => session.id !== id)])
-      setResult(nextSession)
-      setLoading(false)
-      analysisTimerRef.current = null
-    }, DEMO_LOADING_MS)
+    setChecking(true)
+    setCheckError(null)
+    setCheckResult(null)
+    try {
+      const detected = await tracelyApi.detectClaims(sourceText, 'main')
+      const stored = await tracelyApi.getAnalysisResult(detected.analysisId)
+      setCheckResult({ analysis: stored.analysis, claims: stored.claims })
+      await refreshSessions()
+    } catch (caught) {
+      setCheckError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setChecking(false)
+    }
   }
 
-  function openSession(session: DashboardSession, from: 'home' | 'sessions'): void {
+  async function openSession(session: AnalysisSessionSummary, from: 'home' | 'sessions'): Promise<void> {
     setSelectedSession(session)
     setDetailBackPage(from)
+    setSessionLoading(true)
+    setSessionError(null)
     setPage('session')
+    try {
+      const stored = await tracelyApi.getAnalysisResult(session.analysis.id)
+      setSelectedSession({ analysis: stored.analysis, claims: stored.claims })
+    } catch (caught) {
+      setSessionError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setSessionLoading(false)
+    }
   }
 
-  const sidebarPage = page === 'session' ? 'sessions' : page
+  const sidebarPage: SidebarPage =
+    page === 'session' ? 'sessions' : page === 'new-session' ? 'home' : page
+  const displayFirstName = profile?.firstName.trim() || firstName
 
   return (
     <div className="dashboard-app">
-      <DesktopTitleBar />
       <div className="dashboard-frame">
         <Sidebar activePage={sidebarPage} onNavigate={navigate} />
         <main className="dashboard-main">
           {page === 'home' ? (
             <div className="dashboard-content">
               <DashboardHeader
-                firstName={firstName}
+                firstName={displayFirstName}
+                avatarUrl={profile?.avatarUrl}
                 onStartNewSession={startNewSession}
                 onOpenSettings={() => navigate('settings')}
                 onOpenHelp={() => navigate('help')}
+                onSignOut={() => void tracelyApi.signOut()}
+                onCloseWindow={() => void tracelyApi.hideWindow('main')}
               />
               <ClaimInputCard
                 text={text}
                 mode={mode}
-                loading={loading}
-                error={error}
+                loading={checking}
+                error={checkError}
                 textareaRef={textareaRef}
                 onTextChange={(nextText) => {
                   setText(nextText)
-                  if (error) setError(null)
+                  if (checkError) setCheckError(null)
                 }}
                 onModeChange={setMode}
-                onSubmit={checkText}
+                onSubmit={() => void checkText()}
               />
-              {result ? <AnalysisResult session={result} /> : null}
+              {checkResult ? (
+                <section className="dashboard-results" aria-live="polite" aria-label="Detected claims">
+                  <div className="dashboard-results-heading">
+                    <div>
+                      <h2>Detected claims</h2>
+                      <p>
+                        {checkResult.claims.length} checkable claim{checkResult.claims.length === 1 ? '' : 's'} found
+                      </p>
+                    </div>
+                    <button type="button" onClick={clearHomeCheck}>Clear</button>
+                  </div>
+                  {checkResult.claims.map((claim) => (
+                    <ClaimCard key={claim.id} claim={claim} autoAction={mode} onUpdated={() => void refreshSessions()} />
+                  ))}
+                  {checkResult.claims.length === 0 ? (
+                    <p className="dashboard-page-message">No checkable claims were detected.</p>
+                  ) : null}
+                </section>
+              ) : null}
               <RecentSessions
                 sessions={sessions}
                 limit={3}
-                onOpen={(session) => openSession(session, 'home')}
+                onOpen={(session) => void openSession(session, 'home')}
                 onViewAll={() => navigate('sessions')}
               />
+              {sessionsLoading ? <p className="dashboard-page-message">Loading recent sessions…</p> : null}
+              {sessionsError ? <p className="dashboard-form-error">{sessionsError}</p> : null}
             </div>
           ) : null}
 
           {page === 'sessions' ? (
             <div className="dashboard-page">
-              <PageHeading title="Sessions" description="Review the passages and demo results saved on this device." />
+              <PageHeading title="Sessions" description="Review the passages and results saved on this device." />
               <RecentSessions
                 sessions={sessions}
                 title="All Sessions"
-                onOpen={(session) => openSession(session, 'sessions')}
+                onOpen={(session) => void openSession(session, 'sessions')}
               />
+              {sessionsLoading ? <p className="dashboard-page-message">Loading saved sessions…</p> : null}
+              {!sessionsLoading && sessions.length === 0 ? (
+                <p className="dashboard-page-message">No sessions yet. Check a passage from Home to create one.</p>
+              ) : null}
+              {sessionsError ? <p className="dashboard-form-error">{sessionsError}</p> : null}
             </div>
           ) : null}
 
+          {page === 'new-session' ? (
+            <AnalyzeView
+              sourceTypes={['document', 'url']}
+              onNavigate={() => navigate('home')}
+              onAnalysisCreated={() => void refreshSessions()}
+            />
+          ) : null}
           {page === 'screen-watch' ? <ScreenWatchPage /> : null}
-          {page === 'settings' ? <SettingsLanding onOpenPreferences={onOpenPreferences} /> : null}
+          {page === 'settings' ? <SettingsView embedded onNavigate={() => navigate('home')} /> : null}
           {page === 'help' ? <HelpPage /> : null}
           {page === 'session' && selectedSession ? (
-            <SessionDetail session={selectedSession} onBack={() => navigate(detailBackPage)} />
+            <SessionDetail
+              session={selectedSession}
+              loading={sessionLoading}
+              error={sessionError}
+              onBack={() => navigate(detailBackPage)}
+              onUpdated={() => void refreshSessions()}
+            />
           ) : null}
         </main>
       </div>

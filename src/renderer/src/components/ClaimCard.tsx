@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Claim, EvidenceItem, ScoreBreakdown } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import Button from './Button'
@@ -14,7 +14,15 @@ const CLAIM_TYPE_LABEL: Record<Claim['claimType'], string> = {
   opinion: 'Opinion'
 }
 
-export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JSX.Element {
+export default function ClaimCard({
+  claim: initialClaim,
+  autoAction,
+  onUpdated
+}: {
+  claim: Claim
+  autoAction?: 'evidence' | 'critique'
+  onUpdated?: () => void
+}): JSX.Element {
   const [claim, setClaim] = useState(initialClaim)
   const [evidence, setEvidence] = useState<EvidenceItem[] | null>(null)
   const [loadingEvidence, setLoadingEvidence] = useState(false)
@@ -32,6 +40,7 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
       const res = await tracelyApi.findEvidence(claim.id)
       setEvidence(res.evidence)
       setClaim((c) => ({ ...c, strengthScore: res.strengthScore, scoreBreakdown: res.scoreBreakdown as ScoreBreakdown }))
+      onUpdated?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       return
@@ -54,12 +63,41 @@ export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JS
       // must not leave the previous correction on screen asserting something
       // about a sentence that no longer says it.
       setCorrection(res.correction)
+      onUpdated?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoadingCritique(false)
     }
   }
+
+  const autoStartedRef = useRef(false)
+  useEffect(() => {
+    if (!autoAction || autoStartedRef.current) return
+    autoStartedRef.current = true
+    if (autoAction === 'evidence') {
+      void findEvidence()
+    } else {
+      void critique()
+    }
+  }, [autoAction])
+
+  useEffect(() => {
+    if (autoAction || initialClaim.strengthScore === null) return
+    let active = true
+    void tracelyApi
+      .getEvidenceForClaim(initialClaim.id)
+      .then((response) => {
+        if (active) setEvidence(response.evidence)
+      })
+      .catch(() => {
+        // A saved score can outlive a cached provider response. The critique
+        // is still useful, so leave the evidence list collapsed in that case.
+      })
+    return () => {
+      active = false
+    }
+  }, [autoAction, initialClaim.id, initialClaim.strengthScore])
 
   return (
     <div className="claim-card">

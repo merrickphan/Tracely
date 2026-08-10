@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, CircleHelp, Settings } from 'lucide-react'
+import { ChevronDown, CircleHelp, LogOut, Settings, X } from 'lucide-react'
 
 export default function ProfileMenu({
   firstName,
+  avatarUrl,
   onOpenSettings,
-  onOpenHelp
+  onOpenHelp,
+  onSignOut,
+  onCloseWindow
 }: {
   firstName: string
+  avatarUrl?: string | null
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onSignOut: () => void
+  onCloseWindow: () => void
 }): JSX.Element {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -46,9 +52,13 @@ export default function ProfileMenu({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <span className="dashboard-avatar" aria-hidden="true">
-          {firstName.slice(0, 1).toUpperCase()}
-        </span>
+        {avatarUrl ? (
+          <img className="dashboard-avatar" src={avatarUrl} alt="" />
+        ) : (
+          <span className="dashboard-avatar" aria-hidden="true">
+            {firstName.slice(0, 1).toUpperCase()}
+          </span>
+        )}
         <span className="dashboard-profile-name">{firstName}</span>
         <ChevronDown className={open ? 'is-open' : ''} size={16} />
       </button>
@@ -62,6 +72,14 @@ export default function ProfileMenu({
           <button type="button" role="menuitem" onClick={() => choose(onOpenHelp)}>
             <CircleHelp size={16} />
             Help & Support
+          </button>
+          <button type="button" role="menuitem" onClick={() => choose(onSignOut)}>
+            <LogOut size={16} />
+            Sign out
+          </button>
+          <button type="button" role="menuitem" onClick={() => choose(onCloseWindow)}>
+            <X size={16} />
+            Close window
           </button>
         </div>
       ) : null}

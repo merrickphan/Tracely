@@ -88,12 +88,16 @@ export function createMockApi(
 
   let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
   let nextId = 100
+  let currentSettings = { ...fx.settings }
+  let currentProfile = { ...fx.profile }
+  let currentScreenWatch = { ...fx.screenWatchStatus }
 
   return {
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
       getResult: () =>
-        ok('analyze.getResult', { analysis: fx.analysis, claims: fx.claims, evidenceByClaimId: {} })
+        ok('analyze.getResult', { analysis: fx.analysis, claims: fx.claims, evidenceByClaimId: {} }),
+      listSessions: () => ok('analyze.listSessions', { sessions: fx.sessionHistory })
     },
     evidence: {
       find: () =>
@@ -136,8 +140,11 @@ export function createMockApi(
       remove: () => ok('library.remove', { ok: true as const })
     },
     settings: {
-      get: () => ok('settings.get', fx.settings),
-      set: () => ok('settings.set', fx.settings),
+      get: () => ok('settings.get', currentSettings),
+      set: (request) => {
+        currentSettings = { ...currentSettings, ...request }
+        return ok('settings.set', currentSettings)
+      },
       scanInstalledApps: () =>
         ok('settings.scanInstalledApps', {
           found: [
@@ -148,8 +155,11 @@ export function createMockApi(
         })
     },
     profile: {
-      get: () => ok('profile.get', fx.profile),
-      set: () => ok('profile.set', fx.profile)
+      get: () => ok('profile.get', currentProfile),
+      set: (request) => {
+        currentProfile = { ...currentProfile, ...request }
+        return ok('profile.set', currentProfile)
+      }
     },
     auth: {
       getUser: () =>
@@ -180,8 +190,11 @@ export function createMockApi(
       openExternal: () => ok('shell.openExternal (suppressed)', { ok: true as const })
     },
     screenWatch: {
-      setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),
-      getStatus: () => ok('screenWatch.getStatus', fx.screenWatchStatus),
+      setEnabled: (request) => {
+        currentScreenWatch = { ...currentScreenWatch, enabled: request.enabled, active: request.enabled }
+        return ok('screenWatch.setEnabled', currentScreenWatch)
+      },
+      getStatus: () => ok('screenWatch.getStatus', currentScreenWatch),
       setWidgetExpanded: () => ok('screenWatch.setWidgetExpanded', { ok: true as const }),
       setWidgetViewMode: () => ok('screenWatch.setWidgetViewMode', { ok: true as const }),
       widgetDragStart: () => ok('screenWatch.widgetDragStart', { ok: true as const }),

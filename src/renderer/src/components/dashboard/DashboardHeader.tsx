@@ -9,14 +9,20 @@ function greetingForHour(hour: number): string {
 
 export default function DashboardHeader({
   firstName,
+  avatarUrl,
   onStartNewSession,
   onOpenSettings,
-  onOpenHelp
+  onOpenHelp,
+  onSignOut,
+  onCloseWindow
 }: {
   firstName: string
+  avatarUrl?: string | null
   onStartNewSession: () => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onSignOut: () => void
+  onCloseWindow: () => void
 }): JSX.Element {
   const greeting = greetingForHour(new Date().getHours())
 
@@ -33,7 +39,14 @@ export default function DashboardHeader({
           <Plus size={17} strokeWidth={2.2} />
           Start New Session
         </button>
-        <ProfileMenu firstName={firstName} onOpenSettings={onOpenSettings} onOpenHelp={onOpenHelp} />
+        <ProfileMenu
+          firstName={firstName}
+          avatarUrl={avatarUrl}
+          onOpenSettings={onOpenSettings}
+          onOpenHelp={onOpenHelp}
+          onSignOut={onSignOut}
+          onCloseWindow={onCloseWindow}
+        />
       </div>
     </header>
   )

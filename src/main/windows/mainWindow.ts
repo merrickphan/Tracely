@@ -15,22 +15,22 @@ export function setQuitting(value: boolean): void {
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    // The signed-in dashboard uses a desktop sidebar/content layout. Start at
-    // the reference canvas size while allowing the responsive renderer to
-    // adapt down to a compact laptop-sized window.
-    width: 1360,
-    height: 860,
-    minWidth: 760,
-    minHeight: 600,
+    // The signed-in dashboard uses the compact proportions from the current
+    // product frames while remaining usable on smaller laptop displays.
+    width: 1200,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
     resizable: true,
     maximizable: true,
     minimizable: true,
     show: false,
     frame: false,
-    // The dashboard fills the whole window, so an opaque warm-white backing
-    // avoids transparency artifacts while resizing or maximizing.
+    // The renderer draws the rounded app shell and its restrained shadow on
+    // this neutral backing. Keeping the native window opaque avoids resize
+    // artifacts and guarantees that no margin can become click-through.
     transparent: false,
-    backgroundColor: '#fbfaf7',
+    backgroundColor: '#f4f4f3',
     hasShadow: true,
     title: windowTitle(),
     icon: getAppIconPath(),

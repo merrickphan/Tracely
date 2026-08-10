@@ -1,4 +1,4 @@
-import type { DashboardSession } from '../../data/dashboardMockData'
+import type { AnalysisSessionSummary } from '@shared/ipc-contract'
 import SessionRow from './SessionRow'
 
 export default function RecentSessions({
@@ -8,8 +8,8 @@ export default function RecentSessions({
   title = 'Recent Sessions',
   limit
 }: {
-  sessions: DashboardSession[]
-  onOpen: (session: DashboardSession) => void
+  sessions: AnalysisSessionSummary[]
+  onOpen: (session: AnalysisSessionSummary) => void
   onViewAll?: () => void
   title?: string
   limit?: number
@@ -31,8 +31,9 @@ export default function RecentSessions({
       </div>
       <div className="dashboard-session-list">
         {visible.map((session) => (
-          <SessionRow key={session.id} session={session} onOpen={onOpen} />
+          <SessionRow key={session.analysis.id} session={session} onOpen={onOpen} />
         ))}
+        {visible.length === 0 ? <p className="dashboard-session-empty">No saved sessions yet.</p> : null}
       </div>
     </section>
   )
