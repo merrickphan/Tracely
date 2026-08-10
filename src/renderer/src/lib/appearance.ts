@@ -28,4 +28,14 @@ const FONT_SCALE: Record<FontSize, string> = {
 // requiring every size in the sheet to be rewritten as rem.
 export function applyFontSize(size: FontSize): void {
   document.documentElement.style.zoom = FONT_SCALE[size]
+  // `zoom` scales rendered lengths, but `100vw`/`100vh` keep resolving against
+  // the unzoomed viewport — so the shell rendered 12% larger than the window at
+  // `large` and was clipped, and 8% smaller at `small`, leaving a transparent
+  // strip. index.css divides the viewport units by this, which makes the shell
+  // fill the window exactly at every setting.
+  //
+  // Set here rather than in the stylesheet so it cannot drift from the `zoom`
+  // value it has to cancel out. The window itself is resized to match, main-side
+  // — see shared/windowSize.ts.
+  document.documentElement.style.setProperty('--app-zoom', FONT_SCALE[size])
 }
