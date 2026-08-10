@@ -1,11 +1,12 @@
-import type { TextareaHTMLAttributes } from 'react'
+import { forwardRef, type TextareaHTMLAttributes } from 'react'
 
 export type TextAreaSize = 'sm' | 'md' | 'lg'
 
-export default function TextArea({
-  size = 'md',
-  className,
-  ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & { size?: TextAreaSize }): JSX.Element {
-  return <textarea {...props} className={`textarea textarea-${size} ${className ?? ''}`.trim()} />
-}
+const TextArea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement> & { size?: TextAreaSize }
+>(function TextArea({ size = 'md', className, ...props }, ref): JSX.Element {
+  return <textarea ref={ref} {...props} className={`textarea textarea-${size} ${className ?? ''}`.trim()} />
+})
+
+export default TextArea

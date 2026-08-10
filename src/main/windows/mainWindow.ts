@@ -3,6 +3,8 @@ import { BrowserWindow, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { windowTitle } from '../appIdentity'
 import { getAppIconPath } from '../icon'
+import { hideFloatingWindow } from './floatingWindow'
+import { hideOverlay } from './overlayWindow'
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
@@ -48,8 +50,21 @@ export function createMainWindow(): BrowserWindow {
   // window titles; the code looked correct.
   win.on('page-title-updated', (event) => event.preventDefault())
   win.on('ready-to-show', () => {
+    hideOverlay()
+    hideFloatingWindow()
     win.show()
   })
+
+  // Screen Watch's transparent window deliberately sits at the screen-saver
+  // always-on-top level. Hide it synchronously when main is shown/focused;
+  // waiting for the 1.2s UIA poll leaves stale underlines/popovers over this
+  // window and, if hover capture was active, blocks its controls too.
+  const prepareMainWindow = (): void => {
+    hideOverlay()
+    hideFloatingWindow()
+  }
+  win.on('show', prepareMainWindow)
+  win.on('focus', prepareMainWindow)
 
   win.on('close', (event) => {
     if (!isQuitting) {
@@ -83,6 +98,8 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function showMainWindow(): void {
   if (mainWindow) {
+    hideOverlay()
+    hideFloatingWindow()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
