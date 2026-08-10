@@ -25,6 +25,11 @@ export function initAutoUpdater(): void {
   ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
 
   autoUpdater.on('update-available', (info) => {
+    // `checking` was only ever reset on 'error' and 'update-not-available'.
+    // Once an update WAS found, it stayed true forever and every later
+    // Check for Updates... from the tray became a silent no-op, because
+    // runCheck early-returns on it.
+    checking = false
     manualCheck = false
     const win = getMainWindow()
     showMessageBox(win, {
@@ -43,6 +48,7 @@ export function initAutoUpdater(): void {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    checking = false
     const win = getMainWindow()
     showMessageBox(win, {
       type: 'info',
