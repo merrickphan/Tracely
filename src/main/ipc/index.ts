@@ -5,6 +5,7 @@ import { registerClipboardHandlers } from './clipboardHandlers'
 import { registerCritiqueHandlers } from './critiqueHandlers'
 import { registerEvidenceHandlers } from './evidenceHandlers'
 import { registerHistoryHandlers } from './historyHandlers'
+import { registerDocumentsHandlers } from './documentsHandlers'
 import { registerLibraryHandlers } from './libraryHandlers'
 import { registerProfileHandlers } from './profileHandlers'
 import { registerScreenWatchHandlers } from './screenWatchHandlers'
@@ -21,6 +22,7 @@ export function registerIpcHandlers(): void {
   registerEvidenceHandlers()
   registerCritiqueHandlers()
   registerCitationHandlers()
+  registerDocumentsHandlers()
   registerLibraryHandlers()
   registerScreenWatchHandlers()
   registerProfileHandlers()

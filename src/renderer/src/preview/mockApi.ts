@@ -1,5 +1,5 @@
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent } from '@shared/ipc-contract'
-import type { AuthUser } from '@shared/types'
+import type { AuthUser, DocumentRecord } from '@shared/types'
 
 // Deliberately `Window['tracely']` rather than a direct import of
 // src/preload/index.ts. Both resolve to the same `TracelyApi`, but pulling
@@ -86,6 +86,7 @@ export function createMockApi(
     return fx.user
   }
 
+  let previewDocs: DocumentRecord[] = [...fx.documents]
   let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
   let nextId = 100
 
@@ -134,6 +135,33 @@ export function createMockApi(
       get: () => ok('library.get', { item: fx.libraryItems[0], citations: fx.citations }),
       update: () => ok('library.update', { item: fx.libraryItems[0] }),
       remove: () => ok('library.remove', { ok: true as const })
+    },
+    documents: {
+      // Backed by a module-level store so autosave, reload-last and the
+      // document list actually behave like storage in the preview instead of
+      // returning one frozen fixture.
+      list: () => ok('documents.list', { documents: previewDocs }),
+      get: (req) => ok('documents.get', { document: previewDocs.find((d) => d.id === req.id) ?? null }),
+      latest: () => ok('documents.latest', { document: previewDocs[0] ?? null }),
+      save: (req) => {
+        const now = fx.T0
+        const existing = req.id ? previewDocs.find((d) => d.id === req.id) : undefined
+        const doc = existing
+          ? { ...existing, title: req.title, bodyHtml: req.bodyHtml, updatedAt: now }
+          : {
+              id: `doc-${nextId++}`,
+              title: req.title,
+              bodyHtml: req.bodyHtml,
+              createdAt: now,
+              updatedAt: now
+            }
+        previewDocs = [doc, ...previewDocs.filter((d) => d.id !== doc.id)]
+        return ok('documents.save', { document: doc })
+      },
+      remove: (req) => {
+        previewDocs = previewDocs.filter((d) => d.id !== req.id)
+        return ok('documents.remove', { ok: true as const })
+      }
     },
     settings: {
       get: () => ok('settings.get', fx.settings),

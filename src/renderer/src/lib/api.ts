@@ -34,6 +34,13 @@ export const tracelyApi = {
     call(window.tracely.library.update({ id, notes, tags })),
   removeLibraryItem: (id: string) => call(window.tracely.library.remove({ id })),
 
+  listDocuments: () => call(window.tracely.documents.list()),
+  getDocument: (id: string) => call(window.tracely.documents.get({ id })),
+  getLatestDocument: () => call(window.tracely.documents.latest()),
+  saveDocument: (input: { id?: string | null; title: string; bodyHtml: string }) =>
+    call(window.tracely.documents.save(input)),
+  removeDocument: (id: string) => call(window.tracely.documents.remove({ id })),
+
   getSettings: () => call(window.tracely.settings.get()),
   setSettings: (patch: Parameters<typeof window.tracely.settings.set>[0]) =>
     call(window.tracely.settings.set(patch)),

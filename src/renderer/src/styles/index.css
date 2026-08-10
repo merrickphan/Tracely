@@ -2596,3 +2596,14 @@ textarea:disabled {
 .settings-panel-content {
   animation: panel-fade-in 0.16s ease-out;
 }
+
+/* Document editor — autosave indicator. Deliberately quiet: it confirms the
+   work is safe without asking to be looked at. */
+.docedit-savestate {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--label);
+  padding: 0 4px;
+  min-width: 46px;
+  text-align: right;
+}

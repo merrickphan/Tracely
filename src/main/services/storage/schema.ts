@@ -101,4 +101,21 @@ CREATE TABLE IF NOT EXISTS tracer_messages (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tracer_messages_conversation ON tracer_messages(conversation_id, created_at);
+
+-- The document editor's writing surface. Everything it produced used to live
+-- only in an uncontrolled contentEditable node, so pressing Back unmounted the
+-- component and destroyed the work with no warning, and the "name your
+-- document" field fed nothing but itself.
+--
+-- body_html rather than plain text because the editor is a rich-text surface
+-- (execCommand bold/italic/colour/alignment), and storing text would silently
+-- discard every bit of formatting on the first reload.
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  body_html TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC);
 `

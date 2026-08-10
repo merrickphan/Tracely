@@ -189,3 +189,14 @@ export interface AppSettings {
   // reads text from. Empty means nothing is enabled anywhere yet.
   screenWatchAllowedApps: string
 }
+
+// The document editor's saved work. Rich text rather than plain: the editor is
+// an execCommand surface (bold/italic/colour/alignment), so storing plain text
+// would discard every bit of formatting on the first reload.
+export interface DocumentRecord {
+  id: string
+  title: string
+  bodyHtml: string
+  createdAt: string
+  updatedAt: string
+}

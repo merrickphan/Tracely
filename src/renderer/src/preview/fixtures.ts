@@ -15,6 +15,7 @@ import type {
   AuthUser,
   Citation,
   Claim,
+  DocumentRecord,
   EvidenceItem,
   LibraryItem,
   Source,
@@ -216,6 +217,19 @@ export const libraryItems: LibraryItem[] = [
     tags: [],
     savedAt: T0,
     source: sources[1]
+  }
+]
+
+// One saved document, so the editor's reopen-where-you-left-off path has
+// something to reopen in the preview.
+export const documents: DocumentRecord[] = [
+  {
+    id: 'doc-1',
+    title: 'Screen time essay — draft 2',
+    bodyHtml:
+      '<div>Screen time causes depression in teenagers.</div><div><br></div><div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety.</div>',
+    createdAt: T0,
+    updatedAt: T0
   }
 ]
 
