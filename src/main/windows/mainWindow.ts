@@ -1,7 +1,10 @@
 import { join } from 'path'
 import { BrowserWindow, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import type { FontSize } from '@shared/types'
+import { mainWindowSize } from '@shared/windowSize'
 import { windowTitle } from '../appIdentity'
+import { getSetting } from '../services/storage/settingsRepo'
 import { getAppIconPath } from '../icon'
 import { hideFloatingWindow } from './floatingWindow'
 import { hideOverlay } from './overlayWindow'
@@ -13,14 +16,41 @@ export function setQuitting(value: boolean): void {
   isQuitting = value
 }
 
+/** Reads the persisted font size, tolerating an unset or junk value. */
+function currentFontSize(): FontSize {
+  const raw = getSetting('fontSize')
+  return raw === 'small' || raw === 'large' ? raw : 'medium'
+}
+
+/**
+ * Resizes the window to fit the current font size, keeping it centred.
+ *
+ * Font size is applied as CSS `zoom` on the document root, so at `large`
+ * everything renders 12% bigger — which a fixed 870x606 window can only clip.
+ * Called on boot and whenever the setting changes.
+ */
+export function applyMainWindowFontSize(fontSize: FontSize): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { width, height } = mainWindowSize(fontSize)
+  const [current] = mainWindow.getSize()
+  if (current === width) return
+  // setSize before center: centring reads the size it is given, and a
+  // resizable:false window still accepts a programmatic resize.
+  mainWindow.setSize(width, height)
+  mainWindow.center()
+}
+
 export function createMainWindow(): BrowserWindow {
+  // The Figma frame's own size plus a gutter, scaled by the font-size setting —
+  // the app IS the frame, not a resizable OS window with the frame floating
+  // inside it. No minimize/maximize either: the design has no such chrome, only
+  // its own in-content close button (see HomeView/AnalyzeView).
+  const { width, height } = mainWindowSize(currentFontSize())
   const win = new BrowserWindow({
-    // Fixed to the Figma design's own frame size (870x606) — the app IS
-    // the frame, not a resizable OS window with the frame floating inside
-    // it. No minimize/maximize either: the design has no such chrome, only
-    // its own in-content close button (see HomeView/AnalyzeView).
-    width: 870,
-    height: 606,
+    width,
+    height,
+    // Still not user-resizable; `applyMainWindowFontSize` resizes it
+    // programmatically, which Electron allows regardless of this flag.
     resizable: false,
     maximizable: false,
     minimizable: false,

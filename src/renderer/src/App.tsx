@@ -63,15 +63,22 @@ export default function App(): JSX.Element {
     return <div className="app-shell" />
   }
 
+  // Both gates render inside `.app-main` like every other view. They used to be
+  // direct children of `.app-shell`, which meant the window gutter `.app-main`
+  // carries did not apply to them — so the login card sat flush against all
+  // four window edges while every other screen was inset, which is what "the
+  // login page margins are messed up" was.
   if (gate === 'signedOut') {
     return (
       <div className="app-shell">
-        <LoginView
-          onSignedIn={(u) => {
-            setUser(u)
-            setGate(gateFor(u, true))
-          }}
-        />
+        <main className="app-main">
+          <LoginView
+            onSignedIn={(u) => {
+              setUser(u)
+              setGate(gateFor(u, true))
+            }}
+          />
+        </main>
       </div>
     )
   }
@@ -79,12 +86,14 @@ export default function App(): JSX.Element {
   if (gate === 'needsName') {
     return (
       <div className="app-shell">
-        <NamePromptView
-          onDone={(u) => {
-            setUser(u)
-            setGate(gateFor(u, true))
-          }}
-        />
+        <main className="app-main">
+          <NamePromptView
+            onDone={(u) => {
+              setUser(u)
+              setGate(gateFor(u, true))
+            }}
+          />
+        </main>
       </div>
     )
   }
