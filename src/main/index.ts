@@ -8,6 +8,7 @@ import { getSupabase, handleOAuthRedirect, isAuthConfigured } from './services/a
 import { warmUpUia } from './services/screenWatch/uiaSnapshot'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { warmUp as warmUpMl } from './services/ml'
+import { warmUp as warmUpWorldBank } from './services/search/worldBank'
 import { initDb, persist } from './services/storage/db'
 import { setAppPaths } from './services/storage/paths'
 import { getSetting } from './services/storage/settingsRepo'
@@ -122,6 +123,11 @@ if (!gotLock) {
     // Deliberately not awaited: nothing here depends on it, and a failure just
     // means the first analysis takes the old path.
     warmUpMl()
+    // The World Bank catalogue is another one-time local-ML cost: roughly
+    // 1,500 indicator names must be embedded before statistical matching is
+    // available. Build it in the background at boot; searches never wait on
+    // the build, and incomplete cold-start results are not cached.
+    warmUpWorldBank()
 
     // Cold start via the protocol (app wasn't already running) delivers the
     // URL as a plain argv entry instead of 'second-instance'/'open-url'.

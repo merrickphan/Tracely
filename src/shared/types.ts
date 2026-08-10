@@ -37,6 +37,8 @@ export type CritiqueVerdict =
 // the printing press.
 export type VenueType =
   | 'journal'
+  /** Primary statistical series published by an authoritative institution. */
+  | 'dataset'
   | 'conference'
   | 'preprint'
   | 'book'
@@ -50,6 +52,7 @@ export type SourceProvider =
   | 'semanticscholar'
   | 'pubmed'
   | 'wikipedia'
+  | 'worldbank'
   | 'manual'
 
 export interface Author {

@@ -53,7 +53,11 @@ export const PROVIDER_MIN_INTERVAL_MS = {
   // Wikimedia publishes no hard number for anonymous API use, asking instead
   // for a descriptive User-Agent and "reasonable" volume. One request per
   // claim is already reasonable; this is politeness, not a required limit.
-  wikipedia: 200
+  wikipedia: 200,
+  // The catalogue is cached for the process lifetime, so this normally gates
+  // only one request. It also prevents simultaneous retries after an outage
+  // from becoming a burst.
+  worldbank: 250
 } as const
 
 // NCBI raises the ceiling to 10 req/sec for requests carrying an api_key.

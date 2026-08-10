@@ -3,11 +3,38 @@
 Instructions for coding agents working in this repository — Codex, Claude Code,
 or anything else.
 
-**Read [CLAUDE.md](CLAUDE.md) first.** It is the source of truth for what this
-project is, how it is built, and why the odd parts are the way they are. This
-file does not repeat it. What follows are the rules that Claude Code enforces
-automatically through hooks in `.claude/`, and that **every other agent must
-follow by hand**, because those hooks do not run for you.
+**Read [CLAUDE.md](CLAUDE.md) first** — the source of truth for what this
+project is, how it is built, and why the odd parts are the way they are — and
+**[CONTRIBUTING.md](CONTRIBUTING.md)** for setup and the review process. Neither
+is repeated here. Only `AGENTS.md` is loaded automatically, so those two are
+linked rather than copied: three files saying the same thing is three files that
+disagree within a month.
+
+What follows are the rules Claude Code enforces automatically through hooks in
+`.claude/`, and that **every other agent must follow by hand**, because those
+hooks do not run for you.
+
+## Working a task
+
+This is the standing loop. It does not need restating in a prompt — assume it
+unless you are told otherwise.
+
+1. **Read the linked issue first.** It carries the constraints, and it is what
+   the change gets reviewed against. If a task arrives without one, ask what
+   "done" means before writing code.
+2. **Branch off an up-to-date `main`**, named `feat/<short-description>` (or
+   `fix/`, `docs/`). Never work on `main` itself.
+3. **Stay inside the scope the issue names.** Finishing early is not a reason to
+   add adjacent improvements; it makes a small reviewable change into a large
+   unreviewable one. Raise the idea instead.
+4. **Run `npm run typecheck` before committing.** It is the only automated
+   correctness check here.
+5. **Push the branch and hand back the pull request link.** `git push` prints one.
+6. **Never merge, and never release.** A human decides both.
+
+Prompts should carry only what cannot be read from the repository — product
+judgment, scope, and where to stop. Which file to imitate and how to write the
+code are things you can work out faster by reading than by being told.
 
 ## Never do these
 

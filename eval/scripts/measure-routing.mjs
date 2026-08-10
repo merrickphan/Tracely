@@ -86,7 +86,7 @@ for (const claim of claims) {
 console.log('\nrouted to:')
 for (const [domain, n] of Object.entries(counts)) {
   const extra =
-    domain === 'biomedical' ? '  (+ PubMed)' : domain === 'general' ? '  (+ Wikipedia)' : domain === 'statistical' ? '  (no provider yet)' : '  (academic only)'
+    domain === 'biomedical' ? '  (+ PubMed)' : domain === 'general' ? '  (+ Wikipedia)' : domain === 'statistical' ? '  (+ World Bank)' : '  (academic only)'
   console.log(`  ${domain.padEnd(12)} ${String(n).padStart(2)}${extra}`)
 }
 console.log(

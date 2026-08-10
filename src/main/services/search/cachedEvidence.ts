@@ -14,14 +14,14 @@ export interface EvidenceResult {
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
 function cacheKey(query: string, claimText: string): string {
-  // v3: cached entries now carry a per-item textRelevance (see
-  // RankedSourceResult) that v2 entries lack — without a bump, a cache hit
-  // would persist `undefined` as every source's relevance score.
+  // v5: World Bank results no longer enter stance classification and datasets
+  // have a lower quality weight. A v4 hit would preserve both old behaviours
+  // for up to 24 hours.
   //
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v3::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v5::${query}::${claimText}`).digest('hex')
 }
 
 /**
@@ -46,7 +46,7 @@ export async function findEvidenceCached(query: string, claimText: string): Prom
   const cached = getCached<EvidenceResult>(key)
   if (cached) return cached
 
-  const result = await findEvidence(query, claimText)
-  setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
+  const { cacheable, ...result } = await findEvidence(query, claimText)
+  if (cacheable) setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
   return result
 }
