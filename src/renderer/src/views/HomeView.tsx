@@ -72,6 +72,20 @@ export default function HomeView({
         New Session
       </button>
 
+      {/* The way into the saved sources. Until now nothing in the app could
+          reach them — "Save to Library" wrote rows no screen displayed. */}
+      <svg className="home-el home-libraryicon" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M6 4h12a1 1 0 011 1v15l-7-3.5L5 20V5a1 1 0 011-1z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <button className="home-el home-link home-link-library" onClick={() => onNavigate('library')}>
+        Library
+      </button>
+
       {/* Static, non-functional — matches the Figma design exactly, both
           buttons are display-only. */}
       <div className="home-el home-flagcard">
