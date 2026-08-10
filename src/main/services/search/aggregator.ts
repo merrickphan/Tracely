@@ -5,6 +5,7 @@ import * as openalex from './openalex'
 import * as pubmed from './pubmed'
 import { queryVariants } from './queryVariants'
 import * as semanticScholar from './semanticScholar'
+import { attachOpenAccessLinks } from './unpaywall'
 import * as wikipedia from './wikipedia'
 import * as worldBank from './worldBank'
 import {
@@ -16,7 +17,17 @@ import {
 import type { NormalizedSourceResult } from './types'
 
 const PER_PROVIDER_LIMIT = 6
-const MAX_MERGED_RESULTS = 8
+// How many sources the strength score is computed from. Deliberately NOT
+// raised alongside MAX_EVIDENCE_RESULTS below: quality, recency and relevance
+// are averages over the set handed to computeStrengthScore, so widening it
+// would drag all three down with lower-ranked results and silently recalibrate
+// every score in the app against eval/baseline.md. The scored set stays the
+// calibrated top 8; showing more sources is a display change, not a scoring one.
+const MAX_SCORED_RESULTS = 8
+// How many sources the user actually sees. Eight was the binding constraint on
+// breadth — four providers returning six each were merged down to eight, so
+// most of what was retrieved was discarded before anyone could look at it.
+const MAX_EVIDENCE_RESULTS = 16
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -331,20 +342,30 @@ export async function findEvidence(
   const { values, metric } = await computeRelevances(claimText, clusters)
   const scored = clusters.map((item, index) => ({ item, textRelevance: values[index] }))
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
-  const topScored = scored.slice(0, MAX_MERGED_RESULTS)
+  const topScored = scored.slice(0, MAX_EVIDENCE_RESULTS)
 
-  // After the cut to eight, not before: stance is the most expensive local
-  // step and there is no point asking it about candidates that were never
-  // going to be shown.
+  // After the cut to what will be shown, not before: stance is the most
+  // expensive local step and there is no point asking it about candidates that
+  // were never going to be seen. Widening the cut does not widen this
+  // proportionally — attachStance only asks about sources above the relevance
+  // floor, so the added results cost nothing unless they are genuinely relevant.
   const stances = await attachStance(claimText, topScored, metric)
+
+  // Link repair, once, on exactly the set being returned. Turns doi.org
+  // resolvers into open-access pages where one exists; see unpaywall.ts for
+  // why closed papers deliberately keep the resolver.
+  await attachOpenAccessLinks(topScored.map((s) => s.item))
 
   const evidence: RankedSourceResult[] = topScored.map((s, index) => ({
     ...s.item,
     textRelevance: s.textRelevance,
     stance: stances[index]
   }))
+  // Scored on the calibrated top 8, not on everything shown — see
+  // MAX_SCORED_RESULTS. `scored` is already sorted, so this is the same set,
+  // in the same order, that this call received before the display cap moved.
   const { score, breakdown } = computeStrengthScore(
-    topScored.map((s, index) => ({
+    topScored.slice(0, MAX_SCORED_RESULTS).map((s, index) => ({
       venueType: s.item.venueType,
       year: s.item.year,
       relevanceRank: s.item.relevanceRank,
