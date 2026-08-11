@@ -139,6 +139,41 @@ export function createMockApi(
     return scenario.structure === 'classified' ? fx.documentOutlineClassified : fx.documentOutline
   }
 
+  // Rebuild the overlay payload the way screenWatchService would, so the
+  // widget's own controls actually move it. Panel size is computed in main in
+  // production (hoverTracking.ts hit-tests the same rect the renderer draws),
+  // so the sizes here mirror panelSize.ts — if they drift, the preview lies
+  // about how much room the content has.
+  function emitWidget(patch: {
+    expanded: boolean
+    viewMode?: 'single' | 'all' | 'structure'
+  }): void {
+    const w = window as Window & {
+      __previewEmitOverlay?: (e: ScreenWatchOverlayUpdateEvent) => void
+    }
+    if (!w.__previewEmitOverlay) return
+    const base = fx.overlayUpdate.widget
+    if (!base) return
+    const viewMode = patch.viewMode ?? base.viewMode
+    // Taken from panelSize.ts for this fixture's shape (3 claims, 4 weaknesses,
+    // 6 paragraphs), not estimated: computeAllPanelSize(3) = 424 and
+    // computeStructurePanelSize({4, 6}) = 560, which is the MAX_LIST_PANEL_HEIGHT
+    // cap. Guessing these makes the preview claim more or less room than the
+    // real panel has, which is the one thing it must not do.
+    const rect = patch.expanded
+      ? {
+          x: 120,
+          y: 40,
+          width: 400,
+          height: viewMode === 'single' ? 400 : viewMode === 'all' ? 424 : 560
+        }
+      : { x: 520, y: 300, width: 56, height: 56 }
+    w.__previewEmitOverlay({
+      ...fx.overlayUpdate,
+      widget: { ...base, rect, expanded: patch.expanded, viewMode }
+    })
+  }
+
   return {
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
@@ -311,8 +346,20 @@ export function createMockApi(
     screenWatch: {
       setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),
       getStatus: () => ok('screenWatch.getStatus', fx.screenWatchStatus),
-      setWidgetExpanded: () => ok('screenWatch.setWidgetExpanded', { ok: true as const }),
-      setWidgetViewMode: () => ok('screenWatch.setWidgetViewMode', { ok: true as const }),
+      // These two re-emit the overlay payload rather than only logging.
+      // In production the service owns widget geometry and pushes a new
+      // payload back, so the panel's own Back / Show all / score chip / close
+      // buttons are how you navigate it. Returning a bare ok left every one of
+      // them inert in the preview, which is precisely where they need
+      // exercising — the overlay is the hardest surface to reach for real.
+      setWidgetExpanded: (req) => {
+        emitWidget({ expanded: req.expanded, viewMode: req.expanded ? undefined : 'single' })
+        return ok('screenWatch.setWidgetExpanded', { ok: true as const })
+      },
+      setWidgetViewMode: (req) => {
+        emitWidget({ expanded: true, viewMode: req.mode })
+        return ok('screenWatch.setWidgetViewMode', { ok: true as const })
+      },
       widgetDragStart: () => ok('screenWatch.widgetDragStart', { ok: true as const }),
       widgetDragEnd: () => ok('screenWatch.widgetDragEnd', { ok: true as const }),
       setActivePopoverRect: () => ok('screenWatch.setActivePopoverRect', { ok: true as const }),

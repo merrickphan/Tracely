@@ -90,4 +90,17 @@ describe('claimsWithoutEvidence', () => {
   it('treats a resolved claim with a missing breakdown as unsupported', () => {
     deepStrictEqual(claimsWithoutEvidence([claim('odd', 30, null)]), ['odd'])
   })
+
+  it('a well-sourced claim carrying only a score reads as UNSUPPORTED', () => {
+    // Not a quirk — the trap any caller synthesizing Claims in memory falls
+    // into. Screen Watch claims are built with strengthScore: null and no
+    // breakdown, so a caller that folds the evidence score alone produces a
+    // claim that looks searched and unsourced. Every claim with sources would
+    // then be reported as having none.
+    //
+    // Fold BOTH fields. screenWatchService.withEvidenceScores is the one place
+    // that does it; this test is why it exists.
+    deepStrictEqual(claimsWithoutEvidence([claim('score-only', 81, null)]), ['score-only'])
+    deepStrictEqual(claimsWithoutEvidence([claim('score-and-breakdown', 81, 0.5)]), [])
+  })
 })

@@ -6,6 +6,7 @@ import type {
   ProfileInfo,
   ScreenWatchClaimSummary,
   ScreenWatchOverlayUpdateEvent,
+  ScreenWatchStructure,
   ScreenWatchStatus,
   TracerContext
 } from '@shared/ipc-contract'
@@ -479,6 +480,101 @@ export const screenWatchStatus: ScreenWatchStatus = {
   blockedApp: null
 }
 
+/**
+ * The structural read Screen Watch computes over the watched document.
+ *
+ * Score traced by hand against scoreDraft's rubric, so a change to the formula
+ * shows up here as a disagreement rather than as a fixture quietly following it:
+ *
+ *   thesis            20/20  role 'thesis' at index 0
+ *   governing claims  20/20  body = slice(1,-1) = 4 paragraphs, 2 carry role
+ *                            'claim', expected = ceil(4 * 0.5) = 2, so 2/2
+ *   warrant           13/20  owed by 'claim'|'evidence' = paragraphs 2, 3, 4;
+ *                            2 of 3 have a connective -> 20 * 2/3
+ *   counterargument   15/15  paragraph 5
+ *   significance       0/15  no significance paragraph, no so-what in the
+ *                            conclusion — which is why 'no-significance' is
+ *                            in the weakness list below
+ *   conclusion        10/10  role 'conclusion' in last position
+ *                    ------
+ *                    78/100
+ *
+ * `complete: true` (no 'unknown' role), so the whole-draft weaknesses are
+ * allowed to fire. Set a role to 'unknown' to exercise the Provisional badge
+ * and watch 'no-significance' correctly disappear.
+ */
+export const screenWatchStructure: ScreenWatchStructure = {
+  score: 78,
+  complete: true,
+  components: {
+    thesis: 20,
+    governingClaims: 20,
+    warrant: 13.333333333333332,
+    counterargument: 15,
+    significance: 0,
+    conclusion: 10
+  },
+  // Matches screenWatchClaims: c1 (34) and c2 (61) found sources, c3 searched
+  // and found nothing — which is what makes it an 'unsupported-claim' rather
+  // than an unchecked one.
+  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 42, unchecked: 0 },
+  weaknesses: [
+    {
+      kind: 'unsupported-claim',
+      paragraphIndex: 6,
+      claimId: 'c3',
+      message: 'The claim in the 6th paragraph has no supporting source yet.',
+      tracerPrompt:
+        'Tracely could not find evidence for one of my claims. How should I go about checking it?'
+    },
+    {
+      kind: 'warrant-gap',
+      paragraphIndex: 3,
+      claimId: null,
+      message:
+        'The 3rd paragraph presents evidence without explaining how it supports the argument.',
+      tracerPrompt:
+        'In my 3rd paragraph, how do I explain what my evidence actually shows without just restating it?'
+    },
+    {
+      kind: 'new-claim-in-conclusion',
+      paragraphIndex: 6,
+      claimId: 'c3',
+      message:
+        'The conclusion introduces a new claim. Anything asserted here has no room left to be supported.',
+      tracerPrompt: 'My conclusion makes a new claim. Where should that argument go instead?'
+    },
+    {
+      // paragraphIndex null — the case the overlay must render as a plain
+      // "Draft" chip rather than a jump target.
+      kind: 'no-significance',
+      paragraphIndex: null,
+      claimId: null,
+      message:
+        'The draft never says why this matters. A reader finishes knowing what is true but not what follows from it.',
+      tracerPrompt:
+        'My essay proves its point but never says why it matters. How do I write that without overclaiming?'
+    }
+  ],
+  paragraphs: [
+    { index: 1, role: 'thesis', hasWarrant: false, claimIds: [] },
+    { index: 2, role: 'claim', hasWarrant: true, claimIds: ['c1'] },
+    // The one paragraph owed a warrant that has none — the warrant-gap above.
+    { index: 3, role: 'evidence', hasWarrant: false, claimIds: [] },
+    { index: 4, role: 'claim', hasWarrant: true, claimIds: ['c2'] },
+    { index: 5, role: 'counterargument', hasWarrant: true, claimIds: [] },
+    { index: 6, role: 'conclusion', hasWarrant: true, claimIds: ['c3'] }
+  ],
+  previews: [
+    'Schools should delay their start times, because the sleep teenagers lose to an early bell…',
+    'Screen time causes depression in teenagers. Adolescents who spend longer on their phones…',
+    'Twenge and Campbell (2018) found a dose-response relationship. Orben and Przybylski (2019)…',
+    '70% of adolescents who use social media for more than three hours a day report symptoms…',
+    'Some researchers argue the effect sizes here are trivially small, and that is fair — the…',
+    'In conclusion, schools must act. Districts that moved to a later bell saw graduation rates…'
+  ]
+}
+
 // Underline rects are in overlay-window-local coordinates. The preview
 // renders the overlay into a fixed-size frame, so these are chosen to land
 // inside it rather than copied from a real screen capture.
@@ -501,6 +597,7 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
     viewMode: 'single',
     claimCount: screenWatchClaims.length,
     claims: screenWatchClaims,
-    totalInfoCount: screenWatchClaims.length + 10
+    totalInfoCount: screenWatchClaims.length + 10,
+    structure: screenWatchStructure
   }
 }

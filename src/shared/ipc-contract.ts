@@ -13,9 +13,13 @@ import type {
   EvidenceItem,
   DocumentOutline,
   DocumentRecord,
+  EvidenceCoverage,
   LibraryItem,
+  ParagraphOutline,
   ParagraphRole,
   ScoreBreakdown,
+  StructureComponents,
+  StructureWeakness,
   SourceProvider,
   Theme,
   TracerConversation,
@@ -364,6 +368,43 @@ export interface ScreenWatchCritiqueClaimResponse {
   verdict: CritiqueVerdict
 }
 
+/**
+ * The structural read of the watched document, as the overlay needs it.
+ *
+ * A projection of `DocumentOutline` rather than the thing itself. Dropped:
+ * `documentId`/`analysisId` (both null — Screen Watch persists nothing),
+ * `sourceHash`/`schemaVersion` (no stored outline to compare against),
+ * `analyzedAt` (a changing timestamp would defeat the payload dedupe in
+ * updateOverlayAndWidget for no benefit — there is no stale banner here), and
+ * `rolesFrom` (always 'heuristic' on this path, so the overlay states it
+ * outright instead of branching on a field with one value).
+ *
+ * Null whenever `structureFit` judges the extracted text unfit to score. The
+ * overlay hides the score chip entirely in that case rather than showing a
+ * number nobody can act on.
+ */
+export interface ScreenWatchStructure {
+  score: number
+  /** False when any paragraph is `unknown` — the score is then provisional. */
+  complete: boolean
+  components: StructureComponents
+  coverage: EvidenceCoverage
+  weaknesses: StructureWeakness[]
+  paragraphs: ParagraphOutline[]
+  /**
+   * First line of each paragraph, index-aligned so `previews[p.index - 1]`
+   * belongs to `p`.
+   *
+   * `DocumentOutline` deliberately carries no prose, and the in-app panel joins
+   * roles onto the live editor text instead. The overlay has no copy of the
+   * watched document, and shipping one would mean the whole UIA read in every
+   * payload — so main truncates here. Not a new exposure: `ScreenWatchHoverEvent`
+   * already carries the full document text to this renderer on every widget
+   * hover.
+   */
+  previews: string[]
+}
+
 export interface ScreenWatchWidget {
   rect: ScreenRect
   // Whether `rect` is the collapsed launcher circle or the expanded stats
@@ -376,16 +417,24 @@ export interface ScreenWatchWidget {
   // shows every currently-flagged claim in a grid. Determines `rect`'s
   // actual size (see computeAllPanelSize in screenWatchService.ts) since
   // "no scrolling" means the panel itself has to grow/shrink to fit.
-  viewMode: 'single' | 'all'
+  // 'structure' is the draft's structural read — same width as 'all' so the
+  // bottom-right-anchored panel does not jump sideways when switching, and the
+  // one mode whose body is allowed to scroll (paragraph count is unbounded).
+  viewMode: 'single' | 'all' | 'structure'
   claimCount: number
   // Ordered by confidence, highest first — the popup/panel picks which one
   // to show (hovered claim, or the top one by default) from this list
   // rather than needing a separate round-trip per claim.
   claims: ScreenWatchClaimSummary[]
-  // claims.length + the evidence item count of every claim whose search has
-  // resolved so far — the single "how much has been found" number the
-  // widget badge and panel header show.
+  // The number of sources found across every currently-flagged claim — the
+  // single "how much has been found" number the widget badge and panel header
+  // show. Sources only: it once also added +1 per claim and was deliberately
+  // deflated, and structural weaknesses are deliberately NOT folded in either
+  // (they are heuristic, and they are exactly what goes noisy when paragraph
+  // extraction misfires — see structureFit.ts).
   totalInfoCount: number
+  // Null when there is no trustworthy structural read; see ScreenWatchStructure.
+  structure: ScreenWatchStructure | null
 }
 
 export interface ScreenWatchOverlayUpdateEvent {
@@ -413,7 +462,7 @@ export interface ScreenWatchSetWidgetExpandedResponse {
 }
 
 export interface ScreenWatchSetWidgetViewModeRequest {
-  mode: 'single' | 'all'
+  mode: 'single' | 'all' | 'structure'
 }
 export interface ScreenWatchSetWidgetViewModeResponse {
   ok: true

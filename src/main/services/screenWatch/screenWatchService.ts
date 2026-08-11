@@ -8,6 +8,7 @@ import type {
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
   ScreenWatchStatus,
+  ScreenWatchStructure,
   TracerContext
 } from '@shared/ipc-contract'
 import type {
@@ -16,6 +17,7 @@ import type {
   CritiqueVerdict,
   DocumentOutline,
   EvidenceItem,
+  ScoreBreakdown,
   Source
 } from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
@@ -31,6 +33,7 @@ import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getClaimsByAnalysis } from '../storage/claimsRepo'
 import { getSetting, setSetting } from '../storage/settingsRepo'
+import { sourceHashFor } from '../structure/analyzeStructure'
 import { getInAppOutlineContext } from '../structure/outlineContext'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
@@ -42,6 +45,14 @@ import {
 } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
+import {
+  computeAllPanelSize,
+  computeStructurePanelSize,
+  SINGLE_PANEL_HEIGHT,
+  SINGLE_PANEL_WIDTH,
+  WIDGET_SIZE
+} from './panelSize'
+import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { clearHoverState, setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
@@ -127,7 +138,30 @@ let currentClaims: Claim[] = []
 // from `currentClaims` (rather than mutating strengthScore on the Claim
 // objects directly) since results arrive asynchronously, one claim at a
 // time, well after currentClaims was already set.
-let evidenceResultByClaimId = new Map<string, { evidence: NormalizedSourceResult[]; score: number }>()
+// `breakdown` is carried, not just `score`, because structure's evidence
+// coverage reads `scoreBreakdown.sourceCount` rather than `strengthScore` (see
+// structure/evidenceCoverage.ts). Folding only the score onto a synthesized
+// claim makes it read as SEARCHED BUT UNSOURCED, so findWeaknesses would emit
+// "no supporting source yet" for every claim that in fact has sources — with
+// those sources visible one view-mode away in the same panel.
+// findEvidenceCached has always returned it; this used to discard it.
+let evidenceResultByClaimId = new Map<
+  string,
+  { evidence: NormalizedSourceResult[]; score: number; breakdown: ScoreBreakdown }
+>()
+/**
+ * The structural read of the watched document, memoised.
+ *
+ * Recomputed only when its inputs actually change, for two reasons. The cheap
+ * one is that tick() runs every POLL_INTERVAL_MS and redrawOverlay() fires
+ * again on every resolved favicon. The load-bearing one is that
+ * updateOverlayAndWidget dedupes its IPC push by JSON.stringify of the whole
+ * payload — a structure object rebuilt each tick would differ by object
+ * identity only, defeat that dedupe, and re-render the overlay on top of
+ * another app at 1.2s intervals forever.
+ */
+let watchStructure: { key: string; structure: ScreenWatchStructure | null } | null = null
+
 // Critique is never run automatically here (unlike evidence search) — it's
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
@@ -219,7 +253,7 @@ let widgetManualPos: { x: number; y: number } | null = null
 // scrolling — the panel's actual pixel size (see updateOverlayAndWidget)
 // depends on this, so it has to be known server-side rather than left as a
 // renderer-only toggle the way the hover popover's own single/all switch is.
-export type WidgetViewMode = 'single' | 'all'
+export type WidgetViewMode = 'single' | 'all' | 'structure'
 let widgetViewMode: WidgetViewMode = 'single'
 
 export function setWidgetExpanded(expanded: boolean): void {
@@ -335,6 +369,7 @@ function resetTrackingState(): void {
   pendingSince = 0
   lastAnalyzedText = ''
   currentClaims = []
+  watchStructure = null
   evidenceResultByClaimId = new Map()
   critiqueByClaimId = new Map()
   findSourceResultByClaimId = new Map()
@@ -650,6 +685,9 @@ async function tick(): Promise<void> {
           critiqueByClaimId = new Map()
           findSourceResultByClaimId = new Map()
           citationByClaimId = new Map()
+          // Free and local, so it runs on the same automatic footing as the
+          // evidence search above rather than waiting to be asked.
+          refreshWatchOutline()
           triggerEvidenceSearch(currentClaims)
           // Don't wait for the next scheduled poll tick to show results —
           // that adds up to POLL_INTERVAL_MS of dead time on top of the
@@ -722,42 +760,10 @@ async function tick(): Promise<void> {
   }
 }
 
-// Matches the Figma "Collapsed Launcher" mockup's 56px circle.
-const WIDGET_SIZE = 56
 // Fixed distance from the focused window's bottom-right corner — matches
 // where the Figma mockups place it, and (deliberately) has nothing to do
 // with where the focused control or text cursor currently is.
 const EDGE_MARGIN = 24
-// Single-claim panel — big enough for the full action card (claim text,
-// evidence row, Check Claim/Find Evidence buttons, and the critique
-// result once run), with scrolling only when the watched window forces the
-// panel below its ideal size. Must match OverlayApp.tsx's
-// POPOVER_WIDTH/EST_HEIGHT-equivalent sizing intent for the same content.
-const SINGLE_PANEL_WIDTH = 400
-const SINGLE_PANEL_HEIGHT = 400
-// "Show all" — a single vertical column (not a grid) so each row has room
-// to show real article titles, not just a count. Sized per-claim-count
-// below (computeAllPanelSize) so a normal number of claims fits with no
-// scrolling; height is capped (MAX_LIST_PANEL_HEIGHT) for the rare case of
-// many claims at once, since letting the panel grow past the screen would
-// just reintroduce clipping — the renderer scrolls internally only past
-// that cap. Mirrored client-side in OverlayApp.tsx (GRID_*) — keep in sync.
-const GRID_CARD_WIDTH = 364
-const GRID_CARD_HEIGHT = 108
-const GRID_GAP = 10
-const GRID_HEADER_HEIGHT = 44
-const GRID_PADDING = 18
-const MAX_LIST_PANEL_HEIGHT = 560
-
-function computeAllPanelSize(claimCount: number): { width: number; height: number } {
-  const count = Math.max(1, claimCount)
-  const naturalHeight = GRID_PADDING * 2 + GRID_HEADER_HEIGHT + count * GRID_CARD_HEIGHT + (count - 1) * GRID_GAP
-  return {
-    width: GRID_PADDING * 2 + GRID_CARD_WIDTH,
-    height: Math.min(naturalHeight, MAX_LIST_PANEL_HEIGHT)
-  }
-}
-
 let lastSentPayloadKey: string | null = null
 
 function redrawOverlay(): void {
@@ -905,7 +911,14 @@ function triggerEvidenceSearch(claims: Claim[]): void {
         // to a different app) by the time this resolves — a result for a
         // claim that's no longer current would only show stale data.
         if (!currentClaims.some((c) => c.id === claim.id)) return
-        evidenceResultByClaimId.set(claim.id, { evidence: result.evidence, score: result.score })
+        evidenceResultByClaimId.set(claim.id, {
+          evidence: result.evidence,
+          score: result.score,
+          breakdown: result.breakdown
+        })
+        // Coverage and the unsupported-claim weakness both turn on whether a
+        // claim has a relevant source, so evidence landing changes the reading.
+        refreshWatchOutline()
         redrawOverlay()
       })
       .catch((err) => {
@@ -923,9 +936,73 @@ export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWa
   if (!claim) return null
   const result = await findEvidenceCached(claim.searchQuery, claim.text)
   if (!currentClaims.some((c) => c.id === claimId)) return null
-  evidenceResultByClaimId.set(claimId, { evidence: result.evidence, score: result.score })
+  evidenceResultByClaimId.set(claimId, {
+    evidence: result.evidence,
+    score: result.score,
+    breakdown: result.breakdown
+  })
+  refreshWatchOutline()
   redrawOverlay()
   return leanEvidence(claimId)
+}
+
+/**
+ * Recompute the structural read if anything it depends on has moved.
+ *
+ * The key is deliberately the three things the outline is a function of: the
+ * analyzed text, which claims were found in it, and which of those now have a
+ * relevant source (coverage and the `unsupported-claim` weakness both turn on
+ * that, and evidence arrives asynchronously well after detection). Anything
+ * finer — a timestamp, an evidence count — would rebuild the object without
+ * changing what it says, and cost the payload dedupe.
+ */
+function refreshWatchOutline(): void {
+  if (!lastAnalyzedText) {
+    watchStructure = null
+    return
+  }
+
+  const sourced = currentClaims
+    .map((claim) => `${claim.id}:${(evidenceResultByClaimId.get(claim.id)?.breakdown.sourceCount ?? 0) > 0 ? 1 : 0}`)
+    .sort()
+    .join(',')
+  const key = `${sourceHashFor(lastAnalyzedText)}|${currentClaims.map((c) => c.id).join(',')}|${sourced}`
+  if (watchStructure?.key === key) return
+
+  const structure = computeWatchOutline({
+    analyzedText: lastAnalyzedText,
+    claims: currentClaims.map(withEvidenceScores),
+    analyzedAt: new Date().toISOString()
+  })
+  watchStructure = { key, structure }
+  if (structure) {
+    logScreenWatch(
+      `structure: ${structure.score}/100${structure.complete ? '' : ' (provisional)'}, ` +
+        `${structure.paragraphs.length} paragraph(s), ${structure.weaknesses.length} weakness(es)`
+    )
+  }
+}
+
+/**
+ * A Screen Watch claim with whatever its evidence search found folded in.
+ *
+ * Screen Watch claims are synthesized in memory with `strengthScore: null` and
+ * no breakdown, because nothing here is ever written to the claims table. Any
+ * consumer that expects a scored `Claim` — `generateCritique`, and structure's
+ * `computeEvidenceCoverage` — has to be handed this instead of the raw claim.
+ *
+ * BOTH fields, deliberately. `computeEvidenceCoverage` decides "has a relevant
+ * source" from `scoreBreakdown.sourceCount`, not from `strengthScore`, so
+ * folding only the score marks a claim resolved-but-unsourced and produces an
+ * "unsupported claim" weakness for every claim that actually has sources.
+ */
+function withEvidenceScores(claim: Claim): Claim {
+  const evidence = evidenceResultByClaimId.get(claim.id)
+  return {
+    ...claim,
+    strengthScore: evidence?.score ?? null,
+    scoreBreakdown: evidence?.breakdown ?? null
+  }
 }
 
 // User-initiated only (the overlay's "Check Claim" button) — unlike
@@ -936,8 +1013,7 @@ export async function critiqueClaim(claimId: string): Promise<{ critique: string
   if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
   const evidence = evidenceResultByClaimId.get(claimId)
   const evidenceItems = evidence ? evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i)) : []
-  const claimWithScore: Claim = { ...claim, strengthScore: evidence?.score ?? null }
-  const result = await generateCritique(claimWithScore, evidenceItems)
+  const result = await generateCritique(withEvidenceScores(claim), evidenceItems)
   if (currentClaims.some((c) => c.id === claimId)) {
     critiqueByClaimId.set(claimId, result)
     redrawOverlay()
@@ -1215,10 +1291,16 @@ function updateOverlayAndWidget(
     width: WIDGET_SIZE,
     height: WIDGET_SIZE
   }
+  const structure = watchStructure?.structure ?? null
   const desiredPanelSize =
     widgetViewMode === 'all'
       ? computeAllPanelSize(claims.length)
-      : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
+      : widgetViewMode === 'structure'
+        ? computeStructurePanelSize({
+            weaknessCount: structure?.weaknesses.length ?? 0,
+            paragraphCount: structure?.paragraphs.length ?? 0
+          })
+        : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
   // Some watched windows are narrower/shorter than the ideal 400px card. The
   // overlay itself is clipped to that window, so an unclamped panel makes its
   // right/bottom actions unreachable. Keep a small inset and let the renderer
@@ -1297,6 +1379,7 @@ function updateOverlayAndWidget(
       claimCount: number
       claims: ScreenWatchClaimSummary[]
       totalInfoCount: number
+      structure: ScreenWatchStructure | null
     }
   } = {
     underlines: localized,
@@ -1306,7 +1389,12 @@ function updateOverlayAndWidget(
       viewMode: widgetViewMode,
       claimCount: claims.length,
       claims: claimSummaries,
-      totalInfoCount
+      totalInfoCount,
+      // Read, never computed here. This function runs on every poll tick and
+      // on every resolved favicon; refreshWatchOutline owns when the reading
+      // is actually redone, and returning the same object identity is what
+      // keeps the dedupe below working.
+      structure
     }
   }
 
@@ -1402,6 +1490,7 @@ export function getTracerContext(): TracerContext {
   }
 
   const claims = lastUpdateInputs?.claims ?? currentClaims
+  const structure = watchStructure?.structure ?? null
   return {
     processName: lastStatus.active ? lastStatus.processName : null,
     documentText: lastUpdateInputs?.fullText ?? '',
@@ -1410,7 +1499,24 @@ export function getTracerContext(): TracerContext {
       text: c.text,
       claimType: c.claimType,
       evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
-    }))
+    })),
+    // Screen Watch used to send Tracer the claims but never the shape of the
+    // argument they sat in, so a tutor asked "is my essay working?" could only
+    // talk about individual sentences. Absent when the structural read was
+    // withheld — see structureFit.ts — rather than sent as an empty outline,
+    // which Tracer would read as "this draft has none of these things".
+    outline: structure
+      ? {
+          // Deliberately not `processName`: that is 'WINWORD.EXE', it is
+          // already carried separately above, and a prompt interpolating it as
+          // the document's title reads as nonsense.
+          title: 'the document on screen',
+          score: structure.score,
+          complete: structure.complete,
+          roles: structure.paragraphs.map((p) => p.role),
+          weaknesses: structure.weaknesses.map((w) => w.message)
+        }
+      : undefined
   }
 }
 

@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
-import type { CitationStyle, ClaimType, CritiqueVerdict, SourceProvider } from '@shared/types'
+import type {
+  CitationStyle,
+  ClaimType,
+  CritiqueVerdict,
+  ParagraphRole,
+  SourceProvider,
+  StructureComponents
+} from '@shared/types'
 import type {
   ScreenWatchClaimCitation,
   ScreenWatchClaimEvidence,
@@ -9,6 +16,7 @@ import type {
   ScreenWatchHoverEvent,
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
+  ScreenWatchStructure,
   ScreenWatchWidget
 } from '@shared/ipc-contract'
 import figmaLogo from './assets/figma-logo.png'
@@ -292,6 +300,11 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
 // Sized to comfortably fit the full action card (claim text, evidence row,
 // Check Claim/Find Evidence buttons, and — once run — the critique
 // result), not just a couple of lines like the original glance-only popup.
+// How long a paragraph highlight stays lit after clicking its ¶ chip. Long
+// enough to look up from the panel and find the underline, short enough that a
+// forgotten highlight clears itself.
+const HIGHLIGHT_HOLD_MS = 2500
+
 const POPOVER_WIDTH = 380
 // Used only to decide above-vs-below before anything has rendered. It is NOT
 // used to position anything — see the note on `popoverPosition`.
@@ -746,6 +759,296 @@ function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onC
         &ldquo;{claim.text}&rdquo;
       </div>
     </button>
+  )
+}
+
+// -- Structure: the draft's argument, not its sentences ---------------
+//
+// The same reading the in-app Structure rail shows, computed over whatever
+// document Screen Watch is watching. Everything behind it is local — paragraph
+// splitting, the role heuristics, the rubric, the weakness rules — so unlike
+// critique it costs nothing to keep current, which is what makes an always-there
+// passive score defensible at all.
+//
+// Deliberately NOT a port of StructurePanel.tsx. That component is 118
+// `docedit-*` class names resolved from styles/index.css, which this window does
+// not load — the overlay is inline styles plus the one scoped <style> block at
+// the bottom of this file. What is shared is the vocabulary, the role labels and
+// the rubric, and those are duplicated below rather than imported, because
+// importing the component would drag its stylesheet dependency along with it.
+
+const ROLE_LABEL: Record<ParagraphRole, string> = {
+  thesis: 'Thesis',
+  claim: 'Claim',
+  evidence: 'Evidence',
+  reasoning: 'Reasoning',
+  significance: 'Significance',
+  counterargument: 'Counterargument',
+  conclusion: 'Conclusion',
+  transition: 'Transition',
+  unknown: 'Unlabelled'
+}
+
+// Ordered as the rubric reads, not by weight — a writer looks for "do I have a
+// thesis" before "how are my warrants doing". Maxima match COMPONENT_MAX in
+// services/structure/scoreDraft.ts.
+const COMPONENT_ROWS: Array<[keyof StructureComponents, string, number]> = [
+  ['thesis', 'Thesis', 20],
+  ['governingClaims', 'Governing claims', 20],
+  ['warrant', 'Reasoning markers', 20],
+  ['counterargument', 'Counterargument', 15],
+  ['significance', 'Significance', 15],
+  ['conclusion', 'Conclusion', 10]
+]
+
+/**
+ * The always-visible score, shown in the panel header in every view mode.
+ *
+ * Rendered as a sibling BEFORE the drag region rather than inside it: that div
+ * owns onMouseDown for startWidgetDrag, and a real button nested in it has its
+ * click swallowed by the drag-threshold path.
+ */
+function ScoreChip({
+  structure,
+  active,
+  onOpen
+}: {
+  structure: ScreenWatchStructure
+  active: boolean
+  onOpen: () => void
+}): JSX.Element {
+  const color = evidenceScoreColor(structure.score)
+  return (
+    <button
+      onClick={onOpen}
+      title={
+        `Structure score ${structure.score} of 100` +
+        (structure.complete ? '' : ' — provisional, some paragraphs could not be labelled')
+      }
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        flexShrink: 0,
+        border: `1px solid ${active ? color : '#e4e4e8'}`,
+        background: active ? `${color}14` : '#fff',
+        borderRadius: 999,
+        padding: '3px 9px',
+        cursor: 'pointer',
+        font: 'inherit'
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1 }}>{structure.score}</span>
+      <span style={{ fontSize: 10.5, color: '#8a8a8a', lineHeight: 1 }}>structure</span>
+      {/* A dot rather than the word "provisional" — the header has room for one
+          of them, and the tooltip carries the sentence. */}
+      {!structure.complete ? (
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#b3690a', flexShrink: 0 }} />
+      ) : null}
+    </button>
+  )
+}
+
+function ComponentBar({ value, max, label }: { value: number; max: number; label: string }): JSX.Element {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 22 }}>
+      <span style={{ width: 110, flexShrink: 0, fontSize: 11.5, color: '#6b6b76' }}>{label}</span>
+      <span style={{ flex: 1, height: 5, borderRadius: 3, background: '#f0f0f3', overflow: 'hidden' }}>
+        <span
+          style={{
+            display: 'block',
+            width: `${pct}%`,
+            height: '100%',
+            borderRadius: 3,
+            background: evidenceScoreColor(pct)
+          }}
+        />
+      </span>
+      <span style={{ width: 40, flexShrink: 0, textAlign: 'right', fontSize: 11, color: '#8a8a8a' }}>
+        {Math.round(value)}/{max}
+      </span>
+    </div>
+  )
+}
+
+function StructureView({
+  structure,
+  liveClaimIds,
+  onHighlightParagraph
+}: {
+  structure: ScreenWatchStructure
+  /** Claims still on screen — a weakness pointing at anything else cannot jump. */
+  liveClaimIds: Set<string>
+  onHighlightParagraph: (index: number, claimId: string | null) => void
+}): JSX.Element {
+  const color = evidenceScoreColor(structure.score)
+  const { detected, withRelevantSource, meanStrength, unchecked } = structure.coverage
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          style={{
+            width: 54,
+            flexShrink: 0,
+            borderRadius: 12,
+            border: `1px solid ${color}33`,
+            background: `${color}0f`,
+            padding: '7px 0',
+            textAlign: 'center'
+          }}
+        >
+          <div style={{ fontSize: 21, fontWeight: 700, color, lineHeight: 1.1 }}>{structure.score}</div>
+          <div style={{ fontSize: 9.5, color: '#8a8a8a' }}>/ 100</div>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#17171b' }}>
+            Structure score
+            {/* Not decoration. A draft with unlabelled paragraphs was scored on
+                an incomplete reading, and the components it could not assess
+                were counted as absent rather than skipped — presenting that as
+                settled is the failure this prevents. */}
+            {!structure.complete ? (
+              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: '#b3690a' }}>
+                Provisional
+              </span>
+            ) : null}
+          </div>
+          <div style={{ fontSize: 11.5, color: '#6b6b76', marginTop: 3, lineHeight: 1.4 }}>
+            {detected === 0 ? (
+              'No checkable claims in this draft.'
+            ) : (
+              <>
+                <b>
+                  {withRelevantSource} of {detected}
+                </b>{' '}
+                {detected === 1 ? 'claim has' : 'claims have'} sources
+                {meanStrength !== null ? <> · mean {meanStrength}</> : null}
+                {/* Stated apart from the ratio: an unchecked claim is not an
+                    unsupported one, and the number must not imply a search has
+                    run when it has not. */}
+                {unchecked > 0 ? <span style={{ color: '#8a8a8a' }}> · {unchecked} unchecked</span> : null}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {COMPONENT_ROWS.map(([key, label, max]) => (
+          <ComponentBar key={key} value={structure.components[key]} max={max} label={label} />
+        ))}
+      </div>
+
+      {structure.weaknesses.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a8a', letterSpacing: 0.3 }}>
+            WHAT TO FIX ({structure.weaknesses.length})
+          </div>
+          {structure.weaknesses.map((weakness, i) => {
+            // Only some weaknesses can point at anything on screen. The
+            // whole-draft ones (no thesis, no counterargument, no significance)
+            // carry paragraphIndex null by construction, and warrant gaps
+            // usually fire on paragraphs with no detected claim in them — so a
+            // chip that always looked like a button would mostly do nothing.
+            const paragraph =
+              weakness.paragraphIndex === null
+                ? null
+                : structure.paragraphs.find((p) => p.index === weakness.paragraphIndex) ?? null
+            const jumpable = (paragraph?.claimIds ?? []).some((id) => liveClaimIds.has(id))
+            return (
+              <div
+                key={`${weakness.kind}-${weakness.paragraphIndex ?? 'draft'}-${i}`}
+                style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}
+              >
+                {jumpable && paragraph ? (
+                  <button
+                    className="tracely-btn-text"
+                    onClick={() => onHighlightParagraph(paragraph.index, weakness.claimId)}
+                    title="Show this paragraph's claims on screen"
+                    style={{ ...TEXT_BTN_STYLE, flexShrink: 0, padding: 0, fontSize: 11 }}
+                  >
+                    ¶{paragraph.index}
+                  </button>
+                ) : (
+                  <span style={{ flexShrink: 0, fontSize: 11, color: '#b4b4bb' }}>
+                    {weakness.paragraphIndex === null ? 'Draft' : `¶${weakness.paragraphIndex}`}
+                  </span>
+                )}
+                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: '#6b6b76' }}>
+                  {weakness.message}{' '}
+                  {/* The one action available on every weakness, including the
+                      whole-draft ones. The prompt is written in the student's
+                      voice (see weaknesses.ts) so Tracer answers the question
+                      rather than reading it as an instruction to fix the text. */}
+                  <button
+                    className="tracely-btn-text"
+                    onClick={() =>
+                      void window.tracely.tracer.open({
+                        claimId: weakness.claimId ?? undefined,
+                        prompt: weakness.tracerPrompt
+                      })
+                    }
+                    style={{ ...TEXT_BTN_STYLE, padding: 0, fontSize: 11.5 }}
+                  >
+                    Ask Tracer
+                  </button>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a8a', letterSpacing: 0.3 }}>PARAGRAPHS</div>
+        {structure.paragraphs.map((paragraph) => (
+          <div
+            key={paragraph.index}
+            style={{ display: 'flex', alignItems: 'baseline', gap: 7, height: 30 }}
+            data-paragraph={paragraph.index}
+            data-role={paragraph.role}
+          >
+            <span style={{ width: 14, flexShrink: 0, fontSize: 10.5, color: '#b4b4bb' }}>
+              {paragraph.index}
+            </span>
+            <span
+              style={{
+                width: 92,
+                flexShrink: 0,
+                fontSize: 11,
+                fontWeight: 600,
+                color: paragraph.role === 'unknown' ? '#b4b4bb' : '#17171b'
+              }}
+            >
+              {ROLE_LABEL[paragraph.role]}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: 11,
+                color: '#8a8a8a',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {structure.previews[paragraph.index - 1] ?? ''}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Hardcoded rather than driven by a `rolesFrom` field, because this path
+          has no model classifier wired to it — the sentence has one value. It
+          matters more here than in the app: there is no "re-analyze" button to
+          ask for a better reading with. */}
+      <div style={{ fontSize: 10.5, color: '#b4b4bb', lineHeight: 1.4 }}>
+        Labelled by local rules, which leave anything they cannot justify unlabelled.
+      </div>
+    </div>
   )
 }
 
@@ -1214,6 +1517,14 @@ export default function OverlayApp(): JSX.Element {
   // WHICH claim is shown doesn't change the panel's size, so there's no
   // reason for main to need to know it.
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
+  /**
+   * Paragraph whose claim underlines are temporarily lit, from clicking a ¶
+   * chip on a structural weakness. Cleared on a timer and on any view change:
+   * the overlay is click-through everywhere except its own panel, so there is
+   * no click-outside to dismiss it with, and a highlight nobody can turn off
+   * would sit over the user's document indefinitely.
+   */
+  const [highlightedParagraph, setHighlightedParagraph] = useState<number | null>(null)
   const [busyEvidenceIds, setBusyEvidenceIds] = useState<Set<string>>(new Set())
   const [busyCritiqueIds, setBusyCritiqueIds] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
@@ -1266,6 +1577,43 @@ export default function OverlayApp(): JSX.Element {
 
   function showSingle(): void {
     void window.tracely.screenWatch.setWidgetViewMode({ mode: 'single' })
+  }
+
+  /**
+   * Back from a secondary view. Mirrors openWidgetPanel's rule rather than
+   * always landing on 'single', so a document with several unresolved claims
+   * returns to the list it came from instead of dead-ending on one card.
+   */
+  function leavePanelView(): void {
+    const unresolved = (widget?.claims ?? []).filter((c) => !isResolved(c.id))
+    void window.tracely.screenWatch.setWidgetViewMode({
+      mode: unresolved.length > 1 ? 'all' : 'single'
+    })
+  }
+
+  function showStructure(): void {
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'structure' })
+    setHover(null)
+  }
+
+  /**
+   * Light up the claim underlines belonging to one paragraph, so a weakness in
+   * the panel points at something on the actual screen.
+   *
+   * This is the only on-screen connection available from the expanded panel:
+   * while expanded, hoverTracking.ts hit-tests the widget rect alone, so claim
+   * hover is off and there is nothing to conflict with. It reuses
+   * UnderlineMark's existing `hovered` prop rather than adding a highlight
+   * state of its own.
+   *
+   * setSelectedClaimId directly, NOT selectClaim — that helper also calls
+   * showSingle(), which would throw the user out of the view they clicked from.
+   * Setting it here just means Back lands on the right claim.
+   */
+  function highlightParagraph(index: number, claimId: string | null): void {
+    setHighlightedParagraph(index)
+    if (claimId) setSelectedClaimId(claimId)
   }
 
   function dismiss(claimId: string): void {
@@ -1477,6 +1825,13 @@ export default function OverlayApp(): JSX.Element {
   // useStableUnderlines to tell "this measurement glitched" (hold the last
   // rects) apart from "this claim is gone" (drop it now).
   const trackedIds = new Set((widget?.claims ?? []).map((c) => c.id))
+  // Claims in the paragraph currently lit from the Structure view. Empty in
+  // every other state, so it costs nothing when the feature is unused.
+  const highlightedClaimIds = new Set(
+    (highlightedParagraph === null
+      ? []
+      : widget?.structure?.paragraphs.find((p) => p.index === highlightedParagraph)?.claimIds) ?? []
+  )
   const stableUnderlines = useStableUnderlines(underlines, trackedIds)
   const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
 
@@ -1544,6 +1899,21 @@ export default function OverlayApp(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoveredClaimId, needsEvidence])
 
+  // Highlights expire. The overlay is click-through everywhere except its own
+  // panel, so there is no click-outside to dismiss one with; left alone it
+  // would sit over the user's document until the claim set changed.
+  const panelViewMode = widget?.viewMode ?? null
+  useEffect(() => {
+    if (highlightedParagraph === null) return
+    const id = window.setTimeout(() => setHighlightedParagraph(null), HIGHLIGHT_HOLD_MS)
+    return () => window.clearTimeout(id)
+  }, [highlightedParagraph])
+
+  // Leaving the Structure view abandons the thing the highlight referred to.
+  useEffect(() => {
+    if (panelViewMode !== 'structure') setHighlightedParagraph(null)
+  }, [panelViewMode])
+
   const claimHoveredPos = claimHovered ? popoverPosition(claimHovered.anchor) : null
   const popoverRef = useRef<HTMLDivElement>(null)
   const lastReportedPopoverKey = useRef<string | null>(null)
@@ -1587,7 +1957,10 @@ export default function OverlayApp(): JSX.Element {
       {stableUnderlines
         .filter((u) => !isResolved(u.id))
         .flatMap((u) => {
-          const isHovered = claimHovered?.claimId === u.id
+          // Either the cursor is over it, or the Structure view lit its
+          // paragraph. Same visual treatment on purpose — from the reader's
+          // side both mean "this is the one being talked about".
+          const isHovered = claimHovered?.claimId === u.id || highlightedClaimIds.has(u.id)
           const color = BUCKET_COLOR[bucketFor(u.claimType)]
           return u.rects.map((r, i) => (
             <UnderlineMark
@@ -1694,6 +2067,10 @@ export default function OverlayApp(): JSX.Element {
         ? (() => {
             const panelPos = dragPos ?? widget.rect
             const visibleClaims = widget.claims.filter((c) => !isResolved(c.id))
+            // Claims still on screen. A weakness whose paragraph holds only
+            // dismissed or already-cited claims has nothing left to point at,
+            // and its ¶ chip renders as plain text rather than a dead button.
+            const liveClaimIds = new Set(visibleClaims.map((c) => c.id))
             const topClaim = visibleClaims.find((c) => c.id === selectedClaimId) ?? visibleClaims[0] ?? null
             return (
               <div
@@ -1726,14 +2103,24 @@ export default function OverlayApp(): JSX.Element {
                     flexShrink: 0
                   }}
                 >
-                  {widget.viewMode === 'all' ? (
+                  {widget.viewMode !== 'single' ? (
                     <button
                       className="tracely-btn-text"
-                      onClick={showSingle}
+                      onClick={leavePanelView}
                       style={{ ...TEXT_BTN_STYLE, flexShrink: 0 }}
                     >
                       ← Back
                     </button>
+                  ) : null}
+                  {/* Sibling of the drag region, never a child of it — that div
+                      owns onMouseDown for startWidgetDrag and would swallow
+                      this click through the drag-threshold path. */}
+                  {widget.structure ? (
+                    <ScoreChip
+                      structure={widget.structure}
+                      active={widget.viewMode === 'structure'}
+                      onOpen={showStructure}
+                    />
                   ) : null}
                   <div
                     onMouseDown={(e) =>
@@ -1811,10 +2198,24 @@ export default function OverlayApp(): JSX.Element {
                     minHeight: 0,
                     padding: GRID_PADDING,
                     overflowX: 'hidden',
-                    overflowY: widget.viewMode === 'single' ? 'auto' : 'hidden'
+                    // 'structure' scrolls for the same reason 'single' does:
+                    // its content length is not what the panel was sized from
+                    // (paragraph count is unbounded and the height caps out).
+                    overflowY: widget.viewMode === 'all' ? 'hidden' : 'auto'
                   }}
                 >
-                  {visibleClaims.length === 0 ? (
+                  {/* Checked before the empty state: a draft can have a
+                      structural reading and no flagged claims at all (that is
+                      what a well-sourced draft looks like), and opening the
+                      score chip only to be told "no claims flagged" would be
+                      answering a question nobody asked. */}
+                  {widget.viewMode === 'structure' && widget.structure ? (
+                    <StructureView
+                      structure={widget.structure}
+                      liveClaimIds={liveClaimIds}
+                      onHighlightParagraph={highlightParagraph}
+                    />
+                  ) : visibleClaims.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
                       <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center' }}>No claims flagged yet.</div>
                       {/* Tracer is useful with nothing flagged — it's a
