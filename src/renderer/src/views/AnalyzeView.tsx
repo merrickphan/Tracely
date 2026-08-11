@@ -237,35 +237,64 @@ function DocumentEditor({
   // Autosave rather than a save button, because the thing that lost work was
   // a navigation the user had no reason to think was destructive.
 
-  const [docId, setDocId] = useState<string | null>(initialDoc?.id ?? null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(initialDoc ? 'saved' : 'idle')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Read inside the debounced timer without making it a dependency.
   const docNameRef = useRef(docName)
   docNameRef.current = docName
 
-  const flushSave = useCallback(async (): Promise<void> => {
-    const editor = editorRef.current
-    if (!editor) return
-    const bodyHtml = editor.innerHTML
-    // Never create a row for an editor the user opened and never typed in.
-    if (!docId && !bodyHtml.trim() && !docNameRef.current.trim()) return
-    setSaveState('saving')
-    try {
-      const res = await tracelyApi.saveDocument({
-        id: docId,
-        title: docNameRef.current,
-        bodyHtml
-      })
-      setDocId(res.document.id)
-      onSaved(res.document)
-      setSaveState('saved')
-    } catch {
-      // Leave the indicator on "saving" rather than claiming a save that did
-      // not happen. The next keystroke retries.
-      setSaveState('idle')
+  // The id of the row being written, in a ref rather than state.
+  //
+  // It was state, read through `flushSave`'s closure, and that produced a
+  // duplicate document on the very first autosave by two separate routes:
+  //
+  //  1. Setting it changed `flushSave`'s identity, which re-ran the unmount
+  //     effect below. Its cleanup saw `saveTimer.current` still holding the id
+  //     of the timer that had *already fired* (a fired timeout's id stays
+  //     truthy) and read that as "work is pending", calling the previous
+  //     `flushSave` — still closed over `docId === null`, so it INSERTed again.
+  //  2. Any keystroke while the first save was in flight scheduled a timer
+  //     bound to the then-current closure, also with `docId === null`. It fired
+  //     after the id had arrived and INSERTed a second row regardless.
+  //
+  // A ref fixes both at once: there is one authoritative id, no stale copy of
+  // it can exist, and `flushSave` stops changing identity.
+  const docIdRef = useRef<string | null>(initialDoc?.id ?? null)
+  // Saves are chained rather than allowed to overlap. Two concurrent saves on
+  // a new document would both read a null id and both INSERT — the same bug a
+  // third way, and one a ref alone does not close.
+  const inFlightRef = useRef<Promise<void>>(Promise.resolve())
+
+  const flushSave = useCallback((): Promise<void> => {
+    const run = async (): Promise<void> => {
+      const editor = editorRef.current
+      if (!editor) return
+      const bodyHtml = editor.innerHTML
+      // Never create a row for an editor the user opened and never typed in.
+      if (!docIdRef.current && !bodyHtml.trim() && !docNameRef.current.trim()) return
+      setSaveState('saving')
+      try {
+        const res = await tracelyApi.saveDocument({
+          id: docIdRef.current,
+          title: docNameRef.current,
+          bodyHtml
+        })
+        // Before the awaits below, so anything queued behind this save already
+        // sees an UPDATE target rather than inserting its own row.
+        docIdRef.current = res.document.id
+        onSaved(res.document)
+        setSaveState('saved')
+      } catch {
+        // Leave the indicator off "saved" rather than claiming a save that did
+        // not happen. The next keystroke retries.
+        setSaveState('idle')
+      }
     }
-  }, [docId, onSaved])
+    // `run` on both settlements: one failed save must not stall the chain.
+    const next = inFlightRef.current.then(run, run)
+    inFlightRef.current = next
+    return next
+  }, [onSaved])
 
   // 900ms: long enough that a burst of typing is one write, short enough that
   // almost nothing is at risk. Every db.run() re-serializes the entire SQLite
@@ -274,7 +303,13 @@ function DocumentEditor({
   const queueSave = useCallback((): void => {
     setSaveState('idle')
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => void flushSave(), 900)
+    saveTimer.current = setTimeout(() => {
+      // Cleared before running, not after: the unmount cleanup treats a
+      // truthy ref as "there is still pending work to flush", and a fired
+      // timer's id stays truthy forever otherwise.
+      saveTimer.current = null
+      void flushSave()
+    }, 900)
   }, [flushSave])
 
   // Restore the last document into the uncontrolled node exactly once.
@@ -288,11 +323,14 @@ function DocumentEditor({
   }, [])
 
   // A pending debounce must not be lost to unmount — that is the exact case
-  // this whole section exists to fix.
+  // this whole section exists to fix. `flushSave` is identity-stable now, so
+  // this runs on real unmount only, rather than re-running (and re-flushing)
+  // every time the document id changed.
   useEffect(() => {
     return () => {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current)
+        saveTimer.current = null
         void flushSave()
       }
     }
