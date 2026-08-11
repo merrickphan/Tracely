@@ -1366,6 +1366,21 @@ export default function OverlayApp(): JSX.Element {
   const stableUnderlines = useStableUnderlines(underlines, trackedIds)
   const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
 
+  /**
+   * Opens the widget's claims panel, in whichever mode is useful for what is
+   * actually flagged. A single claim goes straight to its actions rather than
+   * to a one-item list you then have to click into.
+   */
+  function openWidgetPanel(): void {
+    const unresolved = (widget?.claims ?? []).filter((c) => !isResolved(c.id)).length
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: unresolved > 1 ? 'all' : 'single' })
+    // Local feedback ahead of the next hover-tracking event, which won't
+    // arrive until the cursor moves — otherwise the hover popover and the
+    // panel can both be on screen for a moment.
+    setHover(null)
+  }
+
   const widgetHovered = hover?.kind === 'widget'
   const claimHovered = hover?.kind === 'claim' && !isResolved(hover.claimId) ? hover : null
   // The hover event itself only carries the bare minimum needed to draw the
@@ -1489,15 +1504,19 @@ export default function OverlayApp(): JSX.Element {
             // whole circle).
             return (
               <button
-                // Clicking the widget opens Tracer directly rather than
-                // expanding the claims panel. The underlines and their hover
-                // popovers are already the surface for inspecting claims —
-                // the panel restated the same information one click deeper,
-                // so the widget is now purely the way to reach the tutor.
-                onMouseDown={(e) =>
-                  startWidgetDrag(e, { width: 56, height: 56 }, () => void window.tracely.tracer.open({}))
-                }
-                title="Ask Tracer — click to open, drag to move"
+                // Opens the claims panel. Pointing this at `tracer.open`
+                // instead (39d238b) left the panel with no entry point at all:
+                // the only other way in required `claim.critiqueVerdict`, which
+                // only `critiqueClaim` sets, which is only reachable from the
+                // "Check Claim" button *inside* the panel. Circular — so the
+                // panel, ClaimActionCard, ClaimListItem, "Show all", the
+                // per-claim Find Evidence and Check Claim actions and the
+                // panel's own close button were all unreachable code.
+                //
+                // Tracer is still one click away, from inside the panel, where
+                // "Ask Tracer" already appears in three places.
+                onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, () => openWidgetPanel())}
+                title="Flagged claims — click to open, drag to move"
                 style={{
                   position: 'absolute',
                   left: circlePos.x,
