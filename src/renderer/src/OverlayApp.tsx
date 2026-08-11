@@ -800,10 +800,23 @@ const KIND_NOUN: Record<Bucket, string> = {
   other: 'statement'
 }
 
-/** Title + description for a claim whose evidence search has resolved. */
+/**
+ * Title, description AND the primary button's label for a claim whose evidence
+ * search has resolved.
+ *
+ * The action belongs here, with the diagnosis, because it kept drifting from
+ * it. The label used to be computed separately as `evidence.count > 0 ? 'Add
+ * citation' : 'Find a source'` — binary on whether anything came back at all —
+ * so a card correctly titled "Evidence is weak … they are related rather than
+ * confirming" still offered "Add citation" underneath, telling the student to
+ * cite the very sources it had just told them not to lean on. That is the same
+ * flattening of two axes this function was written to fix for the title; the
+ * button was left behind. One return value now, so they cannot disagree again.
+ */
 function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchClaimEvidence): {
   title: string
   description: string
+  action: string
 } {
   const bucket = bucketFor(claim.claimType)
   const level = supportLevelFor(evidence)
@@ -817,7 +830,8 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
       description:
         bucket === 'statistic'
           ? "A search of the academic databases turned up nothing carrying this figure. Check the number against its original source before citing it."
-          : `A search of the academic databases turned up nothing supporting this ${noun}. It may still be true — but you have nothing to cite for it yet.`
+          : `A search of the academic databases turned up nothing supporting this ${noun}. It may still be true — but you have nothing to cite for it yet.`,
+      action: 'Find a source'
     }
   }
 
@@ -827,21 +841,26 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
       description:
         bucket === 'causal'
           ? `${sources} touch on this, but score ${evidence.score}/100 for supporting a causal link specifically. Correlation in the literature is not the same as the cause you have asserted here.`
-          : `${sources} came back, but they score ${evidence.score}/100 for actually supporting this ${noun} — they are related rather than confirming. Read them before leaning on them.`
+          : `${sources} came back, but they score ${evidence.score}/100 for actually supporting this ${noun} — they are related rather than confirming. Read them before leaning on them.`,
+      // Not "Add citation". The card just said these do not confirm the claim;
+      // the honest next step is to look at them, which is what the picker shows.
+      action: 'Review the sources'
     }
   }
 
   if (level === 'mixed') {
     return {
       title: 'Partially supported',
-      description: `${sources} score ${evidence.score}/100 for this ${noun} — enough to cite, but they qualify it rather than confirm it outright. Consider softening how strongly it is stated.`
+      description: `${sources} score ${evidence.score}/100 for this ${noun} — enough to cite, but they qualify it rather than confirm it outright. Consider softening how strongly it is stated.`,
+      action: 'Add citation'
     }
   }
 
   // strong — the claim holds up; the only thing missing is the attribution.
   return {
     title: 'Missing citation',
-    description: `${sources} support this ${noun} (${evidence.score}/100). It reads as unattributed, though — add a citation so the reader can follow it.`
+    description: `${sources} support this ${noun} (${evidence.score}/100). It reads as unattributed, though — add a citation so the reader can follow it.`,
+    action: 'Add citation'
   }
 }
 
@@ -887,14 +906,13 @@ function ProblemCard({
           title: 'Weak reasoning',
           description:
             claim.critique ??
-            "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument."
+            "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
+          action: 'Suggest fix'
         }
       : // `kind` is only 'searching' when evidence is null, and that case
         // returned above — so evidence is non-null here.
         problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence)
-  const { title, description } = copy
-  const primaryLabel =
-    kind === 'weak-reasoning' ? 'Suggest fix' : claim.evidence && claim.evidence.count > 0 ? 'Add citation' : 'Find a source'
+  const { title, description, action: primaryLabel } = copy
   const onPrimary = kind === 'weak-reasoning' ? onSuggestFix : onStartCitationFlow
 
   return (

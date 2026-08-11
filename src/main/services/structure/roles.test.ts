@@ -89,6 +89,59 @@ describe('heuristicRoles — precedence', () => {
     )
   })
 
+  it('detects "<someone> argue" with a noun in between', () => {
+    // The miss that motivated the pattern: the marker list held 'some argue',
+    // the draft said "Some instructors argue", nothing matched — and the panel
+    // then asserted the draft had no counterargument at all.
+    strictEqual(
+      rolesOf(['Intro.', 'Some instructors argue that a ban punishes students with disabilities.'])[1],
+      'counterargument'
+    )
+    strictEqual(
+      rolesOf(['Intro.', 'Critics of the policy contend that the data is thin.'])[1],
+      'counterargument'
+    )
+    strictEqual(
+      rolesOf(['Intro.', 'Many researchers have objected to this framing.'])[1],
+      'counterargument'
+    )
+  })
+
+  it('does not read an ordinary claim as a counterargument', () => {
+    // "argue" alone is not the move — the subject has to be someone other than
+    // the writer, which is what the leading pronoun/noun group encodes.
+    strictEqual(rolesOf(['Intro.', 'I argue that laptops harm attention.'], [2])[1], 'claim')
+    // The pattern must not reach across a sentence boundary to find its verb.
+    strictEqual(
+      rolesOf(['Intro.', 'Some students take notes by hand. Others argue for laptops.'], [2])[1],
+      'claim'
+    )
+  })
+
+  it('labels a run of attributions as evidence, not as a claim', () => {
+    // Without this, roleFor could never return 'evidence' at all, and
+    // evidence-stacking in weaknesses.ts was unreachable.
+    strictEqual(
+      rolesOf(
+        [
+          'Intro.',
+          'Mueller and Oppenheimer (2014) found lower conceptual scores. Carter et al. found similar effects.'
+        ],
+        [2]
+      )[1],
+      'evidence'
+    )
+  })
+
+  it('leaves a claim paragraph carrying one citation as a claim', () => {
+    // One attribution is a claim citing its source. Two or more is a run of
+    // evidence — the distinction evidence-stacking depends on.
+    strictEqual(
+      rolesOf(['Intro.', 'Laptops lower grades, as Mueller and Oppenheimer (2014) showed.'], [2])[1],
+      'claim'
+    )
+  })
+
   it('labels a significance paragraph from its marker', () => {
     strictEqual(rolesOf(['Intro.', 'This matters because hiring policy follows it.'])[1], 'significance')
   })

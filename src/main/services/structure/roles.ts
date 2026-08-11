@@ -19,17 +19,8 @@ import type { ParagraphSpan } from '@shared/paragraphSplit'
 // matching it anywhere labelled roughly every paragraph in a real essay.
 const COUNTERARGUMENT_MARKERS = [
   'however',
-  'critics argue',
-  'critics contend',
   'critics of',
   'skeptics',
-  'some argue',
-  'some have argued',
-  'some might argue',
-  'one might argue',
-  'one might object',
-  'it could be argued',
-  'it might be objected',
   'opponents',
   'detractors',
   'on the other hand',
@@ -39,6 +30,23 @@ const COUNTERARGUMENT_MARKERS = [
   'conversely',
   'that said'
 ]
+
+/**
+ * "<someone> argue/contend/object that …" with a noun allowed in between.
+ *
+ * A literal list ('some argue', 'critics argue', 'one might argue') misses the
+ * way people actually write the move: "Some INSTRUCTORS argue", "Critics of the
+ * POLICY contend", "Many RESEARCHERS have objected". Tested against a draft
+ * whose one well-executed counterargument opened "Some instructors argue that
+ * …" and was silently missed — which then made the panel assert the draft had
+ * no counterargument at all. A false negative here becomes a false accusation,
+ * so it is worth more than a substring match.
+ *
+ * `[^.]{0,30}` cannot cross a sentence boundary, keeping this inside the same
+ * clause as the subject.
+ */
+const COUNTERARGUMENT_PATTERN =
+  /\b(some|many|others|critics|opponents|skeptics|sceptics|detractors|one)\b[^.]{0,30}?\b(argue|argued|contend|contends|object|objected|maintain|counter|claim)\b/
 
 const CONCLUSION_MARKERS = [
   'in conclusion',
@@ -131,6 +139,28 @@ function containsMarker(text: string, markers: string[]): boolean {
   return markers.some((marker) => lower.includes(marker))
 }
 
+/** Same opening-clause window as startsWithMarker, for the pattern form. */
+function startsWithCounterargument(text: string): boolean {
+  const opening = firstSentence(text).slice(0, 60).toLowerCase()
+  return startsWithMarker(text, COUNTERARGUMENT_MARKERS) || COUNTERARGUMENT_PATTERN.test(opening)
+}
+
+/**
+ * Attributed-source markers: "Mueller and Oppenheimer (2014)", "Ravizza et al.".
+ *
+ * Two or more in one paragraph is the signal, not one. A body paragraph that
+ * makes a claim and cites a paper for it is a `claim` paragraph and should stay
+ * one; a paragraph that is a RUN of attributions is presenting evidence, which
+ * is the thing `evidence-stacking` looks for two of in a row.
+ */
+const CITATION_PATTERN = /\((?:[12]\d{3}[a-z]?)\)|\bet al\b/g
+
+function citationCount(text: string): number {
+  return (text.match(CITATION_PATTERN) ?? []).length
+}
+
+const MIN_CITATIONS_FOR_EVIDENCE = 2
+
 export function hasSignificanceMarker(text: string): boolean {
   return containsMarker(text, SIGNIFICANCE_MARKERS)
 }
@@ -209,7 +239,7 @@ function roleFor(paragraph: ParagraphSpan, hasClaim: boolean, lastIndex: number)
   const { text, index } = paragraph
 
   if (startsWithMarker(text, CONCLUSION_MARKERS)) return 'conclusion'
-  if (startsWithMarker(text, COUNTERARGUMENT_MARKERS)) return 'counterargument'
+  if (startsWithCounterargument(text)) return 'counterargument'
   if (hasSignificanceMarker(text)) return 'significance'
 
   // An opening paragraph that asserts something is stating the essay's thesis.
@@ -223,6 +253,15 @@ function roleFor(paragraph: ParagraphSpan, hasClaim: boolean, lastIndex: number)
   // A real conclusion almost always announces itself, and the marker branch
   // above catches that.
   if (index === lastIndex && !hasClaim) return 'unknown'
+
+  // Before the claim branch, because a run of attributions is evidence even
+  // when claim detection flags the findings inside it as assertions — which it
+  // does, since "X found that Y" is a checkable statement.
+  //
+  // Without this branch `roleFor` could never return 'evidence' at all, and
+  // `evidence-stacking` in weaknesses.ts was unreachable dead code on the
+  // heuristic path. Found by tracing a draft written to trigger it.
+  if (citationCount(text) >= MIN_CITATIONS_FOR_EVIDENCE) return 'evidence'
 
   return hasClaim ? 'claim' : 'unknown'
 }
