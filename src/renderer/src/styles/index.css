@@ -2528,3 +2528,54 @@ textarea:disabled {
 .settings-panel-content {
   animation: panel-fade-in 0.16s ease-out;
 }
+
+/* Settings > Preferences — global-shortcut capture field. Reads as an input
+   but is a button, because it captures a key chord rather than text. */
+.settings-hotkey {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.settings-hotkey:hover {
+  border-color: var(--accent);
+}
+.settings-hotkey-capturing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+  color: var(--muted);
+}
+
+/* Extra breathing room where a grid follows body copy rather than a header. */
+.settings-panel-grid-spaced {
+  margin-top: 18px;
+}
+
+/* Settings > Privacy — one row per destructive action. */
+.settings-danger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.settings-danger-row > div:first-child {
+  min-width: 0;
+}

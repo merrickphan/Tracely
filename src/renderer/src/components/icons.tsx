@@ -103,3 +103,11 @@ export function SlidersIcon({ size = 15, className }: IconProps): JSX.Element {
 
 
 
+
+export function ShieldIcon({ size = 15, className }: IconProps): JSX.Element {
+  return (
+    <svg {...base(size)} className={className} fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M12 3l7 3v5.5c0 4.2-2.9 7.9-7 9.5-4.1-1.6-7-5.3-7-9.5V6l7-3z" strokeLinejoin="round" />
+    </svg>
+  )
+}
