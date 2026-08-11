@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
+import { mainWindowSize } from '@shared/windowSize'
 import { defaultScenario, type Scenario } from './mockApi'
 import * as fx from './fixtures'
 
@@ -26,14 +27,20 @@ type Surface = {
   checkerboard?: boolean
 }
 
+// Taken from the shared constant the main process sizes the real window with,
+// rather than repeated here. The window is no longer a fixed 870×606 — it
+// carries a gutter and scales with the font-size setting — and a harness that
+// previewed the old size would quietly misreport every margin in the app.
+const MAIN_WINDOW = mainWindowSize('medium')
+
 const SURFACES: Surface[] = [
   {
     id: 'main',
     label: 'Main window',
-    hint: 'index.html · 870 × 606 · Home / Analyze / Settings',
+    hint: `index.html · ${MAIN_WINDOW.width} × ${MAIN_WINDOW.height} · Home / Analyze / Settings`,
     src: '/index.html',
-    width: 870,
-    height: 606
+    width: MAIN_WINDOW.width,
+    height: MAIN_WINDOW.height
   },
   {
     id: 'tracer',

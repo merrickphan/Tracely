@@ -178,13 +178,11 @@ export function createMockApi(
       clear: () => ok('history.clear', { ok: true as const })
     },
     clipboard: {
-      read: () => ok('clipboard.read', { text: fx.analysis.sourceText }),
       write: () => ok('clipboard.write', { ok: true as const })
     },
     window: {
       hide: () => ok('window.hide', { ok: true as const }),
-      show: () => ok('window.show', { ok: true as const }),
-      close: () => ok('window.close', { ok: true as const })
+      show: () => ok('window.show', { ok: true as const })
     },
     shell: {
       // Opening a real browser from a preview is the one side effect worth

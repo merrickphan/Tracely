@@ -21,7 +21,7 @@ import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
-import { getFloatingWindow } from '../../windows/floatingWindow'
+import { focusedShieldableWindow } from '../../windows/overlayShield'
 import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
@@ -849,7 +849,15 @@ function updateOverlayAndWidget(
   // stale external-window result re-show the screen-saver-level overlay over
   // main or the floating claim checker between their immediate focus handlers
   // and the next UIA poll.
-  if (getMainWindow()?.isFocused() || getFloatingWindow()?.isFocused()) {
+  //
+  // Tracer is shieldable too (see overlayShield.ts) but is deliberately NOT
+  // hidden for here: talking to Tracer must hold the claims and underlines in
+  // place — that is the whole point of the "self" skip in tick() — and hiding
+  // the overlay would wipe exactly what the user opened Tracer to ask about.
+  // Tracer is protected positionally instead, in hoverTracking, so the
+  // overlay can stay visible without ever capturing a click meant for it.
+  const focused = focusedShieldableWindow()
+  if (focused === 'main' || focused === 'floating') {
     hideOverlay()
     return
   }

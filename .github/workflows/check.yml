@@ -19,13 +19,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 24, not 20: `npm test` runs .ts test files straight through Node's
+          # type stripping, which does not exist on 20. Matches the local dev
+          # version, so a green CI and a green laptop mean the same thing.
+          node-version: 24
           cache: npm
 
       - run: npm ci
 
       - name: typecheck
         run: npm run typecheck
+
+      - name: test
+        run: npm test
 
       # Guards the eval harness, which is the project's only quality gate. It
       # breaks in a way typecheck cannot see: importing anything that reaches
