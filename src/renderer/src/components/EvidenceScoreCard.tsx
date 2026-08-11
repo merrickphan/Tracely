@@ -1,5 +1,7 @@
 import type { CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 
+import MarkdownText from './MarkdownText'
+
 const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
   'well-supported': 'Well Supported',
   'partially-supported': 'Partially Supported',
@@ -93,14 +95,14 @@ export default function EvidenceScoreCard({
       {correction ? (
         <div className="evidence-correction">
           <div className="evidence-correction-label">What the sources actually say</div>
-          <p>{correction}</p>
+          <MarkdownText>{correction}</MarkdownText>
         </div>
       ) : null}
 
       {critique ? (
         <div className="evidence-score-critique">
           <div className="evidence-score-critique-label">Critique</div>
-          <p>{critique}</p>
+          <MarkdownText>{critique}</MarkdownText>
         </div>
       ) : null}
     </div>

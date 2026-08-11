@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CheckIcon, CopyIcon, RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from 'lucide-react'
 
+import MarkdownText from '@/components/MarkdownText'
 import { Action, Actions } from '@/components/ui/actions'
 import { Conversation, ConversationContent } from '@/components/ui/conversation'
 import { Message, MessageContent } from '@/components/ui/message'
@@ -121,7 +122,9 @@ export function AiActions({
             key={message.id}
           >
             <Avatar from={message.from} assistantAvatar={assistantAvatar} />
-            <MessageContent>{message.content}</MessageContent>
+            <MessageContent>
+              <MarkdownText>{message.content}</MarkdownText>
+            </MessageContent>
             {message.from === 'assistant' ? (
               <Actions className="-ml-1.5">
                 {/*
