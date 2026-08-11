@@ -99,7 +99,6 @@ export default function HomeView({
         Library
       </button>
 
-
       <span className="home-el home-worktext">You choose where Tracely works</span>
       <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">
         <path
