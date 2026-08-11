@@ -43,8 +43,8 @@ export const tracelyApi = {
 
   analyzeStructure: (input: Parameters<typeof window.tracely.structure.analyze>[0]) =>
     call(window.tracely.structure.analyze(input)),
-  getStructure: (documentId: string, sourceHash: string) =>
-    call(window.tracely.structure.get({ documentId, sourceHash })),
+  getStructure: (documentId: string, text: string) =>
+    call(window.tracely.structure.get({ documentId, text })),
 
   getSettings: () => call(window.tracely.settings.get()),
   setSettings: (patch: Parameters<typeof window.tracely.settings.set>[0]) =>

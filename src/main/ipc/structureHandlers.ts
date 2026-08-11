@@ -6,6 +6,7 @@ import { getClaimsByAnalysis } from '../services/storage/claimsRepo'
 import { getStoredOutline, saveOutline } from '../services/storage/structureRepo'
 import {
   analyzeStructure,
+  sourceHashFor,
   STRUCTURE_SCHEMA_VERSION
 } from '../services/structure/analyzeStructure'
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
@@ -23,7 +24,7 @@ const analyzeSchema = z.object({
 
 const getSchema = z.object({
   documentId: z.string().min(1),
-  sourceHash: z.string().min(1)
+  text: z.string().max(MAX_TEXT_CHARS)
 })
 
 export function registerStructureHandlers(): void {
@@ -49,12 +50,12 @@ export function registerStructureHandlers(): void {
   })
 
   ipcMain.handle(IPC.STRUCTURE_GET, (_event, raw): StructureGetResponse => {
-    const { documentId, sourceHash } = getSchema.parse(raw)
+    const { documentId, text } = getSchema.parse(raw)
     const outline = getStoredOutline(documentId, STRUCTURE_SCHEMA_VERSION)
 
     // `stale` is reported rather than the outline being withheld: a previous
     // analysis of an edited draft is still worth showing, as long as the panel
     // says so. Silently returning null would read as "never analyzed".
-    return { outline, stale: outline !== null && outline.sourceHash !== sourceHash }
+    return { outline, stale: outline !== null && outline.sourceHash !== sourceHashFor(text) }
   })
 }

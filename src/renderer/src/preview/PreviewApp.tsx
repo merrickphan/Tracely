@@ -191,6 +191,7 @@ export default function PreviewApp(): JSX.Element {
             >
               <option value="heuristic">Provisional (no relay)</option>
               <option value="classified">Fully classified</option>
+              <option value="stale">Stale (draft edited since)</option>
               <option value="none">Never analyzed</option>
             </select>
           </Field>

@@ -41,11 +41,11 @@ export type Scenario = {
    *
    * 'heuristic' is what the local rules produce with no relay: two paragraphs
    * unlabelled, `complete: false`, whole-draft weaknesses withheld. 'none'
-   * covers a document that has never been analyzed. The confident, fully
-   * classified state is otherwise unreachable in the preview, since there is
-   * no relay behind the harness to produce it.
+   * covers a document that has never been analyzed, and 'stale' one edited
+   * since. The confident, fully classified state is otherwise unreachable in
+   * the preview, since there is no relay behind the harness to produce it.
    */
-  structure: 'heuristic' | 'classified' | 'none'
+  structure: 'heuristic' | 'classified' | 'stale' | 'none'
 }
 
 export const defaultScenario: Scenario = {
@@ -211,10 +211,7 @@ export function createMockApi(
         if (!outline) return ok('structure.get', { outline: null, stale: false })
         return ok('structure.get', {
           outline: { ...outline, documentId: req.documentId },
-          // The stored hash is a fixed fixture string, so anything the editor
-          // computes differs from it — which is exactly the state needed to
-          // review the stale banner.
-          stale: outline.sourceHash !== req.sourceHash
+          stale: scenario.structure === 'stale'
         })
       }
     },

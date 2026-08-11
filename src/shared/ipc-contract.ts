@@ -634,11 +634,16 @@ export interface StructureAnalyzeResponse {
 export interface StructureGetRequest {
   documentId: string
   /**
-   * Hash of the text currently in the editor. The response's `stale` flag is
-   * this compared against the stored outline's, so the panel can say the
-   * document moved on rather than presenting an old analysis as current.
+   * The text currently in the editor, so main can hash it and answer `stale`.
+   *
+   * The TEXT rather than a hash of it, deliberately. Hashing in the renderer
+   * would mean a second implementation of the normalization
+   * (`sourceHashFor`) living in another process, and the two drifting by a
+   * single character class would make every stored outline look permanently
+   * stale — a bug that presents as "the feature doesn't work" with nothing
+   * obviously wrong. The document is already sent in full to analyze it.
    */
-  sourceHash: string
+  text: string
 }
 export interface StructureGetResponse {
   outline: DocumentOutline | null
