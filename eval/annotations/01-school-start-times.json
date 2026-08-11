@@ -1,0 +1,71 @@
+{
+  "essay": "01-school-start-times.txt",
+  "labelledBy": "imported from eval/baseline.md",
+  "report": "report-2026-08-08T02-37-26-088Z.json",
+  "imported": true,
+  "draft": {
+    "roles": null
+  },
+  "claims": [
+    {
+      "text": "The American Academy of Pediatrics recommended in 2014 that middle and high schools start no earlier than 8:30 a.m., yet the majority of public high schools in the United States still begin before that.",
+      "paragraph": 1,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 1,
+        "total": 8
+      },
+      "note": "AAP 2014 recommendation / majority still start before 8:30",
+      "sources": []
+    },
+    {
+      "text": "Teenagers require between eight and ten hours of sleep per night, and roughly 70 percent of them get less than seven.",
+      "paragraph": 1,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 1,
+        "total": 8
+      },
+      "note": "Teens need 8–10 hours, ~70% get under seven",
+      "sources": []
+    },
+    {
+      "text": "The consequence is not subtle: pushing start times later has been shown to increase how long students sleep, and districts that made the change saw fewer car crashes among teen drivers.",
+      "paragraph": 1,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 6,
+        "total": 8
+      },
+      "note": "Later start times → more sleep, fewer crashes",
+      "sources": []
+    },
+    {
+      "text": "Studies show that this sleep debt is the primary driver of the adolescent mental health crisis, and experts agree that smartphones have made it worse.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 4,
+        "total": 8
+      },
+      "note": "Sleep debt is the primary driver of the mental health crisis",
+      "sources": []
+    },
+    {
+      "text": "If schools do not act, depression rates among teenagers will double within the next decade.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "borderline",
+      "support": {
+        "rel": 0,
+        "total": 8
+      },
+      "note": "Depression rates will double within the next decade",
+      "sources": []
+    }
+  ]
+}

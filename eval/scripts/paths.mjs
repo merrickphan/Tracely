@@ -38,7 +38,9 @@ export const CACHE = `${REPO}/out/eval/abstracts.json`
  * Pass a path as the first argument to override, e.g. after re-labelling.
  */
 export function reportPath() {
-  const override = process.argv[2]
+  // Skip flags. Scripts here take options of their own (--force), and reading
+  // one of those as a report path fails with ENOENT on a file named "--force".
+  const override = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
   if (override) return override
 
   const named = readFileSync(BASELINE, 'utf8').match(/report-[\dTZ.\-]+\.(?:json|md)/)

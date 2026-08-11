@@ -22,6 +22,9 @@
     "ship": "node scripts/ship.mjs",
     "ship:preview": "node scripts/ship-preview.mjs",
     "evaluate": "node scripts/evaluate.mjs",
+    "eval:validate": "node eval/scripts/validate-annotations.mjs",
+    "eval:import-baseline": "node eval/scripts/import-baseline.mjs",
+    "eval:fit": "node eval/scripts/fit-weights.mjs",
     "preview": "node scripts/preview.mjs",
     "check:eval-bundle": "node scripts/check-eval-bundle.mjs"
   },
