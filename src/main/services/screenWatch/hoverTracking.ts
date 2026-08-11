@@ -1,10 +1,8 @@
 import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
-import { getFloatingWindow } from '../../windows/floatingWindow'
-import { getMainWindow } from '../../windows/mainWindow'
+import { focusedShieldableWindow, isPointOverOpenTracer } from '../../windows/overlayShield'
 import { getOverlayWindow, setOverlayMouseEventsCaptured } from '../../windows/overlayWindow'
-import { isTracerWindowFocused } from '../../windows/tracerWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
 import type { ScreenRect } from './uiaSnapshot'
 
@@ -102,28 +100,25 @@ function within(point: { x: number; y: number }, rect: ScreenRect, pad: number):
 }
 
 function poll(): void {
-  // The overlay is at the screen-saver always-on-top level, above both
-  // interactive Tracely windows. Release native capture whenever either owns
-  // focus so a stale Screen Watch target can never turn transparent pixels
-  // into a click shield over Tracely's controls.
-  if (getMainWindow()?.isFocused() || getFloatingWindow()?.isFocused()) {
+  // The overlay is at the screen-saver always-on-top level, above every
+  // other Tracely window. Whichever one owns focus, release native capture so
+  // a stale Screen Watch target can never turn transparent pixels into a
+  // click shield over its controls — and, for Tracer, so the frozen
+  // underlines behind it aren't hit-tested while the user is typing a
+  // question about them (Screen Watch itself is frozen in that situation by
+  // the "self" skip in screenWatchService.tick).
+  //
+  // One rule rather than a branch per window: Tracer used to be checked
+  // separately *below* the dragActive early-return, so a widget drag
+  // interrupted by Tracer taking focus kept native capture until some later
+  // drag ended. Clearing dragActive uniformly closes that.
+  if (focusedShieldableWindow() !== null) {
     dragActive = false
     clearHover()
     return
   }
 
   if (dragActive) return
-
-  // While the user is typing to Tracer, the frozen underlines behind that
-  // window are not something they're pointing at — hit-testing them would
-  // flip the overlay to click-capturing over a region the Tracer window is
-  // sitting on, and pop tooltips over a conversation. Screen Watch itself
-  // is frozen in the same situation (see the "self" skip in
-  // screenWatchService.tick), so this keeps the two consistent.
-  if (isTracerWindowFocused()) {
-    clearHover()
-    return
-  }
 
   const targets = getHoverTargets()
   if (targets.length === 0) {
@@ -132,6 +127,17 @@ function poll(): void {
   }
 
   const cursor = screen.getCursorScreenPoint()
+
+  // Tracer stays open and unfocused while the user goes back to writing, and
+  // the overlay stays visible over it — so unlike main and floating it can't
+  // be protected by hiding the overlay, and focus alone doesn't cover the
+  // case where the overlay has been re-raised above it. Never capture over
+  // its rect. See isPointOverOpenTracer for why that ordering is reachable.
+  if (isPointOverOpenTracer(cursor)) {
+    clearHover()
+    return
+  }
+
   const activeClaimId = hoveredKey?.split(':')[0] ?? null
 
   // If a claim is already hovered, first check whether the cursor is still

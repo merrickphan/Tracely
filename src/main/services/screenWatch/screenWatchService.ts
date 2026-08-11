@@ -22,7 +22,7 @@ import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
-import { getFloatingWindow } from '../../windows/floatingWindow'
+import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
   getOverlayWindow,
   hideOverlay,
@@ -1056,7 +1056,22 @@ function updateOverlayAndWidget(
   // stale external-window result re-show the screen-saver-level overlay over
   // main or the floating claim checker between their immediate focus handlers
   // and the next UIA poll.
-  if (getMainWindow()?.isFocused() || getFloatingWindow()?.isFocused()) {
+  //
+  // Tracer is shieldable too (see overlayShield.ts) but is deliberately NOT
+  // hidden for here: talking to Tracer must hold the claims and underlines in
+  // place — that is the whole point of the "self" skip in tick() — and hiding
+  // the overlay would wipe exactly what the user opened Tracer to ask about.
+  // Tracer is protected positionally instead, in hoverTracking, so the
+  // overlay can stay visible without ever capturing a click meant for it.
+  //
+  // `focusedShieldableWindow()` rather than checking getMainWindow()/
+  // getFloatingWindow() directly — that is the one-rule shield this branch
+  // merged with, and duplicating its focus test here is exactly what it was
+  // written to stop. `clearOverlay()` rather than `hideOverlay()`, because
+  // hiding alone is what left stale underlines to be re-shown on the next
+  // present; clearing the state with it is this branch's whole point.
+  const focused = focusedShieldableWindow()
+  if (focused === 'main' || focused === 'floating') {
     clearOverlay()
     return
   }

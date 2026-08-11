@@ -32,6 +32,9 @@ function LogoBg({ size }: { size: number }): JSX.Element {
         width: size,
         height: size,
         objectFit: 'contain',
+        // The image is a flex item in a fixed-size row. Without this, `width`
+        // gets shrunk to fit while `height` does not, which squashes the mark.
+        flexShrink: 0,
         userSelect: 'none',
         pointerEvents: 'none',
         filter: 'brightness(0) invert(1)'
@@ -289,40 +292,61 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
 // Check Claim/Find Evidence buttons, and — once run — the critique
 // result), not just a couple of lines like the original glance-only popup.
 const POPOVER_WIDTH = 380
-// Estimated, not measured — real height varies with claim/critique text
-// length, but we need a number before render to decide whether there's room
-// below. Deliberately generous so it flips above rather than risking
-// clipping.
+// Used only to decide above-vs-below before anything has rendered. It is NOT
+// used to position anything — see the note on `popoverPosition`.
 const POPOVER_EST_HEIGHT = 320
 const POPOVER_GAP = 10
+const POPOVER_PADDING = 8
 
+/**
+ * Places the popover so it can never be clipped, without measuring it.
+ *
+ * The previous version clamped `top` against POPOVER_EST_HEIGHT (320) while
+ * setting `maxHeight` to nearly the whole viewport, so anything taller than the
+ * estimate — a citation flow with a candidate list and a works-cited block
+ * comfortably is — rendered past the bottom of the overlay window and was cut
+ * off by the OS, with no way to scroll to the rest.
+ *
+ * Two changes remove the estimate from the maths entirely:
+ *
+ *   - `maxHeight` is the space actually available on the chosen side, so the
+ *     popover scrolls internally instead of overflowing. It already had
+ *     `overflow-y: auto`; it was just never given a reason to use it.
+ *   - Placing above anchors `bottom` rather than `top`. The box then grows
+ *     upward from the anchor on its own, so its real height never has to be
+ *     known in advance. Guessing it was the whole problem.
+ */
 function popoverPosition(anchor: { x: number; y: number; width: number; height: number }): {
   left: number
-  top: number
+  top?: number
+  bottom?: number
   width: number
   maxHeight: number
 } {
-  const viewportPadding = 8
-  const width = Math.min(POPOVER_WIDTH, Math.max(1, window.innerWidth - viewportPadding * 2))
-  const maxHeight = Math.max(1, window.innerHeight - viewportPadding * 2)
-  const estimatedHeight = Math.min(POPOVER_EST_HEIGHT, maxHeight)
-  const spaceBelow = window.innerHeight - (anchor.y + anchor.height)
-  const spaceAbove = anchor.y
-  const placeAbove = spaceBelow < estimatedHeight + POPOVER_GAP && spaceAbove > spaceBelow
-
+  const width = Math.min(POPOVER_WIDTH, Math.max(1, window.innerWidth - POPOVER_PADDING * 2))
   const left = Math.min(
-    Math.max(viewportPadding, anchor.x),
-    Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
-  )
-  const desiredTop = placeAbove
-    ? anchor.y - estimatedHeight - POPOVER_GAP
-    : anchor.y + anchor.height + POPOVER_GAP
-  const top = Math.min(
-    Math.max(viewportPadding, desiredTop),
-    Math.max(viewportPadding, window.innerHeight - estimatedHeight - viewportPadding)
+    Math.max(POPOVER_PADDING, anchor.x),
+    Math.max(POPOVER_PADDING, window.innerWidth - width - POPOVER_PADDING)
   )
 
-  return { left, top, width, maxHeight }
+  const spaceBelow = window.innerHeight - (anchor.y + anchor.height) - POPOVER_GAP - POPOVER_PADDING
+  const spaceAbove = anchor.y - POPOVER_GAP - POPOVER_PADDING
+  const placeAbove = spaceBelow < POPOVER_EST_HEIGHT && spaceAbove > spaceBelow
+
+  if (placeAbove) {
+    return {
+      left,
+      bottom: Math.max(POPOVER_PADDING, window.innerHeight - (anchor.y - POPOVER_GAP)),
+      width,
+      maxHeight: Math.max(1, spaceAbove)
+    }
+  }
+  return {
+    left,
+    top: Math.max(POPOVER_PADDING, anchor.y + anchor.height + POPOVER_GAP),
+    width,
+    maxHeight: Math.max(1, spaceBelow)
+  }
 }
 
 // Mirrors computeAllPanelSize/GRID_* in screenWatchService.ts — "Show all"
@@ -1067,6 +1091,10 @@ export default function OverlayApp(): JSX.Element {
   // final position (see onGripMouseDown). Cleared once the drag ends so the
   // next server-confirmed rect (which will already match) takes back over.
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null)
+  // True only between passing the drag threshold and mouseup. A ref, not
+  // state: the overlay-update listener is registered once and would close over
+  // a stale value.
+  const dragActive = useRef(false)
   // Which claim the widget's single-claim view is focused on — null means
   // "the top one by confidence." Purely client-side: unlike widgetViewMode,
   // WHICH claim is shown doesn't change the panel's size, so there's no
@@ -1093,6 +1121,11 @@ export default function OverlayApp(): JSX.Element {
     return window.tracely.onScreenWatchOverlayUpdate((event) => {
       setUnderlines(event.underlines)
       setWidget(event.widget)
+      // The payload's rect is authoritative, so the drop position held over
+      // from a finished drag can go. Skipped while a drag is still in flight:
+      // a poll landing mid-drag would otherwise yank the widget back to the
+      // pre-drag rect for one frame.
+      if (!dragActive.current) setDragPos(null)
     })
   }, [])
 
@@ -1294,6 +1327,7 @@ export default function OverlayApp(): JSX.Element {
         const dy = ev.clientY - startMouse.y
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
         dragging = true
+        dragActive.current = true
         void window.tracely.screenWatch.widgetDragStart()
       }
       setDragPos(clamp(delta(ev)))
@@ -1302,8 +1336,17 @@ export default function OverlayApp(): JSX.Element {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
       if (dragging) {
-        setDragPos(null)
-        void window.tracely.screenWatch.widgetDragEnd(clamp(delta(ev)))
+        // Hold the drop position rather than clearing it. `setDragPos(null)`
+        // was synchronous while the IPC that moves `widget.rect` was not, so
+        // the very next render fell back to the PRE-drag rect and the widget
+        // visibly snapped back to where the drag started before jumping to
+        // where it was dropped, one payload later.
+        //
+        // The overlay-update handler clears it once main's rect has caught up.
+        const dropped = clamp(delta(ev))
+        setDragPos(dropped)
+        dragActive.current = false
+        void window.tracely.screenWatch.widgetDragEnd(dropped)
       } else {
         onClick?.()
       }
@@ -1322,6 +1365,21 @@ export default function OverlayApp(): JSX.Element {
   const trackedIds = new Set((widget?.claims ?? []).map((c) => c.id))
   const stableUnderlines = useStableUnderlines(underlines, trackedIds)
   const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
+
+  /**
+   * Opens the widget's claims panel, in whichever mode is useful for what is
+   * actually flagged. A single claim goes straight to its actions rather than
+   * to a one-item list you then have to click into.
+   */
+  function openWidgetPanel(): void {
+    const unresolved = (widget?.claims ?? []).filter((c) => !isResolved(c.id)).length
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: unresolved > 1 ? 'all' : 'single' })
+    // Local feedback ahead of the next hover-tracking event, which won't
+    // arrive until the cursor moves — otherwise the hover popover and the
+    // panel can both be on screen for a moment.
+    setHover(null)
+  }
 
   const widgetHovered = hover?.kind === 'widget'
   const claimHovered = hover?.kind === 'claim' && !isResolved(hover.claimId) ? hover : null
@@ -1446,15 +1504,19 @@ export default function OverlayApp(): JSX.Element {
             // whole circle).
             return (
               <button
-                // Clicking the widget opens Tracer directly rather than
-                // expanding the claims panel. The underlines and their hover
-                // popovers are already the surface for inspecting claims —
-                // the panel restated the same information one click deeper,
-                // so the widget is now purely the way to reach the tutor.
-                onMouseDown={(e) =>
-                  startWidgetDrag(e, { width: 56, height: 56 }, () => void window.tracely.tracer.open({}))
-                }
-                title="Ask Tracer — click to open, drag to move"
+                // Opens the claims panel. Pointing this at `tracer.open`
+                // instead (39d238b) left the panel with no entry point at all:
+                // the only other way in required `claim.critiqueVerdict`, which
+                // only `critiqueClaim` sets, which is only reachable from the
+                // "Check Claim" button *inside* the panel. Circular — so the
+                // panel, ClaimActionCard, ClaimListItem, "Show all", the
+                // per-claim Find Evidence and Check Claim actions and the
+                // panel's own close button were all unreachable code.
+                //
+                // Tracer is still one click away, from inside the panel, where
+                // "Ask Tracer" already appears in three places.
+                onMouseDown={(e) => startWidgetDrag(e, { width: 56, height: 56 }, () => openWidgetPanel())}
+                title="Flagged claims — click to open, drag to move"
                 style={{
                   position: 'absolute',
                   left: circlePos.x,
@@ -1475,7 +1537,17 @@ export default function OverlayApp(): JSX.Element {
                   pointerEvents: 'auto'
                 }}
               >
-                <LogoBg size={30} />
+                {/*
+                  46, not 30. The asset is 899×635 with ~45% of its width as
+                  transparent padding, and `objectFit: contain` in a square box
+                  is width-constrained — so `size={30}` drew a mark about
+                  13.5px wide inside a 56px circle, roughly 24% of the
+                  diameter against a 38-45% norm for a launcher glyph. 46
+                  puts it near 21px (~37%) without touching the circle, so
+                  WIDGET_SIZE in screenWatchService.ts and hoverTracking.ts's
+                  hit-test region stay valid.
+                */}
+                <LogoBg size={46} />
                 {hasInfo ? (
                   <span
                     style={{
@@ -1700,7 +1772,9 @@ export default function OverlayApp(): JSX.Element {
                 style={{
                   position: 'absolute',
                   left: pos.left,
-                  top: pos.top,
+                  // One or the other, never both — placing above anchors the
+                  // bottom edge so the card grows upward from the underline.
+                  ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                   width: pos.width,
                   maxHeight: pos.maxHeight,
                   background: '#fff',

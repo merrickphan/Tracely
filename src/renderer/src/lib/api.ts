@@ -46,7 +46,6 @@ export const tracelyApi = {
   clearHistory: (includeLibrary: boolean) =>
     call(window.tracely.history.clear({ includeLibrary })),
 
-  readClipboard: () => call(window.tracely.clipboard.read()),
   writeClipboard: (text: string) => call(window.tracely.clipboard.write({ text })),
 
   showWindow: (target: 'main' | 'floating') => call(window.tracely.window.show({ target })),
