@@ -49,4 +49,6 @@ that only breaks once packaged — the ML worker loading out of `app.asar`, the
 installer, auto-update. v0.3.76 shipped with the entire ML stack excluded and
 dev was completely happy.
 
-For those, build a real installer with `/preview`.
+For those, build a real installer with `/beta`. (`/preview` is the UI harness —
+real renderer, mocked everything else — which cannot see packaging problems
+either.)

@@ -88,7 +88,12 @@ so publishing without bumping produces a release nobody is ever shown.
 `GH_TOKEN` lives in `.env.release` and must be in the environment for
 `--publish` to work; electron-builder does not read that file on its own.
 
-## Previewing the UI (`npm run preview:ui`)
+## Previewing the UI (`npm run preview:ui`, or `/preview`)
+
+**`/preview` is the command for this** — it covers booting the harness, driving
+the surfaces through the mock bridge, and the measurements worth asserting.
+(The slash command that publishes a beta installer is now `/beta`; it used to
+be called `/preview`, which is why anything older may say so.)
 
 A desktop harness for looking at and reviewing the UI without booting the real
 app — no SQLite, no relay, no Screen Watch, no global hotkey. It opens one
