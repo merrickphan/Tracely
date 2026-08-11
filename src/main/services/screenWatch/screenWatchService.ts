@@ -1079,9 +1079,10 @@ function updateOverlayAndWidget(
   //
   // `focusedShieldableWindow()` rather than checking getMainWindow()/
   // getFloatingWindow() directly — that is the one-rule shield this branch
-  // merged with, and duplicating its focus test here is what it was written
-  // to stop. `clearOverlay()` rather than `hideOverlay()`, because hiding
-  // alone is what left stale underlines to be re-shown on the next present.
+  // merged with, and duplicating its focus test here is exactly what it was
+  // written to stop. `clearOverlay()` rather than `hideOverlay()`, because
+  // hiding alone is what left stale underlines to be re-shown on the next
+  // present; clearing the state with it is this branch's whole point.
   const focused = focusedShieldableWindow()
   if (focused === 'main' || focused === 'floating') {
     clearOverlay()

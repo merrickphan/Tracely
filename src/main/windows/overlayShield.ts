@@ -50,7 +50,7 @@ export function focusedShieldableWindow(): ShieldableWindow | null {
  * for main and floating — is not available: Screen Watch deliberately holds
  * its claims and underlines while the user talks to Tracer about them.
  *
- * Focus alone doesn't protect it either. `showOverlayOnWindow` calls
+ * Focus alone doesn't protect it either. `presentOverlay` calls
  * `showInactive()` on a hidden overlay, which re-raises it above Tracer at
  * the same 'screen-saver' level; from then on the overlay wins clicks over
  * Tracer's rect, so Tracer never receives one, never regains focus, and the
