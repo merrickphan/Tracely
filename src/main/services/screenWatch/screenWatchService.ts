@@ -375,6 +375,53 @@ function clearOverlay(): void {
   hideOverlay()
 }
 
+// How much of the shorter document's vocabulary must appear in the other for
+// them to be treated as the same document, and how many distinct words are
+// needed before the comparison is trusted at all. Below that floor a heading
+// and a first sentence could differ entirely while both being the same file
+// mid-load, so it declines to judge instead.
+const SAME_DOCUMENT_CONTAINMENT = 0.35
+const MIN_TOKENS_TO_JUDGE = 12
+
+/**
+ * Distinct words of five characters or more.
+ *
+ * The length filter is a cheap stopword filter. Nearly every English function
+ * word — "the", "and", "that", "with", "this", "from", "have", "been" — is four
+ * characters or fewer, and leaving them in makes any two English documents look
+ * alike, which is the opposite of what this measure is for.
+ */
+function contentTokens(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length >= 5) out.add(word)
+  }
+  return out
+}
+
+/**
+ * Fraction of the shorter text's vocabulary that also occurs in the longer one.
+ *
+ * Containment rather than Jaccard on purpose: typing, appending a paragraph and
+ * deleting one all change the size of one side without changing how much of the
+ * smaller side the larger one contains, so every editing operation scores near
+ * 1. Two genuinely different documents score low no matter how their lengths
+ * compare — which is exactly the case the previous length-delta test could not
+ * see.
+ */
+function contentContainment(a: string, b: string): number {
+  const setA = contentTokens(a)
+  const setB = contentTokens(b)
+  const smaller = setA.size <= setB.size ? setA : setB
+  const larger = smaller === setA ? setB : setA
+  // Too little to judge — report "same", since a false negative is the cheap
+  // direction (see below).
+  if (smaller.size < MIN_TOKENS_TO_JUDGE) return 1
+  let shared = 0
+  for (const word of smaller) if (larger.has(word)) shared++
+  return shared / smaller.size
+}
+
 /**
  * Whether the watched *document* changed, or null if it looks like the same one.
  *
@@ -397,16 +444,27 @@ function documentChangeReason(processName: string, text: string): string | null 
   }
   if (!pendingText) return null
 
-  // Backstop for switching documents inside one app. Requires BOTH almost no
-  // shared prefix and a large length change, so rewriting a paragraph in place
-  // does not trip it.
+  // Backstop for switching documents inside one app — Word to Word, or tab to
+  // tab in one browser, where the process name is identical and cannot help.
+  //
+  // This used to require a shared prefix under 20% AND a length change of 200+
+  // characters. The second condition is what made it miss: two documents of
+  // similar length are the ordinary case, not the exotic one — two drafts of
+  // the same essay, two tabs of the same site, page 2 and page 3 of anything —
+  // and switching between them cleared neither test. The old claims and the
+  // widget stayed live for the ~24s the slow path takes, and because
+  // underlines are re-located each tick by FindText, any phrase the two
+  // documents happened to share got underlined in the new one on the strength
+  // of the old one's analysis.
+  //
+  // Vocabulary containment replaces both conditions and is independent of
+  // length, so same-length switches are caught while in-place rewriting (which
+  // keeps almost all of its vocabulary) is not.
   const shorter = Math.min(text.length, pendingText.length)
   if (shorter < 40) return null
-  if (Math.abs(text.length - pendingText.length) < 200) return null
-  let shared = 0
-  while (shared < shorter && text[shared] === pendingText[shared]) shared++
-  if (shared >= shorter * 0.2) return null
-  return `text diverged (${shared} shared of ${shorter}, ${pendingText.length} -> ${text.length})`
+  const containment = contentContainment(text, pendingText)
+  if (containment >= SAME_DOCUMENT_CONTAINMENT) return null
+  return `content diverged (${Math.round(containment * 100)}% shared vocabulary, ${pendingText.length} -> ${text.length} chars)`
 }
 
 async function tick(): Promise<void> {
