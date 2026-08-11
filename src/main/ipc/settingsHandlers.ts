@@ -6,6 +6,7 @@ import type { AccentColor, AppSettings, CitationStyle, Density, FontSize, Theme 
 import { scanInstalledApps } from '../services/appScan'
 import { registerGlobalHotkey, registerScreenWatchHotkey } from '../hotkey'
 import { getAllSettingsRaw, setSetting } from '../services/storage/settingsRepo'
+import { applyMainWindowFontSize } from '../windows/mainWindow'
 
 const setSchema = z.object({
   defaultCitationStyle: z.enum(['APA', 'MLA', 'Chicago']).optional(),
@@ -49,7 +50,13 @@ export function registerSettingsHandlers(): void {
     if (patch.theme !== undefined) setSetting('theme', patch.theme)
     if (patch.accentColor !== undefined) setSetting('accentColor', patch.accentColor)
     if (patch.density !== undefined) setSetting('density', patch.density)
-    if (patch.fontSize !== undefined) setSetting('fontSize', patch.fontSize)
+    if (patch.fontSize !== undefined) {
+      setSetting('fontSize', patch.fontSize)
+      // The renderer applies this as CSS `zoom`, so the window has to grow or
+      // shrink with it — otherwise `large` renders 12% past the window edge and
+      // is clipped, and `small` leaves a transparent strip.
+      applyMainWindowFontSize(patch.fontSize)
+    }
     if (patch.claimSensitivity !== undefined) setSetting('claimSensitivity', String(patch.claimSensitivity))
     if (patch.hotkeyAccelerator !== undefined) {
       setSetting('hotkeyAccelerator', patch.hotkeyAccelerator)
