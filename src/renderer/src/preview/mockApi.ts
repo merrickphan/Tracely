@@ -401,7 +401,8 @@ export function createMockApi(
           messages: tracerMsgs,
           context: fx.tracerContext,
           relayConfigured: scenario.relayConfigured,
-          focusedClaimId: null
+          focusedClaimId: null,
+          focusedPrompt: null
         }),
       listConversations: () => ok('tracer.listConversations', { conversations: fx.tracerConversations }),
       newConversation: () => {

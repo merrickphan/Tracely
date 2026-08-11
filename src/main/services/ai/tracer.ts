@@ -53,6 +53,31 @@ function buildContextSummary(context: TracerContext): string {
     parts.push(`Claims Tracely has flagged in it:\n${claims}`)
   }
 
+  // The structural read, when the draft came from Tracely's own editor. Sent
+  // as the role sequence plus the findings rather than as prose about them:
+  // it is a handful of tokens, and it is what turns "how do I explain my
+  // evidence" from a generic writing-class answer into one about the
+  // paragraph the student is looking at.
+  //
+  // The provisional caveat travels with it deliberately. Tracer must not
+  // assert that a draft has no counterargument when the classifier never read
+  // half of it — the same rule findWeaknesses enforces by withholding
+  // whole-draft findings while any paragraph is unlabelled.
+  const outline = context.outline
+  if (outline) {
+    const roles = outline.roles.map((role, i) => `${i + 1}. ${role}`).join(', ')
+    const lines = [
+      `Tracely's structural read of "${outline.title}" — structure score ${outline.score}/100${
+        outline.complete ? '' : ' (PROVISIONAL: some paragraphs could not be labelled, so do not tell the student anything is missing from the draft as a whole)'
+      }.`,
+      `What each paragraph is doing: ${roles}.`
+    ]
+    if (outline.weaknesses.length > 0) {
+      lines.push(`Weaknesses found:\n${outline.weaknesses.map((w) => `- ${w}`).join('\n')}`)
+    }
+    parts.push(lines.join('\n'))
+  }
+
   return parts.join('\n\n')
 }
 

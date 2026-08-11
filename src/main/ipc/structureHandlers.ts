@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type { StructureAnalyzeResponse, StructureGetResponse } from '@shared/ipc-contract'
 import { getClaimsByAnalysis } from '../services/storage/claimsRepo'
+import { getDocument } from '../services/storage/documentsRepo'
+import { setInAppOutlineContext } from '../services/structure/outlineContext'
 import { getStoredOutline, saveOutline } from '../services/storage/structureRepo'
 import {
   analyzeStructure,
@@ -47,6 +49,16 @@ export function registerStructureHandlers(): void {
     })
 
     saveOutline(outline)
+
+    // So Tracer can answer about the draft the user is actually looking at.
+    // Screen Watch reports `skip: "self"` while Tracely is foreground, so its
+    // own context is always stale for the in-app editor — see outlineContext.
+    setInAppOutlineContext({
+      documentTitle: getDocument(input.documentId ?? '')?.title ?? 'your draft',
+      documentText: input.text,
+      outline
+    })
+
     return { outline }
   })
 

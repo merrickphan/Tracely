@@ -65,7 +65,13 @@ export default function TracerApp(): JSX.Element {
     // Opened via "Ask Tracer about this claim" — prefill a question about
     // that specific claim rather than dropping the user on a blank box and
     // making them retype what they just clicked on.
-    if (result.focusedClaimId) {
+    // A caller-composed question wins over the generic claim starter: the
+    // Structure rail already knows what is wrong with the paragraph, and
+    // "how do I explain what my evidence shows" is a better opening than
+    // "why did you flag this claim".
+    if (result.focusedPrompt) {
+      setDraft(result.focusedPrompt)
+    } else if (result.focusedClaimId) {
       const claim = result.context.claims.find((c) => c.id === result.focusedClaimId)
       if (claim) setDraft(`Why did you flag this claim, and how would I strengthen it?\n\n"${claim.text}"`)
     }

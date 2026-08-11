@@ -14,6 +14,7 @@ import type {
   DocumentOutline,
   DocumentRecord,
   LibraryItem,
+  ParagraphRole,
   ScoreBreakdown,
   SourceProvider,
   Theme,
@@ -466,12 +467,27 @@ export interface TracerContext {
   processName: string | null
   documentText: string
   claims: { id: string; text: string; claimType: ClaimType; evidenceScore: number | null }[]
+  // The Structure analysis of the draft, when the context came from Tracely's
+  // own document editor. Absent for Screen Watch context, which reads an
+  // external app that has no outline. Optional and additive.
+  outline?: {
+    title: string
+    score: number
+    complete: boolean
+    roles: ParagraphRole[]
+    weaknesses: string[]
+  }
 }
 
 export interface TracerOpenRequest {
   // Set when opened from a specific claim ("Ask Tracer about this") so the
   // conversation starts anchored to it rather than the whole document.
   claimId?: string
+  // A ready-made question to prefill, set when opened from a structural
+  // weakness in the Structure rail. Separate from claimId because most
+  // structural findings are not about a claim at all — a missing
+  // counterargument is about the whole draft.
+  prompt?: string
 }
 export interface TracerOpenResponse {
   ok: true
@@ -517,6 +533,9 @@ export interface TracerGetConversationResponse {
   // Set when the window was opened via "Ask Tracer about this claim" — the
   // renderer prefills a starter question about it.
   focusedClaimId: string | null
+  // A question composed by the caller, taking precedence over focusedClaimId's
+  // generic starter when both are present.
+  focusedPrompt: string | null
 }
 
 export type TracerListConversationsRequest = Record<string, never>

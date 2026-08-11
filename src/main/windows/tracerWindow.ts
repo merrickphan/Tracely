@@ -24,6 +24,7 @@ let tracerWindow: BrowserWindow | null = null
 // renderer via TRACER_GET_CONVERSATION rather than pushed, since it only
 // matters at open time.
 let pendingFocusedClaimId: string | null = null
+let pendingPrompt: string | null = null
 
 const WIDTH = 420
 const HEIGHT = 620
@@ -126,14 +127,30 @@ export function takeFocusedClaimId(): string | null {
 }
 
 /**
+ * A ready-made question to drop in the composer, set when Tracer is opened
+ * from a structural weakness.
+ *
+ * Separate from the claim id rather than derived from it, because most
+ * structural findings are not about a claim at all — a missing counterargument
+ * is about the whole draft. One-shot, like the claim id: it belongs to the
+ * open that set it, not to the window.
+ */
+export function takePendingPrompt(): string | null {
+  const prompt = pendingPrompt
+  pendingPrompt = null
+  return prompt
+}
+
+/**
  * Opens Tracer anchored to the bottom-right of the display the cursor is
  * on — the same corner the Screen Watch widget anchors to, so it appears
  * next to the thing that launched it, then nudged left so it doesn't cover
  * the widget itself.
  */
-export function showTracerWindow(claimId?: string): void {
+export function showTracerWindow(claimId?: string, prompt?: string): void {
   const win = tracerWindow ?? createTracerWindow()
   pendingFocusedClaimId = claimId ?? null
+  pendingPrompt = prompt ?? null
 
   const cursor = screen.getCursorScreenPoint()
   const { x: dx, y: dy, width: dw, height: dh } = screen.getDisplayNearestPoint(cursor).workArea

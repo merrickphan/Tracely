@@ -1827,6 +1827,23 @@ textarea:disabled {
   color: var(--accent);
 }
 
+/* Inline in the message rather than a row of its own, so a list of findings
+   reads as prose with an offer at the end of each, not as a stack of buttons. */
+.docedit-weakness-ask {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.docedit-weakness-ask:hover {
+  text-decoration: underline;
+}
+
 .docedit-weakness-jump-draft {
   cursor: default;
 }

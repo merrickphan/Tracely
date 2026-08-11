@@ -1,4 +1,5 @@
 import type { Claim, DocumentOutline, ParagraphRole, StructureComponents } from '@shared/types'
+import { tracelyApi } from '../lib/api'
 import Spinner from './Spinner'
 
 /**
@@ -328,7 +329,26 @@ export default function StructurePanel({
                   ) : (
                     <span className="docedit-weakness-jump docedit-weakness-jump-draft">Draft</span>
                   )}
-                  <span className="docedit-weakness-text">{weakness.message}</span>
+                  <span className="docedit-weakness-text">
+                    {weakness.message}{' '}
+                    {/*
+                      Opens the tutor with the question already written. The
+                      prompt is phrased in the student's voice on purpose (see
+                      weaknesses.ts) so Tracer answers it rather than reading it
+                      as an instruction to fix the paragraph itself.
+                    */}
+                    <button
+                      className="docedit-weakness-ask"
+                      onClick={() =>
+                        void tracelyApi.openTracer({
+                          claimId: weakness.claimId ?? undefined,
+                          prompt: weakness.tracerPrompt
+                        })
+                      }
+                    >
+                      Ask Tracer
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>

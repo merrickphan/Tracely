@@ -25,9 +25,19 @@ import {
   listMessages,
   popLastExchange
 } from '../services/storage/tracerRepo'
-import { hideTracerWindow, showTracerWindow, takeFocusedClaimId } from '../windows/tracerWindow'
+import {
+  hideTracerWindow,
+  showTracerWindow,
+  takeFocusedClaimId,
+  takePendingPrompt
+} from '../windows/tracerWindow'
 
-const openSchema = z.object({ claimId: z.string().optional() })
+const openSchema = z.object({
+  claimId: z.string().optional(),
+  // Capped at the same length as a real message, since that is exactly what
+  // it becomes the moment the user presses send.
+  prompt: z.string().max(MAX_TRACER_MESSAGE_CHARS).optional()
+})
 const sendSchema = z.object({
   conversationId: z.string(),
   message: z.string().min(1).max(MAX_TRACER_MESSAGE_CHARS)
@@ -56,8 +66,8 @@ async function runTurn(conversationId: string, message: string): Promise<TracerS
 
 export function registerTracerHandlers(): void {
   ipcMain.handle(IPC.TRACER_OPEN, (_event, raw): TracerOpenResponse => {
-    const { claimId } = openSchema.parse(raw)
-    showTracerWindow(claimId)
+    const { claimId, prompt } = openSchema.parse(raw)
+    showTracerWindow(claimId, prompt)
     return { ok: true }
   })
 
@@ -79,7 +89,8 @@ export function registerTracerHandlers(): void {
       messages: listMessages(conversation.id),
       context: getTracerContext(),
       relayConfigured: isRelayConfigured(),
-      focusedClaimId: takeFocusedClaimId()
+      focusedClaimId: takeFocusedClaimId(),
+      focusedPrompt: takePendingPrompt()
     }
   })
 

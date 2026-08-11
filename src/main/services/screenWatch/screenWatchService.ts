@@ -10,7 +10,14 @@ import type {
   ScreenWatchStatus,
   TracerContext
 } from '@shared/ipc-contract'
-import type { CitationStyle, Claim, CritiqueVerdict, EvidenceItem, Source } from '@shared/types'
+import type {
+  CitationStyle,
+  Claim,
+  CritiqueVerdict,
+  DocumentOutline,
+  EvidenceItem,
+  Source
+} from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
 import { isAuthError } from '../ai/client'
@@ -22,7 +29,9 @@ import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
+import { getClaimsByAnalysis } from '../storage/claimsRepo'
 import { getSetting, setSetting } from '../storage/settingsRepo'
+import { getInAppOutlineContext } from '../structure/outlineContext'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
   getOverlayWindow,
@@ -185,6 +194,9 @@ export function getHoverTargets(): HoverTarget[] {
 let widgetExpanded = false
 // Cached so toggling expanded/collapsed can redraw immediately instead of
 // waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
+// When Screen Watch last captured a document. Compared against the in-app
+// editor's last analysis to decide which one Tracer should talk about.
+let lastTracerContextAt: number | null = null
 let lastUpdateInputs: {
   windowRect: ScreenRect
   // Carried so redrawOverlay() reproduces the same clip the tick that computed
@@ -1098,6 +1110,9 @@ function updateOverlayAndWidget(
       lastUpdateInputs.windowRect.height !== windowRect.height)
 
   lastUpdateInputs = { windowRect, controlRect, claimRects, claims, fullText }
+  // Stamped so getTracerContext can tell whether Screen Watch or the in-app
+  // editor saw a document more recently — see outlineContext.ts.
+  lastTracerContextAt = Date.now()
 
   // Clear BEFORE the window is moved or resized under the old content.
   if (targetChanged) clearOverlay()
@@ -1365,6 +1380,27 @@ function updateOverlayAndWidget(
  * document in hand, it just can't refer to anything specific.
  */
 export function getTracerContext(): TracerContext {
+  // Tracely's own document editor, when it has been analyzed more recently
+  // than Screen Watch saw anything. Without this branch, asking Tracer about
+  // the paragraph you are looking at in the editor gets an answer about
+  // whatever external document Screen Watch last read — UIA reports `skip:
+  // "self"` while Tracely is foreground, so its snapshot is always stale here.
+  const inApp = getInAppOutlineContext(lastTracerContextAt)
+  if (inApp) {
+    return {
+      processName: inApp.documentTitle,
+      documentText: inApp.outline.paragraphs.length ? inApp.documentText : '',
+      claims: inAppClaims(inApp.outline),
+      outline: {
+        title: inApp.documentTitle,
+        score: inApp.outline.score,
+        complete: inApp.outline.complete,
+        roles: inApp.outline.paragraphs.map((p) => p.role),
+        weaknesses: inApp.outline.weaknesses.map((w) => w.message)
+      }
+    }
+  }
+
   const claims = lastUpdateInputs?.claims ?? currentClaims
   return {
     processName: lastStatus.active ? lastStatus.processName : null,
@@ -1376,6 +1412,20 @@ export function getTracerContext(): TracerContext {
       evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
     }))
   }
+}
+
+/**
+ * Claims for the in-app path, read from the store rather than from Screen
+ * Watch's in-memory map — the editor's claims are persisted, unlike these.
+ */
+function inAppClaims(outline: DocumentOutline): TracerContext['claims'] {
+  if (!outline.analysisId) return []
+  return getClaimsByAnalysis(outline.analysisId).map((claim) => ({
+    id: claim.id,
+    text: claim.text,
+    claimType: claim.claimType,
+    evidenceScore: claim.strengthScore
+  }))
 }
 
 // Pushed to the Tracer window whenever the watched document or its claims
