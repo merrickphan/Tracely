@@ -29,12 +29,6 @@ export function registerWindowHandlers(): void {
     return { ok: true }
   })
 
-  ipcMain.handle(IPC.WINDOW_CLOSE, (_event, raw): WindowTargetResponse => {
-    const { target } = targetSchema.parse(raw)
-    resolveWindow(target)?.hide()
-    return { ok: true }
-  })
-
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, raw): ShellOpenExternalResponse => {
     const { url } = urlSchema.parse(raw)
     shell.openExternal(url)

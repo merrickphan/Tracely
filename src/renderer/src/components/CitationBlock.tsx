@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CitationStyle } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import Button from './Button'
@@ -6,7 +6,17 @@ import Button from './Button'
 const STYLES: CitationStyle[] = ['APA', 'MLA', 'Chicago']
 
 export default function CitationBlock({ sourceId }: { sourceId: string }): JSX.Element {
+  // Starts on the user's default rather than always APA. The setting was read
+  // by the Screen Watch citation flow and ignored here, so the same preference
+  // produced two different styles depending on which surface you were in.
   const [style, setStyle] = useState<CitationStyle>('APA')
+
+  useEffect(() => {
+    tracelyApi
+      .getSettings()
+      .then((s) => setStyle(s.defaultCitationStyle))
+      .catch(() => {})
+  }, [])
   const [citation, setCitation] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
