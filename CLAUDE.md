@@ -6,6 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tracely is a private, local-first Electron desktop app (React + TypeScript) that checks the *credibility* of user-written text: it detects factual claims, finds academic evidence (OpenAlex, Crossref, Semantic Scholar, PubMed), scores how well-supported each claim is, critiques weak arguments, and generates citations (APA/MLA/Chicago). All user data lives in a local SQLite (`sql.js`, WASM — no native module compilation needed) database under Electron's per-OS user-data dir. Network calls are to academic search APIs, to the **Tracely Relay** (a separate sibling project, `../Tracely-relay`, that holds the real OpenAI key server-side — this app has no API-key field and never talks to OpenAI directly), and to a public favicon service (`main/services/search/favicon.ts`) for real per-source icons in the Screen Watch overlay — the one place this app's "only academic APIs + relay" network surface is knowingly broadened, opted into by the user after being told it reveals source domains to that service.
 
+## The design file
+
+**[Real Tracely UI](https://www.figma.com/design/k7R5x1M9alKktaMLlZFSJn/Real-Tracely-UI)** — file key
+`k7R5x1M9alKktaMLlZFSJn`, one page, `0:1`. Every overlay/widget/settings frame
+lives there.
+
+Recorded here because it was not recorded anywhere. A dozen comments in this
+codebase cite "the Figma mockup" — the 56px launcher, the 870x606 frame, the
+thin-line icons — without a link, so the UI was being built from *prose
+descriptions of* the design rather than the design. That drift is what produced
+a near-miss palette (`#17171b` for `#1c1c1c`, `#f47b20` for `#ff5900`), pill
+buttons where the design has 8px rounded rectangles, and an overlay that never
+loaded Instrument Sans at all.
+
+Read it with the Figma MCP (`get_metadata` on `0:1` to list frames, then
+`get_design_context` on a node). The overlay frames are named
+`Overlay Mockup - <state>`.
+
+**The one deliberate departure:** source rows show the real favicon, not the
+design's two-letter provider tile. It identifies the publication rather than
+which API returned it. The tile remains as the fallback, in the design's 28px /
+8px-radius box so both line up on the same grid.
+
 ## Commands
 
 ```bash

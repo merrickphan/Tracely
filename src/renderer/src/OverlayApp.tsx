@@ -64,8 +64,68 @@ function bucketFor(claimType: ClaimType): Bucket {
   return 'other'
 }
 
+// -- Design tokens, taken from Figma ----------------------------------
+//
+// "Real Tracely UI" (file k7R5x1M9alKktaMLlZFSJn), the Overlay Mockup frames.
+// These are read off the design rather than chosen here, because the previous
+// values were chosen here — a near-miss palette (#17171b vs #1c1c1c, #f47b20
+// vs #ff5900) and pill-shaped buttons where the design has 8px rounded rects,
+// which together read as a different product rather than as a small drift.
+//
+// Anything that looks arbitrary below is arbitrary in Figma too. Change it
+// there first.
+
+/** Text, and the primary button's fill. */
+const INK = '#1c1c1c'
+/** Body copy and secondary labels. */
+const MUTED = '#737373'
+/** Metadata: venue, year, timing hints — the quietest text on a card. */
+const DIM = '#9a9ba1'
+/** Tracely orange. Progress, the factual claim bucket, the count badge. */
+const ACCENT = '#ff5900'
+/** Agreement: match percentages, confirmations. */
+const POSITIVE = '#16a34a'
+/** Button and divider hairlines. */
+const HAIRLINE = '#d9d9d9'
+/** Fill behind a selected row. */
+const SELECTED_BG = '#f8f8f8'
+/** Fill behind a neutral pill (the citation-style chip). */
+const CHIP_BG = '#f2f2f2'
+
+// A 2px BLACK border, not a hairline in the ink colour. The overlay floats
+// over someone else's application, where a soft 1px edge dissolves into
+// whatever is behind it; the design commits to a hard outline for that reason.
+const CARD_BORDER = '2px solid #000000'
+const CARD_SHADOW = '0px 8px 24px 0px rgba(0, 0, 0, 0.18)'
+const CARD_RADIUS = 16
+
+// 8px rounded rectangles, not pills. The buttons were the most visible drift:
+// a 999px radius at 9x18 padding reads as a chat UI, and the design is a
+// document tool.
+const PRIMARY_BTN_STYLE: CSSProperties = {
+  border: 'none',
+  borderRadius: 8,
+  padding: '8px 14px',
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#fff',
+  cursor: 'pointer',
+  background: INK
+}
+
+const SECONDARY_BTN_STYLE: CSSProperties = {
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: 8,
+  padding: '8px 14px',
+  fontSize: 13,
+  fontWeight: 400,
+  color: INK,
+  background: '#fff',
+  cursor: 'pointer'
+}
+
 const BUCKET_COLOR: Record<Bucket, string> = {
-  factual: '#f47b20',
+  factual: ACCENT,
   statistic: '#7c3aed',
   causal: '#2f6fed',
   other: '#d6301a'
@@ -275,7 +335,7 @@ const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
 // (ClaimCard/EvidenceScoreCard) so a score reads the same wherever it shows
 // up in Tracely.
 function evidenceScoreColor(score: number): string {
-  if (score >= 70) return '#1f9d63'
+  if (score >= 70) return POSITIVE
   if (score >= 40) return '#b3690a'
   return '#d6301a'
 }
@@ -379,31 +439,6 @@ const GRID_HEADER_HEIGHT = 44
 // also just the main app's own light-mode border/text tokens
 // (rgba(0,0,0,0.18-0.26) / #000000 in styles/index.css) at full opacity, so
 // it reads as consistent with the rest of the UI rather than a one-off.
-const CARD_BORDER = '1.5px solid #17171b'
-const CARD_SHADOW = '0 10px 28px rgba(15, 15, 20, 0.12), 0 2px 6px rgba(15, 15, 20, 0.06)'
-
-const PRIMARY_BTN_STYLE: CSSProperties = {
-  border: 'none',
-  borderRadius: 999,
-  padding: '9px 18px',
-  fontSize: 13,
-  fontWeight: 700,
-  color: '#fff',
-  cursor: 'pointer',
-  background: '#17171b'
-}
-
-const SECONDARY_BTN_STYLE: CSSProperties = {
-  border: '1.5px solid #17171b',
-  borderRadius: 999,
-  padding: '9px 18px',
-  fontSize: 13,
-  fontWeight: 700,
-  color: '#17171b',
-  background: '#fff',
-  cursor: 'pointer'
-}
-
 // A plain text link, no border/background — the least visually heavy
 // action on a card, used for anything that closes/skips/reverts rather
 // than does something.
@@ -412,8 +447,8 @@ const TEXT_BTN_STYLE: CSSProperties = {
   background: 'none',
   padding: 0,
   fontSize: 13,
-  fontWeight: 600,
-  color: '#6b6b76',
+  fontWeight: 500,
+  color: MUTED,
   cursor: 'pointer'
 }
 
@@ -425,7 +460,7 @@ const TEXT_BTN_STYLE: CSSProperties = {
 function EvidenceRow({ claim, compact }: { claim: ScreenWatchClaimSummary; compact?: boolean }): JSX.Element {
   if (!claim.evidence) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: compact ? 11 : 12, color: '#8a8a8a' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: compact ? 11 : 12, color: DIM }}>
         <span className="tracely-spinner" />
         Searching evidence…
       </div>
@@ -435,7 +470,7 @@ function EvidenceRow({ claim, compact }: { claim: ScreenWatchClaimSummary; compa
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: compact ? 11 : 12 }}>
       <span style={{ fontWeight: 700, color }}>{claim.evidence.score}/100</span>
-      <span style={{ color: '#8a8a8a' }}>
+      <span style={{ color: DIM }}>
         · {claim.evidence.count} source{claim.evidence.count === 1 ? '' : 's'}
       </span>
     </div>
@@ -477,13 +512,13 @@ function ProviderBadge({ provider }: { provider: SourceProvider }): JSX.Element 
   return (
     <div
       style={{
-        width: 22,
-        height: 22,
-        borderRadius: '50%',
+        width: 28,
+        height: 28,
+        borderRadius: 8,
         background: PROVIDER_COLOR[provider],
         color: '#fff',
-        fontSize: 9,
-        fontWeight: 700,
+        fontSize: 10,
+        fontWeight: 600,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -505,19 +540,24 @@ function SourceIcon({ provider, faviconDataUrl }: { provider: SourceProvider; fa
   return (
     <div
       style={{
-        width: 22,
-        height: 22,
-        borderRadius: 6,
+        // Figma draws a solid provider tile with two letters here. Per the
+        // design review we keep the real favicon instead — it identifies the
+        // actual publication rather than which API returned it — but in the
+        // design's 28px / 8px-radius box, so a row of favicons and a row of
+        // monogram fallbacks line up to the same grid.
+        width: 28,
+        height: 28,
+        borderRadius: 8,
         overflow: 'hidden',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: '#fff',
-        border: '1px solid #eeeef1'
+        border: '1px solid #ededed'
       }}
     >
-      <img src={faviconDataUrl} alt="" width={16} height={16} style={{ objectFit: 'contain' }} />
+      <img src={faviconDataUrl} alt="" width={18} height={18} style={{ objectFit: 'contain' }} />
     </div>
   )
 }
@@ -538,7 +578,7 @@ function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.E
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: '#1c1c1c',
+            color: INK,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
@@ -546,7 +586,7 @@ function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.E
         >
           {article.title}
         </div>
-        {meta ? <div style={{ fontSize: 10.5, color: '#8a8a8a' }}>{meta}</div> : null}
+        {meta ? <div style={{ fontSize: 10.5, color: DIM }}>{meta}</div> : null}
       </div>
     </>
   )
@@ -597,7 +637,7 @@ const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
 const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
 
 function verdictColor(verdict: CritiqueVerdict): string {
-  if (verdict === 'well-supported') return '#1f9d63'
+  if (verdict === 'well-supported') return POSITIVE
   if (verdict === 'partially-supported' || verdict === 'weak') return '#b3690a'
   return '#d6301a'
 }
@@ -634,7 +674,7 @@ function ClaimActionCard({
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <TypeDot claimType={claim.claimType} />
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
           {CLAIM_TYPE_LABEL[claim.claimType]} · {Math.round(claim.confidence * 100)}% confidence
         </div>
       </div>
@@ -839,7 +879,7 @@ function ScoreChip({
       }}
     >
       <span style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1 }}>{structure.score}</span>
-      <span style={{ fontSize: 10.5, color: '#8a8a8a', lineHeight: 1 }}>structure</span>
+      <span style={{ fontSize: 10.5, color: DIM, lineHeight: 1 }}>structure</span>
       {/* A dot rather than the word "provisional" — the header has room for one
           of them, and the tooltip carries the sentence. */}
       {!structure.complete ? (
@@ -853,7 +893,7 @@ function ComponentBar({ value, max, label }: { value: number; max: number; label
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 22 }}>
-      <span style={{ width: 110, flexShrink: 0, fontSize: 11.5, color: '#6b6b76' }}>{label}</span>
+      <span style={{ width: 110, flexShrink: 0, fontSize: 11.5, color: MUTED }}>{label}</span>
       <span style={{ flex: 1, height: 5, borderRadius: 3, background: '#f0f0f3', overflow: 'hidden' }}>
         <span
           style={{
@@ -865,7 +905,7 @@ function ComponentBar({ value, max, label }: { value: number; max: number; label
           }}
         />
       </span>
-      <span style={{ width: 40, flexShrink: 0, textAlign: 'right', fontSize: 11, color: '#8a8a8a' }}>
+      <span style={{ width: 40, flexShrink: 0, textAlign: 'right', fontSize: 11, color: DIM }}>
         {Math.round(value)}/{max}
       </span>
     </div>
@@ -900,10 +940,10 @@ function StructureView({
           }}
         >
           <div style={{ fontSize: 21, fontWeight: 700, color, lineHeight: 1.1 }}>{structure.score}</div>
-          <div style={{ fontSize: 9.5, color: '#8a8a8a' }}>/ 100</div>
+          <div style={{ fontSize: 9.5, color: DIM }}>/ 100</div>
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#17171b' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>
             Structure score
             {/* Not decoration. A draft with unlabelled paragraphs was scored on
                 an incomplete reading, and the components it could not assess
@@ -915,7 +955,7 @@ function StructureView({
               </span>
             ) : null}
           </div>
-          <div style={{ fontSize: 11.5, color: '#6b6b76', marginTop: 3, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
             {detected === 0 ? (
               'No checkable claims in this draft.'
             ) : (
@@ -928,7 +968,7 @@ function StructureView({
                 {/* Stated apart from the ratio: an unchecked claim is not an
                     unsupported one, and the number must not imply a search has
                     run when it has not. */}
-                {unchecked > 0 ? <span style={{ color: '#8a8a8a' }}> · {unchecked} unchecked</span> : null}
+                {unchecked > 0 ? <span style={{ color: DIM }}> · {unchecked} unchecked</span> : null}
               </>
             )}
           </div>
@@ -943,7 +983,7 @@ function StructureView({
 
       {structure.weaknesses.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a8a', letterSpacing: 0.3 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: DIM, letterSpacing: 0.3 }}>
             WHAT TO FIX ({structure.weaknesses.length})
           </div>
           {structure.weaknesses.map((weakness, i) => {
@@ -972,11 +1012,11 @@ function StructureView({
                     ¶{paragraph.index}
                   </button>
                 ) : (
-                  <span style={{ flexShrink: 0, fontSize: 11, color: '#b4b4bb' }}>
+                  <span style={{ flexShrink: 0, fontSize: 11, color: DIM }}>
                     {weakness.paragraphIndex === null ? 'Draft' : `¶${weakness.paragraphIndex}`}
                   </span>
                 )}
-                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: '#6b6b76' }}>
+                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: MUTED }}>
                   {weakness.message}{' '}
                   {/* The one action available on every weakness, including the
                       whole-draft ones. The prompt is written in the student's
@@ -1002,7 +1042,7 @@ function StructureView({
       ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a8a', letterSpacing: 0.3 }}>PARAGRAPHS</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: DIM, letterSpacing: 0.3 }}>PARAGRAPHS</div>
         {structure.paragraphs.map((paragraph) => (
           <div
             key={paragraph.index}
@@ -1010,7 +1050,7 @@ function StructureView({
             data-paragraph={paragraph.index}
             data-role={paragraph.role}
           >
-            <span style={{ width: 14, flexShrink: 0, fontSize: 10.5, color: '#b4b4bb' }}>
+            <span style={{ width: 14, flexShrink: 0, fontSize: 10.5, color: DIM }}>
               {paragraph.index}
             </span>
             <span
@@ -1019,7 +1059,7 @@ function StructureView({
                 flexShrink: 0,
                 fontSize: 11,
                 fontWeight: 600,
-                color: paragraph.role === 'unknown' ? '#b4b4bb' : '#17171b'
+                color: paragraph.role === 'unknown' ? DIM : INK
               }}
             >
               {ROLE_LABEL[paragraph.role]}
@@ -1029,7 +1069,7 @@ function StructureView({
                 flex: 1,
                 minWidth: 0,
                 fontSize: 11,
-                color: '#8a8a8a',
+                color: DIM,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis'
@@ -1045,7 +1085,7 @@ function StructureView({
           has no model classifier wired to it — the sentence has one value. It
           matters more here than in the app: there is no "re-analyze" button to
           ask for a better reading with. */}
-      <div style={{ fontSize: 10.5, color: '#b4b4bb', lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10.5, color: DIM, lineHeight: 1.4 }}>
         Labelled by local rules, which leave anything they cannot justify unlabelled.
       </div>
     </div>
@@ -1185,7 +1225,7 @@ function ProblemCard({
   if (kind === 'searching') {
     return (
       <>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b6b76' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: MUTED }}>
           <span className="tracely-spinner" />
           Checking for supporting evidence…
         </div>
@@ -1222,9 +1262,9 @@ function ProblemCard({
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>{title}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{title}</div>
       </div>
-      <MarkdownText style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{description}</MarkdownText>
+      <MarkdownText style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{description}</MarkdownText>
       <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
           {primaryLabel}
@@ -1244,6 +1284,40 @@ function ProblemCard({
       </div>
     </>
   )
+}
+
+// Skeleton bar widths, taken from the design rather than expressed as
+// percentages — the uneven pair is what makes a loading row read as two lines
+// of a real citation rather than as a progress widget.
+const SKELETON_ROWS: Array<[number, number]> = [
+  [214, 122],
+  [186, 96]
+]
+
+/** The design labels the style with its edition, not just its name. */
+const STYLE_LABEL: Record<CitationStyle, string> = {
+  APA: 'APA 7',
+  MLA: 'MLA 9',
+  Chicago: 'Chicago 17'
+}
+
+function nextStyle(style: CitationStyle): CitationStyle {
+  return CITATION_STYLES[(CITATION_STYLES.indexOf(style) + 1) % CITATION_STYLES.length]
+}
+
+/**
+ * Enough of the claim to recognise it, cut on a word boundary.
+ *
+ * Trailing sentence punctuation always comes off, because every use here nests
+ * the result inside quotes in a sentence of our own — leaving it produces
+ * `supports "the claim.".`, which is what the first version rendered.
+ */
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '')
+  if (clean.length <= max) return clean
+  const cut = clean.slice(0, max)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[.,;:]$/, '')}…`
 }
 
 // -- Hover popup: CitationFlowCard -------------------------------------
@@ -1269,6 +1343,7 @@ const CITATION_STYLES: CitationStyle[] = ['MLA', 'APA', 'Chicago']
 
 function CitationFlowCard({
   state,
+  claimText,
   visibleClaimCount,
   onSelectCandidate,
   onSetStyle,
@@ -1282,6 +1357,8 @@ function CitationFlowCard({
   undoing
 }: {
   state: CitationFlowState
+  /** The sentence being cited — the design quotes it back to the reader. */
+  claimText: string
   visibleClaimCount: number
   onSelectCandidate: (ref: string) => void
   onSetStyle: (style: CitationStyle) => void
@@ -1298,29 +1375,41 @@ function CitationFlowCard({
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f47b20', flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Searching for a source</div>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: ACCENT, flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>Searching for a source</div>
         </div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>Scanning open-access journals and databases.</div>
+        {/* The design quotes the claim back, and it is worth the width: this
+            card can be opened from any of several underlines, and naming the
+            one being searched for is the difference between "it is working"
+            and "it is working on the right sentence". */}
+        <div style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>
+          Scanning open-access journals and databases
+          {claimText ? <> for a source that supports &ldquo;{truncate(claimText, 90)}&rdquo;</> : null}.
+        </div>
+        {/* Figma draws the bar at a fixed 61%, which is a snapshot of a moment.
+            A real search has no progress to report, so this stays indeterminate
+            — a bar that appears to measure something it cannot would be worse
+            than an honest one that only says "still going". Track geometry and
+            colour are the design's. */}
         <div className="tracely-progress-track">
           <div className="tracely-progress-fill" />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[0, 1].map((i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div className="tracely-skeleton" style={{ width: 22, height: 22, borderRadius: '50%' }} />
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div className="tracely-skeleton" style={{ height: 8, width: '80%', borderRadius: 4 }} />
-                <div className="tracely-skeleton" style={{ height: 8, width: '45%', borderRadius: 4 }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {SKELETON_ROWS.map(([wide, narrow], i: number) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="tracely-skeleton" style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="tracely-skeleton" style={{ height: 9, width: wide, borderRadius: 999 }} />
+                <div className="tracely-skeleton-faint" style={{ height: 8, width: narrow, borderRadius: 999 }} />
               </div>
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
             Cancel
           </button>
-          <div style={{ fontSize: 11.5, color: '#8a8a8a' }}>Usually 3-5 seconds</div>
+          <div style={{ fontSize: 12, color: DIM }}>Usually 3–5 seconds</div>
         </div>
       </>
     )
@@ -1331,9 +1420,9 @@ function CitationFlowCard({
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#d6301a', flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Couldn&apos;t do that</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Couldn&apos;t do that</div>
         </div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>{state.message}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{state.message}</div>
         <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
           <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
             Try again
@@ -1350,10 +1439,10 @@ function CitationFlowCard({
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1f9d63', flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>Citation added</div>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Citation added</div>
         </div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: '#6b6b76' }}>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>
           This claim is now backed by a source in your document. {state.citation.inTextCitation} in-text citation inserted.
         </div>
         {state.showWorksCited ? (
@@ -1365,13 +1454,13 @@ function CitationFlowCard({
               student reads that phrase as "the list at the end of my essay".
               This labels the string below it, which is what it actually is.
             */}
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: DIM, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
               Works Cited entry — copy into your reference list
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.5, color: '#3a3a3a' }}>{state.citation.worksCitedEntry}</div>
           </div>
         ) : null}
-        <div style={{ fontSize: 12, color: '#1f9d63', fontWeight: 600 }}>
+        <div style={{ fontSize: 12, color: POSITIVE, fontWeight: 600 }}>
           Claim resolved · {visibleClaimCount} flag{visibleClaimCount === 1 ? '' : 's'} left in this document
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
@@ -1400,88 +1489,116 @@ function CitationFlowCard({
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#1f9d63', flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#17171b' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>
             {state.candidates.length} source{state.candidates.length === 1 ? '' : 's'} found
           </div>
         </div>
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#6b6b76', border: '1px solid #e5e5ea', borderRadius: 999, padding: '2px 8px' }}>
-          {state.style} {state.style === 'MLA' ? '9' : state.style === 'APA' ? '7' : ''}
-        </div>
+        {/* Figma shows the citation style as a single read-only chip. It is a
+            control here because the style has to be choosable somewhere and
+            this window cannot open a menu — it is unfocusable, so there is no
+            popup to host one. Clicking cycles; the tooltip says so. */}
+        <button
+          onClick={() => onSetStyle(nextStyle(state.style))}
+          title={`Citation style: ${state.style}. Click to switch.`}
+          style={{
+            background: CHIP_BG,
+            border: 'none',
+            borderRadius: 999,
+            padding: '4px 10px',
+            fontSize: 11.5,
+            fontWeight: 500,
+            color: MUTED,
+            cursor: 'pointer',
+            font: 'inherit',
+            fontFamily: 'inherit'
+          }}
+        >
+          {STYLE_LABEL[state.style]}
+        </button>
       </div>
-      {state.candidates.length === 0 ? (
-        <div style={{ fontSize: 13, color: '#6b6b76' }}>No sources found for this claim yet.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
-          {state.candidates.map((c) => (
-            <label
-              key={c.sourceRef}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 8px',
-                borderRadius: 10,
-                border: c.sourceRef === state.selectedRef ? '1.5px solid #17171b' : '1px solid #eeeef1',
-                cursor: 'pointer'
-              }}
-            >
-              <input
-                type="radio"
-                checked={c.sourceRef === state.selectedRef}
-                onChange={() => onSelectCandidate(c.sourceRef)}
-                style={{ accentColor: '#17171b' }}
-              />
-              <SourceIcon provider={c.provider} faviconDataUrl={c.faviconDataUrl} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div
+
+      <div style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>
+        {state.candidates.length === 0
+          ? 'No sources found for this claim yet.'
+          : claimText
+            ? `Ranked by how directly each source supports “${truncate(claimText, 90)}”.`
+            : 'Ranked by how directly each source supports this claim.'}
+      </div>
+
+      {state.candidates.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', maxHeight: 168, overflowY: 'auto' }}>
+          {state.candidates.map((c) => {
+            const isSelected = c.sourceRef === state.selectedRef
+            return (
+              <label
+                key={c.sourceRef}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: 8,
+                  borderRadius: 10,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  // Selected rows gain a fill and a hairline; the rest keep a
+                  // transparent border so selecting one does not shift the
+                  // others by a pixel.
+                  background: isSelected ? SELECTED_BG : 'transparent',
+                  border: `1px solid ${isSelected ? '#e5e5e5' : 'transparent'}`,
+                  cursor: 'pointer'
+                }}
+              >
+                <SourceIcon provider={c.provider} faviconDataUrl={c.faviconDataUrl} />
+                <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div
+                    style={{
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      color: INK,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {c.title}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
+                    <span style={{ color: DIM, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {[c.venue, c.year ? String(c.year) : null].filter(Boolean).join(' · ')}
+                    </span>
+                    <span style={{ color: POSITIVE, fontWeight: 500, flexShrink: 0 }}>{c.matchPercent}% match</span>
+                  </div>
+                </div>
+                {/* A drawn radio rather than <input type="radio">: the native
+                    control renders at the OS accent colour and its own size,
+                    which is the one part of this card that would look like
+                    Windows instead of like Tracely. */}
+                <input
+                  type="radio"
+                  checked={isSelected}
+                  onChange={() => onSelectCandidate(c.sourceRef)}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                />
+                <span
+                  aria-hidden
                   style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: '#1c1c1c',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    boxSizing: 'border-box',
+                    background: '#fff',
+                    border: isSelected ? `5px solid ${INK}` : '1.5px solid #d1d1d1'
                   }}
-                >
-                  {c.title}
-                </div>
-                <div style={{ fontSize: 10.5, color: '#8a8a8a' }}>
-                  {[c.venue, c.year ? String(c.year) : null].filter(Boolean).join(' · ')}
-                  {c.venue || c.year ? ' · ' : ''}
-                  <span style={{ color: '#1f9d63', fontWeight: 700 }}>{c.matchPercent}% match</span>
-                </div>
-              </div>
-            </label>
-          ))}
+                />
+              </label>
+            )
+          })}
         </div>
-      )}
-      <div style={{ display: 'flex', gap: 6 }}>
-        {CITATION_STYLES.map((s) => (
-          <button
-            key={s}
-            className="tracely-btn-text"
-            onClick={() => onSetStyle(s)}
-            style={{
-              ...TEXT_BTN_STYLE,
-              padding: '4px 10px',
-              borderRadius: 999,
-              border: s === state.style ? '1.5px solid #17171b' : '1px solid #e5e5ea',
-              color: s === state.style ? '#17171b' : '#8a8a92'
-            }}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+      ) : null}
+
       <div style={{ display: 'flex', gap: 8 }}>
-        {selected?.url ? (
-          <button className="tracely-btn-text" onClick={() => openUrl(selected.url)} style={{ ...TEXT_BTN_STYLE, textDecoration: 'underline' }}>
-            Preview
-          </button>
-        ) : null}
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button
           className="tracely-btn-primary"
           onClick={onInsert}
@@ -1490,10 +1607,19 @@ function CitationFlowCard({
         >
           {inserting ? 'Inserting…' : 'Insert citation'}
         </button>
-        <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
-          Find new source
-        </button>
+        {selected?.url ? (
+          <button className="tracely-btn-secondary" onClick={() => openUrl(selected.url)} style={SECONDARY_BTN_STYLE}>
+            Preview
+          </button>
+        ) : null}
       </div>
+      <button
+        className="tracely-btn-secondary"
+        onClick={onSearchAgain}
+        style={{ ...SECONDARY_BTN_STYLE, width: '100%' }}
+      >
+        Search again
+      </button>
     </>
   )
 }
@@ -2014,7 +2140,7 @@ export default function OverlayApp(): JSX.Element {
                   borderRadius: '50%',
                   padding: 0,
                   cursor: 'pointer',
-                  background: '#17171b',
+                  background: INK,
                   boxShadow: widgetHovered ? '0 6px 18px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.18)',
                   transition: 'box-shadow 0.12s ease, transform 0.12s ease',
                   transform: widgetHovered ? 'scale(1.06)' : 'scale(1)',
@@ -2045,7 +2171,7 @@ export default function OverlayApp(): JSX.Element {
                       height: 22,
                       padding: '0 5px',
                       borderRadius: 999,
-                      background: '#f47b20',
+                      background: ACCENT,
                       color: '#fff',
                       fontSize: 11.5,
                       fontWeight: 700,
@@ -2082,7 +2208,7 @@ export default function OverlayApp(): JSX.Element {
                   height: widget.rect.height,
                   background: '#fff',
                   border: CARD_BORDER,
-                  borderRadius: 20,
+                  borderRadius: CARD_RADIUS,
                   boxShadow: CARD_SHADOW,
                   overflow: 'hidden',
                   display: 'flex',
@@ -2147,7 +2273,7 @@ export default function OverlayApp(): JSX.Element {
                           whiteSpace: 'nowrap',
                           fontSize: 13,
                           fontWeight: 700,
-                          color: '#17171b'
+                          color: INK
                         }}
                       >
                         {widget.claimCount} claim{widget.claimCount === 1 ? '' : 's'} flagged
@@ -2157,7 +2283,7 @@ export default function OverlayApp(): JSX.Element {
                       style={{
                         fontSize: 11,
                         fontWeight: 700,
-                        color: '#f47b20',
+                        color: ACCENT,
                         background: 'rgba(244, 123, 32, 0.1)',
                         borderRadius: 999,
                         padding: '2px 8px',
@@ -2179,7 +2305,7 @@ export default function OverlayApp(): JSX.Element {
                       border: 'none',
                       background: 'rgba(0, 0, 0, 0.06)',
                       borderRadius: '50%',
-                      color: '#6b6b76',
+                      color: MUTED,
                       fontSize: 13,
                       lineHeight: '22px',
                       padding: 0,
@@ -2217,7 +2343,7 @@ export default function OverlayApp(): JSX.Element {
                     />
                   ) : visibleClaims.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
-                      <div style={{ fontSize: 12.5, color: '#8a8a8a', textAlign: 'center' }}>No claims flagged yet.</div>
+                      <div style={{ fontSize: 12.5, color: DIM, textAlign: 'center' }}>No claims flagged yet.</div>
                       {/* Tracer is useful with nothing flagged — it's a
                           tutor, not a claim inspector, so it stays
                           reachable even on an empty panel. */}
@@ -2294,13 +2420,15 @@ export default function OverlayApp(): JSX.Element {
                   maxHeight: pos.maxHeight,
                   background: '#fff',
                   border: CARD_BORDER,
-                  borderRadius: 18,
+                  borderRadius: CARD_RADIUS,
                   boxShadow: CARD_SHADOW,
                   padding: 16,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
-                  color: '#1c1c1c',
+                  // 12, not 10 — the design's card rhythm. Small, but every
+                  // stacked block in the card inherits it.
+                  gap: 12,
+                  color: INK,
                   overflowX: 'hidden',
                   overflowY: 'auto',
                   pointerEvents: 'auto'
@@ -2309,6 +2437,7 @@ export default function OverlayApp(): JSX.Element {
                 {flow ? (
                   <CitationFlowCard
                     state={flow}
+                    claimText={claimHoveredSummary.text}
                     visibleClaimCount={visibleCount}
                     onSelectCandidate={(ref) => selectCandidate(claimHoveredSummary.id, ref)}
                     onSetStyle={(style) => setCandidateStyle(claimHoveredSummary.id, style)}
@@ -2398,7 +2527,7 @@ export default function OverlayApp(): JSX.Element {
           transition: color 0.12s ease;
         }
         .tracely-btn-text:hover {
-          color: #17171b;
+          color: ${INK};
         }
         .tracely-list-row {
           transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -2418,21 +2547,22 @@ export default function OverlayApp(): JSX.Element {
           width: 10px;
           height: 10px;
           border: 1.5px solid rgba(0, 0, 0, 0.12);
-          border-top-color: #f47b20;
+          border-top-color: ${ACCENT};
           border-radius: 50%;
           animation: tracely-spin 0.7s linear infinite;
         }
         .tracely-progress-track {
-          height: 4px;
-          border-radius: 2px;
-          background: rgba(0, 0, 0, 0.08);
+          height: 6px;
+          border-radius: 999px;
+          background: #ededed;
           overflow: hidden;
+          width: 100%;
         }
         .tracely-progress-fill {
           height: 100%;
           width: 40%;
-          border-radius: 2px;
-          background: #f47b20;
+          border-radius: 999px;
+          background: ${ACCENT};
           animation: tracely-progress 1.1s ease-in-out infinite;
         }
         @keyframes tracely-progress {
@@ -2443,8 +2573,15 @@ export default function OverlayApp(): JSX.Element {
           0%, 100% { opacity: 0.5; }
           50% { opacity: 1; }
         }
+        /* Two greys, not one at two opacities: the design's second bar is a
+           genuinely lighter fill, which is what makes a skeleton row read as a
+           title over a subtitle rather than as one block. */
         .tracely-skeleton {
-          background: rgba(0, 0, 0, 0.08);
+          background: #ebebeb;
+          animation: tracely-skeleton-pulse 1.1s ease-in-out infinite;
+        }
+        .tracely-skeleton-faint {
+          background: #f4f4f4;
           animation: tracely-skeleton-pulse 1.1s ease-in-out infinite;
         }
       `}</style>
