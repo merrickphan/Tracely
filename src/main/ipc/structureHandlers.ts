@@ -38,6 +38,7 @@ export function registerStructureHandlers(): void {
 
     const outline = analyzeStructure({
       documentId: input.documentId ?? null,
+      analysisId: input.analysisId ?? null,
       text: input.text,
       claims,
       claimsWithoutEvidence: claimsWithoutEvidence(claims),

@@ -40,6 +40,7 @@ export function sourceHashFor(text: string): string {
 
 export interface AnalyzeStructureInput {
   documentId: string | null
+  analysisId: string | null
   /** The editor's innerText — see sourceHashFor. */
   text: string
   claims: Claim[]
@@ -83,6 +84,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
 
   return {
     documentId: input.documentId,
+    analysisId: input.analysisId,
     sourceHash: sourceHashFor(input.text),
     schemaVersion: STRUCTURE_SCHEMA_VERSION,
     paragraphs,

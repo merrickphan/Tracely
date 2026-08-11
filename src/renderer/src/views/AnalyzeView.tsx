@@ -107,6 +107,7 @@ function DocumentEditor({
   onDocNameChange,
   onBack,
   onRunInsights,
+  onRefreshClaims,
   insightsLoading,
   claims,
   error,
@@ -122,6 +123,8 @@ function DocumentEditor({
    * press two buttons in the right order. Resolves null if detection failed.
    */
   onRunInsights: (bodyText: string) => Promise<string | null>
+  /** Re-reads the analysis so claim scores updated by an evidence search show. */
+  onRefreshClaims: (analysisId: string) => Promise<void>
   insightsLoading: boolean
   claims: Claim[] | null
   error: string | null
@@ -144,6 +147,7 @@ function DocumentEditor({
   const [outlineLoading, setOutlineLoading] = useState(false)
   const [outlineError, setOutlineError] = useState<string | null>(null)
   const [activeParagraph, setActiveParagraph] = useState<number | null>(null)
+  const [checking, setChecking] = useState<{ done: number; total: number } | null>(null)
   // Recomputed from the live editor rather than stored on the outline, which
   // deliberately carries no prose — see DocumentOutline.
   const [paragraphTexts, setParagraphTexts] = useState<string[]>([])
@@ -396,7 +400,11 @@ function DocumentEditor({
     setOutlineError(null)
     try {
       const text = bodyText()
-      const analysisId = analysisIdRef.current ?? (await onRunInsights(text))
+      // Re-detect when the text has moved on. Claim offsets are what map
+      // claims onto paragraphs, so reusing an analysis of older text would
+      // bucket claims into paragraphs they are no longer in.
+      const reuse = analysisIdRef.current !== null && !outlineStale
+      const analysisId = reuse ? analysisIdRef.current : await onRunInsights(text)
       analysisIdRef.current = analysisId
       const res = await tracelyApi.analyzeStructure({
         documentId: docIdRef.current,
@@ -421,10 +429,18 @@ function DocumentEditor({
     let cancelled = false
     void tracelyApi
       .getStructure(docIdRef.current, bodyText())
-      .then((res) => {
+      .then(async (res) => {
         if (cancelled || !res.outline) return
         setOutline(res.outline)
         setOutlineStale(res.stale)
+        // Restore the claims the outline's paragraph claimIds refer to.
+        // Without this a reopened document shows an outline that knows claims
+        // exist and can say nothing about any of them, because ids alone are
+        // not resolvable. Reading a stored analysis costs no relay call.
+        if (res.outline.analysisId) {
+          analysisIdRef.current = res.outline.analysisId
+          await onRefreshClaims(res.outline.analysisId)
+        }
       })
       .catch(() => {
         // A missing stored outline is the normal case for a document that has
@@ -433,7 +449,41 @@ function DocumentEditor({
     return () => {
       cancelled = true
     }
-  }, [structureOpen, outline])
+  }, [structureOpen, outline, onRefreshClaims])
+
+  /**
+   * Runs the evidence search for claims that have not been checked.
+   *
+   * Serial, and with a visible count, rather than fired off in parallel.
+   * `aggregator.ts` gives each provider a 6s timeout and `rateLimiter.ts`
+   * serialises Semantic Scholar at roughly a second a call, so eight claims at
+   * once is a 15-45 second wait — and this codebase already refuses to show
+   * progress it cannot back (see AnalyzingPanel). One claim at a time means the
+   * count is real and partial results land as they arrive.
+   *
+   * These are the four free academic APIs, not the paid relay, which is why
+   * this can be offered as a button per claim at all.
+   */
+  async function checkClaims(ids: string[]): Promise<void> {
+    if (ids.length === 0) return
+    setChecking({ done: 0, total: ids.length })
+    for (const [i, id] of ids.entries()) {
+      try {
+        await tracelyApi.findEvidence(id)
+      } catch {
+        // One claim's search failing must not abandon the rest of the queue.
+      }
+      setChecking({ done: i + 1, total: ids.length })
+    }
+    setChecking(null)
+
+    // Re-read both sides: the claims so their new strength scores render, and
+    // the outline so coverage and the unsupported-claim weaknesses reflect what
+    // the search actually found. Neither costs a relay call.
+    const analysisId = analysisIdRef.current
+    if (analysisId) await onRefreshClaims(analysisId)
+    await runStructure()
+  }
 
   /**
    * Scrolls the editor to a paragraph.
@@ -674,12 +724,15 @@ function DocumentEditor({
       {structureOpen ? (
         <StructurePanel
           outline={outline}
+          claims={claims ?? []}
           paragraphTexts={paragraphTexts}
           stale={outlineStale}
           loading={outlineLoading}
           error={outlineError}
           activeParagraph={activeParagraph}
+          checking={checking}
           onAnalyze={() => void runStructure()}
+          onCheckClaims={(ids) => void checkClaims(ids)}
           onSelectParagraph={selectParagraph}
           onClose={() => setStructureOpen(false)}
         />
@@ -730,6 +783,18 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
     }
   }
 
+  // Re-reads persisted claims after an evidence search has updated their
+  // scores. No relay call — the analysis is already stored.
+  async function refreshClaims(analysisId: string): Promise<void> {
+    try {
+      const res = await tracelyApi.getAnalysisResult(analysisId)
+      setClaims(res.claims)
+    } catch {
+      // The scores are cosmetic here; the outline's coverage is read straight
+      // from the database and stays correct either way.
+    }
+  }
+
   function handleCta(): void {
     if (sourceType === 'document') {
       // A typed name starts a new document; an empty box continues the last
@@ -765,6 +830,7 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         onDocNameChange={setDocName}
         onBack={() => setDocEditorOpen(false)}
         onRunInsights={runDetection}
+        onRefreshClaims={refreshClaims}
         insightsLoading={loading}
         claims={claims}
         error={error}

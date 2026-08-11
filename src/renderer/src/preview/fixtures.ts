@@ -258,6 +258,7 @@ export const documents: DocumentRecord[] = [
 // + counterargument 0 + significance 15 + conclusion 10 = 55.
 export const documentOutline: DocumentOutline = {
   documentId: 'doc-1',
+  analysisId: 'a1',
   sourceHash: 'preview-hash-draft-2',
   schemaVersion: 1,
   paragraphs: [
@@ -279,7 +280,11 @@ export const documentOutline: DocumentOutline = {
   },
   complete: false,
   rolesFrom: 'heuristic',
-  coverage: { detected: 2, withRelevantSource: 2, meanStrength: 48, unchecked: 0 },
+  // Matches the `claims` fixture: c1 and c2 searched and sourced, c3 never
+  // searched. Kept consistent deliberately — an outline claiming 2 detected
+  // beside a list of 3 is the kind of quiet mismatch the preview exists to
+  // surface, not to contain.
+  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 48, unchecked: 1 },
   weaknesses: [
     {
       kind: 'warrant-gap',

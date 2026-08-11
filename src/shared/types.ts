@@ -279,6 +279,15 @@ export interface EvidenceCoverage {
 export interface DocumentOutline {
   /** Null for an unsaved document being analyzed before its first autosave. */
   documentId: string | null
+  /**
+   * The analysis whose claims the paragraph `claimIds` refer to.
+   *
+   * Stored so reopening a document can fetch those claims back and show their
+   * evidence state. Without it a restored outline knows claims exist and has no
+   * way to say anything about them — the ids alone are not resolvable.
+   * An id, not prose, so it does not breach the no-text rule below.
+   */
+  analysisId: string | null
   /** Hash of the text this was computed from. Compare to detect staleness. */
   sourceHash: string
   schemaVersion: number

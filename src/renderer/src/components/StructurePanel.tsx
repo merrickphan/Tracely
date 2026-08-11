@@ -1,4 +1,4 @@
-import type { DocumentOutline, ParagraphRole, StructureComponents } from '@shared/types'
+import type { Claim, DocumentOutline, ParagraphRole, StructureComponents } from '@shared/types'
 import Spinner from './Spinner'
 
 /**
@@ -40,6 +40,101 @@ function toneFor(score: number): 'good' | 'mid' | 'low' {
   return score >= 70 ? 'good' : score >= 40 ? 'mid' : 'low'
 }
 
+/** Unchecked claims, in the order they appear in the draft. */
+function uncheckedIds(claims: Claim[]): string[] {
+  return claims.filter((claim) => claim.strengthScore === null).map((claim) => claim.id)
+}
+
+function ClaimRows({
+  claims,
+  outline,
+  checking,
+  onCheckClaims,
+  onSelectParagraph
+}: {
+  claims: Claim[]
+  outline: DocumentOutline
+  checking: { done: number; total: number } | null
+  onCheckClaims: (ids: string[]) => void
+  onSelectParagraph: (index: number) => void
+}): JSX.Element | null {
+  if (claims.length === 0) return null
+
+  const paragraphOf = new Map<string, number>()
+  for (const paragraph of outline.paragraphs) {
+    for (const claimId of paragraph.claimIds) paragraphOf.set(claimId, paragraph.index)
+  }
+  const pending = uncheckedIds(claims)
+
+  return (
+    <div className="docedit-evidence">
+      <h4 className="docedit-structure-subhead">
+        Claims
+        {pending.length > 0 && !checking ? (
+          <button className="docedit-evidence-checkall" onClick={() => onCheckClaims(pending)}>
+            Check all {pending.length}
+          </button>
+        ) : null}
+      </h4>
+
+      {checking ? (
+        <p className="docedit-evidence-progress">
+          <Spinner />
+          <span>
+            Searching {checking.done + 1} of {checking.total}…
+          </span>
+        </p>
+      ) : null}
+
+      {claims.map((claim) => {
+        const paragraph = paragraphOf.get(claim.id)
+        const checked = claim.strengthScore !== null
+        const supported = (claim.scoreBreakdown?.sourceCount ?? 0) > 0
+        return (
+          <div className="docedit-evidence-claim" key={claim.id}>
+            <span
+              className="docedit-evidence-strength"
+              data-state={!checked ? 'unchecked' : supported ? toneFor(claim.strengthScore ?? 0) : 'none'}
+              title={
+                !checked
+                  ? 'Not checked yet'
+                  : supported
+                    ? `Evidence strength ${claim.strengthScore} of 100`
+                    : 'Searched, but nothing relevant was found'
+              }
+            >
+              {!checked ? '—' : supported ? claim.strengthScore : '0'}
+            </span>
+            <span className="docedit-evidence-claim-text">{claim.text}</span>
+            {paragraph !== undefined ? (
+              <button
+                className="docedit-weakness-jump"
+                onClick={() => onSelectParagraph(paragraph)}
+                title="Go to this claim"
+              >
+                ¶{paragraph}
+              </button>
+            ) : null}
+            {/*
+              The one-button version of "find out before you commit to it".
+              This is the four free academic APIs, not the paid relay, which is
+              what makes offering it per claim reasonable at all.
+            */}
+            {!checked && !checking ? (
+              <button
+                className="docedit-evidence-check"
+                onClick={() => onCheckClaims([claim.id])}
+              >
+                Check if supportable
+              </button>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function CoverageLine({ outline }: { outline: DocumentOutline }): JSX.Element {
   const { detected, withRelevantSource, meanStrength, unchecked } = outline.coverage
 
@@ -64,16 +159,20 @@ function CoverageLine({ outline }: { outline: DocumentOutline }): JSX.Element {
 
 export default function StructurePanel({
   outline,
+  claims,
   paragraphTexts,
   stale,
   loading,
   error,
   activeParagraph,
+  checking,
   onAnalyze,
+  onCheckClaims,
   onSelectParagraph,
   onClose
 }: {
   outline: DocumentOutline | null
+  claims: Claim[]
   /**
    * Paragraph text from the LIVE editor, split with the same shared splitter
    * main used. The outline carries no prose by design, so if the document has
@@ -86,7 +185,10 @@ export default function StructurePanel({
   loading: boolean
   error: string | null
   activeParagraph: number | null
+  /** Progress of a running evidence sweep, or null when idle. */
+  checking: { done: number; total: number } | null
   onAnalyze: () => void
+  onCheckClaims: (ids: string[]) => void
   onSelectParagraph: (index: number) => void
   onClose: () => void
 }): JSX.Element {
@@ -94,6 +196,21 @@ export default function StructurePanel({
     <aside className="docedit-structure" aria-label="Structure">
       <div className="docedit-structure-head">
         <span className="docedit-structure-title">Structure</span>
+        {/*
+          Available whenever an outline exists, not only when it is stale.
+          Staleness is detected from the text, and plenty of reasons to re-read
+          a draft leave the text alone — evidence was just gathered, or the
+          user simply disagrees with a label and wants another pass.
+        */}
+        {outline && !loading ? (
+          <button
+            className="docedit-structure-reanalyze"
+            onClick={onAnalyze}
+            title="Read the draft again"
+          >
+            Re-analyze
+          </button>
+        ) : null}
         <button className="docedit-structure-close" onClick={onClose} aria-label="Hide structure">
           ×
         </button>
@@ -182,6 +299,14 @@ export default function StructurePanel({
               )
             })}
           </div>
+
+          <ClaimRows
+            claims={claims}
+            outline={outline}
+            checking={checking}
+            onCheckClaims={onCheckClaims}
+            onSelectParagraph={onSelectParagraph}
+          />
 
           {outline.weaknesses.length > 0 ? (
             <div className="docedit-weaknesses">
