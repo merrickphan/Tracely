@@ -276,8 +276,15 @@ input[type='range']::-webkit-slider-runnable-track {
 .app-shell {
   display: flex;
   flex-direction: column;
-  width: 100vw;
-  height: 100vh;
+  /* Divided by the zoom factor Settings > Appearance > Font size applies to the
+     document root. `zoom` scales rendered lengths but viewport units keep
+     resolving against the unzoomed viewport, so plain `100vw`/`100vh` rendered
+     974x679 inside an 870x606 window at `large` (measured) — clipped on two
+     sides — and 800x558 at `small`, leaving a transparent strip. --app-zoom is
+     set alongside the `zoom` property itself in applyFontSize so the two cannot
+     drift, and the window is resized to match main-side. */
+  width: calc(100vw / var(--app-zoom, 1));
+  height: calc(100vh / var(--app-zoom, 1));
   overflow: hidden;
 }
 
@@ -288,11 +295,20 @@ input[type='range']::-webkit-slider-runnable-track {
    their own internal padding (28-32px) — no extra centered/inset column on
    top of that, which is what made everything read as "too far inward"
    against the design. */
+/* The gutter between the card and the window edge. Must match
+   MAIN_WINDOW_MARGIN in shared/windowSize.ts, which is what the window is sized
+   with. Without it the card sat flush against three edges and its `-13px 13px`
+   drop shadow fell entirely outside the window, so it never rendered at all. */
+:root {
+  --window-margin: 14px;
+}
+
 .app-main {
   flex: 1;
   overflow: hidden;
   width: 100%;
   display: flex;
+  padding: var(--window-margin);
 }
 
 .app-main-fixed {
@@ -301,24 +317,35 @@ input[type='range']::-webkit-slider-runnable-track {
   flex-direction: column;
 }
 
-/* Pixel-exact recreation of Figma's "Frame Main Page" — literal px from
-   the design, no scaling math at all. The window is fixed at 870x606 and
-   can't resize (see createMainWindow), so there's no need for relative
-   units anymore: Figma's coordinates are used verbatim. Home's own frame
-   is 870x597 (9px shorter than the window) — flush top-left, not
-   centered/stretched, so the aspect ratio never changes. */
+/* Figma's "Frame Main Page", positioned in literal px from the design — the
+   card's own children still use Figma's coordinates verbatim, which is why the
+   card must stay 870x606 of *layout* space.
+
+   The card itself now fills `.app-main`'s content box rather than hardcoding
+   870x606, so it inherits the window gutter and scales with the font-size zoom
+   instead of overflowing it. Three views previously disagreed about this size
+   (870, 868, 100%) for one window. */
 .home-view {
   position: relative;
-  width: 870px;
-  height: 606px;
+  width: 100%;
+  height: 100%;
 }
 
 .home-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 870px;
-  height: 597px;
+  /* `relative`, not `absolute`. It is still the containing block for its
+     absolutely-positioned `.home-el` children, which is the only thing the
+     `absolute` was buying — but as an out-of-flow box with no positioned
+     ancestor it resolved against the initial containing block, i.e. the whole
+     window, so `.app-main`'s gutter did not apply to it and it sat flush
+     against three window edges with its drop shadow entirely off-window.
+     In flow, it fills `.app-main`'s content box and inherits the gutter.
+
+     Size was 870x597 — 9px shorter than the frame around it, for no reason that
+     survives in the design. Nothing inside is bottom-anchored (the lowest
+     element ends at 558), so filling the frame only adds trailing space. */
+  position: relative;
+  width: 100%;
+  height: 100%;
   background: #fff;
   border: 1px solid #000;
   border-radius: 30px;
@@ -335,8 +362,38 @@ input[type='range']::-webkit-slider-runnable-track {
 
 .login-canvas {
   display: flex;
-  align-items: center;
+  /* `safe` matters. With plain `center`, an overflowing flex item is clipped at
+     BOTH ends and the top of the card becomes permanently unreachable — which
+     the Create Account form plus an error banner is tall enough to trigger.
+     `safe center` falls back to start-alignment once it would overflow, so the
+     scroll below can actually reach it. */
+  align-items: safe center;
   justify-content: center;
+  overflow-y: auto;
+  padding: 16px 0;
+  /* `.home-canvas` is the window's drag handle, and Chromium blocks wheel
+     scroll inside a drag region — so without this the overflow above would be
+     unscrollable, exactly as it was on the Analyze card. */
+  -webkit-app-region: no-drag;
+}
+
+/* This screen is deliberately light-only: it paints its own white card with
+   hardcoded black type, before any theme is meaningful. Two elements leaked
+   theme variables into it — `.login-message` uses `.muted` and `.login-google`
+   is a `.btn-secondary` — and in dark mode became near-white text on that white
+   card. Pinned unconditionally rather than under a dark selector, because dark
+   is reachable two ways (an explicit `data-theme` and the system
+   `prefers-color-scheme` fallback) and a rule that only covers one of them is a
+   bug waiting to be re-reported. */
+.login-canvas .login-message.muted,
+.login-canvas .login-message {
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.login-canvas .login-google.btn {
+  background: #fff;
+  color: #000;
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 .login-card {
@@ -518,13 +575,20 @@ input[type='range']::-webkit-slider-runnable-track {
   color: #000;
 }
 
+/* Anchored to its right edge rather than its left. The text is "Hey, {first
+   name}!", and starting it at a fixed left: 636px left only ~197px before the
+   close button at 833 — about six characters at 32px — with `white-space:
+   nowrap` silently cutting off the rest. Growing leftward from just inside the
+   close button means a long name runs into empty card instead of off it. */
 .home-greeting {
-  left: 636px;
+  left: 200px;
+  right: 50px;
   top: 44px;
+  text-align: right;
   font-size: 32px;
   font-weight: 500;
   color: #000;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .home-heading {
@@ -605,72 +669,13 @@ input[type='range']::-webkit-slider-runnable-track {
   font-size: 20px;
 }
 
-.home-flagcard {
-  left: 35px;
-  top: 413px;
-  width: 414px;
-  height: 145px;
-  background: #fff;
-  border: 1px solid #000;
-  border-radius: 17px;
-}
+/* `.home-flagcard*` rules removed with the hardcoded placeholder card. */
 
-.home-flagcard-checkbox {
-  position: absolute;
-  left: 41px;
-  top: 112px;
-  width: 16px;
-  height: 12px;
-  border: 1.5px solid rgba(0, 0, 0, 0.6);
-  border-radius: 2px;
-}
 
-.home-flagcard-checkbox-lid {
-  position: absolute;
-  left: 39px;
-  top: 107px;
-  width: 20px;
-  height: 2px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 1px;
-}
 
-.home-flagcard-quote {
-  position: absolute;
-  left: 19px;
-  top: 13px;
-  width: 387px;
-  font-size: 16px;
-  line-height: 1.35;
-  color: #000;
-  margin: 0;
-}
 
-.home-flagcard-dismiss,
-.home-flagcard-insights {
-  position: absolute;
-  top: 104px;
-  height: 25px;
-  border: none;
-  border-radius: 18px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
 
-.home-flagcard-dismiss {
-  left: 28px;
-  width: 102px;
-  background: #d9d9d9;
-  color: #000;
-}
 
-.home-flagcard-insights {
-  left: 250px;
-  width: 136px;
-  background: linear-gradient(90deg, #ff8a00, #ff3d00);
-  color: #fff;
-}
 
 .home-worktext {
   left: 550px;
@@ -798,8 +803,13 @@ textarea:disabled {
   border: 1px solid #000;
   border-radius: 28px;
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
-  overflow-x: hidden;
-  overflow-y: auto;
+  /* The card is the drag handle and NOT the scroller. It was both, and
+     Chromium blocks wheel scroll inside a drag region — so `overflow-y: auto`
+     here did nothing, and anything below the fold after pasting text was
+     unreachable unless the cursor happened to be over one of the few elements
+     that opt out. `.settings-panel` already documents this exact trap.
+     Scrolling moved to `.analyze-input`, which opts out. */
+  overflow: hidden;
   -webkit-app-region: drag;
 }
 
@@ -844,7 +854,14 @@ textarea:disabled {
 .analyze-input {
   position: static;
   width: 100%;
-  min-height: 100%;
+  /* The scroller, and the opt-out that makes the wheel work over it. Was
+     `min-height: 100%` inside a scrolling card; now it IS the scrolling box, so
+     the back button above it stays put instead of scrolling out of the card
+     when focusing the textarea scrolls it into view. */
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -961,42 +978,10 @@ textarea:disabled {
   min-height: 44px;
 }
 
-@media (max-width: 680px) {
-  .analyze-input {
-    padding: 68px 24px 36px;
-  }
-
-  .source-tile-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 24px;
-  }
-
-  .source-tile {
-    flex-direction: row;
-    height: 72px;
-    padding: 14px 18px;
-  }
-
-  .analyze-input-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .analyze-cta {
-    width: 100%;
-  }
-
-  .analyze-results .claim-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .analyze-results .claim-actions .btn {
-    flex: none;
-    width: 100%;
-  }
-}
+/* A `@media (max-width: 680px)` block sat here and could never match: the
+   main window is fixed at 870px wide and `resizable: false`, so the viewport
+   never gets near 680. Removed rather than left as a false promise of
+   responsiveness. */
 
 .source-unavailable-note {
   margin: -20px 0 24px;
@@ -1114,8 +1099,10 @@ textarea:disabled {
    surface, not the loading/analyzing state. */
 .docedit-view {
   position: relative;
-  width: 868px;
-  height: 606px;
+  /* Was 868x606 — 2px narrower than every other view of the same window, and a
+     hardcoded height that clipped 24px off the bottom under compact density. */
+  width: 100%;
+  height: 100%;
   background: #fff;
   border: 1px solid #000;
   border-radius: 28px;
@@ -1332,17 +1319,8 @@ textarea:disabled {
   cursor: default;
 }
 
-.docedit-share,
-.docedit-more {
-  border: none;
-  background: transparent;
-  color: #5c5c5c;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: default;
-  padding: 4px 6px;
-  flex-shrink: 0;
-}
+/* `.docedit-share` / `.docedit-more` removed with the two permanently-disabled
+   buttons they styled. */
 
 .docedit-body-wrap {
   position: relative;
@@ -1707,7 +1685,11 @@ textarea:disabled {
 /* Per-source verdicts. Only supports/contradicts are ever rendered — see
    EvidenceCard for why 'unclear' deliberately gets no chip. */
 .evidence-stance {
-  float: right;
+  /* `float: right` took it out of flow, so a long evidence title ran underneath
+     the chip instead of stopping short of it. Inline-block keeps it on the same
+     line and lets the text reflow around it. */
+  display: inline-block;
+  vertical-align: middle;
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
@@ -1805,6 +1787,11 @@ textarea:disabled {
 .citation-result code {
   white-space: pre-wrap;
   flex: 1;
+  /* A flex item's min-width defaults to its content, so a long unbroken DOI or
+     URL in a formatted citation pushed the card wider than the window instead
+     of wrapping. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .muted {
@@ -1860,8 +1847,8 @@ textarea:disabled {
 }
 
 .settings-view {
-  width: 870px;
-  height: 606px;
+  width: 100%;
+  height: 100%;
 }
 
 .settings-shell {
@@ -2442,9 +2429,11 @@ textarea:disabled {
 
 /* Density mode (Settings > Appearance) — scopes to the most visibly dense
    surfaces rather than trying to rescale every padding value in the sheet. */
-.density-compact .app-main {
-  padding: 12px 16px;
-}
+/* No `.app-main` override here any more. Shrinking the window gutter by
+   density fought the two views that hardcoded `height: 606px` and clipped 24px
+   off the bottom of both, inside `.app-main`'s `overflow: hidden`. Density is
+   about how tight the content is, not how far the card sits from the window
+   edge — the rules below are the ones doing that work. */
 .density-compact .settings-panel {
   padding: 16px 20px;
 }
@@ -2461,9 +2450,9 @@ textarea:disabled {
 .density-compact .results-panel {
   gap: 10px;
 }
-.density-compact .home-view {
-  gap: 18px;
-}
+/* `.density-compact .home-view { gap: 18px }` was here and never applied —
+   `.home-view` is a positioning context for absolutely-placed children, not a
+   flex container, so it has no gap to set. */
 
 /* ---------------------------------------------------------------------
    Confirm dialog — "are you sure?" gate for destructive/hard-to-undo
@@ -2493,7 +2482,13 @@ textarea:disabled {
 
 .modal-backdrop {
   position: fixed;
-  inset: 0;
+  /* Inset by the window gutter and rounded to match the card. The dialog is
+     portalled to document.body, so `inset: 0` painted an opaque square-cornered
+     rectangle over the whole window — including the transparent area outside
+     the card's 30px radius, which showed as four hard corners appearing out of
+     nowhere on a frameless transparent window. */
+  inset: var(--window-margin);
+  border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2606,4 +2601,55 @@ textarea:disabled {
   padding: 0 4px;
   min-width: 46px;
   text-align: right;
+}
+
+/* Settings > Preferences — global-shortcut capture field. Reads as an input
+   but is a button, because it captures a key chord rather than text. */
+.settings-hotkey {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.settings-hotkey:hover {
+  border-color: var(--accent);
+}
+.settings-hotkey-capturing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+  color: var(--muted);
+}
+
+/* Extra breathing room where a grid follows body copy rather than a header. */
+.settings-panel-grid-spaced {
+  margin-top: 18px;
+}
+
+/* Settings > Privacy — one row per destructive action. */
+.settings-danger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.settings-danger-row > div:first-child {
+  min-width: 0;
 }

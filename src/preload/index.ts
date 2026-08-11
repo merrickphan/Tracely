@@ -176,7 +176,9 @@ const api = {
       ipcRenderer.invoke(IPC.HISTORY_CLEAR, req)
   },
   clipboard: {
-    read: (): Promise<ClipboardReadResponse> => ipcRenderer.invoke(IPC.CLIPBOARD_READ, {}),
+    // No `read`. It had zero renderer callers — the global hotkey reads the
+    // clipboard main-side (hotkey.ts) — so it was an unnecessary
+    // read-the-user's-clipboard capability sitting on the bridge.
     write: (req: ClipboardWriteRequest): Promise<ClipboardWriteResponse> =>
       ipcRenderer.invoke(IPC.CLIPBOARD_WRITE, req)
   },
@@ -184,9 +186,9 @@ const api = {
     hide: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
       ipcRenderer.invoke(IPC.WINDOW_HIDE, req),
     show: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_SHOW, req),
-    close: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_CLOSE, req)
+      ipcRenderer.invoke(IPC.WINDOW_SHOW, req)
+    // No `close`. Its handler was byte-identical to `hide` — both called
+    // .hide() — and it had zero callers.
   },
   shell: {
     openExternal: (req: ShellOpenExternalRequest): Promise<ShellOpenExternalResponse> =>

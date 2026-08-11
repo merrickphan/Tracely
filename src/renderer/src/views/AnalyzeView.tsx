@@ -3,27 +3,35 @@ import type { Claim, DocumentRecord } from '@shared/types'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import TextArea from '../components/TextArea'
-import { DocumentIcon, LinkIcon, ClipboardIcon, CheckCircleIcon, CloseIcon, BackIcon } from '../components/icons'
+import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
-type SourceType = 'document' | 'url' | 'text'
+type SourceType = 'document' | 'text'
 
+// No "URL / Link" tile. It never fetched anything: selecting it only changed
+// the placeholder, and submitting sent the URL *string* to the paid relay as
+// prose — which sentence-splits into one "sentence" of URL characters, finds no
+// checkable claim, and shows "No checkable claims detected in this text." So it
+// cost money to produce a false negative, while the CTA said "Import Link" and
+// the progress bar said "Reading source content".
+//
+// Building it for real needs an HTML extraction dependency and would widen the
+// "academic APIs + relay only" network promise in CLAUDE.md to arbitrary URLs.
+// That is a design decision, not a bug fix. Screen Watch already reads whatever
+// page you actually have open.
 const SOURCE_TILES: { id: SourceType; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
   { id: 'document', label: 'Document', icon: DocumentIcon },
-  { id: 'url', label: 'URL / Link', icon: LinkIcon },
   { id: 'text', label: 'Paste text', icon: ClipboardIcon }
 ]
 
 const SOURCE_PLACEHOLDER: Record<SourceType, string> = {
   document: 'Name your document…',
-  url: 'Paste a URL…',
   text: 'Paste your text here…'
 }
 
 const SOURCE_CTA: Record<SourceType, string> = {
   document: 'Create Document',
-  url: 'Import Link',
   text: 'Begin analysis'
 }
 
@@ -33,12 +41,6 @@ const SOURCE_CTA: Record<SourceType, string> = {
 // before the real call does), the bar's percent tracks actual elapsed time
 // with an asymptotic curve that approaches but never reaches 100% — it only
 // ever disappears when the real response has actually landed.
-const ANALYZING_STEPS = [
-  'Reading source content',
-  'Extracting key claims',
-  'Cross-referencing credible sources',
-  'Generating citations'
-]
 const ANALYZING_EXPECTED_MS = 6000
 const ANALYZING_TICK_MS = 200
 const ANALYZING_MAX_PERCENT = 96
@@ -54,10 +56,6 @@ function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
   }, [])
 
   const percent = Math.round((1 - Math.exp(-elapsedMs / ANALYZING_EXPECTED_MS)) * ANALYZING_MAX_PERCENT)
-  const stepIndex = Math.min(
-    ANALYZING_STEPS.length - 1,
-    Math.floor((percent / ANALYZING_MAX_PERCENT) * ANALYZING_STEPS.length)
-  )
 
   return (
     <>
@@ -66,23 +64,23 @@ function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
       </button>
       <div className="analyzing-panel">
         <div className="analyzing-spinner-ring" />
-        <h3>Analyzing your source</h3>
-        <p>Tracely is scanning claims and gathering credible evidence.</p>
+        <h3>Detecting claims</h3>
+        {/*
+          Says what this stage actually does. It was "Analyzing your source" over
+          a four-item checklist reading "Reading source content",
+          "Cross-referencing credible sources" and "Generating citations" — none
+          of which happen here. This is one relay call that finds claims;
+          evidence search and citations run later, on demand. In an app whose
+          product promise is not overstating what the evidence says, a progress
+          bar narrating work it is not doing is the worst possible place to fake
+          it. The percentage stays: it tracks real elapsed time on an asymptotic
+          curve and only disappears when the response actually lands.
+        */}
+        <p>Tracely is reading your text for checkable claims.</p>
         <div className="analyzing-progress-track">
           <div className="analyzing-progress-fill" style={{ width: `${percent}%` }} />
         </div>
         <p className="analyzing-progress-label">{percent}%</p>
-        <div className="analyzing-steps">
-          {ANALYZING_STEPS.map((label, i) => (
-            <div
-              key={label}
-              className={`analyzing-step ${i < stepIndex ? 'done' : i === stepIndex ? 'active' : ''}`}
-            >
-              <span className="analyzing-step-dot">{i < stepIndex ? <CheckCircleIcon size={10} /> : null}</span>
-              {label}
-            </div>
-          ))}
-        </div>
       </div>
     </>
   )
@@ -480,12 +478,13 @@ function DocumentEditor({
         >
           {insightsLoading ? 'Analyzing…' : 'AI Insights'}
         </button>
-        <button className="docedit-share" disabled title="Sharing isn't available yet">
-          Share
-        </button>
-        <button className="docedit-more" disabled title="More options aren't available yet">
-          •••
-        </button>
+        {/*
+          "Share" and "•••" were here, permanently disabled with "isn't
+          available yet". Same reasoning that already removed Share from
+          Tracer's action row: local-first, no account, no permalink, nothing to
+          share TO. A button that can never be enabled is worse than no button —
+          it takes up space promising something that is not coming.
+        */}
       </div>
 
       <div className="docedit-body-wrap">
@@ -494,7 +493,7 @@ function DocumentEditor({
           className="docedit-body"
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="Start typing or insert using /"
+          data-placeholder="Start typing…"
           onInput={handleInput}
         />
       </div>
