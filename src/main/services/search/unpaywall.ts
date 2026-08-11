@@ -118,13 +118,38 @@ export function selectLinks(data: UnpaywallResponse): OpenAccessLinks | null {
   }
 }
 
+// Bounds on enrichment, and the reason they are not optional.
+//
+// `attachOpenAccessLinks` is awaited inside `findEvidence`, *after* the section
+// that `PROVIDER_TIMEOUT_MS` protects. So while every search provider is capped
+// at 6s, an unbounded fetch here re-opened exactly the hole aggregator.ts's own
+// comment describes: the Screen Watch popover shows a loading state until the
+// search resolves, so one Unpaywall connection that is accepted and then never
+// answered left "loading articles" spinning forever.
+//
+// Two separate limits, because one does not imply the other. The per-request
+// timeout stops a single stalled connection; the budget stops N sequential slow
+// -but-not-stalled lookups from adding up past anything reasonable.
+const LOOKUP_TIMEOUT_MS = 4000
+const ENRICHMENT_BUDGET_MS = 8000
+
 async function lookup(doi: string, email: string): Promise<OpenAccessLinks | null> {
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(doi)}?email=${encodeURIComponent(email)}`)
-  // 404 is the normal answer for a DOI Unpaywall has never indexed, not a
-  // failure worth logging — enrichment is additive and a source with a
-  // resolver link is still a source.
-  if (!res.ok) return null
-  return selectLinks((await res.json()) as UnpaywallResponse)
+  // AbortController rather than AbortSignal.timeout so the timer is cleared on
+  // the normal path instead of being left to fire into nothing.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${ENDPOINT}/${encodeURIComponent(doi)}?email=${encodeURIComponent(email)}`, {
+      signal: controller.signal
+    })
+    // 404 is the normal answer for a DOI Unpaywall has never indexed, not a
+    // failure worth logging — enrichment is additive and a source with a
+    // resolver link is still a source.
+    if (!res.ok) return null
+    return selectLinks((await res.json()) as UnpaywallResponse)
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /**
@@ -144,8 +169,14 @@ export async function attachOpenAccessLinks(items: NormalizedSourceResult[]): Pr
   if (needsLink.length === 0) return
 
   const queue = [...needsLink]
+  const deadline = Date.now() + ENRICHMENT_BUDGET_MS
   const workers = Array.from({ length: Math.min(LOOKUP_CONCURRENCY, queue.length) }, async () => {
     for (;;) {
+      // Best-effort by design: this only ever upgrades a link that already
+      // works. Abandoning the rest of the queue costs some doi.org resolvers
+      // staying as they are, which is strictly better than holding up every
+      // result that did resolve.
+      if (Date.now() >= deadline) return
       const item = queue.shift()
       if (item === undefined) return
       try {
