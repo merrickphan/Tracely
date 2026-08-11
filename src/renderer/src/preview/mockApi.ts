@@ -1,5 +1,5 @@
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent } from '@shared/ipc-contract'
-import type { AuthUser, DocumentRecord } from '@shared/types'
+import type { AuthUser, DocumentOutline, DocumentRecord } from '@shared/types'
 
 // Deliberately `Window['tracely']` rather than a direct import of
 // src/preload/index.ts. Both resolve to the same `TracelyApi`, but pulling
@@ -36,6 +36,16 @@ export type Scenario = {
   failRelay: boolean
   /** Add a delay to async calls so loading states are actually visible. */
   latencyMs: number
+  /**
+   * Which Structure outline to serve.
+   *
+   * 'heuristic' is what the local rules produce with no relay: two paragraphs
+   * unlabelled, `complete: false`, whole-draft weaknesses withheld. 'none'
+   * covers a document that has never been analyzed. The confident, fully
+   * classified state is otherwise unreachable in the preview, since there is
+   * no relay behind the harness to produce it.
+   */
+  structure: 'heuristic' | 'classified' | 'none'
 }
 
 export const defaultScenario: Scenario = {
@@ -43,7 +53,8 @@ export const defaultScenario: Scenario = {
   relayConfigured: true,
   tracerMessages: 'thread',
   failRelay: false,
-  latencyMs: 0
+  latencyMs: 0,
+  structure: 'heuristic'
 }
 
 /** Names of every call the harness logs, so the UI can show what fired. */
@@ -89,6 +100,11 @@ export function createMockApi(
   let previewDocs: DocumentRecord[] = [...fx.documents]
   let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
   let nextId = 100
+
+  const outlineForScenario = (): DocumentOutline | null => {
+    if (scenario.structure === 'none') return null
+    return scenario.structure === 'classified' ? fx.documentOutlineClassified : fx.documentOutline
+  }
 
   return {
     analyze: {
@@ -173,6 +189,33 @@ export function createMockApi(
       remove: (req) => {
         previewDocs = previewDocs.filter((d) => d.id !== req.id)
         return ok('documents.remove', { ok: true as const })
+      }
+    },
+    structure: {
+      // Serves a fixture rather than running the real engine: analyzeStructure
+      // lives in the main process and reaches for node:crypto, so it cannot be
+      // imported into a renderer iframe. The fixtures are hand-computed from
+      // the same rubric — see the score trace in fixtures.ts.
+      // Analyzing always yields an outline, including under the 'none'
+      // scenario — 'none' means "nothing stored yet", which is a fact about
+      // the store, not about whether analysis can run.
+      analyze: (req) =>
+        ok('structure.analyze', {
+          outline: {
+            ...(outlineForScenario() ?? fx.documentOutline),
+            documentId: req.documentId ?? null
+          }
+        }),
+      get: (req) => {
+        const outline = outlineForScenario()
+        if (!outline) return ok('structure.get', { outline: null, stale: false })
+        return ok('structure.get', {
+          outline: { ...outline, documentId: req.documentId },
+          // The stored hash is a fixed fixture string, so anything the editor
+          // computes differs from it — which is exactly the state needed to
+          // review the stale banner.
+          stale: outline.sourceHash !== req.sourceHash
+        })
       }
     },
     settings: {

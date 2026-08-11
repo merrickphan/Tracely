@@ -242,9 +242,14 @@ export function resetDatabase(): void {
 // writing back at them, so leaving them behind would defeat the point of
 // "Clear Analysis History" as a privacy control, even though they live in
 // their own tables rather than analyses/claims.
+// document_structure goes with them for two reasons: its weakness messages
+// quote paragraph positions in the user's writing, and its claim ids point at
+// claims this statement is about to delete — leaving it would strand an
+// outline referring to analyses that no longer exist. The documents themselves
+// are the user's work and stay, exactly as the library does.
 export function clearAnalysisHistory(): void {
   getDb().exec(
-    'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
+    'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations; DELETE FROM document_structure;'
   )
   getDb().exec('VACUUM')
   persist()

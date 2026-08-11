@@ -1,5 +1,5 @@
 import type { ParagraphRole } from '@shared/types'
-import type { ParagraphSpan } from '../ai/paragraphSplit'
+import type { ParagraphSpan } from '@shared/paragraphSplit'
 
 /**
  * Local, zero-cost role labelling. This is the fallback the panel runs on

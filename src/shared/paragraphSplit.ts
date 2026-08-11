@@ -1,3 +1,13 @@
+/**
+ * Paragraph geometry, shared because BOTH processes need the identical split.
+ *
+ * Main computes roles and the score against these spans; the renderer has to
+ * re-derive the same paragraphs to render text beside those labels, because a
+ * DocumentOutline deliberately carries no prose. Two implementations drifting
+ * apart would misalign every row in the panel against the paragraph it claims
+ * to describe, which is the same reason `claimSpans.ts` lives here.
+ */
+
 export interface ParagraphSpan {
   /** 1-based, so it matches the numbering a classifier is shown. */
   index: number

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { computeClaimSpans } from '@shared/claimSpans'
 import type { Claim, DocumentOutline, EvidenceCoverage, ParagraphOutline } from '@shared/types'
-import { bucketClaimsByParagraph, splitParagraphs } from '../ai/paragraphSplit'
+import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
 import { hasSignificanceMarker, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'

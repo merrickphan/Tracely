@@ -11,6 +11,7 @@ import type {
   Density,
   FontSize,
   EvidenceItem,
+  DocumentOutline,
   DocumentRecord,
   LibraryItem,
   ScoreBreakdown,
@@ -612,4 +613,34 @@ export interface DocumentsRemoveRequest {
 }
 export interface DocumentsRemoveResponse {
   ok: true
+}
+
+export interface StructureAnalyzeRequest {
+  /** Null for a document that has not autosaved yet — the outline still computes. */
+  documentId?: string | null
+  /**
+   * The editor's `innerText`, NOT its `bodyHtml`. Paragraph and claim offsets
+   * are computed against this string, and it has to be the same string claim
+   * detection saw or every offset is wrong. Main deliberately never parses the
+   * document's HTML.
+   */
+  text: string
+  /** The analysis whose claims to map onto paragraphs. Null before Analyze has run. */
+  analysisId?: string | null
+}
+export interface StructureAnalyzeResponse {
+  outline: DocumentOutline
+}
+export interface StructureGetRequest {
+  documentId: string
+  /**
+   * Hash of the text currently in the editor. The response's `stale` flag is
+   * this compared against the stored outline's, so the panel can say the
+   * document moved on rather than presenting an old analysis as current.
+   */
+  sourceHash: string
+}
+export interface StructureGetResponse {
+  outline: DocumentOutline | null
+  stale: boolean
 }
