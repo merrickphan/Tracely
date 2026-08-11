@@ -35,6 +35,18 @@ export const MIN_CLAIM_CONFIDENCE = 0.4
 // re-sent on every message, so an uncapped conversation grows quadratically
 // in tokens. Trimming the OLDEST turns keeps the exchange the user is
 // actually in the middle of intact.
+// Structure classification. Mirrored in the relay's lib/limits.ts.
+//
+// The order these are applied in is load-bearing: cap each paragraph to
+// MAX_STRUCTURE_PARAGRAPH_CHARS first, then the assembled text to
+// MAX_STRUCTURE_INPUT_CHARS. Slicing the assembled string instead lets a long
+// introduction eat the whole budget, so the conclusion is never labelled and
+// two of the six score components silently read as absent rather than as
+// unassessed — a wrong score with no visible cause.
+export const MAX_STRUCTURE_PARAGRAPHS = 24
+export const MAX_STRUCTURE_PARAGRAPH_CHARS = 320
+export const MAX_STRUCTURE_INPUT_CHARS = 8000
+
 export const MAX_TRACER_MESSAGE_CHARS = 2000
 export const MAX_TRACER_HISTORY_MESSAGES = 12
 export const MAX_TRACER_DOCUMENT_CHARS = 4000

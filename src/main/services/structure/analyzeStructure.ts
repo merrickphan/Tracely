@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto'
 import { computeClaimSpans } from '@shared/claimSpans'
-import type { Claim, DocumentOutline, EvidenceCoverage, ParagraphOutline } from '@shared/types'
+import type {
+  Claim,
+  DocumentOutline,
+  EvidenceCoverage,
+  ParagraphOutline,
+  ParagraphRole
+} from '@shared/types'
 import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
 import { hasSignificanceMarker, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
@@ -48,6 +54,12 @@ export interface AnalyzeStructureInput {
   claimsWithoutEvidence: string[]
   coverage: EvidenceCoverage
   analyzedAt: string
+  /**
+   * Roles from the relay classifier, when it ran. Absent falls back to the
+   * local heuristics, and `rolesFrom` records which was used so the panel can
+   * say so rather than presenting both as the same kind of answer.
+   */
+  classified?: { roles: ParagraphRole[]; warranted: boolean[] } | null
 }
 
 export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline {
@@ -64,7 +76,13 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   }))
   const claimsByParagraph = bucketClaimsByParagraph(spans, located)
 
-  const { roles, warranted } = heuristicRoles({ paragraphs: spans, claimsByParagraph })
+  // The classifier's answer is used whole or not at all. Merging it with the
+  // heuristics per paragraph — say, letting a heuristic fill a paragraph the
+  // model returned 'unknown' for — would produce a role vector from two
+  // sources with different standards for what justifies a label, and
+  // `rolesFrom` could no longer describe it truthfully.
+  const { roles, warranted } =
+    input.classified ?? heuristicRoles({ paragraphs: spans, claimsByParagraph })
 
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
@@ -91,7 +109,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     score,
     components,
     complete,
-    rolesFrom: 'heuristic',
+    rolesFrom: input.classified ? 'model' : 'heuristic',
     coverage: input.coverage,
     weaknesses: findWeaknesses({
       paragraphs,
