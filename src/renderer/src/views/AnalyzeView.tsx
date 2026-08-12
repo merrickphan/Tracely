@@ -269,6 +269,7 @@ function DocumentEditor({
     if (!text.trim() && editor.innerHTML !== '') {
       editor.innerHTML = ''
     }
+    bodyHtmlRef.current = editor.innerHTML
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
     setParagraphTexts(splitParagraphs(text).map((p) => p.text))
     // Editing invalidates the reading. Without this, `outlineStale` was only
@@ -327,12 +328,26 @@ function DocumentEditor({
   // reason docIdRef is one: it is read inside async work that must not be
   // re-created when it changes.
   const analysisIdRef = useRef<string | null>(null)
+  /**
+   * The editor's HTML as of the last input event.
+   *
+   * `flushSave` cannot rely on `editorRef.current` alone. React detaches refs
+   * during deletion but runs passive effect cleanups AFTER that, so by the time
+   * the unmount cleanup below fires, `editorRef.current` is already null and
+   * the save it exists to perform returns immediately without writing. Typing
+   * and pressing Back inside the 900ms debounce lost the edit outright.
+   *
+   * Mirroring the html here costs one assignment per input event and makes the
+   * flush independent of whether the node is still mounted.
+   */
+  const bodyHtmlRef = useRef<string>(initialDoc?.bodyHtml ?? '')
 
   const flushSave = useCallback((): Promise<void> => {
     const run = async (): Promise<void> => {
-      const editor = editorRef.current
-      if (!editor) return
-      const bodyHtml = editor.innerHTML
+      // Prefer the live node when it is still mounted, since it is the truth;
+      // fall back to the mirror when it is not, which is exactly the unmount
+      // case this save has to survive.
+      const bodyHtml = editorRef.current?.innerHTML ?? bodyHtmlRef.current
       // Never create a row for an editor the user opened and never typed in.
       if (!docIdRef.current && !bodyHtml.trim() && !docNameRef.current.trim()) return
       setSaveState('saving')
