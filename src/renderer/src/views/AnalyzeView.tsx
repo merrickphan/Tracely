@@ -143,6 +143,14 @@ function DocumentEditor({
   // ---- Structure rail ----------------------------------------------------
   const [structureOpen, setStructureOpen] = useState(false)
   const [outline, setOutline] = useState<DocumentOutline | null>(null)
+  // handleInput is a plain function re-created every render and called from an
+  // uncontrolled contentEditable, so it must not close over `outline` — it
+  // would read whatever value was current when that render's handler was
+  // attached. A ref is the value at call time.
+  const outlineRef = useRef<DocumentOutline | null>(null)
+  useEffect(() => {
+    outlineRef.current = outline
+  }, [outline])
   const [outlineStale, setOutlineStale] = useState(false)
   const [outlineLoading, setOutlineLoading] = useState(false)
   const [outlineError, setOutlineError] = useState<string | null>(null)
@@ -263,6 +271,13 @@ function DocumentEditor({
     }
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
     setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+    // Editing invalidates the reading. Without this, `outlineStale` was only
+    // ever set by the stored-outline load, so typing left a stale analysis
+    // looking current AND let runStructure reuse its analysisId — bucketing
+    // claims into paragraphs they had since moved out of. Guarded on the
+    // current value so an already-stale outline does not re-render per
+    // keystroke.
+    setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
     // Typing can end a pending style (Enter starts a fresh block), so the
     // toolbar has to follow the caret, not just explicit toolbar clicks.
     syncFormatState()
@@ -412,8 +427,11 @@ function DocumentEditor({
         analysisId
       })
       setOutline(res.outline)
-      setOutlineStale(false)
       setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+      // Only clear the flag if the draft has not moved on while the analysis
+      // was running. Clearing it unconditionally presented a reading of text
+      // the user had already edited past as current.
+      setOutlineStale(bodyText() !== text)
     } catch (err) {
       setOutlineError(err instanceof Error ? err.message : String(err))
     } finally {

@@ -89,6 +89,32 @@ describe('heuristicRoles — precedence', () => {
     )
   })
 
+  it('ignores a marker word used mid-sentence', () => {
+    // The markers are sentence-openers announcing a turn in the argument. As a
+    // substring search over the opening 60 characters, ordinary prose that
+    // merely contains one was labelled as though it signposted something.
+    strictEqual(
+      rolesOf(['Intro.', 'The results were positive overall, and the trend held.'], [2])[1],
+      'claim'
+    )
+    strictEqual(
+      rolesOf(['Intro.', 'The evidence, however, is not decisive on this point.'], [2])[1],
+      'claim'
+    )
+  })
+
+  it('still allows a marker behind an opening quote or conjunction', () => {
+    strictEqual(rolesOf(['Intro.', 'But in conclusion, the policy failed.'])[1], 'conclusion')
+    strictEqual(rolesOf(['Intro.', '“However, the sample was small,” they wrote.'])[1], 'counterargument')
+  })
+
+  it('does not let one marker match a longer one by prefix', () => {
+    // 'in sum' must not fire on 'in summary' by whichever entry is reached
+    // first — both are conclusion markers, but the boundary is what stops the
+    // same trick mislabelling 'granted' from 'grantedly'.
+    strictEqual(rolesOf(['Intro.', 'Grantedly odd phrasing aside, the data holds.'], [2])[1], 'claim')
+  })
+
   it('labels a significance paragraph from its marker', () => {
     strictEqual(rolesOf(['Intro.', 'This matters because hiring policy follows it.'])[1], 'significance')
   })

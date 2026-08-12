@@ -112,23 +112,43 @@ function firstSentence(text: string): string {
 }
 
 function startsWithMarker(text: string, markers: string[]): boolean {
-  // The opening clause of the FIRST SENTENCE, and nothing else. Both bounds
-  // matter and both were found by a failing test:
+  // Anchored at the OPENING of the first sentence, which is what the name says
+  // and what the markers are: sentence-openers announcing a turn in the
+  // argument. It used to be `includes` over the first 60 characters, and the
+  // difference is not academic — "The results were positive overall, and the
+  // trend held" was labelled a conclusion, and "The evidence, however, is not
+  // decisive" a counterargument. Both are the writer carrying on, not
+  // signposting.
   //
-  // - First sentence only, because "The sample was large and well drawn.
-  //   However, it was old." announces no counterargument — that "however"
-  //   contrasts two of the writer's own points. A flat character window from
-  //   the paragraph start reaches across the sentence break and matches it.
-  // - Still capped inside that sentence, because a long opening sentence can
-  //   carry a marker deep in a subordinate clause ("The evidence, however, is
-  //   not decisive") where it is again just contrast.
+  // Two things still have to be allowed through, because both are ordinary
+  // prose rather than edge cases: an opening quotation mark or bracket, and a
+  // short coordinating conjunction ("But in conclusion, ...").
   const opening = firstSentence(text).slice(0, 60).toLowerCase()
-  return markers.some((marker) => opening.includes(marker))
+  return markers.some((marker) => OPENER.get(marker)!.test(opening))
+}
+
+/**
+ * One anchored matcher per marker, built once at module load.
+ *
+ * No escaping: every marker is plain lowercase words and spaces. If one ever
+ * needs a regex metacharacter, escape it here rather than at the call site.
+ *
+ * The trailing word boundary matters — without it "in sum" also matches "in
+ * summary" and "granted" matches "grantedly", so the label would depend on
+ * whichever list entry happened to be reached first.
+ */
+const OPENER = new Map<string, RegExp>()
+function openerFor(marker: string): RegExp {
+  return new RegExp(String.raw`^["'‘“(\[]?\s*(?:and|but|so|yet)?\s*${marker}\b`)
 }
 
 function containsMarker(text: string, markers: string[]): boolean {
   const lower = text.toLowerCase()
   return markers.some((marker) => lower.includes(marker))
+}
+
+for (const marker of [...CONCLUSION_MARKERS, ...COUNTERARGUMENT_MARKERS]) {
+  OPENER.set(marker, openerFor(marker))
 }
 
 export function hasSignificanceMarker(text: string): boolean {
