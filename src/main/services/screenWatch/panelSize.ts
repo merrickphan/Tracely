@@ -36,10 +36,24 @@ export const SINGLE_PANEL_HEIGHT = 568
  * clipping. Mirrored client-side in OverlayApp.tsx — keep in sync.
  */
 export const GRID_CARD_WIDTH = 432
-export const GRID_CARD_HEIGHT = 108
+export const GRID_CARD_HEIGHT = 62
 export const GRID_GAP = 10
-export const GRID_HEADER_HEIGHT = 52
 export const GRID_PADDING = 24
+/** Vertical padding differs from horizontal in the design: 22 against 24. */
+export const PANEL_PADDING_Y = 22
+/** The title row itself — the close button's 30px circle sets it. */
+export const PANEL_HEADER_HEIGHT = 30
+/** The design's stack gap between header, divider and content. */
+export const PANEL_GAP = 16
+
+/**
+ * Header, its divider, and the gaps either side.
+ *
+ * The design has no tinted header BAR: the title sits inside the same padded
+ * box as the content, with a hairline inset by the padding rather than running
+ * edge to edge. This is the vertical cost of that block.
+ */
+export const GRID_HEADER_HEIGHT = PANEL_HEADER_HEIGHT + PANEL_GAP + 1 + PANEL_GAP
 // 568 — the tallest widget frame the design draws, and the same height the
 // single-claim card is fixed at, so a mode switch never changes the panel's
 // height either once content caps out.
@@ -58,7 +72,7 @@ export const PANEL_WIDTH = GRID_PADDING * 2 + GRID_CARD_WIDTH
 export function computeAllPanelSize(claimCount: number): { width: number; height: number } {
   const count = Math.max(1, claimCount)
   const naturalHeight =
-    GRID_PADDING * 2 + GRID_HEADER_HEIGHT + count * GRID_CARD_HEIGHT + (count - 1) * GRID_GAP
+    PANEL_PADDING_Y * 2 + GRID_HEADER_HEIGHT + count * GRID_CARD_HEIGHT + (count - 1) * GRID_GAP
   return { width: PANEL_WIDTH, height: Math.min(naturalHeight, MAX_LIST_PANEL_HEIGHT) }
 }
 
@@ -93,7 +107,7 @@ export function computeStructurePanelSize({
   const paragraphRows = Math.min(paragraphCount, STRUCTURE_MAX_PARAGRAPH_ROWS)
 
   const natural =
-    GRID_PADDING * 2 +
+    PANEL_PADDING_Y * 2 +
     GRID_HEADER_HEIGHT +
     STRUCTURE_SCORE_BLOCK +
     STRUCTURE_RUBRIC_BLOCK +

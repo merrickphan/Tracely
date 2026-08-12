@@ -368,7 +368,13 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
 // forgotten highlight clears itself.
 const HIGHLIGHT_HOLD_MS = 2500
 
-const POPOVER_WIDTH = 380
+// Two widths, because the design uses two. The inline-detection popovers are
+// 320 — a glance over someone's document, sized to be read without moving your
+// eyes far. The citation flow is 380, because a list of candidate sources with
+// titles, venues and match percentages does not fit in 320. Using one width for
+// both made every glance card a third wider than designed.
+const POPOVER_WIDTH_GLANCE = 320
+const POPOVER_WIDTH_FLOW = 380
 // Used only to decide above-vs-below before anything has rendered. It is NOT
 // used to position anything — see the note on `popoverPosition`.
 const POPOVER_EST_HEIGHT = 320
@@ -393,14 +399,17 @@ const POPOVER_PADDING = 8
  *     upward from the anchor on its own, so its real height never has to be
  *     known in advance. Guessing it was the whole problem.
  */
-function popoverPosition(anchor: { x: number; y: number; width: number; height: number }): {
+function popoverPosition(
+  anchor: { x: number; y: number; width: number; height: number },
+  preferredWidth: number
+): {
   left: number
   top?: number
   bottom?: number
   width: number
   maxHeight: number
 } {
-  const width = Math.min(POPOVER_WIDTH, Math.max(1, window.innerWidth - POPOVER_PADDING * 2))
+  const width = Math.min(preferredWidth, Math.max(1, window.innerWidth - POPOVER_PADDING * 2))
   const left = Math.min(
     Math.max(POPOVER_PADDING, anchor.x),
     Math.max(POPOVER_PADDING, window.innerWidth - width - POPOVER_PADDING)
@@ -432,10 +441,12 @@ function popoverPosition(anchor: { x: number; y: number; width: number; height: 
 // hit-test region matches what's drawn) and has to reproduce the exact same
 // size math here or the list wouldn't fit the panel sized for it.
 const GRID_CARD_WIDTH = 432
-const GRID_CARD_HEIGHT = 108
+const GRID_CARD_HEIGHT = 62
 const GRID_GAP = 10
 const GRID_PADDING = 24
-const GRID_HEADER_HEIGHT = 52
+const PANEL_PADDING_Y = 22
+const PANEL_HEADER_HEIGHT = 30
+const PANEL_GAP = 16
 
 // Card/panel visual tokens — near-black outline + soft neutral shadow, no
 // glow/colored strip, matching the Figma "Overlay Mockup" frames. This is
@@ -907,11 +918,10 @@ function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onC
       style={{
         boxSizing: 'border-box',
         width: '100%',
-        maxWidth: GRID_CARD_WIDTH,
         height: GRID_CARD_HEIGHT,
-        border: '1px solid #e5e5ea',
-        borderRadius: 14,
-        padding: 12,
+        border: '1px solid #eaeaea',
+        borderRadius: 12,
+        padding: '12px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -924,23 +934,26 @@ function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onC
         flexShrink: 0
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
         <TypeDot claimType={claim.claimType} size={8} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a92', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          {CLAIM_TYPE_LABEL[claim.claimType]}
+        {/* One line, reading as a sentence: "Factual claim · 90% confidence".
+            It used to be an uppercase micro-label with the percentage pushed to
+            the far right, which turned a description of the claim into two
+            unrelated pieces of metadata. */}
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: W_INK, whiteSpace: 'nowrap' }}>
+          {CLAIM_TYPE_LABEL[claim.claimType]} · {Math.round(claim.confidence * 100)}% confidence
         </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#8a8a92' }}>{Math.round(claim.confidence * 100)}%</div>
       </div>
+      {/* A single ellipsised line, not a two-line clamp — every row is then the
+          same height, which is what lets the panel be sized from a row count. */}
       <div
         style={{
-          fontSize: 12.5,
-          lineHeight: 1.4,
-          color: '#3a3a3a',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden'
+          fontSize: 13,
+          color: '#6b6c72',
+          width: '100%',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
         }}
       >
         &ldquo;{claim.text}&rdquo;
@@ -1408,27 +1421,34 @@ function ProblemCard({
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 9, height: 9, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
-        <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{title}</div>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
+        <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>{title}</div>
       </div>
-      <MarkdownText style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{description}</MarkdownText>
-      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+      <MarkdownText style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>{description}</MarkdownText>
+      {/*
+        The design's action row is exactly two buttons — fix it, or dismiss it —
+        and at 320 wide that is all that fits on one line. Ask Tracer is not in
+        the mockups because it postdates them, and it is the one action here
+        that teaches rather than fixes, so it sits below as a text link instead
+        of competing with them. Opening Tracer takes OS focus away from the
+        watched app, which is why screenWatchService holds its claim state
+        while that window is up.
+      */}
+      <div style={{ display: 'flex', gap: 8 }}>
         <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
           {primaryLabel}
         </button>
-        {/* The teaching path out of this card: every other action here
-            fixes the claim for you (insert a citation, open the panel),
-            this one opens Tracer to explain why it was flagged so the
-            next draft doesn't need the fix. Opening Tracer takes OS focus
-            away from the watched app, which is why screenWatchService
-            holds its claim state while that window is up. */}
-        <button className="tracely-btn-secondary" onClick={onAskTracer} style={SECONDARY_BTN_STYLE}>
-          Ask Tracer
-        </button>
-        <button className="tracely-btn-text" onClick={onDismiss} style={TEXT_BTN_STYLE}>
+        <button className="tracely-btn-secondary" onClick={onDismiss} style={SECONDARY_BTN_STYLE}>
           Dismiss
         </button>
       </div>
+      <button
+        className="tracely-btn-text"
+        onClick={onAskTracer}
+        style={{ ...TEXT_BTN_STYLE, alignSelf: 'flex-start', fontSize: 12.5 }}
+      >
+        Ask Tracer why
+      </button>
     </>
   )
 }
@@ -2187,7 +2207,13 @@ export default function OverlayApp(): JSX.Element {
     if (panelViewMode !== 'structure') setHighlightedParagraph(null)
   }, [panelViewMode])
 
-  const claimHoveredPos = claimHovered ? popoverPosition(claimHovered.anchor) : null
+  const hoveredFlowStep = claimHovered
+    ? (citationFlowByClaimId.get(claimHovered.claimId)?.step ?? null)
+    : null
+  const hoveredPopoverWidth = hoveredFlowStep ? POPOVER_WIDTH_FLOW : POPOVER_WIDTH_GLANCE
+  const claimHoveredPos = claimHovered
+    ? popoverPosition(claimHovered.anchor, hoveredPopoverWidth)
+    : null
   const popoverRef = useRef<HTMLDivElement>(null)
   const lastReportedPopoverKey = useRef<string | null>(null)
 
@@ -2364,21 +2390,22 @@ export default function OverlayApp(): JSX.Element {
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
+                  // The design is ONE padded box, not a header bar above a
+                  // padded body: the title sits in the same gutter as the
+                  // content and the rule between them is inset by that gutter
+                  // rather than running edge to edge.
+                  padding: `${PANEL_PADDING_Y}px ${GRID_PADDING}px`,
+                  gap: PANEL_GAP,
                   pointerEvents: 'auto'
                 }}
               >
                 <div
                   style={{
                     boxSizing: 'border-box',
-                    height: GRID_HEADER_HEIGHT,
+                    height: PANEL_HEADER_HEIGHT,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    // Aligned to the body's 24px gutter, on white with a
-                    // hairline rule — the design has no tinted header bar.
-                    padding: `0 ${GRID_PADDING}px`,
-                    background: '#fff',
-                    borderBottom: `1px solid ${W_DIVIDER}`,
                     flexShrink: 0
                   }}
                 >
@@ -2478,12 +2505,13 @@ export default function OverlayApp(): JSX.Element {
                   </button>
                 </div>
 
+                <div style={{ height: 1, background: W_DIVIDER, flexShrink: 0 }} />
+
                 <div
                   style={{
                     boxSizing: 'border-box',
                     flex: 1,
                     minHeight: 0,
-                    padding: GRID_PADDING,
                     overflowX: 'hidden',
                     // 'structure' scrolls for the same reason 'single' does:
                     // its content length is not what the panel was sized from
@@ -2564,7 +2592,7 @@ export default function OverlayApp(): JSX.Element {
 
       {claimHovered && claimHoveredSummary
         ? (() => {
-            const pos = popoverPosition(claimHovered.anchor)
+            const pos = popoverPosition(claimHovered.anchor, hoveredPopoverWidth)
             const flow = citationFlowByClaimId.get(claimHoveredSummary.id) ?? null
             const visibleCount = (widget?.claims ?? []).filter((c) => !isResolved(c.id) && c.id !== claimHoveredSummary.id).length
             return (
