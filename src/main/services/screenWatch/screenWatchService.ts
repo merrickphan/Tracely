@@ -53,6 +53,7 @@ import {
   WIDGET_SIZE
 } from './panelSize'
 import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
+import { problemKindFor, problemSeverity } from './problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
@@ -1311,6 +1312,22 @@ function updateOverlayAndWidget(
     )
   }
 
+  /** Decided once here, so the underline and the card cannot disagree. */
+  const problemKindById = new Map(
+    claims.map((c) => {
+      const evidence = evidenceResultByClaimId.get(c.id)
+      return [
+        c.id,
+        problemKindFor({
+          claimType: c.claimType,
+          hasInlineCitation: hasInlineCitation(c.text),
+          evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
+          critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
+        })
+      ] as const
+    })
+  )
+
   const clip = resolveClip([controlRect, windowRect])
   const underlines = (Array.isArray(claimRects) ? claimRects : [])
     .filter((r) => !settled.has(r.id))
@@ -1387,7 +1404,8 @@ function updateOverlayAndWidget(
   const localized = underlines.map((u) => ({
     id: u.id,
     rects: u.rects.map(toLocal),
-    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual'
+    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual',
+    problemKind: problemKindById.get(u.id) ?? 'searching'
   }))
 
   // Anchored to a fixed corner of the focused app's window, not the focused
@@ -1463,7 +1481,16 @@ function updateOverlayAndWidget(
 
   const claimSummaries: ScreenWatchClaimSummary[] = claims
     .filter((c) => !settled.has(c.id))
-    .sort((a, b) => b.confidence - a.confidence)
+    // Severity first, confidence only to break ties. Confidence says how sure
+    // Tracely is that a sentence IS a claim — not how much trouble it is in —
+    // so sorting by it alone buried the reasoning failure under tidy claims
+    // that merely wanted a citation.
+    .sort((a, b) => {
+      const bySeverity =
+        problemSeverity(problemKindById.get(a.id) ?? 'searching') -
+        problemSeverity(problemKindById.get(b.id) ?? 'searching')
+      return bySeverity !== 0 ? bySeverity : b.confidence - a.confidence
+    })
     .map((c) => {
       const critique = critiqueByClaimId.get(c.id)
       const citation = citationByClaimId.get(c.id)
@@ -1473,6 +1500,7 @@ function updateOverlayAndWidget(
         claimType: c.claimType,
         confidence: c.confidence,
         hasInlineCitation: hasInlineCitation(c.text),
+        problemKind: problemKindById.get(c.id) ?? 'searching',
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,

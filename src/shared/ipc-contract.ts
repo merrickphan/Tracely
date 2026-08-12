@@ -260,6 +260,21 @@ export interface ScreenRect {
 // in the overlay payload that gets re-sent on every change; the full list is
 // only ever fetched from the main Tracely window via the existing
 // EVIDENCE_FIND flow, not through Screen Watch.
+/**
+ * What is wrong with a claim. Mirrors ScreenWatchProblemKind in
+ * services/screenWatch/problemKind.ts, which is where it is decided — declared
+ * here because the renderer needs the union and must not import main.
+ */
+export type ScreenWatchProblemKind =
+  | 'searching'
+  | 'weak-reasoning'
+  | 'unverified-statistic'
+  | 'no-sources'
+  | 'weak-evidence'
+  | 'partial-evidence'
+  | 'missing-citation'
+  | 'cited-unverified'
+
 export interface ScreenWatchEvidenceArticle {
   title: string
   venue: string | null
@@ -314,6 +329,8 @@ export interface ScreenWatchClaimSummary {
    * turn on this now.
    */
   hasInlineCitation: boolean
+  /** Decided in main so the underline and this card cannot disagree. */
+  problemKind: ScreenWatchProblemKind
   // null while the background search hasn't resolved yet (or failed) for
   // this claim — the renderer shows a loading state, not a zero score.
   evidence: ScreenWatchClaimEvidence | null
@@ -458,7 +475,19 @@ export interface ScreenWatchWidget {
 }
 
 export interface ScreenWatchOverlayUpdateEvent {
-  underlines: { id: string; rects: ScreenRect[]; claimType: ClaimType }[]
+  /**
+   * `problemKind` is what the mark is coloured by. `claimType` rides along for
+   * the popover's type dot, but it must NOT drive the underline: colouring by
+   * claim type meant every factual claim in a document was the same orange
+   * whatever state it was in, and the underline — the part of Screen Watch
+   * people actually read — carried no information about the problem at all.
+   */
+  underlines: {
+    id: string
+    rects: ScreenRect[]
+    claimType: ClaimType
+    problemKind: ScreenWatchProblemKind
+  }[]
   widget: ScreenWatchWidget | null
 }
 

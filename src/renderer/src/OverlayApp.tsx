@@ -15,6 +15,7 @@ import type {
   ScreenWatchEvidenceArticle,
   ScreenWatchHoverEvent,
   ScreenWatchOverlayUpdateEvent,
+  ScreenWatchProblemKind,
   ScreenWatchSourceCandidate,
   ScreenWatchStructure,
   ScreenWatchWidget
@@ -243,7 +244,8 @@ function UnderlineMark({
   width,
   height,
   color,
-  hovered
+  hovered,
+  title
 }: {
   claimId: string
   x: number
@@ -252,6 +254,8 @@ function UnderlineMark({
   height: number
   color: string
   hovered: boolean
+  /** Plain-language name of the problem, so the mark is legible on its own. */
+  title: string
 }): JSX.Element {
   const prev = useRef<{ x: number; y: number } | null>(null)
 
@@ -269,6 +273,9 @@ function UnderlineMark({
       // these its DOM is unreadable when inspecting or preview-testing it.
       data-claim-id={claimId}
       data-hovered={hovered ? 'true' : 'false'}
+      // Also the DOM handle the preview harness asserts on, so a mark's kind is
+      // checkable without reading a colour out of a screenshot.
+      data-problem={title}
       style={{
         position: 'absolute',
         left: 0,
@@ -380,6 +387,40 @@ function hasInlineCitationText(sentence: string): boolean {
     /\([A-Z][^)]{0,80}?(?:1[6-9]|20)\d{2}[a-z]?\s*\)/.test(sentence) ||
     /\[\s*\d{1,3}(?:\s*[–—,-]\s*\d{1,3})*\s*\]/.test(sentence)
   )
+}
+
+/**
+ * One colour per problem, for the underline.
+ *
+ * Chosen so the three that mean "this may be wrong" are warm and the two that
+ * mean "this is unfinished" are cool — a document skimmed at arm's length
+ * should separate those two groups before any individual colour is read.
+ */
+const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
+  // Wrong, or possibly wrong.
+  'weak-reasoning': '#d6301a',
+  'unverified-statistic': '#7c3aed',
+  'no-sources': '#d6301a',
+  'weak-evidence': '#b3690a',
+  'cited-unverified': '#b3690a',
+  // Unfinished rather than wrong.
+  'partial-evidence': '#2f6fed',
+  'missing-citation': ACCENT,
+  // Nothing known yet — deliberately the quietest thing on screen, since it
+  // resolves on its own within a few seconds.
+  searching: '#9a9ba1'
+}
+
+/** Plain-language name for the mark, used as the underline's tooltip. */
+const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
+  'weak-reasoning': 'Weak reasoning',
+  'unverified-statistic': 'Unverified statistic',
+  'no-sources': 'No supporting sources',
+  'weak-evidence': 'Evidence is weak',
+  'cited-unverified': 'Cited — worth checking',
+  'partial-evidence': 'Partially supported',
+  'missing-citation': 'Missing citation',
+  searching: 'Checking…'
 }
 
 const HIGHLIGHT_HOLD_MS = 2500
@@ -1417,7 +1458,9 @@ function ProblemCard({
   onAskTracer: () => void
   onDismiss: () => void
 }): JSX.Element {
-  const kind = problemKindFor(claim)
+  // Read, not re-derived. This card and the underline disagreeing about what
+  // is wrong with the same sentence was the whole defect.
+  const kind = claim.problemKind
 
   if (kind === 'searching') {
     return (
@@ -2197,6 +2240,9 @@ export default function OverlayApp(): JSX.Element {
         // rather than guessed — and guessing false would flash "Missing
         // citation" on a cited claim for the tick before the payload lands.
         hasInlineCitation: hasInlineCitationText(claimHovered.text),
+        // Nothing is known about a claim whose payload has not arrived yet, and
+        // 'searching' is the honest name for that.
+        problemKind: 'searching' as const,
         evidence: null,
         critique: null,
         critiqueVerdict: null,
@@ -2301,7 +2347,10 @@ export default function OverlayApp(): JSX.Element {
           // paragraph. Same visual treatment on purpose — from the reader's
           // side both mean "this is the one being talked about".
           const isHovered = claimHovered?.claimId === u.id || highlightedClaimIds.has(u.id)
-          const color = BUCKET_COLOR[bucketFor(u.claimType)]
+          // The point of the whole change: the mark is coloured by what is
+          // WRONG, not by what kind of sentence it is. Every factual claim in a
+          // document used to be the same orange whatever state it was in.
+          const color = PROBLEM_COLOR[u.problemKind]
           return u.rects.map((r, i) => (
             <UnderlineMark
               key={`${u.id}-${i}`}
@@ -2315,6 +2364,7 @@ export default function OverlayApp(): JSX.Element {
               height={Math.round(r.height)}
               claimId={u.id}
               color={color}
+              title={PROBLEM_LABEL[u.problemKind]}
               hovered={isHovered}
             />
           ))
