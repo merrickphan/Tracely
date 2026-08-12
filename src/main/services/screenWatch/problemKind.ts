@@ -21,6 +21,18 @@ export type ScreenWatchProblemKind =
   | 'searching'
   /** The critique found the reasoning does not follow from the evidence. */
   | 'weak-reasoning'
+  /**
+   * The critique's fact-check said a specific assertion in the sentence is
+   * wrong — a different finding from weak reasoning, and a worse one.
+   *
+   * CRITIQUE_SYSTEM_PROMPT reserves the `contradicted` verdict for "the claim
+   * asserts a specific fact you're confident is factually wrong", and instructs
+   * the model to fall through to the rigor pass whenever it is merely unsure.
+   * Folding it in with 'weak-reasoning' printed "Weak reasoning" over the one
+   * verdict that is not about reasoning at all, and ranked the most serious
+   * thing this product can say below a citation problem.
+   */
+  | 'contradicted-claim'
   /** A number nothing in the literature carries. */
   | 'unverified-statistic'
   /** Searched, and nothing relevant came back at all. */
@@ -47,7 +59,8 @@ export interface ProblemKindInput {
   critiqueVerdict: CritiqueVerdict | null
 }
 
-const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
+/** Reasoning that does not follow. 'contradicted' is deliberately NOT here. */
+const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported']
 
 /** The 70/40 bands used everywhere else in the product. */
 const STRONG = 70
@@ -78,7 +91,8 @@ export function problemKindsFor({
   const kinds: ScreenWatchProblemKind[] = []
   const nothingFound = evidence.count === 0
 
-  if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
+  if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
+  else if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
 
   // Cited, and the literature does not back what was attributed. Subsumes the
   // plain evidence bands for a cited claim: "thin support" is the wrong advice
@@ -121,6 +135,9 @@ export function problemKindFor(input: ProblemKindInput): ScreenWatchProblemKind 
  * merely wants a citation.
  */
 const SEVERITY: ScreenWatchProblemKind[] = [
+  // Nothing outranks "a fact in this sentence is wrong". Every other kind here
+  // is a statement about support; this one is a statement about truth.
+  'contradicted-claim',
   // Above weak reasoning: a claim whose own citation does not support it is
   // the one error a reader has no prompt to go and check.
   'cited-unverified',

@@ -14,6 +14,28 @@ describe('problemKindFor', () => {
     strictEqual(problemKindFor({ ...base, evidence: null }), 'searching')
   })
 
+  it('separates a factual contradiction from weak reasoning', () => {
+    // CRITIQUE_SYSTEM_PROMPT reserves 'contradicted' for "a specific fact you
+    // are confident is wrong". It used to fold into 'weak-reasoning', which
+    // printed "Weak reasoning" over the one verdict that is not about
+    // reasoning — and ranked it below a citation problem.
+    strictEqual(
+      problemKindFor({ ...base, critiqueVerdict: 'contradicted' }),
+      'contradicted-claim'
+    )
+    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'weak' }), 'weak-reasoning')
+    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'unsupported' }), 'weak-reasoning')
+  })
+
+  it('ranks a contradicted fact above everything else, including a bad citation', () => {
+    ok(problemSeverity('contradicted-claim') < problemSeverity('cited-unverified'))
+    ok(problemSeverity('contradicted-claim') < problemSeverity('weak-reasoning'))
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 }, critiqueVerdict: 'contradicted' })[0],
+      'contradicted-claim'
+    )
+  })
+
   it('puts reasoning above evidence, however well sourced', () => {
     // The point of the ordering: a claim can be perfectly well sourced and
     // still not follow from what those sources say.
@@ -21,7 +43,6 @@ describe('problemKindFor', () => {
       problemKindFor({ ...base, evidence: { score: 95, count: 8 }, critiqueVerdict: 'weak' }),
       'weak-reasoning'
     )
-    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'contradicted' }), 'weak-reasoning')
   })
 
   it('does not treat a sound verdict as a problem', () => {
@@ -114,7 +135,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
 
   it('always orders worst first, so the card shows the right one', () => {
     const kinds = problemKindsFor({ ...base, critiqueVerdict: 'contradicted' })
-    strictEqual(kinds[0], 'weak-reasoning')
+    strictEqual(kinds[0], 'contradicted-claim')
     strictEqual(problemKindFor({ ...base, critiqueVerdict: 'contradicted' }), kinds[0])
   })
 })
@@ -132,6 +153,7 @@ describe('problemSeverity', () => {
   it('gives every kind a place, so nothing sorts to -1 and jumps to the top', () => {
     const kinds = [
       'searching',
+      'contradicted-claim',
       'weak-reasoning',
       'unverified-statistic',
       'no-sources',

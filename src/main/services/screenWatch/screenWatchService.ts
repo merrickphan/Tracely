@@ -167,6 +167,9 @@ let watchStructure: { key: string; structure: ScreenWatchStructure | null } | nu
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
 let critiqueByClaimId = new Map<string, { critique: string; verdict: CritiqueVerdict }>()
+// Whether this detection's one budgeted automatic critique has been spent.
+// Reset wherever critiqueByClaimId is — a fresh claim set gets a fresh budget.
+let autoCritiqueSpent = false
 // Results of the focused "Find a source" search (findSourceForClaim) — kept
 // separate from evidenceResultByClaimId (the broader background auto-search)
 // since it's a distinct, user-triggered search that can use a different
@@ -384,6 +387,7 @@ function resetTrackingState(): void {
   watchStructure = null
   evidenceResultByClaimId = new Map()
   critiqueByClaimId = new Map()
+  autoCritiqueSpent = false
   findSourceResultByClaimId = new Map()
   citationByClaimId = new Map()
   faviconByUrl = new Map()
@@ -680,6 +684,7 @@ async function tick(): Promise<void> {
           // previous one no longer applies to anything currently shown.
           evidenceResultByClaimId = new Map()
           critiqueByClaimId = new Map()
+          autoCritiqueSpent = false
           findSourceResultByClaimId = new Map()
           citationByClaimId = new Map()
           // Free and local, so it runs on the same automatic footing as the
@@ -953,14 +958,31 @@ function triggerEvidenceSearch(claims: Claim[]): void {
  * Failures are swallowed to the log. An unprompted critique that could not run
  * is not something to interrupt someone's writing about.
  */
-const MAX_AUTO_CRITIQUE_CLAIMS = 1
-
 async function autoCritique(claim: Claim): Promise<void> {
-  if (currentClaims.slice(0, MAX_AUTO_CRITIQUE_CLAIMS).every((c) => c.id !== claim.id)) return
+  // The budget is ONE call per detection, claimed by the first eligible claim
+  // rather than reserved for the highest-confidence one.
+  //
+  // It used to be `currentClaims.slice(0, 1)`, which meant the single most
+  // confident claim held the budget whether or not it could use it — and
+  // autoCritique needs evidence to reason about, so a top claim whose search
+  // returned nothing (common: retrieval is the weakest part of this pipeline)
+  // silently disabled the reasoning check for the WHOLE document. Nothing fell
+  // through to claim 2. Since `problemKindFor` only reports "weak reasoning"
+  // when a critique exists, that is most of why passive watching so rarely
+  // says anything about reasoning.
+  //
+  // Claims are confidence-sorted (claimDetection.ts) and evidence resolves
+  // roughly in flight order, so in practice the top claim still wins whenever
+  // it has evidence at all.
+  if (autoCritiqueSpent) return
+  if (currentClaims.slice(0, MAX_AUTO_EVIDENCE_CLAIMS).every((c) => c.id !== claim.id)) return
   if (critiqueByClaimId.has(claim.id)) return
   const evidence = evidenceResultByClaimId.get(claim.id)
   if (!evidence || evidence.evidence.length === 0) return
 
+  // Claimed BEFORE the await. Three evidence searches can resolve in the same
+  // tick, and without this all three would pass the check and fire.
+  autoCritiqueSpent = true
   const generationAtRequestTime = trackingGeneration
   try {
     const items = evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i))
@@ -989,6 +1011,16 @@ export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWa
     score: result.score,
     breakdown: result.breakdown
   })
+  // The critique was an argument ABOUT the evidence that just got replaced —
+  // it cites its sources by number ("supported by evidence 2", per
+  // CRITIQUE_SYSTEM_PROMPT), and those numbers now point into a different
+  // list. Keeping it left the panel showing a fresh source list beside a
+  // verdict reasoned over the old one, and `problemKindsFor` reporting "weak
+  // reasoning" on grounds nothing on screen still supports. Dropping it puts
+  // the claim back to offering "Critique Argument", which is the truth.
+  if (critiqueByClaimId.delete(claimId)) {
+    logScreenWatch(`dropped stale critique for ${claimId.slice(0, 8)} — its evidence was refreshed`)
+  }
   refreshWatchOutline()
   redrawOverlay()
   return leanEvidence(claimId)

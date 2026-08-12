@@ -268,6 +268,7 @@ export interface ScreenRect {
 export type ScreenWatchProblemKind =
   | 'searching'
   | 'weak-reasoning'
+  | 'contradicted-claim'
   | 'unverified-statistic'
   | 'no-sources'
   | 'weak-evidence'

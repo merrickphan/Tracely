@@ -43,10 +43,18 @@ function truncateAtWordBoundary(text: string, maxChars: number): string {
 // claim whose retrieval failed entirely still needs a critique that says
 // so, and "no supporting evidence was found" is a different (and less
 // useful) message than "here are the two closest things we found".
+// Relevant items FIRST, then the rest as padding — not "the filtered list, or
+// else the raw list". The raw list is ordered by rank, so the old fallback
+// (`relevant.length >= MIN ? relevant : evidence`) then took the first four by
+// rank: a claim with exactly one relevant source sitting at rank 5 had that
+// source dropped and four off-topic ones sent in its place. The one case the
+// fallback exists for is the one case it broke.
 function selectCritiqueEvidence(evidence: EvidenceItem[]): EvidenceItem[] {
   const relevant = evidence.filter((e) => e.relevanceScore >= MIN_CRITIQUE_RELEVANCE)
-  const chosen = relevant.length >= MIN_CRITIQUE_EVIDENCE_ITEMS ? relevant : evidence
-  return chosen.slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
+  if (relevant.length >= MIN_CRITIQUE_EVIDENCE_ITEMS) return relevant.slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
+
+  const padding = evidence.filter((e) => e.relevanceScore < MIN_CRITIQUE_RELEVANCE)
+  return [...relevant, ...padding].slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
 }
 
 function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
@@ -57,10 +65,24 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
     .map((e) => e.source.id)
     .sort()
     .join(',')
-  // v5: off-topic evidence is now dropped before the model sees it, and the
-  // abstract budget settled at 900 chars — v4 entries were formed from a
-  // different (larger, noisier) evidence set.
-  return createHash('sha256').update(`ai:critique::v5::${claim.id}::${evidenceIds}`).digest('hex')
+  // v6: keyed on the claim's TEXT and score — the actual request body — rather
+  // than `claim.id`.
+  //
+  // The id looked equivalent and was not. Screen Watch synthesizes its claims
+  // in memory with a fresh randomUUID() on every detection (see
+  // synthesizeClaim), so an id-keyed entry could never be hit there: editing a
+  // paragraph and having the same sentence re-detected paid a fresh call on the
+  // reasoning model — the most expensive call in the product — for input the
+  // relay had already answered. The in-app path had a weaker version of the
+  // same problem, since re-analyzing a document mints new claim rows too.
+  //
+  // strengthScore is in the key because it is in the request body. It usually
+  // moves with the evidence set, but not always: the same sources rescored (ML
+  // on vs off) is a different question with the same evidenceIds.
+  const normalizedText = claim.text.trim().replace(/\s+/g, ' ').toLowerCase()
+  return createHash('sha256')
+    .update(`ai:critique::v6::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}`)
+    .digest('hex')
 }
 
 export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): Promise<CritiqueResult> {

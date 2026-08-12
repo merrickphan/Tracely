@@ -398,6 +398,7 @@ function hasInlineCitationText(sentence: string): boolean {
  */
 const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   // Wrong, or possibly wrong.
+  'contradicted-claim': '#d6301a',
   'weak-reasoning': '#d6301a',
   'unverified-statistic': '#7c3aed',
   'no-sources': '#d6301a',
@@ -414,6 +415,7 @@ const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
 
 /** Plain-language name for the mark, used as the underline's tooltip. */
 const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
+  'contradicted-claim': 'Contradicted — check this fact',
   'weak-reasoning': 'Weak reasoning',
   'unverified-statistic': 'Unverified statistic',
   'no-sources': 'No supporting sources',
@@ -1408,15 +1410,16 @@ function StructureView({
 // entirely from the claim's own state (critique verdict, evidence
 // resolution), not tracked separately.
 
-type ProblemKind = 'weak-reasoning' | 'searching' | 'statistic' | 'citation'
-
-function problemKindFor(claim: ScreenWatchClaimSummary): ProblemKind {
-  if (claim.critiqueVerdict && WEAK_VERDICTS.includes(claim.critiqueVerdict)) return 'weak-reasoning'
-  if (!claim.evidence) return 'searching'
-  return claim.claimType === 'statistic' ? 'statistic' : 'citation'
-}
-
-// Why this exists, and why it isn't just `problemKindFor`:
+// A renderer-local `problemKindFor(claim)` used to live here, deciding the
+// popover's variant from the claim's verdict and evidence independently of
+// main. It has had no call site since main became the single source of truth
+// (services/screenWatch/problemKind.ts) and the payload started carrying
+// `problemKinds` — and it was actively dangerous to leave lying around: it
+// still folded the `contradicted` verdict into 'weak-reasoning', so
+// reintroducing one call to it would have quietly restored the bug of telling
+// a writer their reasoning is weak when the model said a fact is wrong.
+//
+// The support bands below are still used, by problemCopyFor.
 //
 // The underline the user hovered is coloured by bucketFor(claimType) — four
 // distinct colours (factual orange, statistic purple, causal blue, other red).
@@ -1597,15 +1600,26 @@ function ProblemCard({
   // orange. It was the claim type, so a red underline opened an orange card.
   const dotColor = PROBLEM_COLOR[kind]
   const copy =
-    kind === 'weak-reasoning'
+    kind === 'contradicted-claim'
       ? {
-          title: 'Weak reasoning',
+          // The fact-check verdict, not the rigor one. The critique text is
+          // instructed to state the correct fact plainly when it fires, so it
+          // is the description rather than a generic line about reasoning.
+          title: 'Contradicted — check this fact',
           description:
             claim.critique ??
-            "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
+            'A specific fact asserted here appears to be wrong. Check it against the original source before this goes any further.',
           action: 'Suggest fix'
         }
-      : // `kind` is only 'searching' when evidence is null, and that case
+      : kind === 'weak-reasoning'
+        ? {
+            title: 'Weak reasoning',
+            description:
+              claim.critique ??
+              "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
+            action: 'Suggest fix'
+          }
+        : // `kind` is only 'searching' when evidence is null, and that case
         // returned above — so evidence is non-null here.
         problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence, kind)
   const { title, description, action: primaryLabel } = copy
