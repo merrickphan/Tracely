@@ -318,7 +318,21 @@ export function getScreenWatchStatus(): ScreenWatchStatus {
   return lastStatus
 }
 
+/**
+ * Bumped by every reset, and captured before any asynchronous work that will
+ * write back into the tracking state.
+ *
+ * `detecting` stops a second detection starting while one is in flight, but it
+ * does nothing about a RESET arriving in the middle — focus moving to another
+ * app, a document switch, repeated snapshot failures. The relay call then
+ * resolves into a world it no longer describes and repopulates currentClaims,
+ * currentSpans and the evidence searches for a document that is no longer on
+ * screen. Comparing generations is how a late result learns it is stale.
+ */
+let trackingGeneration = 0
+
 function resetTrackingState(): void {
+  trackingGeneration++
   pendingText = ''
   pendingSince = 0
   lastAnalyzedText = ''
@@ -611,9 +625,17 @@ async function tick(): Promise<void> {
       detecting = true
       lastAnalysisAt = Date.now()
       const textAtRequestTime = pendingText
+      const generationAtRequestTime = trackingGeneration
       logScreenWatch(`text stable, triggering detectClaims (len ${textAtRequestTime.length})`)
       detectClaims(textAtRequestTime)
         .then((detected) => {
+          if (trackingGeneration !== generationAtRequestTime) {
+            logScreenWatch(
+              `discarding detectClaims result: tracking reset while it was in flight ` +
+                `(gen ${generationAtRequestTime} -> ${trackingGeneration})`
+            )
+            return
+          }
           // Only mark this text "done" on success — a failure must stay
           // retryable rather than being silently marked as already-tried.
           lastAnalyzedText = textAtRequestTime
@@ -645,6 +667,9 @@ async function tick(): Promise<void> {
           void tick()
         })
         .catch((err) => {
+          // A failure from a discarded generation must not put a cooldown on
+          // the document now being watched, nor report its error as current.
+          if (trackingGeneration !== generationAtRequestTime) return
           retryAfter = Date.now() + RETRY_COOLDOWN_MS
           lastError = err instanceof Error ? err.message : String(err)
           // A 401 is not a transient fault to retry past — it will keep failing
