@@ -143,6 +143,14 @@ function DocumentEditor({
   // ---- Structure rail ----------------------------------------------------
   const [structureOpen, setStructureOpen] = useState(false)
   const [outline, setOutline] = useState<DocumentOutline | null>(null)
+  // handleInput is a plain function re-created every render and called from an
+  // uncontrolled contentEditable, so it must not close over `outline` — it
+  // would read whatever value was current when that render's handler was
+  // attached. A ref is the value at call time.
+  const outlineRef = useRef<DocumentOutline | null>(null)
+  useEffect(() => {
+    outlineRef.current = outline
+  }, [outline])
   const [outlineStale, setOutlineStale] = useState(false)
   const [outlineLoading, setOutlineLoading] = useState(false)
   const [outlineError, setOutlineError] = useState<string | null>(null)
@@ -261,8 +269,16 @@ function DocumentEditor({
     if (!text.trim() && editor.innerHTML !== '') {
       editor.innerHTML = ''
     }
+    bodyHtmlRef.current = editor.innerHTML
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
     setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+    // Editing invalidates the reading. Without this, `outlineStale` was only
+    // ever set by the stored-outline load, so typing left a stale analysis
+    // looking current AND let runStructure reuse its analysisId — bucketing
+    // claims into paragraphs they had since moved out of. Guarded on the
+    // current value so an already-stale outline does not re-render per
+    // keystroke.
+    setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
     // Typing can end a pending style (Enter starts a fresh block), so the
     // toolbar has to follow the caret, not just explicit toolbar clicks.
     syncFormatState()
@@ -312,12 +328,26 @@ function DocumentEditor({
   // reason docIdRef is one: it is read inside async work that must not be
   // re-created when it changes.
   const analysisIdRef = useRef<string | null>(null)
+  /**
+   * The editor's HTML as of the last input event.
+   *
+   * `flushSave` cannot rely on `editorRef.current` alone. React detaches refs
+   * during deletion but runs passive effect cleanups AFTER that, so by the time
+   * the unmount cleanup below fires, `editorRef.current` is already null and
+   * the save it exists to perform returns immediately without writing. Typing
+   * and pressing Back inside the 900ms debounce lost the edit outright.
+   *
+   * Mirroring the html here costs one assignment per input event and makes the
+   * flush independent of whether the node is still mounted.
+   */
+  const bodyHtmlRef = useRef<string>(initialDoc?.bodyHtml ?? '')
 
   const flushSave = useCallback((): Promise<void> => {
     const run = async (): Promise<void> => {
-      const editor = editorRef.current
-      if (!editor) return
-      const bodyHtml = editor.innerHTML
+      // Prefer the live node when it is still mounted, since it is the truth;
+      // fall back to the mirror when it is not, which is exactly the unmount
+      // case this save has to survive.
+      const bodyHtml = editorRef.current?.innerHTML ?? bodyHtmlRef.current
       // Never create a row for an editor the user opened and never typed in.
       if (!docIdRef.current && !bodyHtml.trim() && !docNameRef.current.trim()) return
       setSaveState('saving')
@@ -412,8 +442,11 @@ function DocumentEditor({
         analysisId
       })
       setOutline(res.outline)
-      setOutlineStale(false)
       setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+      // Only clear the flag if the draft has not moved on while the analysis
+      // was running. Clearing it unconditionally presented a reading of text
+      // the user had already edited past as current.
+      setOutlineStale(bodyText() !== text)
     } catch (err) {
       setOutlineError(err instanceof Error ? err.message : String(err))
     } finally {
