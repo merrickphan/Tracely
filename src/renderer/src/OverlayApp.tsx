@@ -385,13 +385,6 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
  * not import. Kept deliberately to the two shapes that carry the copy
  * difference; main's fuller set decides what is actually flagged.
  */
-function hasInlineCitationText(sentence: string): boolean {
-  return (
-    /\([A-Z][^)]{0,80}?(?:1[6-9]|20)\d{2}[a-z]?\s*\)/.test(sentence) ||
-    /\[\s*\d{1,3}(?:\s*[–—,-]\s*\d{1,3})*\s*\]/.test(sentence)
-  )
-}
-
 /**
  * The design's three underline colours, read off the Figma frames rather than
  * chosen here: `#ff5900` on the "Inline Detection (Statistic)" marks, `#ffb800`
@@ -2560,10 +2553,13 @@ export default function OverlayApp(): JSX.Element {
         text: claimHovered.text,
         claimType: claimHovered.claimType,
         confidence: 0,
-        // The hover event carries the sentence, so this can be answered here
-        // rather than guessed — and guessing false would flash "Missing
-        // citation" on a cited claim for the tick before the payload lands.
-        hasInlineCitation: hasInlineCitationText(claimHovered.text),
+        // Deliberately false, and unread: `problemKinds` is ['searching'] in
+        // this placeholder, and no copy branch consults this field in that
+        // state. It used to call a two-pattern COPY of main's citation
+        // detector, which is the same duplicated-judgement mistake that had
+        // the underline and the card disagreeing — and the copy had already
+        // drifted, missing four of main's six patterns.
+        hasInlineCitation: false,
         // Nothing is known about a claim whose payload has not arrived yet, and
         // 'searching' is the honest name for that.
         problemKinds: ['searching' as const],

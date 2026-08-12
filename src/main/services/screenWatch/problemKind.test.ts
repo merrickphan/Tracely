@@ -71,13 +71,9 @@ describe('problemKindFor', () => {
   })
 
   it('separates a wrong citation from thin evidence', () => {
-    // The alarming case: the writer attributed it, and the literature does not
-    // carry what they attributed. It used to fall into weak-evidence, whose
-    // copy never mentions the citation at all.
-    strictEqual(
-      problemKindFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 } }),
-      'cited-unverified'
-    )
+    // The alarming case: the writer attributed it, and the literature we found
+    // does not carry what they attributed. It used to fall into weak-evidence,
+    // whose copy never mentions the citation at all.
     strictEqual(
       problemKindFor({ ...base, hasInlineCitation: true, evidence: { score: 22, count: 5 } }),
       'cited-unverified'
@@ -86,6 +82,34 @@ describe('problemKindFor', () => {
     strictEqual(
       problemKindFor({ ...base, hasInlineCitation: false, evidence: { score: 22, count: 5 } }),
       'weak-evidence'
+    )
+  })
+
+  it('says nothing about a cited claim the databases had no opinion on', () => {
+    // Zero results is not a finding about a sentence that is already
+    // attributed. The search corpus is four ACADEMIC APIs; a policy paper
+    // cites UN pages, government programmes and newspapers, none of which they
+    // index. Reporting that as "Citation may not support this" is asserting
+    // something nobody checked — and on a well-cited essay it fired on nearly
+    // every line.
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 } }),
+      []
+    )
+    deepStrictEqual(
+      problemKindsFor({
+        ...base,
+        claimType: 'statistic',
+        hasInlineCitation: true,
+        evidence: { score: 0, count: 0 }
+      }),
+      []
+    )
+    // Uncited and unfindable is still a real finding: nothing was attributed,
+    // and nothing was found.
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: false, evidence: { score: 0, count: 0 } }),
+      ['no-sources']
     )
   })
 
@@ -102,17 +126,18 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
     ])
   })
 
-  it('reports a cited statistic that nothing carries as both', () => {
-    // "You cited this AND no database has the figure" is two facts, and the
-    // second is what tells the writer which part to go and check.
+  it('reports a cited statistic whose sources do not carry it as both', () => {
+    // Sources came back and they score badly for this figure — that is two
+    // facts, and the second is what tells the writer which part to check.
+    // Zero results is deliberately NOT this case; see the test above.
     deepStrictEqual(
       problemKindsFor({
         ...base,
         claimType: 'statistic',
         hasInlineCitation: true,
-        evidence: { score: 0, count: 0 }
+        evidence: { score: 12, count: 4 }
       }),
-      ['cited-unverified', 'unverified-statistic']
+      ['cited-unverified']
     )
   })
 

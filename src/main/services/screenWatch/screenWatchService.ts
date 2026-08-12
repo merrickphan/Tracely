@@ -84,10 +84,6 @@ const MIN_TEXT_DELTA_CHARS = 80
 // How many of a detection's claims get their evidence fetched automatically
 // (see triggerEvidenceSearch). The rest search when the user opens them.
 const MAX_AUTO_EVIDENCE_CLAIMS = 3
-// At or above this, the literature is taken to back the claim — the same 70
-// band ProblemCard, ClaimCard and the structure score all use, so "strong"
-// means one number everywhere in the product.
-const SETTLED_SCORE = 70
 const MIN_TEXT_LENGTH = 20
 // User-configurable now (Settings > General > sensitivity) rather than a
 // value we keep re-tuning in code — Screen Watch underlines passively,
@@ -1269,40 +1265,6 @@ function updateOverlayAndWidget(
   // open a popover. controlRect is preferred because the window includes the
   // app's own toolbars, and text scrolled under a sticky header still reports a
   // valid rect that was then drawn on top of the header.
-  /**
-   * Claims the writer has already handled: the sentence carries its own
-   * citation AND the literature backs it.
-   *
-   * Underlining these was the loudest thing wrong with Screen Watch. A
-   * correctly cited, well-supported sentence was marked in the margin and the
-   * card said "Missing citation" — so the one category of claim the user had
-   * done everything right on was also the one the app complained about most,
-   * because a cited sentence tends to be a searchable one and therefore scores
-   * well.
-   *
-   * Both halves are required. A cited claim the literature does NOT support is
-   * exactly what this app exists to catch, and stays flagged with copy that
-   * says so.
-   */
-  const settled = new Set(
-    claims
-      .filter((c) => {
-        if (!hasInlineCitation(c.text)) return false
-        const evidence = evidenceResultByClaimId.get(c.id)
-        return evidence !== undefined && evidence.evidence.length > 0 && evidence.score >= SETTLED_SCORE
-      })
-      .map((c) => c.id)
-  )
-  if (settled.size > 0) {
-    logScreenWatch(
-      `not flagging ${settled.size} claim(s) already cited and supported: ` +
-        claims
-          .filter((c) => settled.has(c.id))
-          .map((c) => `${inlineCitationKind(c.text)}/${evidenceResultByClaimId.get(c.id)?.score}`)
-          .join(', ')
-    )
-  }
-
   /** Decided once here, so the underline and the card cannot disagree. */
   const problemKindById = new Map(
     claims.map((c) => {
@@ -1318,6 +1280,29 @@ function updateOverlayAndWidget(
       ] as const
     })
   )
+
+  /**
+   * Claims with nothing to say about them, which are not drawn at all.
+   *
+   * Read straight off `problemKindsFor` rather than re-tested here. It used to
+   * be its own predicate — cited AND scoring at least 70 — which
+   * meant two functions decided whether a sentence was worth interrupting
+   * someone about, on different rules, and the gap between them was where a
+   * cited claim the databases had no opinion on ended up flagged. One function
+   * owns the judgement now; an empty list is its way of saying "nothing".
+   */
+  const settled = new Set(
+    claims.filter((c) => (problemKindById.get(c.id) ?? ['searching']).length === 0).map((c) => c.id)
+  )
+  if (settled.size > 0) {
+    logScreenWatch(
+      `not flagging ${settled.size} claim(s) with nothing to report: ` +
+        claims
+          .filter((c) => settled.has(c.id))
+          .map((c) => `${inlineCitationKind(c.text)}/${evidenceResultByClaimId.get(c.id)?.score ?? '-'}`)
+          .join(', ')
+    )
+  }
 
   const clip = resolveClip([controlRect, windowRect])
   const underlines = (Array.isArray(claimRects) ? claimRects : [])

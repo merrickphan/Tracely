@@ -18,9 +18,37 @@
 
 const PATTERNS: Array<[string, RegExp]> = [
   // Parenthetical: (Smith, 2020) · (Mueller & Oppenheimer, 2014) · (IEA, 2024)
+  // · ("Corruption Perceptions Index", 2024) · (Margarian, 2022: 23)
+  //
   // Anchored on a capital immediately inside the bracket, so "(up from 2019)"
-  // and "(down 4% since 2015)" do not match.
-  ['parenthetical', /\([A-Z][^)]{0,80}?(?:1[6-9]|20)\d{2}[a-z]?\s*\)/],
+  // and "(down 4% since 2015)" do not match. Two things the first version got
+  // wrong, both found on a real, meticulously cited MUN position paper:
+  //
+  //  - An opening quotation mark before the capital. MLA cites a title, not an
+  //    author, and a title is quoted: ("Corruption Perceptions Index", 2024).
+  //  - A page locator after the year. ("IOM Libya Migrant Report Round 44",
+  //    2022: 15) and (Margarian, 2022: 23) both failed, because the pattern
+  //    required the year to be the last thing before the bracket.
+  [
+    'parenthetical',
+    /\(["“'‘]?[A-Z][^)]{0,140}?(?:1[6-9]|20)\d{2}[a-z]?(?:\s*[:,]\s*(?:pp?\.\s*)?\d+(?:\s*[–—-]\s*\d+)?)?["”'’]?\s*\)/
+  ],
+  // A quoted title in brackets, with no year at all — the MLA short form for a
+  // source with no dated author: ("Background to the Convention"). This is the
+  // single most common citation shape in a paper that cites institutions
+  // rather than papers (UN pages, government sites, standards bodies), and
+  // NONE of it was detected: 26 of the 34 citations in the essay that prompted
+  // this were invisible, so an essay that cited something on nearly every line
+  // was told on nearly every line to add a citation.
+  //
+  // The 6-character floor inside the quotes is what keeps ordinary quoted
+  // speech out — (he said "no") does not match. A quoted phrase of six or more
+  // characters inside brackets is a reference to a named thing essentially
+  // every time. The known cost is a naming gloss — the policy ("Operation Warp
+  // Speed") — reading as a citation, which is the quiet failure this module
+  // prefers: a false positive hides one card, a false negative accuses a
+  // writer of missing a citation they wrote.
+  ['titled', /\(\s*["“][^"”)]{6,}["”][^)]*\)/],
   // Narrative: Smith (2020) · Smith et al. (2020) · Mueller and Oppenheimer (2014)
   [
     'narrative',

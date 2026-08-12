@@ -24,6 +24,33 @@ describe('hasInlineCitation — finds what a writer actually types', () => {
   }
 })
 
+describe('hasInlineCitation — MLA title citations, from a real position paper', () => {
+  // Every one of these is lifted verbatim from a meticulously cited Model UN
+  // position paper that Screen Watch flagged on almost every line. 26 of its
+  // 34 citations were invisible to the first version of this module, because
+  // they cite institutions rather than authors — and an institution is cited
+  // by TITLE, in quotes, often with no year at all.
+  const cited = [
+    'The convention guarantees fair pay and fair trial ("Background to the Convention").',
+    'Objective 17 works to eliminate hate speech ("International Migration.").',
+    'Japan grants transport and legal help ("Support System for SSWs"; "Japan is looking for Specified Skilled Workers!").',
+    'Migrants reached 3.9 million in 2025 ("Japan’s 2026 Election: Immigration Reform.").',
+    'Only 38 of 180 countries improved ("Corruption Perceptions Index", 2024).',
+    'Language was a significant challenge for 79% ("IOM Libya Migrant Report Round 44", 2022: 15).',
+    'Governments use that gap to justify warrantless searches (Gregory P. Margarian, 2022: 23).',
+    'One in seven avoid seeking medical care ("KFF/New York Times 2025 Survey of Immigrants: Worries and Experiences amid Increased Immigration Enforcement.").',
+    'The EEOC enforces eight federal laws ("What Laws Does EEOC Enforce?").',
+    'A former FIFA member was sentenced to nine years ("UNODC - Global Report On Corruption In Sport").',
+    'Illegal betting reached a trillion yen ("Betting money from Japan, 6.5 trillion yen/illegal sports betting", 2025).',
+    'Athletes want half the voting rights ("Global Athlete Survey Results: Athlete Rights, Welfare And Representation", 2020).'
+  ]
+  for (const sentence of cited) {
+    it(`treats as cited: ${sentence.slice(0, 52)}…`, () => {
+      strictEqual(hasInlineCitation(sentence), true)
+    })
+  }
+})
+
 describe('hasInlineCitation — does not fire on ordinary prose', () => {
   const uncited = [
     'Screen time causes depression in teenagers.',
@@ -36,7 +63,10 @@ describe('hasInlineCitation — does not fire on ordinary prose', () => {
     'In 2020, the policy was reversed.',
     'The study cost £2.3m and ran for three years.',
     'See the appendix (page 14) for the full table.',
-    'Handwriting is the oldest form of note-taking.'
+    'Handwriting is the oldest form of note-taking.',
+    // The 6-character floor inside the quotes is what keeps short quoted
+    // speech out of the `titled` pattern.
+    'He shrugged ("no") and walked out.'
   ]
   for (const sentence of uncited) {
     it(`treats as uncited: ${sentence.slice(0, 52)}…`, () => {

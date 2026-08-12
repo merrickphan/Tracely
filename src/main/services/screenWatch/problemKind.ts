@@ -94,16 +94,26 @@ export function problemKindsFor({
   if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
   else if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
 
-  // Cited, and the literature does not back what was attributed. Subsumes the
-  // plain evidence bands for a cited claim: "thin support" is the wrong advice
-  // when the writer has already named a source.
-  if (hasInlineCitation && (nothingFound || evidence.score < MIXED)) kinds.push('cited-unverified')
+  // Cited, and the literature we DID find does not back what was attributed.
+  // Subsumes the plain evidence bands for a cited claim: "thin support" is the
+  // wrong advice when the writer has already named a source.
+  //
+  // `!nothingFound` is the load-bearing half. This used to fire on zero results
+  // too, which turns silence from four ACADEMIC search APIs into an accusation
+  // about a sentence the writer has already attributed — and those APIs index
+  // journal articles, not UN treaty pages, government programmes, national
+  // statistics offices or newspapers, which is what a policy paper actually
+  // cites. On an essay that cited an institution on nearly every line, every
+  // line came back "Citation may not support this". Absence of evidence in a
+  // corpus that was never going to hold it is not evidence of absence.
+  if (hasInlineCitation && !nothingFound && evidence.score < MIXED) kinds.push('cited-unverified')
 
-  // A number nothing carries is its own finding even when the sentence is
-  // cited — "you cited this AND no database has the figure" is two facts, and
-  // the second is the one that tells them which part to go and check.
-  if (nothingFound && claimType === 'statistic') kinds.push('unverified-statistic')
-  if (nothingFound && claimType !== 'statistic' && !hasInlineCitation) kinds.push('no-sources')
+  // A number nothing carries, in a sentence with no citation to check it
+  // against. Cited figures are excluded for the reason above: we have not
+  // read the source the writer named, so "unverified" would be our word for
+  // "not indexed by OpenAlex", which is not what the reader will hear.
+  if (nothingFound && !hasInlineCitation && claimType === 'statistic') kinds.push('unverified-statistic')
+  if (nothingFound && !hasInlineCitation && claimType !== 'statistic') kinds.push('no-sources')
 
   if (!nothingFound && !hasInlineCitation) {
     if (evidence.score < MIXED) kinds.push('weak-evidence')
@@ -116,8 +126,9 @@ export function problemKindsFor({
     kinds.push('partial-evidence')
   }
 
-  // A cited, well-supported claim produces nothing at all, and is filtered out
-  // upstream as settled before it ever reaches the overlay.
+  // An empty list is a real answer, and the caller treats it as "say nothing
+  // about this sentence": a cited claim that is well supported, and a cited
+  // claim the databases simply have no opinion on, both land here.
   return kinds.sort((a, b) => problemSeverity(a) - problemSeverity(b))
 }
 
