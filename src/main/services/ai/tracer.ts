@@ -5,7 +5,9 @@ import {
   MAX_TRACER_CLAIMS_IN_CONTEXT,
   MAX_TRACER_DOCUMENT_CHARS,
   MAX_TRACER_HISTORY_MESSAGES,
-  MAX_TRACER_MESSAGE_CHARS
+  MAX_TRACER_MESSAGE_CHARS,
+  MAX_TRACER_OUTLINE_ROLES,
+  MAX_TRACER_OUTLINE_WEAKNESSES
 } from './costGuard'
 
 // Tracer is the only AI feature here that is a real conversation, which
@@ -65,7 +67,15 @@ function buildContextSummary(context: TracerContext): string {
   // whole-draft findings while any paragraph is unlabelled.
   const outline = context.outline
   if (outline) {
-    const roles = outline.roles.map((role, i) => `${i + 1}. ${role}`).join(', ')
+    // Truncated rather than sampled: the first N paragraphs are the ones a
+    // student is most likely to be asking about, and saying how many were
+    // dropped keeps Tracer from reasoning about a draft it was only shown part
+    // of as though it had seen all of it.
+    const shownRoles = outline.roles.slice(0, MAX_TRACER_OUTLINE_ROLES)
+    const rolesOverflow = outline.roles.length - shownRoles.length
+    const roles =
+      shownRoles.map((role, i) => `${i + 1}. ${role}`).join(', ') +
+      (rolesOverflow > 0 ? ` (+${rolesOverflow} further paragraph${rolesOverflow === 1 ? '' : 's'} not listed)` : '')
     const lines = [
       `Tracely's structural read of "${outline.title}" — structure score ${outline.score}/100${
         outline.complete ? '' : ' (PROVISIONAL: some paragraphs could not be labelled, so do not tell the student anything is missing from the draft as a whole)'

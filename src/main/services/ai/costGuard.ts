@@ -51,6 +51,13 @@ export const MAX_TRACER_MESSAGE_CHARS = 2000
 export const MAX_TRACER_HISTORY_MESSAGES = 12
 export const MAX_TRACER_DOCUMENT_CHARS = 4000
 export const MAX_TRACER_CLAIMS_IN_CONTEXT = 8
+// The structural read is bounded like everything else that rides along on a
+// Tracer turn. Document text and claims were capped; roles and weaknesses were
+// not, and both scale with the draft — a 60-paragraph document sent 60 role
+// labels and however many weaknesses fell out of them on EVERY message, since
+// the whole context is rebuilt per turn.
+export const MAX_TRACER_OUTLINE_ROLES = 24
+export const MAX_TRACER_OUTLINE_WEAKNESSES = 8
 
 export function truncateForClaimDetection(text: string): string {
   return text.length > MAX_CLAIM_DETECTION_INPUT_CHARS
