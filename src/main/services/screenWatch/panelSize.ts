@@ -16,12 +16,17 @@
 /** Collapsed launcher circle. */
 export const WIDGET_SIZE = 56
 
+// All of the numbers below are the Figma "Tracely Widget" frame's, not chosen
+// here: 480 wide with 24px padding, which is what leaves the 432px source rows
+// the design draws. They were 400/18/364 — close enough to look deliberate and
+// wrong enough that nothing inside ever lined up with the mockups.
+
 /**
  * 'single' — one claim's action card. Fixed, because the card's own content is
  * fixed; only the claim inside it changes.
  */
-export const SINGLE_PANEL_WIDTH = 400
-export const SINGLE_PANEL_HEIGHT = 400
+export const SINGLE_PANEL_WIDTH = 480
+export const SINGLE_PANEL_HEIGHT = 568
 
 /**
  * 'all' — a single vertical column (not a grid) so each row has room to show
@@ -30,12 +35,15 @@ export const SINGLE_PANEL_HEIGHT = 400
  * since letting the panel grow past the screen would just reintroduce
  * clipping. Mirrored client-side in OverlayApp.tsx — keep in sync.
  */
-export const GRID_CARD_WIDTH = 364
+export const GRID_CARD_WIDTH = 432
 export const GRID_CARD_HEIGHT = 108
 export const GRID_GAP = 10
-export const GRID_HEADER_HEIGHT = 44
-export const GRID_PADDING = 18
-export const MAX_LIST_PANEL_HEIGHT = 560
+export const GRID_HEADER_HEIGHT = 52
+export const GRID_PADDING = 24
+// 568 — the tallest widget frame the design draws, and the same height the
+// single-claim card is fixed at, so a mode switch never changes the panel's
+// height either once content caps out.
+export const MAX_LIST_PANEL_HEIGHT = 568
 
 /**
  * Every panel mode is this wide.

@@ -422,6 +422,10 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     evidence: {
       score: 34,
       count: 6,
+      // Hand-traced against WEIGHTS_WITHOUT_STANCE in search/scoring.ts:
+      // .3(.42) + .25(.5) + .3(.31) + .15(.2) = .126 + .125 + .093 + .03 = .374
+      // -> 37, close enough to the fixture's 34 to read as the same claim.
+      breakdown: { sourceCount: 0.5, quality: 0.31, recency: 0.2, relevance: 0.42, support: 0 },
       articles: [
         {
           title: 'Adolescent screen time and depressive symptoms: a three-year longitudinal cohort',
@@ -450,7 +454,12 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: '70% of adolescents who use social media for more than three hours a day report symptoms of anxiety.',
     claimType: 'statistic',
     confidence: 0.87,
-    evidence: { score: 61, count: 4, articles: [] },
+    evidence: {
+      score: 61,
+      count: 4,
+      breakdown: { sourceCount: 0.83, quality: 0.72, recency: 0.55, relevance: 0.38, support: 0 },
+      articles: []
+    },
     critique: null,
     critiqueVerdict: null,
     citation: null

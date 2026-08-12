@@ -815,6 +815,7 @@ function leanEvidence(claimId: string): ScreenWatchClaimEvidence | null {
   return {
     score: result.score,
     count: result.evidence.length,
+    breakdown: result.breakdown,
     articles: result.evidence.slice(0, MAX_ARTICLES_IN_OVERLAY).map((item) => ({
       title: item.title,
       venue: item.venue,

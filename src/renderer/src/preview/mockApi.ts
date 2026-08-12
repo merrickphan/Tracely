@@ -156,16 +156,16 @@ export function createMockApi(
     if (!base) return
     const viewMode = patch.viewMode ?? base.viewMode
     // Taken from panelSize.ts for this fixture's shape (3 claims, 4 weaknesses,
-    // 6 paragraphs), not estimated: computeAllPanelSize(3) = 424 and
-    // computeStructurePanelSize({4, 6}) = 560, which is the MAX_LIST_PANEL_HEIGHT
-    // cap. Guessing these makes the preview claim more or less room than the
+    // 6 paragraphs), not estimated: PANEL_WIDTH = 480, SINGLE_PANEL_HEIGHT =
+    // 568, computeAllPanelSize(3) = 444, computeStructurePanelSize({4, 6}) =
+    // 560. Guessing these makes the preview claim more or less room than the
     // real panel has, which is the one thing it must not do.
     const rect = patch.expanded
       ? {
-          x: 120,
-          y: 40,
-          width: 400,
-          height: viewMode === 'single' ? 400 : viewMode === 'all' ? 424 : 560
+          x: 90,
+          y: 20,
+          width: 480,
+          height: viewMode === 'single' ? 568 : viewMode === 'all' ? 444 : 560
         }
       : { x: 520, y: 300, width: 56, height: 56 }
     w.__previewEmitOverlay({

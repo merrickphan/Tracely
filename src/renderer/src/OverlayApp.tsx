@@ -96,6 +96,9 @@ const CHIP_BG = '#f2f2f2'
 // over someone else's application, where a soft 1px edge dissolves into
 // whatever is behind it; the design commits to a hard outline for that reason.
 const CARD_BORDER = '2px solid #000000'
+const PANEL_BORDER = '1px solid #000000'
+const PANEL_RADIUS = 24
+const PANEL_SHADOW = '0px 8px 12px 0px rgba(0, 0, 0, 0.18)'
 const CARD_SHADOW = '0px 8px 24px 0px rgba(0, 0, 0, 0.18)'
 const CARD_RADIUS = 16
 
@@ -428,11 +431,11 @@ function popoverPosition(anchor: { x: number; y: number; width: number; height: 
 // size is computed server-side (so hoverTracking.ts's click-through
 // hit-test region matches what's drawn) and has to reproduce the exact same
 // size math here or the list wouldn't fit the panel sized for it.
-const GRID_CARD_WIDTH = 364
+const GRID_CARD_WIDTH = 432
 const GRID_CARD_HEIGHT = 108
 const GRID_GAP = 10
-const GRID_PADDING = 18
-const GRID_HEADER_HEIGHT = 44
+const GRID_PADDING = 24
+const GRID_HEADER_HEIGHT = 52
 
 // Card/panel visual tokens — near-black outline + soft neutral shadow, no
 // glow/colored strip, matching the Figma "Overlay Mockup" frames. This is
@@ -655,6 +658,79 @@ function verdictWash(verdict: CritiqueVerdict): string {
 // popup uses the lighter ProblemCard/CitationFlowCard below instead of this
 // heavier card, matching the Figma "Inline Detection (Grammarly-style)"
 // mockups' lightweight glance-only popup.
+// -- The widget's single-claim card: Figma "Argument check" -----------
+//
+// The design's own breakdown is Support / Relevance / Quality / Recency, which
+// are exactly the factors computeStrength weighs in search/scoring.ts. That is
+// the point of publishing them: a student handed 34/100 can see which factor
+// cost them the marks and argue with it, which is only possible because the
+// score is a formula rather than a model's opinion.
+
+/**
+ * Widget-surface tokens. The panel runs a slightly different palette from the
+ * hover popover in Figma — darker ink, warmer body grey, its own divider — and
+ * its buttons are pills where the popover's are 8px rectangles. That is not an
+ * inconsistency to reconcile: the popover is a glance over someone's document,
+ * the panel is a workspace you have deliberately opened.
+ */
+const W_INK = '#1a1a1f'
+const W_BODY = '#55565c'
+const W_DIVIDER = '#e7e7e7'
+const W_TRACK = '#f0f0f0'
+
+const WIDGET_PRIMARY_BTN: CSSProperties = {
+  border: 'none',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontSize: 14,
+  fontWeight: 500,
+  color: '#fff',
+  background: '#111',
+  cursor: 'pointer'
+}
+
+const WIDGET_SECONDARY_BTN: CSSProperties = {
+  border: '1.5px solid #111',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontSize: 14,
+  fontWeight: 500,
+  color: W_INK,
+  background: '#fff',
+  cursor: 'pointer'
+}
+
+/** The design's bands, on the same 70/40 thresholds used everywhere else. */
+function strengthBand(score: number): { label: string; fg: string; bg: string } {
+  if (score >= 70) return { label: 'Strong', fg: '#16a34a', bg: '#dcfce7' }
+  if (score >= 40) return { label: 'Moderate', fg: '#b3690a', bg: '#fef3c7' }
+  return { label: 'Weak', fg: '#dc2626', bg: '#fee2e2' }
+}
+
+function SectionLabel({ children }: { children: string }): JSX.Element {
+  return <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>{children}</div>
+}
+
+function Divider(): JSX.Element {
+  return <div style={{ height: 1, width: '100%', background: W_DIVIDER, flexShrink: 0 }} />
+}
+
+/** One factor of the score, as a labelled 5px bar. */
+function MetricCell({ label, value }: { label: string; value: number }): JSX.Element {
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
+  return (
+    <div style={{ flex: '1 0 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, whiteSpace: 'nowrap' }}>
+        <span style={{ color: W_BODY, fontWeight: 500 }}>{label}</span>
+        <span style={{ color: W_INK, fontWeight: 600 }}>{pct}%</span>
+      </div>
+      <div style={{ height: 5, borderRadius: 999, background: W_TRACK, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: W_INK }} />
+      </div>
+    </div>
+  )
+}
+
 function ClaimActionCard({
   claim,
   evidenceBusy,
@@ -669,20 +745,23 @@ function ClaimActionCard({
   onCritique: () => void
 }): JSX.Element {
   const findLabel = evidenceBusy ? 'Searching…' : claim.evidence ? 'Refresh Evidence' : 'Find Evidence'
-  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Check Again' : 'Check Claim'
+  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Re-check Argument' : 'Check Argument'
+  const evidence = claim.evidence
+  const band = evidence ? strengthBand(evidence.score) : null
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <TypeDot claimType={claim.claimType} />
-        <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: W_INK }}>
           {CLAIM_TYPE_LABEL[claim.claimType]} · {Math.round(claim.confidence * 100)}% confidence
         </div>
       </div>
       <div
         style={{
-          fontSize: 15,
-          lineHeight: 1.5,
-          color: '#1a1a1f',
+          fontSize: 14.5,
+          lineHeight: 1.4,
+          color: W_BODY,
           display: '-webkit-box',
           WebkitLineClamp: 3,
           WebkitBoxOrient: 'vertical',
@@ -691,30 +770,103 @@ function ClaimActionCard({
       >
         &ldquo;{claim.text}&rdquo;
       </div>
-      <EvidenceRow claim={claim} />
-      <ArticleList claim={claim} />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+
+      <Divider />
+
+      {evidence && band ? (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                <SectionLabel>ARGUMENT STRENGTH</SectionLabel>
+                <span
+                  style={{
+                    background: band.bg,
+                    color: band.fg,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: 999,
+                    padding: '4px 10px'
+                  }}
+                >
+                  {band.label}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                <span style={{ fontSize: 26, fontWeight: 600, color: W_INK }}>{evidence.score}</span>
+                <span style={{ fontSize: 14, color: DIM }}>/100</span>
+              </div>
+            </div>
+            <div style={{ height: 6, borderRadius: 999, background: W_TRACK, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${evidence.score}%`, borderRadius: 999, background: band.fg }} />
+            </div>
+          </div>
+
+          <SectionLabel>BREAKDOWN</SectionLabel>
+          {/*
+            Two rows of two, in the design's order — except that `support` is
+            deliberately not among them. It is weighted 0 whenever the stance
+            model has not decided, which ml/index.ts establishes is every
+            packaged build, so its bar would sit at zero on every claim in the
+            app and read as a failing grade rather than as an absent input.
+            `sourceCount` takes the fourth slot: it is a real factor of the
+            score, and unlike support it actually varies.
+          */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+            <div style={{ display: 'flex', gap: 24, width: '100%' }}>
+              <MetricCell label="Relevance" value={evidence.breakdown.relevance} />
+              <MetricCell label="Sources" value={evidence.breakdown.sourceCount} />
+            </div>
+            <div style={{ display: 'flex', gap: 24, width: '100%' }}>
+              <MetricCell label="Quality" value={evidence.breakdown.quality} />
+              <MetricCell label="Recency" value={evidence.breakdown.recency} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#8a8b90', flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#8a8b90' }}>
+              {evidence.count} source{evidence.count === 1 ? '' : 's'} found for this claim
+            </span>
+          </div>
+        </>
+      ) : (
+        <EvidenceRow claim={claim} />
+      )}
+
+      {claim.critique && claim.critiqueVerdict ? (
+        <>
+          <Divider />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: verdictColor(claim.critiqueVerdict),
+                  flexShrink: 0
+                }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 600, color: W_INK }}>Critique</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: verdictColor(claim.critiqueVerdict) }}>
+                {VERDICT_LABEL[claim.critiqueVerdict]}
+              </span>
+            </div>
+            <MarkdownText style={{ fontSize: 13.5, lineHeight: 1.4, color: W_BODY }}>{claim.critique}</MarkdownText>
+          </div>
+        </>
+      ) : null}
+
+      <div style={{ display: 'flex', gap: 10, width: '100%' }}>
         <button
           className="tracely-btn-primary"
-          onClick={onCritique}
-          disabled={critiqueBusy}
-          style={{
-            ...PRIMARY_BTN_STYLE,
-            flex: '1 1 150px',
-            whiteSpace: 'nowrap',
-            opacity: critiqueBusy ? 0.6 : 1,
-            cursor: critiqueBusy ? 'default' : 'pointer'
-          }}
-        >
-          {critiqueLabel}
-        </button>
-        <button
-          className="tracely-btn-secondary"
           onClick={onFindEvidence}
           disabled={evidenceBusy}
           style={{
-            ...SECONDARY_BTN_STYLE,
-            flex: '1 1 150px',
+            ...WIDGET_PRIMARY_BTN,
+            flex: '1 0 0',
+            minWidth: 0,
             whiteSpace: 'nowrap',
             opacity: evidenceBusy ? 0.6 : 1,
             cursor: evidenceBusy ? 'default' : 'pointer'
@@ -722,27 +874,22 @@ function ClaimActionCard({
         >
           {findLabel}
         </button>
+        <button
+          className="tracely-btn-secondary"
+          onClick={onCritique}
+          disabled={critiqueBusy}
+          style={{
+            ...WIDGET_SECONDARY_BTN,
+            flex: '1 0 0',
+            minWidth: 0,
+            whiteSpace: 'nowrap',
+            opacity: critiqueBusy ? 0.6 : 1,
+            cursor: critiqueBusy ? 'default' : 'pointer'
+          }}
+        >
+          {critiqueLabel}
+        </button>
       </div>
-      {claim.critique && claim.critiqueVerdict ? (
-        <div style={{ border: '1px solid #eeeef1', borderRadius: 12, overflow: 'hidden' }}>
-          <div
-            style={{
-              padding: '8px 12px',
-              background: verdictWash(claim.critiqueVerdict),
-              fontSize: 11.5,
-              fontWeight: 700,
-              color: verdictColor(claim.critiqueVerdict),
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em'
-            }}
-          >
-            {VERDICT_LABEL[claim.critiqueVerdict]}
-          </div>
-          <MarkdownText style={{ padding: '10px 12px', fontSize: 12.5, lineHeight: 1.55, color: '#3a3a3a' }}>
-            {claim.critique}
-          </MarkdownText>
-        </div>
-      ) : null}
     </>
   )
 }
@@ -2207,9 +2354,13 @@ export default function OverlayApp(): JSX.Element {
                   width: widget.rect.width,
                   height: widget.rect.height,
                   background: '#fff',
-                  border: CARD_BORDER,
-                  borderRadius: CARD_RADIUS,
-                  boxShadow: CARD_SHADOW,
+                  // The panel's own chrome, which is not the popover's: 1px
+                  // rather than 2px, radius 24 rather than 16, and a tighter
+                  // shadow. It is a window you opened, not a note pinned over
+                  // your document, and the design distinguishes the two.
+                  border: PANEL_BORDER,
+                  borderRadius: PANEL_RADIUS,
+                  boxShadow: PANEL_SHADOW,
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
@@ -2223,9 +2374,11 @@ export default function OverlayApp(): JSX.Element {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: '0 10px',
-                    background: '#fafafa',
-                    borderBottom: '1px solid #eeeef1',
+                    // Aligned to the body's 24px gutter, on white with a
+                    // hairline rule — the design has no tinted header bar.
+                    padding: `0 ${GRID_PADDING}px`,
+                    background: '#fff',
+                    borderBottom: `1px solid ${W_DIVIDER}`,
                     flexShrink: 0
                   }}
                 >
@@ -2271,20 +2424,24 @@ export default function OverlayApp(): JSX.Element {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: INK
+                          // 19px semibold, the design's panel title size. The
+                          // header is the only place the panel names itself.
+                          fontSize: 19,
+                          fontWeight: 600,
+                          color: W_INK
                         }}
                       >
-                        {widget.claimCount} claim{widget.claimCount === 1 ? '' : 's'} flagged
+                        {widget.viewMode === 'single'
+                          ? 'Argument check'
+                          : `${widget.claimCount} claim${widget.claimCount === 1 ? '' : 's'} flagged`}
                       </div>
                     ) : null}
                     <div
                       style={{
                         fontSize: 11,
-                        fontWeight: 700,
+                        fontWeight: 600,
                         color: ACCENT,
-                        background: 'rgba(244, 123, 32, 0.1)',
+                        background: 'rgba(255, 89, 0, 0.1)',
                         borderRadius: 999,
                         padding: '2px 8px',
                         whiteSpace: 'nowrap',
@@ -2299,15 +2456,19 @@ export default function OverlayApp(): JSX.Element {
                     title="Close"
                     aria-label="Close"
                     style={{
-                      width: 22,
-                      height: 22,
+                      // 30px on #f2f2f2, per the design — the old 22px puck at
+                      // 6% black read as a disabled control rather than a
+                      // button.
+                      width: 30,
+                      height: 30,
                       boxSizing: 'border-box',
                       border: 'none',
-                      background: 'rgba(0, 0, 0, 0.06)',
+                      background: CHIP_BG,
                       borderRadius: '50%',
-                      color: MUTED,
-                      fontSize: 13,
-                      lineHeight: '22px',
+                      color: W_INK,
+                      fontSize: 17,
+                      fontWeight: 500,
+                      lineHeight: '30px',
                       padding: 0,
                       cursor: 'pointer',
                       flexShrink: 0

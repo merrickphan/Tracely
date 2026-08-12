@@ -277,6 +277,14 @@ export interface ScreenWatchClaimEvidence {
   score: number
   count: number
   articles: ScreenWatchEvidenceArticle[]
+  // The four factors the score is made of. The widget's single-claim card
+  // ("Argument check" in Figma) shows them as a 2x2 breakdown, which is the
+  // whole reason the score is a published formula rather than a model's
+  // opinion — a student who disagrees with 34/100 can see which factor cost
+  // them the points. `support` is omitted: it is weighted 0 on the no-stance
+  // path, which ml/index.ts establishes is the only path a packaged build
+  // takes, so showing it would report a factor that cannot vary.
+  breakdown: ScoreBreakdown
 }
 
 // Set once the user has actually inserted a citation into the watched
