@@ -402,7 +402,8 @@ const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   'unverified-statistic': '#7c3aed',
   'no-sources': '#d6301a',
   'weak-evidence': '#b3690a',
-  'cited-unverified': '#b3690a',
+  // The most alarming state, and the only one given the contradiction red.
+  'cited-unverified': '#d6301a',
   // Unfinished rather than wrong.
   'partial-evidence': '#2f6fed',
   'missing-citation': ACCENT,
@@ -417,7 +418,7 @@ const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
   'unverified-statistic': 'Unverified statistic',
   'no-sources': 'No supporting sources',
   'weak-evidence': 'Evidence is weak',
-  'cited-unverified': 'Cited — worth checking',
+  'cited-unverified': 'Citation may not support this',
   'partial-evidence': 'Partially supported',
   'missing-citation': 'Missing citation',
   searching: 'Checking…'
@@ -1383,6 +1384,17 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
   const noun = KIND_NOUN[bucket]
   const n = evidence.count
   const sources = `${n} source${n === 1 ? '' : 's'}`
+
+  if (claim.problemKind === 'cited-unverified') {
+    return {
+      title: 'Citation may not support this',
+      description:
+        evidence.count === 0
+          ? `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. Either the source is not indexed — or it does not say this.`
+          : `You have cited this ${noun}, but the ${sources} found score ${evidence.score}/100 for supporting it. Check the source says what you have attributed to it.`,
+      action: 'Compare sources'
+    }
+  }
 
   if (level === 'none') {
     // "Unverified statistic" is the design's wording, and it is the better one:

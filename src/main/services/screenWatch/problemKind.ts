@@ -31,7 +31,11 @@ export type ScreenWatchProblemKind =
   | 'partial-evidence'
   /** Well supported, but the sentence is unattributed. */
   | 'missing-citation'
-  /** Attributed by the writer, and the literature does not clearly agree. */
+  /**
+   * The writer attributed it, and the literature does not back what they
+   * attributed. The most alarming state a claim can be in — a wrong citation
+   * is worse than a missing one, because the reader has no reason to check it.
+   */
   | 'cited-unverified'
 
 export interface ProblemKindInput {
@@ -63,6 +67,15 @@ export function problemKindFor({
 
   if (!evidence) return 'searching'
 
+  // Checked before the plain evidence bands, because "you cited this and the
+  // literature does not carry it" is a different and worse problem from "this
+  // is thinly supported" — and the copy for the latter never mentions the
+  // citation at all, which is how a possible miscitation used to read as a
+  // routine weak-evidence warning.
+  if (hasInlineCitation && (evidence.count === 0 || evidence.score < MIXED)) {
+    return 'cited-unverified'
+  }
+
   if (evidence.count === 0) {
     // A number is a different kind of problem from an assertion: it is checkable
     // against a specific figure, and being unable to find it is a stronger
@@ -73,11 +86,9 @@ export function problemKindFor({
   if (evidence.score < MIXED) return 'weak-evidence'
   if (evidence.score < STRONG) return 'partial-evidence'
 
-  // Strong. What remains depends on whether the writer has attributed it.
-  // A claim that is BOTH cited and strong is filtered out upstream and never
-  // reaches here, so this branch is the one where a cited claim is still worth
-  // a second look.
-  return hasInlineCitation ? 'cited-unverified' : 'missing-citation'
+  // Strong, and either uncited (say so) or cited — in which case it is
+  // filtered out upstream as settled and never reaches here at all.
+  return 'missing-citation'
 }
 
 /**
@@ -89,11 +100,13 @@ export function problemKindFor({
  * merely wants a citation.
  */
 const SEVERITY: ScreenWatchProblemKind[] = [
+  // Above weak reasoning: a claim whose own citation does not support it is
+  // the one error a reader has no prompt to go and check.
+  'cited-unverified',
   'weak-reasoning',
   'unverified-statistic',
   'no-sources',
   'weak-evidence',
-  'cited-unverified',
   'partial-evidence',
   'missing-citation',
   'searching'

@@ -44,9 +44,32 @@ describe('problemKindFor', () => {
   })
 
   it('never says "missing citation" about a sentence that has one', () => {
-    // The complaint that started all of this.
-    strictEqual(problemKindFor({ ...base, hasInlineCitation: true }), 'cited-unverified')
+    // The complaint that started all of this. A cited claim that IS supported
+    // is filtered out upstream as settled and never reaches this function.
     strictEqual(problemKindFor({ ...base, hasInlineCitation: false }), 'missing-citation')
+  })
+
+  it('separates a wrong citation from thin evidence', () => {
+    // The alarming case: the writer attributed it, and the literature does not
+    // carry what they attributed. It used to fall into weak-evidence, whose
+    // copy never mentions the citation at all.
+    strictEqual(
+      problemKindFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 } }),
+      'cited-unverified'
+    )
+    strictEqual(
+      problemKindFor({ ...base, hasInlineCitation: true, evidence: { score: 22, count: 5 } }),
+      'cited-unverified'
+    )
+    // Uncited at the same score is a different problem with different advice.
+    strictEqual(
+      problemKindFor({ ...base, hasInlineCitation: false, evidence: { score: 22, count: 5 } }),
+      'weak-evidence'
+    )
+  })
+
+  it('ranks a wrong citation above every other problem', () => {
+    ok(problemSeverity('cited-unverified') < problemSeverity('weak-reasoning'))
   })
 })
 
