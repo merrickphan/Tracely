@@ -41,11 +41,6 @@ export const tracelyApi = {
     call(window.tracely.documents.save(input)),
   removeDocument: (id: string) => call(window.tracely.documents.remove({ id })),
 
-  // The main window can open Tracer too now, not just the Screen Watch
-  // overlay — the Structure rail's weaknesses each offer to talk one through.
-  openTracer: (req: Parameters<typeof window.tracely.tracer.open>[0]) =>
-    call(window.tracely.tracer.open(req)),
-
   analyzeStructure: (input: Parameters<typeof window.tracely.structure.analyze>[0]) =>
     call(window.tracely.structure.analyze(input)),
   getStructure: (documentId: string, text: string) =>

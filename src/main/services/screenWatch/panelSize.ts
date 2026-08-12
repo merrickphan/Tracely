@@ -22,11 +22,19 @@ export const WIDGET_SIZE = 56
 // wrong enough that nothing inside ever lined up with the mockups.
 
 /**
- * 'single' — one claim's action card. Fixed, because the card's own content is
- * fixed; only the claim inside it changes.
+ * 'single' — one claim's card, as the Figma "Widget over Document" frames draw
+ * it. Fixed rather than measured, because the height depends on which claim is
+ * selected and that lives in the renderer: main sizes the rect the click-through
+ * hit-test is derived from, so it cannot ask.
+ *
+ * 532 is the TALLEST of the three frames (base 487, evidence-refreshed 506,
+ * critique-result 532), not an average — the card's body scrolls, so being
+ * larger than the content costs whitespace above the pinned button row, while
+ * being smaller would clip a critique. It was 568, which is the list view's
+ * cap and 36px taller than anything the design draws here.
  */
 export const SINGLE_PANEL_WIDTH = 480
-export const SINGLE_PANEL_HEIGHT = 568
+export const SINGLE_PANEL_HEIGHT = 532
 
 /**
  * 'all' — a single vertical column (not a grid) so each row has room to show
@@ -54,9 +62,9 @@ export const PANEL_GAP = 16
  * edge to edge. This is the vertical cost of that block.
  */
 export const GRID_HEADER_HEIGHT = PANEL_HEADER_HEIGHT + PANEL_GAP + 1 + PANEL_GAP
-// 568 — the tallest widget frame the design draws, and the same height the
-// single-claim card is fixed at, so a mode switch never changes the panel's
-// height either once content caps out.
+// 568 — the tallest widget frame the design draws. The single-claim card is
+// shorter (see SINGLE_PANEL_HEIGHT); this is the ceiling a list of many claims
+// or a long structural read is clamped to.
 export const MAX_LIST_PANEL_HEIGHT = 568
 
 /**

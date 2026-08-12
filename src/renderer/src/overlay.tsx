@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 // The overlay names Instrument Sans in its FONT_STACK but never loaded it, so
-// every card drew in the system fallback (Segoe UI on Windows) while the main,
-// floating and Tracer windows — and the Figma designs all of this is drawn
+// every card drew in the system fallback (Segoe UI on Windows) while the main
+// and floating windows — and the Figma designs all of this is drawn
 // from — used Instrument Sans. Nothing about the layout was wrong; it simply
 // was not the same typeface, which is most of why the overlay never quite
 // looked like the mockups.

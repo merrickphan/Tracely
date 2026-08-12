@@ -639,18 +639,175 @@ function openUrl(url: string | null): void {
   void window.tracely.shell.openExternal({ url })
 }
 
-function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.Element {
+// Same verdict vocabulary/colors as EvidenceScoreCard.tsx in the main app —
+// this card is meant to read as the same feature, not a stripped-down
+// lookalike, just rendered with inline styles since this window has no
+// shared stylesheet to pull CSS classes/variables from.
+const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
+  'well-supported': 'Well Supported',
+  'partially-supported': 'Partially Supported',
+  weak: 'Weak',
+  unsupported: 'Unsupported',
+  contradicted: 'Contradicted — False'
+}
+
+const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
+
+// -- The widget panel: Figma "Overlay Mockup - Widget over Document" ---------
+//
+// What the black launcher circle opens. The hover popover is a glance over
+// someone's document and stays the lighter ProblemCard/CitationFlowCard below;
+// this is the workspace you deliberately opened, and it follows the design's
+// three "Widget over Document" frames rather than the "Argument Score Card"
+// frame it used to draw.
+
+/**
+ * Widget-surface tokens. The panel runs a slightly different palette from the
+ * hover popover in Figma — darker ink, warmer body grey, its own divider — and
+ * its buttons are pills where the popover's are 8px rectangles. That is not an
+ * inconsistency to reconcile: the popover is a glance over someone's document,
+ * the panel is a workspace you have deliberately opened.
+ */
+const W_INK = '#1a1a1f'
+const W_BODY = '#55565c'
+const W_DIVIDER = '#e7e7e7'
+const W_TRACK = '#f0f0f0'
+
+// The three pill states the "Widget over Document" frames draw: filled for the
+// action the panel is offering, outlined for the one it isn't, and a flat grey
+// for an action already spent ("✓ Evidence Refreshed").
+//
+// `fontFamily: 'inherit'` is not decoration. A <button> does not inherit the
+// document font, so without it these drew in the UA default while every label
+// around them drew in Instrument Sans — the same class of near-miss that had
+// the overlay never loading the typeface at all.
+const WIDGET_PRIMARY_BTN: CSSProperties = {
+  border: 'none',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 500,
+  color: '#fff',
+  background: '#111',
+  cursor: 'pointer'
+}
+
+const WIDGET_SECONDARY_BTN: CSSProperties = {
+  border: '1.5px solid #111',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 500,
+  color: W_INK,
+  background: '#fff',
+  cursor: 'pointer'
+}
+
+const WIDGET_SPENT_BTN: CSSProperties = {
+  border: 'none',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 500,
+  color: '#8a8b90',
+  background: '#f0f0f0',
+  cursor: 'default'
+}
+
+/** Full-width, hairline-outlined — the design's "Show all (4)" row. */
+const WIDGET_SHOW_ALL_BTN: CSSProperties = {
+  width: '100%',
+  border: '1.5px solid #e2e2e2',
+  borderRadius: 999,
+  padding: '12px 18px',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 500,
+  color: W_INK,
+  background: '#fff',
+  cursor: 'pointer'
+}
+
+/**
+ * How long "Updated just now" stays true. A chip that says "just now" twenty
+ * minutes later is a small lie the panel has no reason to tell.
+ */
+const FRESH_EVIDENCE_MS = 60_000
+
+/** The critique rows' amber "!" tile, and the "Updated just now" chip. */
+const AMBER_BG = '#fef3c7'
+const AMBER_FG = '#d97706'
+const FRESH_BG = '#dcfce7'
+
+/**
+ * Reads a critique back as the design's issue rows.
+ *
+ * The "Critique Argument Result" frame draws three rows, each a short title
+ * over a sentence of detail. The relay returns ONE prose paragraph under 120
+ * words (see CRITIQUE_SYSTEM_PROMPT), so that shape is something the data
+ * sometimes has and sometimes doesn't. This reads whatever structure the model
+ * actually produced — markdown bullets, numbered points, or blank-line
+ * separated paragraphs — and otherwise returns a single row with the prose
+ * intact. Chopping a paragraph into sentences to reach three rows would be
+ * inventing issues the critique never claimed to have found.
+ *
+ * A row with no detected title returns an empty one; the card fills it with
+ * the verdict, so the prose always renders as body text rather than being
+ * ellipsised into a heading.
+ */
+export function critiqueIssues(critique: string): Array<{ title: string; detail: string }> {
+  const text = critique.trim()
+  if (!text) return []
+
+  const blocks = text
+    .split(/\n\s*\n|\n(?=[ \t]*(?:[-*•]|\d+[.)])[ \t])/)
+    .map((block) => block.replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]*/, '').trim())
+    .filter(Boolean)
+
+  return (blocks.length ? blocks : [text]).map((block) => {
+    const bold = /^\*\*(.+?)\*\*\s*[:.—-]?\s*/.exec(block)
+    if (bold && block.length > bold[0].length) {
+      return { title: bold[1].trim(), detail: block.slice(bold[0].length).trim() }
+    }
+    const sentenceEnd = /[.?!]\s/.exec(block)
+    if (sentenceEnd && sentenceEnd.index < 80 && block.length > sentenceEnd.index + 2) {
+      return {
+        title: block.slice(0, sentenceEnd.index + 1).trim(),
+        detail: block.slice(sentenceEnd.index + 2).trim()
+      }
+    }
+    return { title: '', detail: block }
+  })
+}
+
+/** A source row at the panel's scale — the popover's ArticleRow is smaller. */
+/** Stable enough to diff two searches: title + year, which is what a source
+ *  row shows. DOIs are not carried on ScreenWatchEvidenceArticle. */
+function articleKey(article: ScreenWatchEvidenceArticle): string {
+  return `${article.title}::${article.year ?? ''}`
+}
+
+function PanelSourceRow({
+  article,
+  isNew
+}: {
+  article: ScreenWatchEvidenceArticle
+  isNew: boolean
+}): JSX.Element {
   const meta = [article.venue, article.year ? String(article.year) : null].filter(Boolean).join(' · ')
-  const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }
   const content = (
     <>
       <SourceIcon provider={article.provider} faviconDataUrl={article.faviconDataUrl} />
-      <div style={{ minWidth: 0, flex: 1 }}>
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div
+          title={article.title}
           style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: INK,
+            fontSize: 13.5,
+            fontWeight: 500,
+            color: W_INK,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
@@ -658,10 +815,14 @@ function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.E
         >
           {article.title}
         </div>
-        {meta ? <div style={{ fontSize: 10.5, color: DIM }}>{meta}</div> : null}
+        {meta ? <div style={{ fontSize: 12, color: DIM }}>{meta}</div> : null}
+        {/* Only after an explicit refresh, and only on rows the previous
+            search did not return — otherwise "New" is decoration. */}
+        {isNew ? <div style={{ fontSize: 11, fontWeight: 600, color: POSITIVE }}>New</div> : null}
       </div>
     </>
   )
+  const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }
   if (!article.url) return <div style={rowStyle}>{content}</div>
   const url = article.url
   return (
@@ -679,144 +840,108 @@ function ArticleRow({ article }: { article: ScreenWatchEvidenceArticle }): JSX.E
   )
 }
 
-// Up to 3 real article titles (see MAX_ARTICLES_IN_OVERLAY in
-// screenWatchService.ts) — previously this card only ever showed a bare
-// "N sources" count with nothing to actually look at.
-function ArticleList({ claim, limit }: { claim: ScreenWatchClaimSummary; limit?: number }): JSX.Element | null {
-  if (!claim.evidence || claim.evidence.articles.length === 0) return null
-  const articles = limit ? claim.evidence.articles.slice(0, limit) : claim.evidence.articles
+function CritiqueIssueRow({ title, detail }: { title: string; detail: string }): JSX.Element {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {articles.map((article, i) => (
-        <ArticleRow key={`${article.title}-${i}`} article={article} />
-      ))}
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: AMBER_BG,
+          color: AMBER_FG,
+          fontSize: 10,
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}
+      >
+        !
+      </div>
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {title ? (
+          <div
+            title={title}
+            style={{
+              fontSize: 13.5,
+              fontWeight: 500,
+              color: W_INK,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {title}
+          </div>
+        ) : null}
+        {detail ? (
+          <MarkdownText style={{ fontSize: 12, lineHeight: 1.35, color: DIM }}>{detail}</MarkdownText>
+        ) : null}
+      </div>
     </div>
   )
 }
-
-// Same verdict vocabulary/colors as EvidenceScoreCard.tsx in the main app —
-// this card is meant to read as the same feature, not a stripped-down
-// lookalike, just rendered with inline styles since this window has no
-// shared stylesheet to pull CSS classes/variables from.
-const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
-  'well-supported': 'Well Supported',
-  'partially-supported': 'Partially Supported',
-  weak: 'Weak',
-  unsupported: 'Unsupported',
-  contradicted: 'Contradicted — False'
-}
-
-const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
-
-function verdictColor(verdict: CritiqueVerdict): string {
-  if (verdict === 'well-supported') return POSITIVE
-  if (verdict === 'partially-supported' || verdict === 'weak') return '#b3690a'
-  return '#d6301a'
-}
-
-function verdictWash(verdict: CritiqueVerdict): string {
-  if (verdict === 'well-supported') return 'rgba(31, 157, 99, 0.12)'
-  if (verdict === 'partially-supported' || verdict === 'weak') return 'rgba(179, 105, 10, 0.12)'
-  return 'rgba(214, 48, 26, 0.12)'
-}
-
-// The full card used by the widget panel — claim text, live evidence with
-// real article titles, and the Check Claim / Find Evidence actions.
-// `context` controls how much this card assumes: 'panel' (the widget you
-// deliberately opened) is the only place this renders now — the hover
-// popup uses the lighter ProblemCard/CitationFlowCard below instead of this
-// heavier card, matching the Figma "Inline Detection (Grammarly-style)"
-// mockups' lightweight glance-only popup.
-// -- The widget's single-claim card: Figma "Argument check" -----------
-//
-// The design's own breakdown is Support / Relevance / Quality / Recency, which
-// are exactly the factors computeStrength weighs in search/scoring.ts. That is
-// the point of publishing them: a student handed 34/100 can see which factor
-// cost them the marks and argue with it, which is only possible because the
-// score is a formula rather than a model's opinion.
 
 /**
- * Widget-surface tokens. The panel runs a slightly different palette from the
- * hover popover in Figma — darker ink, warmer body grey, its own divider — and
- * its buttons are pills where the popover's are 8px rectangles. That is not an
- * inconsistency to reconcile: the popover is a glance over someone's document,
- * the panel is a workspace you have deliberately opened.
+ * The panel's single-claim card — Figma "Overlay Mockup - Widget over Document"
+ * and its two result variants.
+ *
+ * One component, three states, because the frames differ only in their middle
+ * block and which pill is filled:
+ *  - base (282:70)         sources, Refresh Evidence filled
+ *  - refreshed (291:144)   sources + "Updated just now" + "New", refresh spent
+ *  - critique (291:251)    the critique as issue rows, Critique filled
+ *
+ * What this deliberately no longer shows is the 0–100 evidence score and its
+ * four-factor breakdown. That is a different frame — "Argument Score Card" —
+ * and this is the one the launcher opens.
  */
-const W_INK = '#1a1a1f'
-const W_BODY = '#55565c'
-const W_DIVIDER = '#e7e7e7'
-const W_TRACK = '#f0f0f0'
-
-const WIDGET_PRIMARY_BTN: CSSProperties = {
-  border: 'none',
-  borderRadius: 999,
-  padding: '12px 18px',
-  fontSize: 14,
-  fontWeight: 500,
-  color: '#fff',
-  background: '#111',
-  cursor: 'pointer'
-}
-
-const WIDGET_SECONDARY_BTN: CSSProperties = {
-  border: '1.5px solid #111',
-  borderRadius: 999,
-  padding: '12px 18px',
-  fontSize: 14,
-  fontWeight: 500,
-  color: W_INK,
-  background: '#fff',
-  cursor: 'pointer'
-}
-
-/** The design's bands, on the same 70/40 thresholds used everywhere else. */
-function strengthBand(score: number): { label: string; fg: string; bg: string } {
-  if (score >= 70) return { label: 'Strong', fg: '#16a34a', bg: '#dcfce7' }
-  if (score >= 40) return { label: 'Moderate', fg: '#b3690a', bg: '#fef3c7' }
-  return { label: 'Weak', fg: '#dc2626', bg: '#fee2e2' }
-}
-
-function SectionLabel({ children }: { children: string }): JSX.Element {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>{children}</div>
-}
-
-function Divider(): JSX.Element {
-  return <div style={{ height: 1, width: '100%', background: W_DIVIDER, flexShrink: 0 }} />
-}
-
-/** One factor of the score, as a labelled 5px bar. */
-function MetricCell({ label, value }: { label: string; value: number }): JSX.Element {
-  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
-  return (
-    <div style={{ flex: '1 0 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, whiteSpace: 'nowrap' }}>
-        <span style={{ color: W_BODY, fontWeight: 500 }}>{label}</span>
-        <span style={{ color: W_INK, fontWeight: 600 }}>{pct}%</span>
-      </div>
-      <div style={{ height: 5, borderRadius: 999, background: W_TRACK, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: W_INK }} />
-      </div>
-    </div>
-  )
-}
-
-function ClaimActionCard({
+function WidgetClaimCard({
   claim,
+  body,
   evidenceBusy,
   critiqueBusy,
-  onFindEvidence,
-  onCritique
+  freshlyRefreshed,
+  newArticleKeys,
+  showAllCount,
+  onRefreshEvidence,
+  onCritique,
+  onShowAll
 }: {
   claim: ScreenWatchClaimSummary
+  /** Which of the two result blocks is showing — set by the last action taken. */
+  body: 'sources' | 'critique'
   evidenceBusy: boolean
   critiqueBusy: boolean
-  onFindEvidence: () => void
+  freshlyRefreshed: boolean
+  /** Article keys the search returned that the previous one did not. */
+  newArticleKeys: Set<string> | null
+  showAllCount: number
+  onRefreshEvidence: () => void
   onCritique: () => void
+  onShowAll: () => void
 }): JSX.Element {
-  const findLabel = evidenceBusy ? 'Searching…' : claim.evidence ? 'Refresh Evidence' : 'Find Evidence'
-  const critiqueLabel = critiqueBusy ? 'Checking…' : claim.critique ? 'Re-check Argument' : 'Check Argument'
   const evidence = claim.evidence
-  const band = evidence ? strengthBand(evidence.score) : null
+  const issues = claim.critique ? critiqueIssues(claim.critique) : []
+  const showCritique = body === 'critique' && issues.length > 0
+  const verdictLabel = claim.critiqueVerdict ? VERDICT_LABEL[claim.critiqueVerdict] : 'Critique'
+  const weakVerdict = claim.critiqueVerdict !== null && WEAK_VERDICTS.includes(claim.critiqueVerdict)
+
+  const refreshLabel = evidenceBusy
+    ? 'Searching…'
+    : freshlyRefreshed && !showCritique
+      ? '✓ Evidence Refreshed'
+      : evidence
+        ? 'Refresh Evidence'
+        : 'Find Evidence'
+  const refreshStyle = showCritique
+    ? WIDGET_SECONDARY_BTN
+    : freshlyRefreshed && !evidenceBusy
+      ? WIDGET_SPENT_BTN
+      : WIDGET_PRIMARY_BTN
+  const critiqueStyle = showCritique ? WIDGET_PRIMARY_BTN : WIDGET_SECONDARY_BTN
 
   return (
     <>
@@ -840,115 +965,92 @@ function ClaimActionCard({
         &ldquo;{claim.text}&rdquo;
       </div>
 
-      <Divider />
-
-      {evidence && band ? (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                <SectionLabel>ARGUMENT STRENGTH</SectionLabel>
-                <span
-                  style={{
-                    background: band.bg,
-                    color: band.fg,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    borderRadius: 999,
-                    padding: '4px 10px'
-                  }}
-                >
-                  {band.label}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                <span style={{ fontSize: 26, fontWeight: 600, color: W_INK }}>{evidence.score}</span>
-                <span style={{ fontSize: 14, color: DIM }}>/100</span>
-              </div>
-            </div>
-            <div style={{ height: 6, borderRadius: 999, background: W_TRACK, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${evidence.score}%`, borderRadius: 999, background: band.fg }} />
-            </div>
-          </div>
-
-          <SectionLabel>BREAKDOWN</SectionLabel>
-          {/*
-            Two rows of two, in the design's order — except that `support` is
-            deliberately not among them. It is weighted 0 whenever the stance
-            model has not decided, which ml/index.ts establishes is every
-            packaged build, so its bar would sit at zero on every claim in the
-            app and read as a failing grade rather than as an absent input.
-            `sourceCount` takes the fourth slot: it is a real factor of the
-            score, and unlike support it actually varies.
-          */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
-            <div style={{ display: 'flex', gap: 24, width: '100%' }}>
-              <MetricCell label="Relevance" value={evidence.breakdown.relevance} />
-              <MetricCell label="Sources" value={evidence.breakdown.sourceCount} />
-            </div>
-            <div style={{ display: 'flex', gap: 24, width: '100%' }}>
-              <MetricCell label="Quality" value={evidence.breakdown.quality} />
-              <MetricCell label="Recency" value={evidence.breakdown.recency} />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#8a8b90', flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#8a8b90' }}>
-              {evidence.count} source{evidence.count === 1 ? '' : 's'} found for this claim
+      {/* The design's one-line "score row": what the block below it is a list
+          OF, rather than a rating of the claim. */}
+      {showCritique ? (
+        <div style={{ fontSize: 14, fontWeight: 500, color: '#1a1a1a' }}>
+          {weakVerdict
+            ? `${issues.length} issue${issues.length === 1 ? '' : 's'} found`
+            : `Reviewed · ${verdictLabel}`}
+        </div>
+      ) : evidence ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#8a8b90' }}>
+            {evidence.count} source{evidence.count === 1 ? '' : 's'}
+          </span>
+          {freshlyRefreshed ? (
+            <span
+              style={{
+                background: FRESH_BG,
+                color: POSITIVE,
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 999,
+                padding: '3px 10px'
+              }}
+            >
+              Updated just now
             </span>
-          </div>
-        </>
+          ) : null}
+        </div>
       ) : (
         <EvidenceRow claim={claim} />
       )}
 
-      {claim.critique && claim.critiqueVerdict ? (
-        <>
-          <Divider />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: verdictColor(claim.critiqueVerdict),
-                  flexShrink: 0
-                }}
-              />
-              <span style={{ fontSize: 14, fontWeight: 600, color: W_INK }}>Critique</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: verdictColor(claim.critiqueVerdict) }}>
-                {VERDICT_LABEL[claim.critiqueVerdict]}
-              </span>
-            </div>
-            <MarkdownText style={{ fontSize: 13.5, lineHeight: 1.4, color: W_BODY }}>{claim.critique}</MarkdownText>
-          </div>
-        </>
+      {showCritique ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+          {issues.map((issue, i) => (
+            <CritiqueIssueRow
+              key={`${issue.title}-${i}`}
+              // The verdict stands in for a missing title on the FIRST row
+              // only. Prose that never splits into a heading is common, and
+              // using the verdict every time printed "Weak" down the whole
+              // list as if it were three separate findings.
+              title={issue.title || (i === 0 ? verdictLabel : '')}
+              detail={issue.detail}
+            />
+          ))}
+        </div>
+      ) : evidence && evidence.articles.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+          {evidence.articles.map((article, i) => (
+            <PanelSourceRow
+              key={`${article.title}-${i}`}
+              article={article}
+              isNew={newArticleKeys !== null && !newArticleKeys.has(articleKey(article))}
+            />
+          ))}
+        </div>
       ) : null}
+
+      {/* Pushes the two action rows to the bottom edge of the card. The panel
+          is a fixed height (SINGLE_PANEL_HEIGHT, sized for the tallest of the
+          three frames), so a claim with fewer sources than the mockup would
+          otherwise leave its buttons floating mid-card. */}
+      <div style={{ flex: 1, minHeight: 0 }} />
 
       <div style={{ display: 'flex', gap: 10, width: '100%' }}>
         <button
-          className="tracely-btn-primary"
-          onClick={onFindEvidence}
+          className={refreshStyle === WIDGET_PRIMARY_BTN ? 'tracely-btn-primary' : 'tracely-btn-secondary'}
+          onClick={onRefreshEvidence}
           disabled={evidenceBusy}
           style={{
-            ...WIDGET_PRIMARY_BTN,
+            ...refreshStyle,
             flex: '1 0 0',
             minWidth: 0,
             whiteSpace: 'nowrap',
             opacity: evidenceBusy ? 0.6 : 1,
-            cursor: evidenceBusy ? 'default' : 'pointer'
+            cursor: evidenceBusy ? 'default' : refreshStyle.cursor
           }}
         >
-          {findLabel}
+          {refreshLabel}
         </button>
         <button
-          className="tracely-btn-secondary"
+          className={critiqueStyle === WIDGET_PRIMARY_BTN ? 'tracely-btn-primary' : 'tracely-btn-secondary'}
           onClick={onCritique}
           disabled={critiqueBusy}
           style={{
-            ...WIDGET_SECONDARY_BTN,
+            ...critiqueStyle,
             flex: '1 0 0',
             minWidth: 0,
             whiteSpace: 'nowrap',
@@ -956,9 +1058,15 @@ function ClaimActionCard({
             cursor: critiqueBusy ? 'default' : 'pointer'
           }}
         >
-          {critiqueLabel}
+          {critiqueBusy ? 'Checking…' : claim.critique ? 'Re-check Argument' : 'Critique Argument'}
         </button>
       </div>
+
+      {showAllCount > 1 ? (
+        <button className="tracely-btn-secondary" onClick={onShowAll} style={WIDGET_SHOW_ALL_BTN}>
+          Show all ({showAllCount})
+        </button>
+      ) : null}
     </>
   )
 }
@@ -1234,25 +1342,7 @@ function StructureView({
                     {weakness.paragraphIndex === null ? 'Draft' : `¶${weakness.paragraphIndex}`}
                   </span>
                 )}
-                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: MUTED }}>
-                  {weakness.message}{' '}
-                  {/* The one action available on every weakness, including the
-                      whole-draft ones. The prompt is written in the student's
-                      voice (see weaknesses.ts) so Tracer answers the question
-                      rather than reading it as an instruction to fix the text. */}
-                  <button
-                    className="tracely-btn-text"
-                    onClick={() =>
-                      void window.tracely.tracer.open({
-                        claimId: weakness.claimId ?? undefined,
-                        prompt: weakness.tracerPrompt
-                      })
-                    }
-                    style={{ ...TEXT_BTN_STYLE, padding: 0, fontSize: 11.5 }}
-                  >
-                    Ask Tracer
-                  </button>
-                </span>
+                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: MUTED }}>{weakness.message}</span>
               </div>
             )
           })}
@@ -1467,7 +1557,6 @@ function ProblemCard({
   remaining,
   onSuggestFix,
   onStartCitationFlow,
-  onAskTracer,
   onDismiss
 }: {
   claim: ScreenWatchClaimSummary
@@ -1477,7 +1566,6 @@ function ProblemCard({
   remaining: number
   onSuggestFix: () => void
   onStartCitationFlow: () => void
-  onAskTracer: () => void
   onDismiss: () => void
 }): JSX.Element {
   // Read, not re-derived. This card and the underline disagreeing about what
@@ -1555,15 +1643,8 @@ function ProblemCard({
         ) : null}
       </div>
       <MarkdownText style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>{description}</MarkdownText>
-      {/*
-        The design's action row is exactly two buttons — fix it, or dismiss it —
-        and at 320 wide that is all that fits on one line. Ask Tracer is not in
-        the mockups because it postdates them, and it is the one action here
-        that teaches rather than fixes, so it sits below as a text link instead
-        of competing with them. Opening Tracer takes OS focus away from the
-        watched app, which is why screenWatchService holds its claim state
-        while that window is up.
-      */}
+      {/* The design's action row is exactly two buttons — fix it, or dismiss
+          it — and at 320 wide that is all that fits on one line. */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="tracely-btn-primary" onClick={onPrimary} style={PRIMARY_BTN_STYLE}>
           {primaryLabel}
@@ -1572,13 +1653,6 @@ function ProblemCard({
           Dismiss
         </button>
       </div>
-      <button
-        className="tracely-btn-text"
-        onClick={onAskTracer}
-        style={{ ...TEXT_BTN_STYLE, alignSelf: 'flex-start', fontSize: 12.5 }}
-      >
-        Ask Tracer why
-      </button>
     </>
   )
 }
@@ -1960,6 +2034,27 @@ export default function OverlayApp(): JSX.Element {
   const [busyEvidenceIds, setBusyEvidenceIds] = useState<Set<string>>(new Set())
   const [busyCritiqueIds, setBusyCritiqueIds] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Which of the card's two result blocks to show, per claim: whichever action
+  // the user took last, exactly as the design's two result frames read. A claim
+  // that already carries a critique opens on it, since that is the thing the
+  // sources list cannot tell them.
+  const [panelBodyByClaim, setPanelBodyByClaim] = useState<Map<string, 'sources' | 'critique'>>(new Map())
+  // Set for FRESH_EVIDENCE_MS after an explicit refresh — the green chip says
+  // "just now", so it has to stop being true at some point.
+  const [freshEvidenceIds, setFreshEvidenceIds] = useState<Set<string>>(new Set())
+  // The article keys a claim had BEFORE its last refresh. Rows outside this
+  // set are the ones the new search actually turned up, which is what "New"
+  // means; without a baseline no row is marked, rather than all of them.
+  const [refreshBaselineByClaim, setRefreshBaselineByClaim] = useState<Map<string, Set<string>>>(new Map())
+
+  function panelBodyFor(claim: ScreenWatchClaimSummary): 'sources' | 'critique' {
+    return panelBodyByClaim.get(claim.id) ?? (claim.critique ? 'critique' : 'sources')
+  }
+
+  function setPanelBody(claimId: string, body: 'sources' | 'critique'): void {
+    setPanelBodyByClaim((prev) => new Map(prev).set(claimId, body))
+  }
   // The hover popup's citation flow (Find a source / Add citation), keyed
   // by claim id — absent means "just showing ProblemCard," not started.
   const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
@@ -2067,11 +2162,26 @@ export default function OverlayApp(): JSX.Element {
   async function findEvidenceFor(claimId: string): Promise<void> {
     setActionError(null)
     setBusyEvidenceIds((prev) => new Set(prev).add(claimId))
+    setPanelBody(claimId, 'sources')
+    // Snapshot BEFORE the call, not after it resolves. The new articles arrive
+    // on the next SCREENWATCH_OVERLAY_UPDATE push rather than in the response,
+    // so a baseline taken afterwards would race the push and mark either
+    // everything or nothing as new.
+    const before = new Set(
+      (widget?.claims.find((c) => c.id === claimId)?.evidence?.articles ?? []).map(articleKey)
+    )
     try {
       await window.tracely.screenWatch.refreshEvidence({ claimId })
-      // The result lands via the next SCREENWATCH_OVERLAY_UPDATE push
-      // (screenWatchService.ts redraws right after updating its state) —
-      // nothing to store from the response itself.
+      setRefreshBaselineByClaim((prev) => new Map(prev).set(claimId, before))
+      setFreshEvidenceIds((prev) => new Set(prev).add(claimId))
+      window.setTimeout(() => {
+        setFreshEvidenceIds((prev) => {
+          if (!prev.has(claimId)) return prev
+          const next = new Set(prev)
+          next.delete(claimId)
+          return next
+        })
+      }, FRESH_EVIDENCE_MS)
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -2086,6 +2196,7 @@ export default function OverlayApp(): JSX.Element {
   async function critiqueFor(claimId: string): Promise<void> {
     setActionError(null)
     setBusyCritiqueIds((prev) => new Set(prev).add(claimId))
+    setPanelBody(claimId, 'critique')
     try {
       await window.tracely.screenWatch.critiqueClaim({ claimId })
     } catch (err) {
@@ -2624,25 +2735,28 @@ export default function OverlayApp(): JSX.Element {
                       cursor: 'grab'
                     }}
                   >
-                    {widget.viewMode === 'single' ? (
-                      <div
-                        style={{
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          // 19px semibold, the design's panel title size. The
-                          // header is the only place the panel names itself.
-                          fontSize: 19,
-                          fontWeight: 600,
-                          color: W_INK
-                        }}
-                      >
-                        {widget.viewMode === 'single'
-                          ? 'Argument check'
-                          : `${widget.claimCount} claim${widget.claimCount === 1 ? '' : 's'} flagged`}
-                      </div>
-                    ) : null}
+                    {/* The same title in every mode, which is what the design
+                        does: the base frame, the two result frames and the
+                        "Show All Result" frame all say "4 claims flagged". It
+                        used to read "Argument check" in single mode and render
+                        nothing at all in the others. Counted from the visible
+                        claims rather than widget.claimCount so it agrees with
+                        the "Show all (N)" pill directly below it. */}
+                    <div
+                      style={{
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        // 19px semibold, the design's panel title size. The
+                        // header is the only place the panel names itself.
+                        fontSize: 19,
+                        fontWeight: 600,
+                        color: W_INK
+                      }}
+                    >
+                      {visibleClaims.length} claim{visibleClaims.length === 1 ? '' : 's'} flagged
+                    </div>
                     <div
                       style={{
                         fontSize: 11,
@@ -2713,46 +2827,25 @@ export default function OverlayApp(): JSX.Element {
                   ) : visibleClaims.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
                       <div style={{ fontSize: 12.5, color: DIM, textAlign: 'center' }}>No claims flagged yet.</div>
-                      {/* Tracer is useful with nothing flagged — it's a
-                          tutor, not a claim inspector, so it stays
-                          reachable even on an empty panel. */}
-                      <button
-                        className="tracely-btn-secondary"
-                        onClick={() => void window.tracely.tracer.open({})}
-                        style={SECONDARY_BTN_STYLE}
-                      >
-                        Ask Tracer
-                      </button>
                     </div>
                   ) : widget.viewMode === 'single' && topClaim ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%' }}>
-                      <ClaimActionCard
+                    // The design's card IS the panel body: the same 16px stack
+                    // the panel itself uses, so the card contributes rows to it
+                    // rather than nesting a second box inside it.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: PANEL_GAP, minHeight: '100%' }}>
+                      <WidgetClaimCard
                         claim={topClaim}
+                        body={panelBodyFor(topClaim)}
                         evidenceBusy={busyEvidenceIds.has(topClaim.id)}
                         critiqueBusy={busyCritiqueIds.has(topClaim.id)}
-                        onFindEvidence={() => void findEvidenceFor(topClaim.id)}
+                        freshlyRefreshed={freshEvidenceIds.has(topClaim.id)}
+                        newArticleKeys={refreshBaselineByClaim.get(topClaim.id) ?? null}
+                        showAllCount={visibleClaims.length}
+                        onRefreshEvidence={() => void findEvidenceFor(topClaim.id)}
                         onCritique={() => void critiqueFor(topClaim.id)}
+                        onShowAll={showAll}
                       />
                       {actionError ? <div style={{ fontSize: 11.5, color: '#d6301a' }}>{actionError}</div> : null}
-                      <div style={{ flex: 1 }} />
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        <button
-                          className="tracely-btn-secondary"
-                          onClick={() => void window.tracely.tracer.open({ claimId: topClaim.id })}
-                          style={{ ...SECONDARY_BTN_STYLE, flex: '1 1 130px' }}
-                        >
-                          Ask Tracer
-                        </button>
-                        {visibleClaims.length > 1 ? (
-                          <button
-                            className="tracely-btn-secondary"
-                            onClick={showAll}
-                            style={{ ...SECONDARY_BTN_STYLE, flex: '1 1 130px' }}
-                          >
-                            Show all ({visibleClaims.length})
-                          </button>
-                        ) : null}
-                      </div>
                     </div>
                   ) : (
                     // A single vertical column, not a grid — sized per-claim-
@@ -2828,7 +2921,6 @@ export default function OverlayApp(): JSX.Element {
                       void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
                     }}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
-                    onAskTracer={() => void window.tracely.tracer.open({ claimId: claimHoveredSummary.id })}
                     activeKind={hoveredActiveKind}
                     remaining={hoveredRemaining}
                     onDismiss={() =>

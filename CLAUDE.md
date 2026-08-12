@@ -103,7 +103,7 @@ published GitHub release.
 That relay check is the important one. **The desktop app and the relay
 (`C:\Users\merri\Tracely-relay`, deployed to Vercel) must ship together**, and
 nothing else enforces it: v0.3.73 was committed, typechecked and building
-cleanly with Tracer's `/api/tracer` returning 404 in production. Deploy the
+cleanly with the then-new `/api/tracer` returning 404 in production. Deploy the
 relay first, then release the client. The version check matters for the
 opposite failure — `electron-updater` only offers a *strictly higher* version,
 so publishing without bumping produces a release nobody is ever shown.
@@ -121,14 +121,13 @@ be called `/preview`, which is why anything older may say so.)
 A desktop harness for looking at and reviewing the UI without booting the real
 app — no SQLite, no relay, no Screen Watch, no global hotkey. It opens one
 Electron window that loads **the real renderer entries** (`index.html`,
-`tracer.html`, `floating.html`, `overlay.html`) in iframes at their true
-BrowserWindow pixel sizes, against a mocked IPC bridge. HMR is live, and it's
-safe to run alongside the real app.
+`floating.html`, `overlay.html`) in iframes at their true BrowserWindow pixel
+sizes, against a mocked IPC bridge. HMR is live, and it's safe to run alongside
+the real app.
 
-It exists because most of this UI is otherwise awkward to reach: Tracer's
-window is created hidden and only opens from the Screen Watch widget, the
-floating window needs a global hotkey and a clipboard payload, and the overlay
-only draws when UIA is reading a real focused control in another app.
+It exists because most of this UI is otherwise awkward to reach: the floating
+window needs a global hotkey and a clipboard payload, and the overlay only
+draws when UIA is reading a real focused control in another app.
 
 - **`src/renderer/src/preview/mockApi.ts` is the drift guard, and the reason
   this is worth having.** `createMockApi` is typed as `Window['tracely']` —
@@ -140,23 +139,23 @@ only draws when UIA is reading a real focused control in another app.
   of `src/preload/index.ts` on purpose: importing the preload *implementation*
   drags electron's Node typings into the renderer's tsconfig program and
   degrades inference across every renderer file.)
-- **Iframes, not one shared document.** Tracer ships Tailwind including its
-  preflight reset; the other three windows rely on `styles/index.css` and
-  default UA styling. They can only be shown side by side as separate
-  documents.
+- **Iframes, not one shared document.** Each surface is a real document with
+  its own stylesheet, which is the only way to show them side by side without
+  one window's reset reaching another. (Tracer, which shipped Tailwind's
+  preflight next to windows relying on default UA styling, is why this was
+  never negotiable.)
 - **The mock is injected by `preview/vite.config.mts`, dev-server-side only.**
   `transformIndexHtml` prepends `src/preview/bootstrap.ts` as a module script
-  to the four real entries. ES module scripts run in document order, so
+  to the three real entries. ES module scripts run in document order, so
   `window.tracely` is installed before the app's own entry module — the same
   guarantee the preload contextBridge gives it in production. **No shipped
   file is modified to support the preview.**
 - **It cannot ship.** `preview.html` is deliberately absent from
   `electron.vite.config.ts`'s `rollupOptions.input`, so it's never built into
   `out/`, and electron-builder packages `out/**/*` only.
-- Scenario controls in the left rail (auth gate, relay configured, empty vs.
-  populated Tracer thread, forced relay failure, injected latency) re-create
-  states that are otherwise hard to reach on demand — the error banner, the
-  "needs a relay" composer, the loading spinners. Changing one reloads the
+- Scenario controls in the left rail (auth gate, relay configured, structure
+  variant, forced relay failure, injected latency) re-create states that are
+  otherwise hard to reach on demand — the error banner, the loading spinners. Changing one reloads the
   surfaces, because the mock is constructed once per document exactly like the
   real bridge. The right-hand panel logs every IPC call that fires.
 - **Overlay hover and overlay updates are driveable from the rail.** Hover normally comes from `hoverTracking.ts` hit-testing the real cursor against the watched app, and overlay payloads from the poll loop — neither has an equivalent inside an iframe, so `mockApi.ts` exposes `__previewEmitHover` / `__previewEmitOverlay` on the overlay frame. Without them the hover states and the dropped-rect flicker path are simply unreachable in the preview.
@@ -173,9 +172,9 @@ src/shared/         Types (types.ts) and IPC contract (ipc-contract.ts request/r
                      three processes. Import via the `@shared` alias.
 src/main/           Node.js main process — all business logic lives here, nothing in the renderer.
 src/preload/        contextBridge surface exposed as `window.tracely` (typed `TracelyApi`).
-src/renderer/       React UI, four entry points (index.html main window, floating.html popup,
-                     overlay.html Screen Watch overlay, tracer.html the tutor chat)
-                     sharing components. Import via the `@renderer` alias.
+src/renderer/       React UI, three entry points (index.html main window, floating.html popup,
+                     overlay.html Screen Watch overlay) sharing components.
+                     Import via the `@renderer` alias.
 ```
 
 ### IPC pattern (adding a new feature follows this shape every time)
@@ -249,55 +248,37 @@ A rail in the document editor that reads a draft as an *argument* rather than as
 - **`splitParagraphs` treats ANY newline run as a boundary**, not just a blank line. It runs on the contentEditable editor's `innerText`, where execCommand wraps each Enter in a `<div>` that Chromium renders as a single `\n`; requiring `\n\n` would see a normal essay as one giant paragraph. It lives in `shared/` because the renderer must re-derive the same paragraphs to draw text beside the labels — a `DocumentOutline` carries **no prose**, only indices, roles, booleans and ids.
 - **`document_structure` is a cache of a pure function that still has to be persisted**, because it cannot be recomputed on demand: the analysis runs on `innerText`, and `documents.body_html` cannot be turned back into that string from main without parsing HTML. `source_hash` is over the innerText, so reformatting leaves the analysis valid while an edit to the words marks it stale.
 - Layout: `.docedit-view` is a **row**, with the editor column in `.docedit-main`. `.docedit-wordcount` and `.docedit-error` must stay inside it or they become flex items of the row, and `.docedit-structure` needs `-webkit-app-region: no-drag` because `.docedit-view` is a drag region. Paragraph jumps use `scrollIntoView({ behavior: 'auto' })` — smooth scrolling is compositor-driven and silently does nothing when the window is not compositing, the same trap as the overlay's entrance animation.
-- Tracer integration: `structure/outlineContext.ts` holds the last in-app analysis, because `getTracerContext()` sources from Screen Watch, which reports `skip: "self"` while Tracely is foreground and would otherwise answer about an external document from an hour ago. Most-recent-wins in both directions.
 
-### Tracer (`main/services/ai/tracer.ts`, `windows/tracerWindow.ts`, `renderer/src/TracerApp.tsx`)
+### Tracer (removed)
 
-A conversational writing teacher, opened from the Screen Watch widget ("Ask Tracer" in the hover popover, the expanded panel, and the empty panel). It answers questions about the user's writing using the watched document and its flagged claims as context — and is prompted to explain and push back rather than write text for the student (`TRACER_SYSTEM_PROMPT` on the relay refuses rewriting outright).
+Tracer was a conversational writing tutor in its own `BrowserWindow`, opened
+from the Screen Watch widget. **It was removed** — window, relay client, IPC
+handlers, repo, renderer entry and every "Ask Tracer" entry point — because the
+widget was rebuilt on the Figma "Widget over Document" frames, and those frames
+have no Tracer in them.
 
-- **It gets its own `BrowserWindow`, not a spot in the overlay.** The overlay is `focusable: false` + click-through by design so it never steals focus from the watched app, which means it cannot host a text input — the same constraint that already forced the citation picker to have no "search again" box. `tracerWindow.ts` is a normal focusable window that opens at the same bottom-right corner the widget anchors to. It's created hidden at boot and hidden (not destroyed) on close, so reopening is instant; because that means no remount, `showTracerWindow` pushes `TRACER_OPENED` and the renderer reloads on it.
-- **Focusing Tracer freezes Screen Watch instead of resetting it.** Talking to Tracer makes Tracely the foreground app, which UIA reports as `skip: "self"` — the normal path for that calls `resetTrackingState()` and hides the overlay, which would wipe the very claims the user just opened Tracer to ask about. `tick()` returns early on `"self"` while the Tracer window is open, holding claims and underlines in place; every other skip reason still resets. `hoverTracking.ts` likewise stops hit-testing while Tracer is *focused* (not merely open, so going back to writing restores popovers immediately), and `tracerWindow.ts` matches the overlay's `'screen-saver'` always-on-top level so the click-through overlay can't sit above the composer and eat clicks.
-- **It is the one part of Screen Watch that persists.** Everything else there is deliberately ephemeral, but conversations live in `tracer_conversations` / `tracer_messages` via `storage/tracerRepo.ts` — a tutor that forgets every session isn't one. Both Privacy clears wipe them, since the messages quote the user's own writing.
-- **Nothing is cached.** Unlike `critique.ts`/`claimDetection.ts` (pure functions of their input, keyed into `cacheRepo`), a chat turn depends on the whole conversation, so a cache would return wrong answers rather than merely useless ones. Cost is bounded instead by the `MAX_TRACER_*` caps in `ai/costGuard.ts` — notably a cap on **history turns**, since every prior turn is re-sent on every message and an uncapped conversation grows quadratically in tokens.
-- **Needs a new relay endpoint.** `api/tracer.ts` in the relay repo, mirrored caps in its `lib/limits.ts`. Deploy the relay before this does anything — the composer disables itself when the build has no relay (`isRelayConfigured()`).
-- **It is the only window styled with Tailwind.** Tracer's UI is built on shadcn
-  [ai-elements](https://ai-sdk.dev/elements) primitives — `components/ui/{conversation,message,actions,ai-actions}.tsx`
-  — so it needs Tailwind, while the other three renderer entries keep the
-  inline-style + `styles/index.css` idiom. The split is enforced purely by
-  import: `styles/tracer.css` (the `@import 'tailwindcss'` entry, plus the
-  `@theme` tokens) is imported by `tracer.tsx` and nothing else, which keeps
-  Tailwind's preflight reset out of the main, floating and overlay windows.
-  **Don't import it anywhere else without checking those windows against the
-  reset** — they rely on default UA styling in places. Tailwind v4 is
-  CSS-first: there is no `tailwind.config.js`, and the design tokens
-  (`ink`/`accent`/`muted`/`line`) live in the `@theme` block of that CSS file.
-  The `@` alias (→ `src/renderer/src`) exists in both `electron.vite.config.ts`
-  and `tsconfig.web.json` so registry components paste in with their
-  `@/components/ui/...` imports intact.
-- **Two things the upstream ai-elements examples do that cannot work here:**
-  `next/image` (this is Electron — no Next, no image optimizer) and remote
-  avatars (`tracer.html` ships `img-src 'self' data:`, so any CDN or
-  placeholder URL is blocked by CSP before it's a design question). Both
-  avatars are drawn from the bundled `figma-logo.png`. The registry's `Action`
-  also wraps every button in a Radix tooltip; that's replaced with the native
-  `title` attribute rather than adding `@radix-ui/react-tooltip` and a
-  provider to label five icons in a 380px popup.
-- **Copy falls back to `document.execCommand`.** `navigator.clipboard.writeText`
-  rejects with `NotAllowedError: Document is not focused` whenever Tracer isn't
-  the foreground window — a normal state for a popup that sits next to the app
-  you're typing in, not an edge case. The fallback in `ai-actions.tsx` is why
-  the button doesn't silently do nothing; the "Copied" confirmation is only
-  shown if a copy actually succeeded.
-- **Like/Dislike are local and unpersisted, and there is no Share action.** The
-  relay has no feedback endpoint to send a rating to, and writing one into
-  `tracer_messages` would imply it goes somewhere. Share was dropped from the
-  upstream action row outright: Tracely is local-first with no account and no
-  permalink, so it could only ever be decorative.
+What deliberately stayed:
+
+- **The `tracer_conversations` / `tracer_messages` tables**, and both Privacy
+  clears' `DELETE` statements against them. Dropping tables destroys data on
+  upgrade for nothing; the DELETEs are how an existing install's rows get
+  cleaned up. Nothing writes to them.
+- **The `Tracer*` types in `shared/ipc-contract.ts` and the `TRACER_*` channel
+  constants**, because `src/shared/*` is additive (see the branch rules above)
+  and unwiring an implementation is not a reason to restructure a shared file.
+- **`tracerPrompt` on `StructureWeakness`.** Same rule. Nothing renders it.
+
+`git log` has the implementation if it comes back. The relay's `/api/tracer`
+was NOT touched — it is still deployed, and `callRelay`'s endpoint union no
+longer names it, so `scripts/preflight.mjs` simply stops checking it.
+
+Tailwind left with Tracer: it was scoped to that one window by import, no entry
+pulls it in now, and the plugin is gone from both Vite configs.
 
 ### Where user data lives at runtime
 
-- Windows: `%APPDATA%\Tracely\tracely.db` (SQLite: analyses, claims, evidence, citations, library, request cache, Tracer conversations) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
-- Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`). Both also wipe Tracer conversations — they quote the user's own writing back at them, so leaving them behind would defeat the point of the control.
+- Windows: `%APPDATA%\Tracely\tracely.db` (SQLite: analyses, claims, evidence, citations, library, request cache) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
+- Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`). Both also clear any leftover `tracer_*` rows from before Tracer was removed.
 
 ## Known MVP simplifications (intentional, not bugs)
 

@@ -12,7 +12,7 @@ repo's history — the clipped popover, the snapping underline, the invisible
 mark, the 476-vs-560 panel — was invisible in the source and obvious the
 moment something measured it.
 
-The harness loads the **real** `index.html`, `tracer.html`, `floating.html` and
+The harness loads the **real** `index.html`, `floating.html` and
 `overlay.html` in iframes at their true BrowserWindow sizes, against a mocked
 IPC bridge. No SQLite, no relay, no Screen Watch, no hotkey. Safe to run
 alongside the real app.
@@ -31,9 +31,9 @@ assuming 5199; Vite moves on if it is taken.
 
 ## Turn on the surfaces you need
 
-Only Tracer is enabled by default. The rail's checkboxes are `.preview-check
-input`, in the order: main window, Tracer, floating popup, Screen Watch overlay,
-then the scenario toggles.
+Only the Screen Watch overlay is enabled by default. The rail's checkboxes are
+`.preview-check input`, in the order: main window, floating popup, Screen Watch
+overlay, then the scenario toggles.
 
 Match by **label text, not index** — the order changes as surfaces are added:
 
@@ -46,7 +46,7 @@ return 'on';})()
 
 ## Drive it
 
-Each surface is an iframe titled after itself (`Screen Watch overlay`, `Tracer`,
+Each surface is an iframe titled after itself (`Screen Watch overlay`,
 `Main window`, `Floating popup`). Inside it, `contentWindow.tracely` is the
 mock bridge — the same object the real preload installs, so calling it exercises
 the component's real handler:
@@ -120,7 +120,7 @@ work". Wait ~100ms.
 **Anything that reloads resets the surfaces.** Changing a scenario control
 reloads the frames on purpose (the mock is constructed once per document,
 exactly like the real bridge), and saving a file triggers HMR on the harness
-page itself. Both drop you back to Tracer-only. Re-enable and re-drive.
+page itself. Both drop you back to the overlay alone. Re-enable and re-drive.
 
 **Timers you are testing are real timers.** An auto-clear on a 2500ms timeout
 needs a wait past 2500ms to prove it fires — and a wait under it to prove the

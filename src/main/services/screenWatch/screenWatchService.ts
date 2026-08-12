@@ -8,14 +8,12 @@ import type {
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
   ScreenWatchStatus,
-  ScreenWatchStructure,
-  TracerContext
+  ScreenWatchStructure
 } from '@shared/ipc-contract'
 import type {
   CitationStyle,
   Claim,
   CritiqueVerdict,
-  DocumentOutline,
   EvidenceItem,
   ScoreBreakdown,
   Source
@@ -31,10 +29,8 @@ import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
-import { getClaimsByAnalysis } from '../storage/claimsRepo'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { sourceHashFor } from '../structure/analyzeStructure'
-import { getInAppOutlineContext } from '../structure/outlineContext'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
   getOverlayWindow,
@@ -44,7 +40,6 @@ import {
   sendToOverlay
 } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
-import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
 import {
   computeAllPanelSize,
   computeStructurePanelSize,
@@ -234,9 +229,6 @@ export function getHoverTargets(): HoverTarget[] {
 let widgetExpanded = false
 // Cached so toggling expanded/collapsed can redraw immediately instead of
 // waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
-// When Screen Watch last captured a document. Compared against the in-app
-// editor's last analysis to decide which one Tracer should talk about.
-let lastTracerContextAt: number | null = null
 let lastUpdateInputs: {
   windowRect: ScreenRect
   // Carried so redrawOverlay() reproduces the same clip the tick that computed
@@ -544,17 +536,6 @@ async function tick(): Promise<void> {
     if (!snapshot.ok) {
       lastError = snapshot.error
 
-      // Freeze for the same reason a `skip: "self"` freezes, and check it
-      // BEFORE counting. A backgrounded watched app is *more* likely to blow
-      // uiaSnapshot's 4s budget while Tracer holds focus, so without this the
-      // failure path becomes a second door into exactly the wipe the "self"
-      // guard exists to prevent — and it opens in the situation that provokes
-      // it most.
-      if (isTracerWindowOpen()) {
-        logScreenWatch(`snapshot failed while Tracer is open (frozen): ${snapshot.error}`)
-        return
-      }
-
       // This branch used to return without hiding or resetting anything, with
       // no counter — and a closing window is exactly what produces it, since
       // FocusedElement keeps handing back a dying element until focus settles.
@@ -589,18 +570,6 @@ async function tick(): Promise<void> {
     snapshotFailures = 0
 
     if (snapshot.skip) {
-      // Talking to Tracer means Tracely itself is the foreground app, which
-      // UIA reports as `skip: "self"`. Treating that like any other skip
-      // would wipe the very claims the user opened Tracer to ask about and
-      // hide the underlines out from under them mid-question. So while the
-      // Tracer window is up, a "self" skip freezes Screen Watch instead:
-      // keep the claims, keep the overlay drawn where it was, and pick the
-      // document back up on the next tick after Tracer is closed. Every
-      // other skip reason (and "self" with Tracer closed) still resets.
-      if (snapshot.reason === 'self' && isTracerWindowOpen()) {
-        return
-      }
-
       // Logged only on change, not every tick — "not-editable-control-type"
       // in particular would otherwise spam the log constantly while just
       // browsing a normal webpage.
@@ -1237,13 +1206,6 @@ function updateOverlayAndWidget(
   // main or the floating claim checker between their immediate focus handlers
   // and the next UIA poll.
   //
-  // Tracer is shieldable too (see overlayShield.ts) but is deliberately NOT
-  // hidden for here: talking to Tracer must hold the claims and underlines in
-  // place — that is the whole point of the "self" skip in tick() — and hiding
-  // the overlay would wipe exactly what the user opened Tracer to ask about.
-  // Tracer is protected positionally instead, in hoverTracking, so the
-  // overlay can stay visible without ever capturing a click meant for it.
-  //
   // `focusedShieldableWindow()` rather than checking getMainWindow()/
   // getFloatingWindow() directly — that is the one-rule shield this branch
   // merged with, and duplicating its focus test here is exactly what it was
@@ -1265,9 +1227,6 @@ function updateOverlayAndWidget(
       lastUpdateInputs.windowRect.height !== windowRect.height)
 
   lastUpdateInputs = { windowRect, controlRect, claimRects, claims, fullText }
-  // Stamped so getTracerContext can tell whether Screen Watch or the in-app
-  // editor saw a document more recently — see outlineContext.ts.
-  lastTracerContextAt = Date.now()
 
   // Clear BEFORE the window is moved or resized under the old content.
   if (targetChanged) clearOverlay()
@@ -1586,7 +1545,6 @@ function updateOverlayAndWidget(
   if (payloadKey !== lastSentPayloadKey) {
     lastSentPayloadKey = payloadKey
     sendToOverlay(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
-    emitTracerContext()
   }
 
   // Outside the dedupe, and last. This used to be an early `return`, with the
@@ -1598,92 +1556,6 @@ function updateOverlayAndWidget(
   // document.
   void win
   presentOverlay()
-}
-
-/**
- * What Tracer is allowed to see: the text of the watched document and the
- * claims currently flagged in it. Read live from the same in-memory state
- * the overlay draws from — deliberately NOT from the database, since Screen
- * Watch persists none of this (see the note on synthesizeClaim).
- *
- * Returns empty context rather than throwing when Screen Watch is off or no
- * allowed app is focused: Tracer is still useful as a plain tutor with no
- * document in hand, it just can't refer to anything specific.
- */
-export function getTracerContext(): TracerContext {
-  // Tracely's own document editor, when it has been analyzed more recently
-  // than Screen Watch saw anything. Without this branch, asking Tracer about
-  // the paragraph you are looking at in the editor gets an answer about
-  // whatever external document Screen Watch last read — UIA reports `skip:
-  // "self"` while Tracely is foreground, so its snapshot is always stale here.
-  const inApp = getInAppOutlineContext(lastTracerContextAt)
-  if (inApp) {
-    return {
-      processName: inApp.documentTitle,
-      documentText: inApp.outline.paragraphs.length ? inApp.documentText : '',
-      claims: inAppClaims(inApp.outline),
-      outline: {
-        title: inApp.documentTitle,
-        score: inApp.outline.score,
-        complete: inApp.outline.complete,
-        roles: inApp.outline.paragraphs.map((p) => p.role),
-        weaknesses: inApp.outline.weaknesses.map((w) => w.message)
-      }
-    }
-  }
-
-  const claims = lastUpdateInputs?.claims ?? currentClaims
-  const structure = watchStructure?.structure ?? null
-  return {
-    processName: lastStatus.active ? lastStatus.processName : null,
-    documentText: lastUpdateInputs?.fullText ?? '',
-    claims: claims.map((c) => ({
-      id: c.id,
-      text: c.text,
-      claimType: c.claimType,
-      evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
-    })),
-    // Screen Watch used to send Tracer the claims but never the shape of the
-    // argument they sat in, so a tutor asked "is my essay working?" could only
-    // talk about individual sentences. Absent when the structural read was
-    // withheld — see structureFit.ts — rather than sent as an empty outline,
-    // which Tracer would read as "this draft has none of these things".
-    outline: structure
-      ? {
-          // Deliberately not `processName`: that is 'WINWORD.EXE', it is
-          // already carried separately above, and a prompt interpolating it as
-          // the document's title reads as nonsense.
-          title: 'the document on screen',
-          score: structure.score,
-          complete: structure.complete,
-          roles: structure.paragraphs.map((p) => p.role),
-          weaknesses: structure.weaknesses.map((w) => w.message)
-        }
-      : undefined
-  }
-}
-
-/**
- * Claims for the in-app path, read from the store rather than from Screen
- * Watch's in-memory map — the editor's claims are persisted, unlike these.
- */
-function inAppClaims(outline: DocumentOutline): TracerContext['claims'] {
-  if (!outline.analysisId) return []
-  return getClaimsByAnalysis(outline.analysisId).map((claim) => ({
-    id: claim.id,
-    text: claim.text,
-    claimType: claim.claimType,
-    evidenceScore: claim.strengthScore
-  }))
-}
-
-// Pushed to the Tracer window whenever the watched document or its claims
-// change, so an open conversation's "what I can see" header stays live
-// instead of being a snapshot from whenever the window happened to open.
-function emitTracerContext(): void {
-  const win = getTracerWindow()
-  if (!win || win.isDestroyed() || !win.isVisible()) return
-  win.webContents.send(IPC_EVENTS.TRACER_CONTEXT_CHANGED, getTracerContext())
 }
 
 export function isScreenWatchEnabled(): boolean {
