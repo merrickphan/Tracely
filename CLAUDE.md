@@ -24,10 +24,39 @@ Read it with the Figma MCP (`get_metadata` on `0:1` to list frames, then
 `get_design_context` on a node). The overlay frames are named
 `Overlay Mockup - <state>`.
 
-**The one deliberate departure:** source rows show the real favicon, not the
-design's two-letter provider tile. It identifies the publication rather than
-which API returned it. The tile remains as the fallback, in the design's 28px /
-8px-radius box so both line up on the same grid.
+**The overlay's frames, and what each one governs:**
+
+| frame | governs |
+|---|---|
+| `Widget over Document` (+ Refresh / Critique / Show All results) | the panel the launcher opens |
+| `Inline Detection (Grammarly-style / Statistic / Citation / Reasoning)` | the hover popover — `ProblemCard` |
+| `Find a Source (Searching / Results)`, `Add Citation (Choose Source / Inserted)` | `CitationFlowCard` |
+| `Collapsed Launcher` | the 56px circle and its 31px count badge |
+| `Inline Detection (Resting State)` | the underline marks with nothing hovered |
+
+**Three underline colours, not eight.** `#ff5900` for an unverified figure,
+`#ffb800` for a missing citation, `#d93636` for weak reasoning — read off the
+marks in those frames, with the popover's dot always matching the mark that
+opened it. `PROBLEM_COLOR` in `OverlayApp.tsx` groups all eight problem kinds
+onto those three, because inventing a fourth hue is what produced a purple
+statistic underline and an orange "missing citation" one — the design's two
+colours, swapped.
+
+**Every popover has a 16x10 tail** (`PopoverTail`, path from node `288:545`)
+pointing at the sentence, overlapping the card border by 2px so the strokes
+meet. The overlay shipped without one for months; on a paragraph with three
+flagged sentences a card floating nearby is genuinely ambiguous.
+
+**Two deliberate departures:**
+
+- Source rows show the real favicon, not the design's two-letter provider tile.
+  It identifies the publication rather than which API returned it. The tile
+  remains as the fallback, in the design's 28px / 8px-radius box so both line up
+  on the same grid.
+- `Add Citation (Choose Source)`'s library list and text search field are not
+  built. Screen Watch persists nothing, so there is no per-document library to
+  list, and `overlayWindow.ts` sets `focusable: false` — this window can never
+  host a real text input. Its style pills ARE used, in the Results step.
 
 ## Commands
 

@@ -322,11 +322,14 @@ function UnderlineMark({
           left: 0,
           right: 0,
           bottom: 0,
+          // 2px tall with a 1px radius, at full strength — the design's
+          // `rounded-[1px]` marks. It was a 2px radius at 0.85 opacity, which
+          // on a 2px bar rounds it into a capsule and washes the colour.
           height: hovered ? 3 : 2,
-          borderRadius: 2,
+          borderRadius: 1,
           background: color,
-          opacity: hovered ? 1 : 0.85,
-          transition: 'opacity 110ms ease, height 110ms ease'
+          opacity: 1,
+          transition: 'height 110ms ease'
         }}
       />
     </div>
@@ -390,27 +393,86 @@ function hasInlineCitationText(sentence: string): boolean {
 }
 
 /**
- * One colour per problem, for the underline.
+ * The design's three underline colours, read off the Figma frames rather than
+ * chosen here: `#ff5900` on the "Inline Detection (Statistic)" marks, `#ffb800`
+ * on "(Citation)", `#d93636` on "(Reasoning)". The popover's dot is the same
+ * colour as the mark that opened it, in all three.
  *
- * Chosen so the three that mean "this may be wrong" are warm and the two that
- * mean "this is unfinished" are cool — a document skimmed at arm's length
- * should separate those two groups before any individual colour is read.
+ * Three, for eight problem kinds — so the mapping below is a grouping, not a
+ * palette of its own. What the design is saying with the colour is which of
+ * three KINDS of trouble a sentence is in: is the reasoning wrong (red), is the
+ * evidence missing or thin (orange), or is the attribution missing (amber).
+ * Inventing a fourth and fifth hue for our extra kinds is exactly the drift
+ * that produced a purple statistic underline and an orange "missing citation"
+ * one — the two the design has, with their colours swapped.
  */
+const DESIGN_ORANGE = '#ff5900'
+const DESIGN_AMBER = '#ffb800'
+const DESIGN_RED = '#d93636'
+
 const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
-  // Wrong, or possibly wrong.
-  'contradicted-claim': '#d6301a',
-  'weak-reasoning': '#d6301a',
-  'unverified-statistic': '#7c3aed',
-  'no-sources': '#d6301a',
-  'weak-evidence': '#b3690a',
-  // The most alarming state, and the only one given the contradiction red.
-  'cited-unverified': '#d6301a',
-  // Unfinished rather than wrong.
-  'partial-evidence': '#2f6fed',
-  'missing-citation': ACCENT,
+  // Reasoning: the sentence does not follow, or asserts something false.
+  'contradicted-claim': DESIGN_RED,
+  'weak-reasoning': DESIGN_RED,
+  // Evidence: nothing found, or what was found does not carry it.
+  'unverified-statistic': DESIGN_ORANGE,
+  'no-sources': DESIGN_ORANGE,
+  'weak-evidence': DESIGN_ORANGE,
+  'partial-evidence': DESIGN_ORANGE,
+  // Attribution: the sentence needs a citation, or the one it has is suspect.
+  'missing-citation': DESIGN_AMBER,
+  'cited-unverified': DESIGN_AMBER,
   // Nothing known yet — deliberately the quietest thing on screen, since it
-  // resolves on its own within a few seconds.
+  // resolves on its own within a few seconds. Not a state the design draws.
   searching: '#9a9ba1'
+}
+
+/**
+ * The popover's two text styles, shared by every card in it.
+ *
+ * Identical across all eight Figma popover frames — 14px SemiBold ink for the
+ * title, 13px Regular at 1.4 for the body — so they are defined once rather
+ * than repeated at each call site and allowed to drift apart.
+ */
+const POPOVER_TITLE: CSSProperties = { fontSize: 14, fontWeight: 600, color: INK }
+const POPOVER_BODY: CSSProperties = { fontSize: 13, lineHeight: 1.4, color: MUTED }
+
+/**
+ * The 16x10 arrow every "Hover Popover" frame draws, pointing at the sentence.
+ *
+ * The overlay had no tail at all: a card simply appeared near the text with
+ * nothing tying it to the words it was about, which on a document with three
+ * flagged sentences within a few lines of each other is genuinely ambiguous.
+ *
+ * The path is Figma's own (node 288:545), stroked 2px black to match the card's
+ * outline, and the tail overlaps the card edge by TAIL_OVERLAP so the two
+ * strokes meet instead of leaving a hairline of white between them — the same
+ * 2px the design uses (tail at y=103 h=10, card top at y=111).
+ */
+const TAIL_WIDTH = 16
+const TAIL_HEIGHT = 10
+const TAIL_OVERLAP = 2
+
+function PopoverTail({ left, pointing }: { left: number; pointing: 'up' | 'down' }): JSX.Element {
+  return (
+    <svg
+      width={TAIL_WIDTH}
+      height={TAIL_HEIGHT}
+      viewBox="0 0 13.8564 7.5"
+      fill="none"
+      aria-hidden="true"
+      style={{
+        position: 'relative',
+        left,
+        flexShrink: 0,
+        display: 'block',
+        transform: pointing === 'down' ? 'scaleY(-1)' : undefined,
+        ...(pointing === 'up' ? { marginBottom: -TAIL_OVERLAP } : { marginTop: -TAIL_OVERLAP })
+      }}
+    >
+      <path d="M11.5708 6.5H2.28562L6.9282 1.47363L11.5708 6.5Z" fill="white" stroke="black" strokeWidth="2" />
+    </svg>
+  )
 }
 
 /** Plain-language name for the mark, used as the underline's tooltip. */
@@ -1578,12 +1640,13 @@ function ProblemCard({
   if (kind === 'searching') {
     return (
       <>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: MUTED }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="tracely-spinner" />
-          Checking for supporting evidence…
+          <div style={POPOVER_TITLE}>Checking this claim</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-          <button className="tracely-btn-text" onClick={onDismiss} style={TEXT_BTN_STYLE}>
+        <div style={POPOVER_BODY}>Searching open-access journals and databases for a source that supports it.</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tracely-btn-secondary" onClick={onDismiss} style={SECONDARY_BTN_STYLE}>
             Dismiss
           </button>
         </div>
@@ -1591,13 +1654,8 @@ function ProblemCard({
     )
   }
 
-  // The dot now carries the claim's own bucket colour, so it matches the
-  // underline that was hovered to open this card. It was hardcoded to
-  // factual-orange for everything except weak reasoning, which meant hovering
-  // a purple or blue underline produced an orange dot.
-  // Coloured by the PROBLEM, matching the underline and the Figma frames —
-  // the citation card's dot is amber, reasoning's is red, the statistic's is
-  // orange. It was the claim type, so a red underline opened an orange card.
+  // The dot is the underline's own colour, which is the design's: amber for a
+  // citation problem, orange for an unverified figure, red for reasoning.
   const dotColor = PROBLEM_COLOR[kind]
   const copy =
     kind === 'contradicted-claim'
@@ -1620,20 +1678,21 @@ function ProblemCard({
             action: 'Suggest fix'
           }
         : // `kind` is only 'searching' when evidence is null, and that case
-        // returned above — so evidence is non-null here.
-        problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence, kind)
+          // returned above — so evidence is non-null here.
+          problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence, kind)
   const { title, description, action: primaryLabel } = copy
-  const onPrimary = kind === 'weak-reasoning' ? onSuggestFix : onStartCitationFlow
+  const onPrimary = kind === 'weak-reasoning' || kind === 'contradicted-claim' ? onSuggestFix : onStartCitationFlow
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-        <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>{title}</div>
+        <div style={POPOVER_TITLE}>{title}</div>
         {/* How many problems this sentence has in total, when it has more than
             one. Only the first is shown; fixing or dismissing it advances to
             the next, so the count is the writer's warning that the card is not
-            finished with them yet. */}
+            finished with them yet. The one element here the design does not
+            draw — it postdates the frames. */}
         {remaining > 1 ? (
           <span
             title={`${remaining} issues with this sentence — this is the first`}
@@ -1656,7 +1715,7 @@ function ProblemCard({
           </span>
         ) : null}
       </div>
-      <MarkdownText style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>{description}</MarkdownText>
+      <MarkdownText style={POPOVER_BODY}>{description}</MarkdownText>
       {/* The design's action row is exactly two buttons — fix it, or dismiss
           it — and at 320 wide that is all that fits on one line. */}
       <div style={{ display: 'flex', gap: 8 }}>
@@ -1686,10 +1745,6 @@ const STYLE_LABEL: Record<CitationStyle, string> = {
   Chicago: 'Chicago 17'
 }
 
-function nextStyle(style: CitationStyle): CitationStyle {
-  return CITATION_STYLES[(CITATION_STYLES.indexOf(style) + 1) % CITATION_STYLES.length]
-}
-
 /**
  * Enough of the claim to recognise it, cut on a word boundary.
  *
@@ -1712,6 +1767,15 @@ function truncate(text: string, max: number): string {
 // (citationFlowByClaimId in OverlayApp) — the server call itself is a
 // single request/response per step, no persistent flow state on the main
 // process side beyond the final insert.
+//
+// Drawn from three Figma frames, one per step: "Find a Source (Searching)"
+// (294:343), "Find a Source (Results)" (295:349) and "Add Citation (Inserted)"
+// (298:130). The style pills come from "Add Citation (Choose Source)"
+// (296:355); the rest of that frame — a library list of sources already in the
+// document, behind a text search field — is NOT built, and the reason is
+// structural rather than an omission: Screen Watch persists nothing, so there
+// is no per-document library to list, and `overlayWindow.ts` sets
+// `focusable: false` so this window can never host a real text input.
 
 type CitationFlowState =
   | { step: 'searching' }
@@ -1725,6 +1789,83 @@ type CitationFlowState =
   | { step: 'error'; message: string }
 
 const CITATION_STYLES: CitationStyle[] = ['MLA', 'APA', 'Chicago']
+
+/** 18px, filled ink with a 3px white centre — the design's selected radio. */
+function Radio({ selected }: { selected: boolean }): JSX.Element {
+  if (!selected) {
+    return (
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          border: '1.5px solid #d1d1d1',
+          background: '#fff',
+          flexShrink: 0
+        }}
+      />
+    )
+  }
+  return (
+    <div
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 999,
+        background: INK,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: '#fff' }} />
+    </div>
+  )
+}
+
+function CandidateRow({
+  candidate,
+  selected,
+  onSelect
+}: {
+  candidate: ScreenWatchSourceCandidate
+  selected: boolean
+  onSelect: () => void
+}): JSX.Element {
+  const meta = [candidate.venue, candidate.year ? String(candidate.year) : null].filter(Boolean).join(' · ')
+  return (
+    <button
+      onClick={onSelect}
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: 8,
+        borderRadius: 10,
+        // The unselected row keeps a transparent border of the same width, so
+        // selecting one does not shift the row's contents by a pixel.
+        border: `1px solid ${selected ? '#e5e5e5' : 'transparent'}`,
+        background: selected ? SELECTED_BG : 'transparent',
+        textAlign: 'left',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        color: 'inherit'
+      }}
+    >
+      <SourceIcon provider={candidate.provider} faviconDataUrl={candidate.faviconDataUrl} />
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: INK }}>{candidate.title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
+          {meta ? <span style={{ color: DIM }}>{meta}</span> : null}
+          <span style={{ color: POSITIVE, fontWeight: 500 }}>{candidate.matchPercent}% match</span>
+        </div>
+      </div>
+      <Radio selected={selected} />
+    </button>
+  )
+}
 
 function CitationFlowCard({
   state,
@@ -1756,36 +1897,28 @@ function CitationFlowCard({
   inserting: boolean
   undoing: boolean
 }): JSX.Element {
+  // "Find a Source (Searching)" — 294:343.
   if (state.step === 'searching') {
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: ACCENT, flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>Searching for a source</div>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_ORANGE, flexShrink: 0 }} />
+          <div style={POPOVER_TITLE}>Searching for a source</div>
         </div>
-        {/* The design quotes the claim back, and it is worth the width: this
-            card can be opened from any of several underlines, and naming the
-            one being searched for is the difference between "it is working"
-            and "it is working on the right sentence". */}
-        <div style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>
-          Scanning open-access journals and databases
-          {claimText ? <> for a source that supports &ldquo;{truncate(claimText, 90)}&rdquo;</> : null}.
+        <div style={POPOVER_BODY}>
+          Scanning open-access journals and databases for a source that supports &ldquo;
+          {truncate(claimText, 70)}.&rdquo;
         </div>
-        {/* Figma draws the bar at a fixed 61%, which is a snapshot of a moment.
-            A real search has no progress to report, so this stays indeterminate
-            — a bar that appears to measure something it cannot would be worse
-            than an honest one that only says "still going". Track geometry and
-            colour are the design's. */}
         <div className="tracely-progress-track">
           <div className="tracely-progress-fill" />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {SKELETON_ROWS.map(([wide, narrow], i: number) => (
+          {SKELETON_ROWS.map(([wide, narrow], i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div className="tracely-skeleton" style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div className="tracely-skeleton" style={{ height: 9, width: wide, borderRadius: 999 }} />
-                <div className="tracely-skeleton-faint" style={{ height: 8, width: narrow, borderRadius: 999 }} />
+                <div className="tracely-skeleton" style={{ width: wide, height: 9, borderRadius: 999 }} />
+                <div className="tracely-skeleton-faint" style={{ width: narrow, height: 8, borderRadius: 999 }} />
               </div>
             </div>
           ))}
@@ -1794,7 +1927,7 @@ function CitationFlowCard({
           <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
             Cancel
           </button>
-          <div style={{ fontSize: 12, color: DIM }}>Usually 3–5 seconds</div>
+          <span style={{ fontSize: 12, color: DIM }}>Usually 3–5 seconds</span>
         </div>
       </>
     )
@@ -1804,15 +1937,15 @@ function CitationFlowCard({
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#d6301a', flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Couldn&apos;t do that</div>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_RED, flexShrink: 0 }} />
+          <div style={POPOVER_TITLE}>Search failed</div>
         </div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{state.message}</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-          <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
-            Try again
+        <div style={POPOVER_BODY}>{state.message}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tracely-btn-primary" onClick={onSearchAgain} style={PRIMARY_BTN_STYLE}>
+            Search again
           </button>
-          <button className="tracely-btn-text" onClick={onCancel} style={TEXT_BTN_STYLE}>
+          <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
             Cancel
           </button>
         </div>
@@ -1820,46 +1953,54 @@ function CitationFlowCard({
     )
   }
 
+  // "Add Citation (Inserted)" — 298:130.
   if (state.step === 'inserted') {
+    const remaining = Math.max(0, visibleClaimCount)
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Citation added</div>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
+          <div style={POPOVER_TITLE}>Citation added</div>
         </div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>
-          This claim is now backed by a source in your document. {state.citation.inTextCitation} in-text citation inserted.
+        <div style={POPOVER_BODY}>
+          This claim is now backed by a source in your document. {state.citation.inTextCitation} inserted.
         </div>
         {state.showWorksCited ? (
-          <div style={{ border: '1px solid #eeeef1', borderRadius: 10, padding: '8px 10px', background: '#fafafa' }}>
-            {/*
-              "Added to Works Cited" was not true. Only the in-text form is
-              written into the document; nothing appends to a works-cited list,
-              and citationByClaimId is per-session and never persisted — a
-              student reads that phrase as "the list at the end of my essay".
-              This labels the string below it, which is what it actually is.
-            */}
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: DIM, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-              Works Cited entry — copy into your reference list
+          <div
+            style={{
+              width: '100%',
+              background: SELECTED_BG,
+              borderRadius: 10,
+              padding: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6
+            }}
+          >
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
+              ADDED TO WORKS CITED
             </div>
-            <div style={{ fontSize: 12, lineHeight: 1.5, color: '#3a3a3a' }}>{state.citation.worksCitedEntry}</div>
+            <div style={{ fontSize: 12, lineHeight: 1.4, color: MUTED }}>{state.citation.worksCitedEntry}</div>
           </div>
         ) : null}
-        <div style={{ fontSize: 12, color: POSITIVE, fontWeight: 600 }}>
-          Claim resolved · {visibleClaimCount} flag{visibleClaimCount === 1 ? '' : 's'} left in this document
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, whiteSpace: 'nowrap' }}>
+          <span style={{ color: POSITIVE, fontWeight: 500 }}>Claim resolved</span>
+          <span style={{ color: DIM }}>
+            · {remaining} flag{remaining === 1 ? '' : 's'} left in this document
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button className="tracely-btn-primary" onClick={onDone} style={PRIMARY_BTN_STYLE}>
             Done
           </button>
           <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
-            {state.showWorksCited ? 'Hide full citation' : 'View full citation'}
+            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
           </button>
           <button
             className="tracely-btn-secondary"
             onClick={onUndo}
             disabled={undoing}
-            style={{ ...SECONDARY_BTN_STYLE, opacity: undoing ? 0.6 : 1 }}
+            style={{ ...SECONDARY_BTN_STYLE, opacity: undoing ? 0.6 : 1, cursor: undoing ? 'default' : 'pointer' }}
           >
             {undoing ? 'Undoing…' : 'Undo'}
           </button>
@@ -1868,135 +2009,113 @@ function CitationFlowCard({
     )
   }
 
-  // picking
-  const selected = state.candidates.find((c) => c.sourceRef === state.selectedRef) ?? null
+  // "Find a Source (Results)" — 295:349, with the style pills from
+  // "Add Citation (Choose Source)" (296:355).
+  const { candidates, selectedRef, style } = state
+  if (candidates.length === 0) {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_AMBER, flexShrink: 0 }} />
+          <div style={POPOVER_TITLE}>No sources found</div>
+        </div>
+        <div style={POPOVER_BODY}>
+          Nothing in the open-access databases came back for &ldquo;{truncate(claimText, 70)}.&rdquo; That does not
+          make the claim wrong — it means there is nothing here to cite for it yet.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tracely-btn-primary" onClick={onSearchAgain} style={PRIMARY_BTN_STYLE}>
+            Search again
+          </button>
+          <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
+            Dismiss
+          </button>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>
-            {state.candidates.length} source{state.candidates.length === 1 ? '' : 's'} found
+          <div style={POPOVER_TITLE}>
+            {candidates.length} source{candidates.length === 1 ? '' : 's'} found
           </div>
         </div>
-        {/* Figma shows the citation style as a single read-only chip. It is a
-            control here because the style has to be choosable somewhere and
-            this window cannot open a menu — it is unfocusable, so there is no
-            popup to host one. Clicking cycles; the tooltip says so. */}
-        <button
-          onClick={() => onSetStyle(nextStyle(state.style))}
-          title={`Citation style: ${state.style}. Click to switch.`}
+        <div
           style={{
+            flexShrink: 0,
             background: CHIP_BG,
-            border: 'none',
             borderRadius: 999,
             padding: '4px 10px',
             fontSize: 11.5,
             fontWeight: 500,
-            color: MUTED,
-            cursor: 'pointer',
-            font: 'inherit',
-            fontFamily: 'inherit'
+            color: MUTED
           }}
         >
-          {STYLE_LABEL[state.style]}
-        </button>
-      </div>
-
-      <div style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>
-        {state.candidates.length === 0
-          ? 'No sources found for this claim yet.'
-          : claimText
-            ? `Ranked by how directly each source supports “${truncate(claimText, 90)}”.`
-            : 'Ranked by how directly each source supports this claim.'}
-      </div>
-
-      {state.candidates.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', maxHeight: 168, overflowY: 'auto' }}>
-          {state.candidates.map((c) => {
-            const isSelected = c.sourceRef === state.selectedRef
-            return (
-              <label
-                key={c.sourceRef}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: 8,
-                  borderRadius: 10,
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  // Selected rows gain a fill and a hairline; the rest keep a
-                  // transparent border so selecting one does not shift the
-                  // others by a pixel.
-                  background: isSelected ? SELECTED_BG : 'transparent',
-                  border: `1px solid ${isSelected ? '#e5e5e5' : 'transparent'}`,
-                  cursor: 'pointer'
-                }}
-              >
-                <SourceIcon provider={c.provider} faviconDataUrl={c.faviconDataUrl} />
-                <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div
-                    style={{
-                      fontSize: 13.5,
-                      fontWeight: 500,
-                      color: INK,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {c.title}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
-                    <span style={{ color: DIM, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {[c.venue, c.year ? String(c.year) : null].filter(Boolean).join(' · ')}
-                    </span>
-                    <span style={{ color: POSITIVE, fontWeight: 500, flexShrink: 0 }}>{c.matchPercent}% match</span>
-                  </div>
-                </div>
-                {/* A drawn radio rather than <input type="radio">: the native
-                    control renders at the OS accent colour and its own size,
-                    which is the one part of this card that would look like
-                    Windows instead of like Tracely. */}
-                <input
-                  type="radio"
-                  checked={isSelected}
-                  onChange={() => onSelectCandidate(c.sourceRef)}
-                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-                />
-                <span
-                  aria-hidden
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    flexShrink: 0,
-                    boxSizing: 'border-box',
-                    background: '#fff',
-                    border: isSelected ? `5px solid ${INK}` : '1.5px solid #d1d1d1'
-                  }}
-                />
-              </label>
-            )
-          })}
+          {STYLE_LABEL[style]}
         </div>
-      ) : null}
-
-      <div style={{ display: 'flex', gap: 8 }}>
+      </div>
+      <div style={POPOVER_BODY}>
+        Ranked by how directly each source supports &ldquo;{truncate(claimText, 70)}.&rdquo;
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+        {candidates.map((candidate) => (
+          <CandidateRow
+            key={candidate.sourceRef}
+            candidate={candidate}
+            selected={candidate.sourceRef === selectedRef}
+            onSelect={() => onSelectCandidate(candidate.sourceRef)}
+          />
+        ))}
+      </div>
+      {/* The style row from the Choose Source frame. Three pills rather than
+          the one cycling button this used to be: the design shows every option
+          at once, and a button that had to be clicked twice to discover
+          Chicago was hiding two thirds of the control. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: MUTED }}>Style</span>
+        {CITATION_STYLES.map((option) => {
+          const active = option === style
+          return (
+            <button
+              key={option}
+              onClick={() => onSetStyle(option)}
+              style={{
+                borderRadius: 999,
+                padding: '5px 11px',
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: active ? 600 : 400,
+                color: active ? '#fff' : MUTED,
+                background: active ? INK : '#fff',
+                border: active ? 'none' : '1px solid #e0e0e0',
+                cursor: 'pointer'
+              }}
+            >
+              {STYLE_LABEL[option]}
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           className="tracely-btn-primary"
           onClick={onInsert}
-          disabled={!state.selectedRef || inserting}
-          style={{ ...PRIMARY_BTN_STYLE, opacity: !state.selectedRef || inserting ? 0.6 : 1 }}
+          disabled={inserting || !selectedRef}
+          style={{
+            ...PRIMARY_BTN_STYLE,
+            opacity: inserting || !selectedRef ? 0.6 : 1,
+            cursor: inserting || !selectedRef ? 'default' : 'pointer'
+          }}
         >
           {inserting ? 'Inserting…' : 'Insert citation'}
         </button>
-        {selected?.url ? (
-          <button className="tracely-btn-secondary" onClick={() => openUrl(selected.url)} style={SECONDARY_BTN_STYLE}>
-            Preview
-          </button>
-        ) : null}
+        <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
+          Cancel
+        </button>
       </div>
       <button
         className="tracely-btn-secondary"
@@ -2509,7 +2628,13 @@ export default function OverlayApp(): JSX.Element {
   const hoveredFlowStep = claimHovered
     ? (citationFlowByClaimId.get(claimHovered.claimId)?.step ?? null)
     : null
-  const hoveredPopoverWidth = hoveredFlowStep ? POPOVER_WIDTH_FLOW : POPOVER_WIDTH_GLANCE
+  // 320 for a glance, 380 once the card is showing a list. Measured off the
+  // frames rather than "the flow is wider": "Find a Source (Searching)" is 320
+  // like the inline-detection cards, because it shows two skeleton rows and a
+  // sentence; only "(Results)", "Add Citation (Choose Source)" and "(Inserted)"
+  // widen to 380, where real titles and a works-cited entry have to fit.
+  const hoveredPopoverWidth =
+    hoveredFlowStep === null || hoveredFlowStep === 'searching' ? POPOVER_WIDTH_GLANCE : POPOVER_WIDTH_FLOW
   const claimHoveredPos = claimHovered
     ? popoverPosition(claimHovered.anchor, hoveredPopoverWidth)
     : null
@@ -2640,19 +2765,24 @@ export default function OverlayApp(): JSX.Element {
                 */}
                 <LogoBg size={46} />
                 {hasInfo ? (
+                  // 31px on a 56px launcher, sitting 8.5px above its top edge
+                  // and 3.5px past its right — the design's Badge/Badge Count
+                  // (267:121, 267:122) measured off the frame, not eyeballed.
+                  // It was a 22px puck at -4/-4 with 11.5px text, which read as
+                  // a notification dot rather than the count it is.
                   <span
                     style={{
                       position: 'absolute',
-                      top: -4,
-                      right: -4,
-                      minWidth: 22,
-                      height: 22,
-                      padding: '0 5px',
+                      top: -8.5,
+                      right: -3.5,
+                      minWidth: 31,
+                      height: 31,
+                      padding: '0 8px',
                       borderRadius: 999,
-                      background: ACCENT,
+                      background: DESIGN_ORANGE,
                       color: '#fff',
-                      fontSize: 11.5,
-                      fontWeight: 700,
+                      fontSize: 16,
+                      fontWeight: 600,
                       border: '2px solid #fff',
                       display: 'flex',
                       alignItems: 'center',
@@ -2882,6 +3012,16 @@ export default function OverlayApp(): JSX.Element {
             const pos = popoverPosition(claimHovered.anchor, hoveredPopoverWidth)
             const flow = citationFlowByClaimId.get(claimHoveredSummary.id) ?? null
             const visibleCount = (widget?.claims ?? []).filter((c) => !isResolved(c.id) && c.id !== claimHoveredSummary.id).length
+            const pointing = pos.top !== undefined ? 'up' : 'down'
+            // Over the middle of the hovered rect, then clamped inside the
+            // card's rounded corners. In the design the tail sits under the
+            // flagged words, not centred on the card — two of the three inline
+            // frames have it centred only because the sentence happens to be.
+            const anchorCentre = claimHovered.anchor.x + claimHovered.anchor.width / 2
+            const tailLeft = Math.max(
+              CARD_RADIUS - TAIL_WIDTH / 2,
+              Math.min(anchorCentre - pos.left - TAIL_WIDTH / 2, pos.width - CARD_RADIUS - TAIL_WIDTH / 2)
+            )
             return (
               <div
                 ref={popoverRef}
@@ -2893,23 +3033,34 @@ export default function OverlayApp(): JSX.Element {
                   // bottom edge so the card grows upward from the underline.
                   ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                   width: pos.width,
-                  maxHeight: pos.maxHeight,
-                  background: '#fff',
-                  border: CARD_BORDER,
-                  borderRadius: CARD_RADIUS,
-                  boxShadow: CARD_SHADOW,
-                  padding: 16,
                   display: 'flex',
                   flexDirection: 'column',
-                  // 12, not 10 — the design's card rhythm. Small, but every
-                  // stacked block in the card inherits it.
-                  gap: 12,
-                  color: INK,
-                  overflowX: 'hidden',
-                  overflowY: 'auto',
+                  alignItems: 'flex-start',
                   pointerEvents: 'auto'
                 }}
               >
+                {pointing === 'up' ? <PopoverTail left={tailLeft} pointing="up" /> : null}
+                <div
+                  style={{
+                    width: '100%',
+                    // The tail is drawn outside this box, so its own height
+                    // comes out of the room the card has to grow into.
+                    maxHeight: Math.max(1, pos.maxHeight - TAIL_HEIGHT),
+                    background: '#fff',
+                    border: CARD_BORDER,
+                    borderRadius: CARD_RADIUS,
+                    boxShadow: CARD_SHADOW,
+                    padding: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    // 12, not 10 — the design's card rhythm. Small, but every
+                    // stacked block in the card inherits it.
+                    gap: 12,
+                    color: INK,
+                    overflowX: 'hidden',
+                    overflowY: 'auto'
+                  }}
+                >
                 {flow ? (
                   <CitationFlowCard
                     state={flow}
@@ -2942,6 +3093,8 @@ export default function OverlayApp(): JSX.Element {
                     }
                   />
                 )}
+                </div>
+                {pointing === 'down' ? <PopoverTail left={tailLeft} pointing="down" /> : null}
               </div>
             )
           })()
