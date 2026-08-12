@@ -419,6 +419,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: 'Screen time causes depression in teenagers.',
     claimType: 'causal',
     confidence: 0.93,
+    hasInlineCitation: false,
     evidence: {
       score: 34,
       count: 6,
@@ -454,6 +455,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: '70% of adolescents who use social media for more than three hours a day report symptoms of anxiety.',
     claimType: 'statistic',
     confidence: 0.87,
+    hasInlineCitation: false,
     evidence: {
       score: 61,
       count: 4,
@@ -469,6 +471,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: 'This is the clearest public-health crisis of our generation.',
     claimType: 'opinion',
     confidence: 0.55,
+    hasInlineCitation: false,
     // null evidence exercises the "search still running" state, which is
     // otherwise only visible for the second or two after detection.
     evidence: null,

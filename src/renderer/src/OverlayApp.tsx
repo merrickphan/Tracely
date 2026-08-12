@@ -366,6 +366,22 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
 // How long a paragraph highlight stays lit after clicking its ¶ chip. Long
 // enough to look up from the panel and find the underline, short enough that a
 // forgotten highlight clears itself.
+/**
+ * Same detection main runs, for the brief window where a claim has a hover
+ * target but its payload has not arrived yet.
+ *
+ * Duplicated rather than shared because the real one lives in
+ * services/screenWatch/inlineCitation.ts — main-process code the renderer must
+ * not import. Kept deliberately to the two shapes that carry the copy
+ * difference; main's fuller set decides what is actually flagged.
+ */
+function hasInlineCitationText(sentence: string): boolean {
+  return (
+    /\([A-Z][^)]{0,80}?(?:1[6-9]|20)\d{2}[a-z]?\s*\)/.test(sentence) ||
+    /\[\s*\d{1,3}(?:\s*[–—,-]\s*\d{1,3})*\s*\]/.test(sentence)
+  )
+}
+
 const HIGHLIGHT_HOLD_MS = 2500
 
 // Two widths, because the design uses two. The inline-detection popovers are
@@ -1328,11 +1344,20 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
   const sources = `${n} source${n === 1 ? '' : 's'}`
 
   if (level === 'none') {
+    // "Unverified statistic" is the design's wording, and it is the better one:
+    // "figure" reads as a chart as easily as a number.
+    if (claim.hasInlineCitation) {
+      return {
+        title: bucket === 'statistic' ? 'Unverified statistic' : 'Source not found',
+        description: `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. That can mean the source is not indexed — or that it does not say this.`,
+        action: 'Find a source'
+      }
+    }
     return {
-      title: bucket === 'statistic' ? 'Unverified figure' : 'No supporting sources',
+      title: bucket === 'statistic' ? 'Unverified statistic' : 'No supporting sources',
       description:
         bucket === 'statistic'
-          ? "A search of the academic databases turned up nothing carrying this figure. Check the number against its original source before citing it."
+          ? 'A search of the academic databases turned up nothing carrying this statistic. Check the number against its original source before citing it.'
           : `A search of the academic databases turned up nothing supporting this ${noun}. It may still be true — but you have nothing to cite for it yet.`,
       action: 'Find a source'
     }
@@ -1359,7 +1384,19 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
     }
   }
 
-  // strong — the claim holds up; the only thing missing is the attribution.
+  // strong — the claim holds up. What is left depends entirely on whether the
+  // writer has already attributed it, and telling someone who cited properly
+  // that they are "Missing citation" is the single least credible thing this
+  // card can do. A claim that is BOTH cited and strong is not shown at all
+  // (see `settled` in screenWatchService), so this branch is the case where a
+  // cited claim is still worth a look.
+  if (claim.hasInlineCitation) {
+    return {
+      title: 'Cited — worth checking',
+      description: `${sources} agree with this ${noun} (${evidence.score}/100). Tracely cannot read the source you cited, so check it says what you have attributed to it.`,
+      action: 'Compare sources'
+    }
+  }
   return {
     title: 'Missing citation',
     description: `${sources} support this ${noun} (${evidence.score}/100). It reads as unattributed, though — add a citation so the reader can follow it.`,
@@ -2156,6 +2193,10 @@ export default function OverlayApp(): JSX.Element {
         text: claimHovered.text,
         claimType: claimHovered.claimType,
         confidence: 0,
+        // The hover event carries the sentence, so this can be answered here
+        // rather than guessed — and guessing false would flash "Missing
+        // citation" on a cited claim for the tick before the payload lands.
+        hasInlineCitation: hasInlineCitationText(claimHovered.text),
         evidence: null,
         critique: null,
         critiqueVerdict: null,

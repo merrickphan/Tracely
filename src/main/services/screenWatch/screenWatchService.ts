@@ -52,6 +52,7 @@ import {
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
 } from './panelSize'
+import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
@@ -87,6 +88,10 @@ const MIN_TEXT_DELTA_CHARS = 80
 // How many of a detection's claims get their evidence fetched automatically
 // (see triggerEvidenceSearch). The rest search when the user opens them.
 const MAX_AUTO_EVIDENCE_CLAIMS = 3
+// At or above this, the literature is taken to back the claim — the same 70
+// band ProblemCard, ClaimCard and the structure score all use, so "strong"
+// means one number everywhere in the product.
+const SETTLED_SCORE = 70
 const MIN_TEXT_LENGTH = 20
 // User-configurable now (Settings > General > sensitivity) rather than a
 // value we keep re-tuning in code — Screen Watch underlines passively,
@@ -946,10 +951,57 @@ function triggerEvidenceSearch(claims: Claim[]): void {
         // claim has a relevant source, so evidence landing changes the reading.
         refreshWatchOutline()
         redrawOverlay()
+        void autoCritique(claim)
       })
       .catch((err) => {
         logScreenWatch(`background evidence search failed for claim ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
       })
+  }
+}
+
+/**
+ * Critique the single highest-confidence claim, once its evidence has landed.
+ *
+ * This is the one place Screen Watch spends a relay call it was not asked for,
+ * and it exists because without it "Weak reasoning" is UNREACHABLE. The card
+ * only shows it when `critiqueVerdict` is set, critique only ran on an explicit
+ * click, and passive watching therefore had exactly one thing it could ever
+ * say: something about citations. A tool that claims to check reasoning and
+ * structurally cannot is worse than one that does not claim it.
+ *
+ * Bounded hard, because the original reason for not doing this was real:
+ *
+ *  - ONE claim per detection, the top by confidence — not the three that get an
+ *    evidence search, and never the whole set.
+ *  - Only after that claim's evidence resolved, so the critique has something
+ *    to reason about rather than judging a claim in a vacuum.
+ *  - Only if it is still current, and never twice for the same claim.
+ *  - Detection is already gated to one per MIN_ANALYSIS_INTERVAL_MS past an
+ *    80-char delta, so this adds at most one relay call per detection — the
+ *    same order as the detectClaims call that produced the claim.
+ *
+ * Failures are swallowed to the log. An unprompted critique that could not run
+ * is not something to interrupt someone's writing about.
+ */
+const MAX_AUTO_CRITIQUE_CLAIMS = 1
+
+async function autoCritique(claim: Claim): Promise<void> {
+  if (currentClaims.slice(0, MAX_AUTO_CRITIQUE_CLAIMS).every((c) => c.id !== claim.id)) return
+  if (critiqueByClaimId.has(claim.id)) return
+  const evidence = evidenceResultByClaimId.get(claim.id)
+  if (!evidence || evidence.evidence.length === 0) return
+
+  const generationAtRequestTime = trackingGeneration
+  try {
+    const items = evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i))
+    const result = await generateCritique(withEvidenceScores(claim), items)
+    if (trackingGeneration !== generationAtRequestTime) return
+    if (!currentClaims.some((c) => c.id === claim.id)) return
+    critiqueByClaimId.set(claim.id, result)
+    logScreenWatch(`auto-critique for ${claim.id.slice(0, 8)}: ${result.verdict}`)
+    redrawOverlay()
+  } catch (err) {
+    logScreenWatch(`auto-critique failed for ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -1225,8 +1277,43 @@ function updateOverlayAndWidget(
   // open a popover. controlRect is preferred because the window includes the
   // app's own toolbars, and text scrolled under a sticky header still reports a
   // valid rect that was then drawn on top of the header.
+  /**
+   * Claims the writer has already handled: the sentence carries its own
+   * citation AND the literature backs it.
+   *
+   * Underlining these was the loudest thing wrong with Screen Watch. A
+   * correctly cited, well-supported sentence was marked in the margin and the
+   * card said "Missing citation" — so the one category of claim the user had
+   * done everything right on was also the one the app complained about most,
+   * because a cited sentence tends to be a searchable one and therefore scores
+   * well.
+   *
+   * Both halves are required. A cited claim the literature does NOT support is
+   * exactly what this app exists to catch, and stays flagged with copy that
+   * says so.
+   */
+  const settled = new Set(
+    claims
+      .filter((c) => {
+        if (!hasInlineCitation(c.text)) return false
+        const evidence = evidenceResultByClaimId.get(c.id)
+        return evidence !== undefined && evidence.evidence.length > 0 && evidence.score >= SETTLED_SCORE
+      })
+      .map((c) => c.id)
+  )
+  if (settled.size > 0) {
+    logScreenWatch(
+      `not flagging ${settled.size} claim(s) already cited and supported: ` +
+        claims
+          .filter((c) => settled.has(c.id))
+          .map((c) => `${inlineCitationKind(c.text)}/${evidenceResultByClaimId.get(c.id)?.score}`)
+          .join(', ')
+    )
+  }
+
   const clip = resolveClip([controlRect, windowRect])
   const underlines = (Array.isArray(claimRects) ? claimRects : [])
+    .filter((r) => !settled.has(r.id))
     .map((r) => ({
       ...r,
       rects: !Array.isArray(r.rects)
@@ -1374,7 +1461,8 @@ function updateOverlayAndWidget(
     )
   }
 
-  const claimSummaries: ScreenWatchClaimSummary[] = [...claims]
+  const claimSummaries: ScreenWatchClaimSummary[] = claims
+    .filter((c) => !settled.has(c.id))
     .sort((a, b) => b.confidence - a.confidence)
     .map((c) => {
       const critique = critiqueByClaimId.get(c.id)
@@ -1384,6 +1472,7 @@ function updateOverlayAndWidget(
         text: c.text,
         claimType: c.claimType,
         confidence: c.confidence,
+        hasInlineCitation: hasInlineCitation(c.text),
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,
@@ -1413,7 +1502,7 @@ function updateOverlayAndWidget(
       rect: activeLocal,
       expanded: widgetExpanded,
       viewMode: widgetViewMode,
-      claimCount: claims.length,
+      claimCount: claimSummaries.length,
       claims: claimSummaries,
       totalInfoCount,
       // Read, never computed here. This function runs on every poll tick and

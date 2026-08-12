@@ -302,6 +302,18 @@ export interface ScreenWatchClaimSummary {
   text: string
   claimType: ClaimType
   confidence: number
+  /**
+   * The writer already put a citation in this sentence — (Smith, 2020),
+   * "Smith (2020)", [3], a DOI.
+   *
+   * Screen Watch had no way to know this: `citation` below is set only when
+   * TRACELY inserted one. So a properly cited sentence was told, in those
+   * words, that it was "Missing citation" — and because a cited sentence tends
+   * to be a searchable one, it also scored well, which is the band that copy
+   * comes from. Both the card's wording and whether the claim is shown at all
+   * turn on this now.
+   */
+  hasInlineCitation: boolean
   // null while the background search hasn't resolved yet (or failed) for
   // this claim — the renderer shows a loading state, not a zero score.
   evidence: ScreenWatchClaimEvidence | null
