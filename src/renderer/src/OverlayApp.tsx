@@ -1374,7 +1374,11 @@ const KIND_NOUN: Record<Bucket, string> = {
  * flattening of two axes this function was written to fix for the title; the
  * button was left behind. One return value now, so they cannot disagree again.
  */
-function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchClaimEvidence): {
+function problemCopyFor(
+  claim: ScreenWatchClaimSummary,
+  evidence: ScreenWatchClaimEvidence,
+  kind: ScreenWatchProblemKind
+): {
   title: string
   description: string
   action: string
@@ -1385,7 +1389,7 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
   const n = evidence.count
   const sources = `${n} source${n === 1 ? '' : 's'}`
 
-  if (claim.problemKind === 'cited-unverified') {
+  if (kind === 'cited-unverified') {
     return {
       title: 'Citation may not support this',
       description:
@@ -1459,12 +1463,18 @@ function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchCla
 
 function ProblemCard({
   claim,
+  activeKind,
+  remaining,
   onSuggestFix,
   onStartCitationFlow,
   onAskTracer,
   onDismiss
 }: {
   claim: ScreenWatchClaimSummary
+  /** The first problem not yet dismissed — the only one this card shows. */
+  activeKind: ScreenWatchProblemKind
+  /** How many problems remain on this sentence, including the active one. */
+  remaining: number
   onSuggestFix: () => void
   onStartCitationFlow: () => void
   onAskTracer: () => void
@@ -1472,7 +1482,7 @@ function ProblemCard({
 }): JSX.Element {
   // Read, not re-derived. This card and the underline disagreeing about what
   // is wrong with the same sentence was the whole defect.
-  const kind = claim.problemKind
+  const kind = activeKind
 
   if (kind === 'searching') {
     return (
@@ -1494,7 +1504,10 @@ function ProblemCard({
   // underline that was hovered to open this card. It was hardcoded to
   // factual-orange for everything except weak reasoning, which meant hovering
   // a purple or blue underline produced an orange dot.
-  const dot: Bucket = bucketFor(claim.claimType)
+  // Coloured by the PROBLEM, matching the underline and the Figma frames —
+  // the citation card's dot is amber, reasoning's is red, the statistic's is
+  // orange. It was the claim type, so a red underline opened an orange card.
+  const dotColor = PROBLEM_COLOR[kind]
   const copy =
     kind === 'weak-reasoning'
       ? {
@@ -1506,15 +1519,40 @@ function ProblemCard({
         }
       : // `kind` is only 'searching' when evidence is null, and that case
         // returned above — so evidence is non-null here.
-        problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence)
+        problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence, kind)
   const { title, description, action: primaryLabel } = copy
   const onPrimary = kind === 'weak-reasoning' ? onSuggestFix : onStartCitationFlow
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: BUCKET_COLOR[dot], flexShrink: 0 }} />
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
         <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>{title}</div>
+        {/* How many problems this sentence has in total, when it has more than
+            one. Only the first is shown; fixing or dismissing it advances to
+            the next, so the count is the writer's warning that the card is not
+            finished with them yet. */}
+        {remaining > 1 ? (
+          <span
+            title={`${remaining} issues with this sentence — this is the first`}
+            style={{
+              marginLeft: 'auto',
+              flexShrink: 0,
+              minWidth: 18,
+              height: 18,
+              padding: '0 5px',
+              borderRadius: 999,
+              background: CHIP_BG,
+              color: MUTED,
+              fontSize: 11,
+              fontWeight: 600,
+              lineHeight: '18px',
+              textAlign: 'center'
+            }}
+          >
+            {remaining}
+          </span>
+        ) : null}
       </div>
       <MarkdownText style={{ fontSize: 13, lineHeight: 1.4, color: MUTED }}>{description}</MarkdownText>
       {/*
@@ -1888,6 +1926,15 @@ export default function OverlayApp(): JSX.Element {
   const [widget, setWidget] = useState<ScreenWatchWidget | null>(null)
   const [hover, setHover] = useState<ScreenWatchHoverEvent | null>(null)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+  /**
+   * Problems the user has waved away, keyed `claimId:kind`.
+   *
+   * Dismissal used to remove the whole claim, which meant a sentence with two
+   * problems lost the second one the moment the first was waved away — and a
+   * sentence whose citation gap was fixed kept its reasoning warning hidden
+   * for the rest of the session. Per-problem, the card simply advances.
+   */
+  const [dismissedIssues, setDismissedIssues] = useState<Set<string>>(new Set())
   // Driven locally at full mouse speed during a drag rather than round-
   // tripping every mousemove through main — main only needs to know the
   // final position (see onGripMouseDown). Cleared once the drag ends so the
@@ -2001,8 +2048,15 @@ export default function OverlayApp(): JSX.Element {
     if (claimId) setSelectedClaimId(claimId)
   }
 
-  function dismiss(claimId: string): void {
-    setDismissedIds((prev) => new Set(prev).add(claimId))
+  /**
+   * Wave away ONE problem. The claim only disappears once nothing is left.
+   *
+   * `remaining` is passed rather than recomputed so this cannot disagree with
+   * what the card was showing when the button was pressed.
+   */
+  function dismissIssue(claimId: string, kind: ScreenWatchProblemKind, remaining: number): void {
+    setDismissedIssues((prev) => new Set(prev).add(`${claimId}:${kind}`))
+    if (remaining <= 1) setDismissedIds((prev) => new Set(prev).add(claimId))
   }
 
   function selectClaim(claimId: string): void {
@@ -2220,6 +2274,20 @@ export default function OverlayApp(): JSX.Element {
   const stableUnderlines = useStableUnderlines(underlines, trackedIds)
   const isResolved = (id: string): boolean => dismissedIds.has(id) || citedIds.has(id)
 
+  /** The problems still live on a claim, worst first. */
+  const openKinds = (claimId: string, kinds: ScreenWatchProblemKind[]): ScreenWatchProblemKind[] =>
+    kinds.filter((k) => !dismissedIssues.has(`${claimId}:${k}`))
+
+  /**
+   * What to show for a claim. Falls back to the worst dismissed kind rather
+   * than to a default, so a mark whose problems are all dismissed keeps its own
+   * colour for the moment before it disappears instead of flashing grey.
+   */
+  const visibleKindFor = (
+    claimId: string,
+    kinds: ScreenWatchProblemKind[]
+  ): ScreenWatchProblemKind => openKinds(claimId, kinds)[0] ?? kinds[0] ?? 'searching'
+
   /**
    * Opens the widget's claims panel, in whichever mode is useful for what is
    * actually flagged. A single claim goes straight to its actions rather than
@@ -2254,7 +2322,7 @@ export default function OverlayApp(): JSX.Element {
         hasInlineCitation: hasInlineCitationText(claimHovered.text),
         // Nothing is known about a claim whose payload has not arrived yet, and
         // 'searching' is the honest name for that.
-        problemKind: 'searching' as const,
+        problemKinds: ['searching' as const],
         evidence: null,
         critique: null,
         critiqueVerdict: null,
@@ -2305,6 +2373,13 @@ export default function OverlayApp(): JSX.Element {
   useEffect(() => {
     if (panelViewMode !== 'structure') setHighlightedParagraph(null)
   }, [panelViewMode])
+
+  const hoveredOpenKinds = claimHoveredSummary
+    ? openKinds(claimHoveredSummary.id, claimHoveredSummary.problemKinds)
+    : []
+  const hoveredActiveKind: ScreenWatchProblemKind =
+    hoveredOpenKinds[0] ?? claimHoveredSummary?.problemKinds[0] ?? 'searching'
+  const hoveredRemaining = hoveredOpenKinds.length
 
   const hoveredFlowStep = claimHovered
     ? (citationFlowByClaimId.get(claimHovered.claimId)?.step ?? null)
@@ -2362,7 +2437,9 @@ export default function OverlayApp(): JSX.Element {
           // The point of the whole change: the mark is coloured by what is
           // WRONG, not by what kind of sentence it is. Every factual claim in a
           // document used to be the same orange whatever state it was in.
-          const color = PROBLEM_COLOR[u.problemKind]
+          // Worst first, so the mark shows the most serious of the sentence's
+          // problems — the same one the card opens on.
+          const color = PROBLEM_COLOR[visibleKindFor(u.id, u.problemKinds)]
           return u.rects.map((r, i) => (
             <UnderlineMark
               key={`${u.id}-${i}`}
@@ -2376,7 +2453,7 @@ export default function OverlayApp(): JSX.Element {
               height={Math.round(r.height)}
               claimId={u.id}
               color={color}
-              title={PROBLEM_LABEL[u.problemKind]}
+              title={PROBLEM_LABEL[visibleKindFor(u.id, u.problemKinds)]}
               hovered={isHovered}
             />
           ))
@@ -2752,7 +2829,11 @@ export default function OverlayApp(): JSX.Element {
                     }}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
                     onAskTracer={() => void window.tracely.tracer.open({ claimId: claimHoveredSummary.id })}
-                    onDismiss={() => dismiss(claimHoveredSummary.id)}
+                    activeKind={hoveredActiveKind}
+                    remaining={hoveredRemaining}
+                    onDismiss={() =>
+                      dismissIssue(claimHoveredSummary.id, hoveredActiveKind, hoveredRemaining)
+                    }
                   />
                 )}
               </div>

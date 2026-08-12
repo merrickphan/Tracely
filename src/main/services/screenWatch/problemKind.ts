@@ -53,42 +53,63 @@ const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
 const STRONG = 70
 const MIXED = 40
 
-export function problemKindFor({
+/**
+ * EVERY problem this claim has, worst first.
+ *
+ * A sentence can be in more than one kind of trouble at once, and the two most
+ * common pairs are the two most worth knowing about: reasoning that does not
+ * follow from evidence that is also thin, and a cited statistic that nothing
+ * carries. Returning a single kind meant fixing the one shown revealed a second
+ * problem the writer had no idea was there.
+ *
+ * The predicates below are deliberately independent — each answers one question
+ * about the claim — and the ordering is applied afterwards, so adding a kind
+ * cannot silently mask an existing one the way an if/else chain does.
+ */
+export function problemKindsFor({
   claimType,
   hasInlineCitation,
   evidence,
   critiqueVerdict
-}: ProblemKindInput): ScreenWatchProblemKind {
-  // Reasoning outranks evidence deliberately. A claim can be perfectly well
-  // sourced and still not follow from what those sources say, and that is the
-  // more interesting failure — it is also the one the writer cannot see by
-  // looking at their own citation list.
-  if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) return 'weak-reasoning'
+}: ProblemKindInput): ScreenWatchProblemKind[] {
+  // Nothing is known yet, so nothing else can be asserted. Sole kind.
+  if (!evidence) return ['searching']
 
-  if (!evidence) return 'searching'
+  const kinds: ScreenWatchProblemKind[] = []
+  const nothingFound = evidence.count === 0
 
-  // Checked before the plain evidence bands, because "you cited this and the
-  // literature does not carry it" is a different and worse problem from "this
-  // is thinly supported" — and the copy for the latter never mentions the
-  // citation at all, which is how a possible miscitation used to read as a
-  // routine weak-evidence warning.
-  if (hasInlineCitation && (evidence.count === 0 || evidence.score < MIXED)) {
-    return 'cited-unverified'
+  if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
+
+  // Cited, and the literature does not back what was attributed. Subsumes the
+  // plain evidence bands for a cited claim: "thin support" is the wrong advice
+  // when the writer has already named a source.
+  if (hasInlineCitation && (nothingFound || evidence.score < MIXED)) kinds.push('cited-unverified')
+
+  // A number nothing carries is its own finding even when the sentence is
+  // cited — "you cited this AND no database has the figure" is two facts, and
+  // the second is the one that tells them which part to go and check.
+  if (nothingFound && claimType === 'statistic') kinds.push('unverified-statistic')
+  if (nothingFound && claimType !== 'statistic' && !hasInlineCitation) kinds.push('no-sources')
+
+  if (!nothingFound && !hasInlineCitation) {
+    if (evidence.score < MIXED) kinds.push('weak-evidence')
+    else if (evidence.score < STRONG) kinds.push('partial-evidence')
+    else kinds.push('missing-citation')
+  }
+  // A cited claim scoring in the middle band is neither settled nor alarming;
+  // it is worth saying it is only partly supported.
+  if (!nothingFound && hasInlineCitation && evidence.score >= MIXED && evidence.score < STRONG) {
+    kinds.push('partial-evidence')
   }
 
-  if (evidence.count === 0) {
-    // A number is a different kind of problem from an assertion: it is checkable
-    // against a specific figure, and being unable to find it is a stronger
-    // signal than failing to find support for a general statement.
-    return claimType === 'statistic' ? 'unverified-statistic' : 'no-sources'
-  }
+  // A cited, well-supported claim produces nothing at all, and is filtered out
+  // upstream as settled before it ever reaches the overlay.
+  return kinds.sort((a, b) => problemSeverity(a) - problemSeverity(b))
+}
 
-  if (evidence.score < MIXED) return 'weak-evidence'
-  if (evidence.score < STRONG) return 'partial-evidence'
-
-  // Strong, and either uncited (say so) or cited — in which case it is
-  // filtered out upstream as settled and never reaches here at all.
-  return 'missing-citation'
+/** The worst of them — what the underline is coloured by and the card shows. */
+export function problemKindFor(input: ProblemKindInput): ScreenWatchProblemKind {
+  return problemKindsFor(input)[0] ?? 'searching'
 }
 
 /**

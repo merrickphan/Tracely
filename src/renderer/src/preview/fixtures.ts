@@ -420,7 +420,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     claimType: 'causal',
     confidence: 0.93,
     hasInlineCitation: false,
-    problemKind: 'weak-reasoning',
+    problemKinds: ['weak-reasoning', 'partial-evidence'],
     evidence: {
       score: 34,
       count: 6,
@@ -457,7 +457,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     claimType: 'statistic',
     confidence: 0.87,
     hasInlineCitation: false,
-    problemKind: 'unverified-statistic',
+    problemKinds: ['unverified-statistic'],
     evidence: {
       score: 61,
       count: 4,
@@ -474,7 +474,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     claimType: 'opinion',
     confidence: 0.55,
     hasInlineCitation: false,
-    problemKind: 'missing-citation',
+    problemKinds: ['missing-citation'],
     // null evidence exercises the "search still running" state, which is
     // otherwise only visible for the second or two after detection.
     evidence: null,
@@ -595,7 +595,7 @@ export const screenWatchStructure: ScreenWatchStructure = {
 // inside it rather than copied from a real screen capture.
 export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
   underlines: [
-    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal', problemKind: 'weak-reasoning' },
+    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal', problemKinds: ['weak-reasoning', 'partial-evidence'] },
     {
       id: 'c2',
       rects: [
@@ -603,9 +603,9 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
         { x: 60, y: 142, width: 180, height: 18 }
       ],
       claimType: 'statistic',
-      problemKind: 'unverified-statistic'
+      problemKinds: ['unverified-statistic']
     },
-    { id: 'c3', rects: [{ x: 60, y: 174, width: 330, height: 18 }], claimType: 'opinion', problemKind: 'missing-citation' }
+    { id: 'c3', rects: [{ x: 60, y: 174, width: 330, height: 18 }], claimType: 'opinion', problemKinds: ['missing-citation'] }
   ],
   widget: {
     rect: { x: 520, y: 300, width: 56, height: 56 },

@@ -53,7 +53,7 @@ import {
   WIDGET_SIZE
 } from './panelSize'
 import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
-import { problemKindFor, problemSeverity } from './problemKind'
+import { problemKindsFor, problemSeverity } from './problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
@@ -1318,7 +1318,7 @@ function updateOverlayAndWidget(
       const evidence = evidenceResultByClaimId.get(c.id)
       return [
         c.id,
-        problemKindFor({
+        problemKindsFor({
           claimType: c.claimType,
           hasInlineCitation: hasInlineCitation(c.text),
           evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
@@ -1405,7 +1405,7 @@ function updateOverlayAndWidget(
     id: u.id,
     rects: u.rects.map(toLocal),
     claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual',
-    problemKind: problemKindById.get(u.id) ?? 'searching'
+    problemKinds: problemKindById.get(u.id) ?? ['searching']
   }))
 
   // Anchored to a fixed corner of the focused app's window, not the focused
@@ -1486,9 +1486,9 @@ function updateOverlayAndWidget(
     // so sorting by it alone buried the reasoning failure under tidy claims
     // that merely wanted a citation.
     .sort((a, b) => {
-      const bySeverity =
-        problemSeverity(problemKindById.get(a.id) ?? 'searching') -
-        problemSeverity(problemKindById.get(b.id) ?? 'searching')
+      const worst = (id: string): number =>
+        problemSeverity(problemKindById.get(id)?.[0] ?? 'searching')
+      const bySeverity = worst(a.id) - worst(b.id)
       return bySeverity !== 0 ? bySeverity : b.confidence - a.confidence
     })
     .map((c) => {
@@ -1500,7 +1500,7 @@ function updateOverlayAndWidget(
         claimType: c.claimType,
         confidence: c.confidence,
         hasInlineCitation: hasInlineCitation(c.text),
-        problemKind: problemKindById.get(c.id) ?? 'searching',
+        problemKinds: problemKindById.get(c.id) ?? ['searching'],
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,

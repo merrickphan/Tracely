@@ -1,6 +1,6 @@
-import { ok, strictEqual } from 'node:assert/strict'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { problemKindFor, problemSeverity } from './problemKind.ts'
+import { problemKindFor, problemKindsFor, problemSeverity } from './problemKind.ts'
 
 const base = {
   claimType: 'factual' as const,
@@ -70,6 +70,52 @@ describe('problemKindFor', () => {
 
   it('ranks a wrong citation above every other problem', () => {
     ok(problemSeverity('cited-unverified') < problemSeverity('weak-reasoning'))
+  })
+})
+
+describe('problemKindsFor — a sentence can be in more than one kind of trouble', () => {
+  it('reports reasoning AND the citation gap together', () => {
+    deepStrictEqual(problemKindsFor({ ...base, critiqueVerdict: 'weak' }), [
+      'weak-reasoning',
+      'missing-citation'
+    ])
+  })
+
+  it('reports a cited statistic that nothing carries as both', () => {
+    // "You cited this AND no database has the figure" is two facts, and the
+    // second is what tells the writer which part to go and check.
+    deepStrictEqual(
+      problemKindsFor({
+        ...base,
+        claimType: 'statistic',
+        hasInlineCitation: true,
+        evidence: { score: 0, count: 0 }
+      }),
+      ['cited-unverified', 'unverified-statistic']
+    )
+  })
+
+  it('does not double-report thin evidence for a cited claim', () => {
+    // cited-unverified already says it, with the right advice.
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 20, count: 5 } }),
+      ['cited-unverified']
+    )
+  })
+
+  it('returns nothing at all for a cited, well-supported claim', () => {
+    // Filtered out upstream as settled; this is the same judgement from here.
+    deepStrictEqual(problemKindsFor({ ...base, hasInlineCitation: true }), [])
+  })
+
+  it('makes searching the sole kind, since nothing else is known', () => {
+    deepStrictEqual(problemKindsFor({ ...base, evidence: null }), ['searching'])
+  })
+
+  it('always orders worst first, so the card shows the right one', () => {
+    const kinds = problemKindsFor({ ...base, critiqueVerdict: 'contradicted' })
+    strictEqual(kinds[0], 'weak-reasoning')
+    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'contradicted' }), kinds[0])
   })
 })
 

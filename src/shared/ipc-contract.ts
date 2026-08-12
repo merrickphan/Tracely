@@ -329,8 +329,16 @@ export interface ScreenWatchClaimSummary {
    * turn on this now.
    */
   hasInlineCitation: boolean
-  /** Decided in main so the underline and this card cannot disagree. */
-  problemKind: ScreenWatchProblemKind
+  /**
+   * Every problem this claim has, worst first — decided in main so the
+   * underline and this card cannot disagree.
+   *
+   * A sentence can be in more than one kind of trouble at once. The card shows
+   * only the first and badges the count; dismissing or fixing it advances to
+   * the next, so fixing what is shown never reveals a second problem the
+   * writer had no idea was there.
+   */
+  problemKinds: ScreenWatchProblemKind[]
   // null while the background search hasn't resolved yet (or failed) for
   // this claim — the renderer shows a loading state, not a zero score.
   evidence: ScreenWatchClaimEvidence | null
@@ -486,7 +494,8 @@ export interface ScreenWatchOverlayUpdateEvent {
     id: string
     rects: ScreenRect[]
     claimType: ClaimType
-    problemKind: ScreenWatchProblemKind
+    /** Worst first. The mark is coloured by [0]; length > 1 shows a count. */
+    problemKinds: ScreenWatchProblemKind[]
   }[]
   widget: ScreenWatchWidget | null
 }
