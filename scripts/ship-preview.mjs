@@ -83,6 +83,23 @@ console.log('\n5/5  Build + publish preview')
 run('npm run preflight', { env: previewEnv })
 run('npm run preview:win', { env: { ...previewEnv, GH_TOKEN: token } })
 
+// Point the tag at the commit that was actually built.
+//
+// electron-builder creates the GitHub release through the API without a
+// target_commitish, so GitHub creates the tag at the DEFAULT BRANCH's head —
+// not at the preview branch we are standing on. Every preview tag therefore
+// pointed at some commit on main whose package.json still read the previous
+// release's version, and the published installer could not be reproduced from
+// its own tag. Moving it here is deterministic and does not depend on what
+// electron-builder chooses to send.
+//
+// Forced because the tag already exists by this point: electron-builder made
+// it a moment ago, in the wrong place.
+const built = out('git rev-parse HEAD')
+run(`git tag -f v${version} ${built}`)
+run(`git push -f origin v${version}`)
+console.log(`     tag v${version} -> ${built.slice(0, 7)} (${branch})`)
+
 console.log(`
 Published preview v${version} as a GitHub prerelease.
 
