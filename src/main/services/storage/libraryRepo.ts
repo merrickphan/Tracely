@@ -74,8 +74,20 @@ export function listLibrary(search?: string, tag?: string): LibraryItem[] {
   let items = rows.map(toDomain).filter((item): item is LibraryItem => item !== null)
 
   if (search) {
+    // Title, authors and notes — the three fields the search box says it
+    // covers ("Search titles, authors and notes…" in LibraryView). It matched
+    // only the title, so looking up a saved source by the author you remember
+    // it by, or by the note you wrote explaining why you kept it, returned
+    // nothing and read as "that source isn't in my library".
+    //
+    // Notes matter most of the three: it is the one field the user wrote
+    // themselves, so it is the one they are most likely to search by.
     const needle = search.toLowerCase()
-    items = items.filter((item) => item.source.title.toLowerCase().includes(needle))
+    items = items.filter((item) => {
+      const authors = item.source.authors.map((a) => `${a.given ?? ''} ${a.family}`)
+      const haystack = [item.source.title, ...authors, item.notes ?? '']
+      return haystack.some((field) => field.toLowerCase().includes(needle))
+    })
   }
   if (tag) {
     items = items.filter((item) => item.tags.includes(tag))
