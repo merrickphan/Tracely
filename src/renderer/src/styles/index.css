@@ -1109,8 +1109,24 @@ textarea:disabled {
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  /* Row since the Structure rail: the editor column moved into
+     `.docedit-main`, which keeps everything positioned against it —
+     `.docedit-wordcount` and `.docedit-error` are absolute/relative to this
+     box, and as siblings of the rail they would become flex items of the row
+     and land next to it instead of over the page. */
+  flex-direction: row;
   -webkit-app-region: drag;
+}
+
+.docedit-main {
+  position: relative;
+  flex: 1;
+  /* Without this a long unbroken line in the editor sets the flex base size
+     and pushes the rail off the card. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .docedit-toolbar {
@@ -1340,6 +1356,13 @@ textarea:disabled {
   -webkit-app-region: no-drag;
 }
 
+/* The page loses ~300px to the rail, so the generous side padding that suits
+   a full-width page would leave a very narrow measure. */
+.docedit-view.with-structure .docedit-body {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
 .docedit-body {
   width: 100%;
   min-height: 100%;
@@ -1411,6 +1434,498 @@ textarea:disabled {
   overflow-y: auto;
   padding: 16px 24px;
   -webkit-app-region: no-drag;
+}
+
+/* ---- Structure rail ------------------------------------------------------
+   Sits to the right of `.docedit-main` inside the row `.docedit-view`. A rail
+   rather than a taller bottom strip because the content is per-paragraph: a
+   row can sit on the same horizontal band as the paragraph it describes,
+   which a strip pinned under the page cannot do at any height. */
+
+.docedit-structure {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fbfbfb;
+  padding: 14px 16px 20px;
+  /* `.docedit-view` is a drag region, and without this every button in here
+     would move the window instead of firing. */
+  -webkit-app-region: no-drag;
+}
+
+.docedit-structure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.docedit-structure-reanalyze {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4d4d4d;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.docedit-structure-reanalyze:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.docedit-structure-title {
+  /* Pushes the Re-analyze and close buttons to the right edge of the head. */
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #4d4d4d;
+}
+
+.docedit-structure-close {
+  border: none;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.docedit-structure-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+
+.docedit-structure-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.docedit-structure-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.docedit-structure-run,
+.docedit-structure-restale {
+  align-self: flex-start;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.docedit-structure-run:hover,
+.docedit-structure-restale:hover {
+  filter: brightness(1.06);
+}
+
+.docedit-structure-msg {
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.docedit-structure-stale {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--score-mid-wash);
+  border: 1px solid var(--score-mid);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--score-mid);
+  margin-bottom: 12px;
+}
+
+.docedit-structure-stale .docedit-structure-restale {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.docedit-score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* Conic sweep to --score-pct, set inline from the score itself, over the
+   tone band the rest of the app uses (70/40, same as evidenceScoreColor). */
+.docedit-score-ring {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    var(--ring-color) 0 var(--score-pct, 0%),
+    rgba(0, 0, 0, 0.08) var(--score-pct, 0%) 100%
+  );
+}
+
+.docedit-score-ring[data-tone='good'] {
+  --ring-color: var(--score-good);
+}
+
+.docedit-score-ring[data-tone='mid'] {
+  --ring-color: var(--score-mid);
+}
+
+.docedit-score-ring[data-tone='low'] {
+  --ring-color: var(--score-low);
+}
+
+.docedit-score-ring::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: #fbfbfb;
+}
+
+.docedit-score-value {
+  position: relative;
+  z-index: 1;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.docedit-score-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.docedit-score-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* Deliberately prominent. A score computed over paragraphs that were never
+   labelled must not read as a settled verdict. */
+.docedit-score-provisional {
+  align-self: flex-start;
+  background: var(--score-mid-wash);
+  color: var(--score-mid);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
+}
+
+.docedit-evidence-line {
+  margin: 0;
+  font-size: 12px;
+  color: #4d4d4d;
+  line-height: 1.4;
+}
+
+.docedit-score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.docedit-score-bar {
+  display: grid;
+  grid-template-columns: 1fr 58px 34px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #4d4d4d;
+}
+
+.docedit-score-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.docedit-score-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--score-mid);
+}
+
+.docedit-score-bar-fill[data-tone='good'] {
+  background: var(--score-good);
+}
+
+.docedit-score-bar-fill[data-tone='low'] {
+  background: var(--score-low);
+}
+
+.docedit-score-bar-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #6b6b6b;
+}
+
+.docedit-structure-subhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4d4d4d;
+}
+
+.docedit-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.docedit-evidence-checkall,
+.docedit-evidence-check {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4d4d4d;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.docedit-evidence-checkall:hover,
+.docedit-evidence-check:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.docedit-evidence-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #4d4d4d;
+}
+
+.docedit-evidence-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #2b2b2b;
+}
+
+.docedit-evidence-strength {
+  flex-shrink: 0;
+  min-width: 26px;
+  text-align: center;
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, 0.06);
+  color: #6b6b6b;
+}
+
+.docedit-evidence-strength[data-state='good'] {
+  background: var(--score-good-wash);
+  color: var(--score-good);
+}
+
+.docedit-evidence-strength[data-state='mid'] {
+  background: var(--score-mid-wash);
+  color: var(--score-mid);
+}
+
+.docedit-evidence-strength[data-state='low'],
+.docedit-evidence-strength[data-state='none'] {
+  background: var(--score-low-wash);
+  color: var(--score-low);
+}
+
+/* Unchecked must not read as a bad score. It is the absence of a number, not
+   a low one, and colouring it like a verdict would tell the user their claim
+   failed a search that never ran. */
+.docedit-evidence-strength[data-state='unchecked'] {
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  color: #a1a1a1;
+}
+
+.docedit-evidence-claim-text {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.docedit-weaknesses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.docedit-weakness {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #2b2b2b;
+}
+
+.docedit-weakness-jump {
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #4d4d4d;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.docedit-weakness-jump:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Inline in the message rather than a row of its own, so a list of findings
+   reads as prose with an offer at the end of each, not as a stack of buttons. */
+.docedit-weakness-ask {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.docedit-weakness-ask:hover {
+  text-decoration: underline;
+}
+
+.docedit-weakness-jump-draft {
+  cursor: default;
+}
+
+.docedit-weakness-jump-draft:hover {
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #4d4d4d;
+}
+
+.docedit-structure-map {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docedit-para-row {
+  display: grid;
+  grid-template-columns: 16px auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.docedit-para-row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.docedit-para-row[data-active='true'] {
+  border-color: var(--accent-border);
+  background: var(--accent-wash);
+}
+
+.docedit-para-num {
+  color: #a1a1a1;
+  font-variant-numeric: tabular-nums;
+}
+
+.docedit-para-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4d4d4d;
+  white-space: nowrap;
+}
+
+/* Unlabelled has to look like an absence rather than a category, or a reader
+   scanning the column mistakes "we could not tell" for "this does nothing". */
+.docedit-para-row[data-role='unknown'] .docedit-para-role {
+  color: #a1a1a1;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.docedit-para-row[data-role='thesis'] .docedit-para-role,
+.docedit-para-row[data-role='conclusion'] .docedit-para-role {
+  color: var(--accent);
+}
+
+.docedit-para-preview {
+  color: #8a8a8a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.docedit-structure-foot {
+  margin: 16px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.docedit-structure-toggle.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .analyzing-step.active .analyzing-step-dot {

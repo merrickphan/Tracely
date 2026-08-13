@@ -184,6 +184,17 @@ export default function PreviewApp(): JSX.Element {
               <option value="empty">Empty (starters)</option>
             </select>
           </Field>
+          <Field label="Structure">
+            <select
+              value={scenario.structure}
+              onChange={(e) => update('structure', e.target.value as Scenario['structure'])}
+            >
+              <option value="heuristic">Provisional (no relay)</option>
+              <option value="classified">Fully classified</option>
+              <option value="stale">Stale (draft edited since)</option>
+              <option value="none">Never analyzed</option>
+            </select>
+          </Field>
           <Field label="Latency">
             <select value={scenario.latencyMs} onChange={(e) => update('latencyMs', Number(e.target.value))}>
               <option value={0}>None</option>

@@ -200,3 +200,105 @@ export interface DocumentRecord {
   createdAt: string
   updatedAt: string
 }
+
+// What a paragraph is DOING in the argument, which is a different question from
+// what it says. The vocabulary is the one composition instructors already use,
+// so a label is something a student can act on rather than jargon to decode.
+//
+// 'unknown' is load-bearing and must never be treated as a role. It means the
+// question was not answered — no classifier ran, or it declined this paragraph
+// — which is different from "this paragraph does nothing". The score reports
+// itself as provisional whenever any paragraph carries it, rather than quietly
+// scoring an unlabelled essay as if it had been read.
+export type ParagraphRole =
+  | 'thesis'
+  | 'claim'
+  | 'evidence'
+  | 'reasoning'
+  | 'significance'
+  | 'counterargument'
+  | 'conclusion'
+  | 'transition'
+  | 'unknown'
+
+export interface ParagraphOutline {
+  /** 1-based, matching the numbering the classifier is shown. */
+  index: number
+  role: ParagraphRole
+  // Whether the paragraph explains how its evidence bears on its claim. Until
+  // the relay classifier ships this is a marker heuristic, and `rolesFrom`
+  // says which it was — see DocumentOutline.
+  hasWarrant: boolean
+  /** Claims detected inside this paragraph, by id. Empty is normal. */
+  claimIds: string[]
+}
+
+export interface StructureComponents {
+  thesis: number
+  governingClaims: number
+  warrant: number
+  counterargument: number
+  significance: number
+  conclusion: number
+}
+
+export type StructureWeaknessKind =
+  | 'no-thesis'
+  | 'warrant-gap'
+  | 'evidence-stacking'
+  | 'no-counterargument'
+  | 'unsupported-claim'
+  | 'new-claim-in-conclusion'
+  | 'no-significance'
+
+export interface StructureWeakness {
+  kind: StructureWeaknessKind
+  /** 1-based paragraph this is about, or null when it is about the whole draft. */
+  paragraphIndex: number | null
+  claimId: string | null
+  /** Built from a local template. Never model prose — see structure/weaknesses.ts. */
+  message: string
+  /** Prefilled into Tracer when the user asks about this weakness. */
+  tracerPrompt: string
+}
+
+export interface EvidenceCoverage {
+  detected: number
+  withRelevantSource: number
+  /** Mean strengthScore over claims whose search has resolved; null if none have. */
+  meanStrength: number | null
+  unchecked: number
+}
+
+// Deliberately holds NO prose from the document — only indices, roles, booleans
+// and claim ids. Three consequences, all wanted: the persisted row stays tiny;
+// there is no copy of the user's writing to reason about when Privacy clears
+// run; and the renderer is forced to join these labels onto the live editor
+// text, so an outline computed against older text renders visibly wrong rather
+// than looking authoritative over stale content it carries with it.
+export interface DocumentOutline {
+  /** Null for an unsaved document being analyzed before its first autosave. */
+  documentId: string | null
+  /**
+   * The analysis whose claims the paragraph `claimIds` refer to.
+   *
+   * Stored so reopening a document can fetch those claims back and show their
+   * evidence state. Without it a restored outline knows claims exist and has no
+   * way to say anything about them — the ids alone are not resolvable.
+   * An id, not prose, so it does not breach the no-text rule below.
+   */
+  analysisId: string | null
+  /** Hash of the text this was computed from. Compare to detect staleness. */
+  sourceHash: string
+  schemaVersion: number
+  paragraphs: ParagraphOutline[]
+  /** 0-100. Deterministic given `paragraphs` — see structure/scoreDraft.ts. */
+  score: number
+  components: StructureComponents
+  /** False when any paragraph is 'unknown'. The UI must say "provisional". */
+  complete: boolean
+  rolesFrom: 'heuristic' | 'model'
+  coverage: EvidenceCoverage
+  weaknesses: StructureWeakness[]
+  analyzedAt: string
+}

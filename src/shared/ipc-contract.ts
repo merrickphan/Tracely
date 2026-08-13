@@ -11,8 +11,10 @@ import type {
   Density,
   FontSize,
   EvidenceItem,
+  DocumentOutline,
   DocumentRecord,
   LibraryItem,
+  ParagraphRole,
   ScoreBreakdown,
   SourceProvider,
   Theme,
@@ -465,12 +467,27 @@ export interface TracerContext {
   processName: string | null
   documentText: string
   claims: { id: string; text: string; claimType: ClaimType; evidenceScore: number | null }[]
+  // The Structure analysis of the draft, when the context came from Tracely's
+  // own document editor. Absent for Screen Watch context, which reads an
+  // external app that has no outline. Optional and additive.
+  outline?: {
+    title: string
+    score: number
+    complete: boolean
+    roles: ParagraphRole[]
+    weaknesses: string[]
+  }
 }
 
 export interface TracerOpenRequest {
   // Set when opened from a specific claim ("Ask Tracer about this") so the
   // conversation starts anchored to it rather than the whole document.
   claimId?: string
+  // A ready-made question to prefill, set when opened from a structural
+  // weakness in the Structure rail. Separate from claimId because most
+  // structural findings are not about a claim at all — a missing
+  // counterargument is about the whole draft.
+  prompt?: string
 }
 export interface TracerOpenResponse {
   ok: true
@@ -516,6 +533,9 @@ export interface TracerGetConversationResponse {
   // Set when the window was opened via "Ask Tracer about this claim" — the
   // renderer prefills a starter question about it.
   focusedClaimId: string | null
+  // A question composed by the caller, taking precedence over focusedClaimId's
+  // generic starter when both are present.
+  focusedPrompt: string | null
 }
 
 export type TracerListConversationsRequest = Record<string, never>
@@ -612,4 +632,39 @@ export interface DocumentsRemoveRequest {
 }
 export interface DocumentsRemoveResponse {
   ok: true
+}
+
+export interface StructureAnalyzeRequest {
+  /** Null for a document that has not autosaved yet — the outline still computes. */
+  documentId?: string | null
+  /**
+   * The editor's `innerText`, NOT its `bodyHtml`. Paragraph and claim offsets
+   * are computed against this string, and it has to be the same string claim
+   * detection saw or every offset is wrong. Main deliberately never parses the
+   * document's HTML.
+   */
+  text: string
+  /** The analysis whose claims to map onto paragraphs. Null before Analyze has run. */
+  analysisId?: string | null
+}
+export interface StructureAnalyzeResponse {
+  outline: DocumentOutline
+}
+export interface StructureGetRequest {
+  documentId: string
+  /**
+   * The text currently in the editor, so main can hash it and answer `stale`.
+   *
+   * The TEXT rather than a hash of it, deliberately. Hashing in the renderer
+   * would mean a second implementation of the normalization
+   * (`sourceHashFor`) living in another process, and the two drifting by a
+   * single character class would make every stored outline look permanently
+   * stale — a bug that presents as "the feature doesn't work" with nothing
+   * obviously wrong. The document is already sent in full to analyze it.
+   */
+  text: string
+}
+export interface StructureGetResponse {
+  outline: DocumentOutline | null
+  stale: boolean
 }

@@ -15,6 +15,7 @@ import type {
   AuthUser,
   Citation,
   Claim,
+  DocumentOutline,
   DocumentRecord,
   EvidenceItem,
   LibraryItem,
@@ -226,16 +227,131 @@ export const libraryItems: LibraryItem[] = [
 
 // One saved document, so the editor's reopen-where-you-left-off path has
 // something to reopen in the preview.
+// Six paragraphs rather than two, because the Structure panel renders one row
+// per paragraph and a two-paragraph document exercises none of what makes that
+// list hard: an unlabelled paragraph, a warrant gap, and enough rows to scroll.
 export const documents: DocumentRecord[] = [
   {
     id: 'doc-1',
     title: 'Screen time essay — draft 2',
     bodyHtml:
-      '<div>Screen time causes depression in teenagers.</div><div><br></div><div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety.</div>',
+      '<div>Screen time causes depression in teenagers.</div><div><br></div>' +
+      '<div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety.</div><div><br></div>' +
+      '<div>Longitudinal data from Norway tracked 2,000 students over four years. The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
+      '<div>Schools in three districts have already moved to ban phones during instructional hours.</div><div><br></div>' +
+      '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +
+      '<div>In conclusion, the link is real but weaker than the debate assumes.</div>',
     createdAt: T0,
     updatedAt: T0
   }
 ]
+
+// What the LOCAL heuristics actually produce for the document above — not an
+// idealised outline. The heuristics can only emit thesis / claim /
+// counterargument / significance / conclusion / unknown, so paragraphs 3 and 4
+// come back unlabelled, `complete` is false, and the panel must show
+// "provisional". Faking a fully-labelled outline here would hide the exact
+// state most users see before the classifier ships.
+//
+// Score traces by hand: thesis 20 + governing claims 10 (1 of 2 expected in a
+// 4-paragraph body) + warrant 0 (the one paragraph owing a warrant has none)
+// + counterargument 0 + significance 15 + conclusion 10 = 55.
+export const documentOutline: DocumentOutline = {
+  documentId: 'doc-1',
+  analysisId: 'a1',
+  sourceHash: 'preview-hash-draft-2',
+  schemaVersion: 1,
+  paragraphs: [
+    { index: 1, role: 'thesis', hasWarrant: false, claimIds: ['c1'] },
+    { index: 2, role: 'claim', hasWarrant: false, claimIds: ['c2'] },
+    { index: 3, role: 'unknown', hasWarrant: true, claimIds: [] },
+    { index: 4, role: 'unknown', hasWarrant: false, claimIds: [] },
+    { index: 5, role: 'significance', hasWarrant: false, claimIds: [] },
+    { index: 6, role: 'conclusion', hasWarrant: false, claimIds: [] }
+  ],
+  score: 55,
+  components: {
+    thesis: 20,
+    governingClaims: 10,
+    warrant: 0,
+    counterargument: 0,
+    significance: 15,
+    conclusion: 10
+  },
+  complete: false,
+  rolesFrom: 'heuristic',
+  // Matches the `claims` fixture: c1 and c2 searched and sourced, c3 never
+  // searched. Kept consistent deliberately — an outline claiming 2 detected
+  // beside a list of 3 is the kind of quiet mismatch the preview exists to
+  // surface, not to contain.
+  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 48, unchecked: 1 },
+  weaknesses: [
+    {
+      kind: 'warrant-gap',
+      paragraphIndex: 2,
+      claimId: 'c2',
+      message:
+        'The 2nd paragraph presents a claim without explaining how it supports the argument.',
+      tracerPrompt:
+        'In my 2nd paragraph, how do I explain what my evidence actually shows without just restating it?'
+    }
+  ],
+  analyzedAt: T0
+}
+
+// The same document as the relay classifier would label it: every paragraph
+// resolved, so the panel drops the "provisional" badge and whole-draft
+// weaknesses become sayable. Selected by the "classified" preview scenario —
+// without it the confident state is unreachable with no relay running.
+export const documentOutlineClassified: DocumentOutline = {
+  ...documentOutline,
+  paragraphs: [
+    { index: 1, role: 'thesis', hasWarrant: false, claimIds: ['c1'] },
+    { index: 2, role: 'evidence', hasWarrant: false, claimIds: ['c2'] },
+    { index: 3, role: 'evidence', hasWarrant: true, claimIds: [] },
+    { index: 4, role: 'transition', hasWarrant: false, claimIds: [] },
+    { index: 5, role: 'significance', hasWarrant: false, claimIds: [] },
+    { index: 6, role: 'conclusion', hasWarrant: false, claimIds: [] }
+  ],
+  score: 60,
+  components: {
+    thesis: 20,
+    governingClaims: 0,
+    warrant: 10,
+    counterargument: 0,
+    significance: 15,
+    conclusion: 10
+  },
+  complete: true,
+  rolesFrom: 'model',
+  weaknesses: [
+    {
+      kind: 'warrant-gap',
+      paragraphIndex: 2,
+      claimId: 'c2',
+      message:
+        'The 2nd paragraph presents evidence without explaining how it supports the argument.',
+      tracerPrompt:
+        'In my 2nd paragraph, how do I explain what my evidence actually shows without just restating it?'
+    },
+    {
+      kind: 'evidence-stacking',
+      paragraphIndex: 3,
+      claimId: null,
+      message:
+        'The 3rd paragraph adds more evidence to the 2nd without a claim between them. Stacked sources read as a literature review rather than an argument.',
+      tracerPrompt: 'My 3rd and 2nd paragraphs are both evidence. What claim should be joining them?'
+    },
+    {
+      kind: 'no-counterargument',
+      paragraphIndex: null,
+      claimId: null,
+      message:
+        'Nothing in this draft engages an opposing view. An argument that never meets resistance reads as one that has not been tested.',
+      tracerPrompt: 'What is the strongest objection to my argument, and how do I address it fairly?'
+    }
+  ]
+}
 
 export const tracerConversations: TracerConversation[] = [
   { id: 'tc1', title: 'Why did you flag this claim?', createdAt: T0, updatedAt: T0 },

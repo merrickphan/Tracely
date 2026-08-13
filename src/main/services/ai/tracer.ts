@@ -5,7 +5,9 @@ import {
   MAX_TRACER_CLAIMS_IN_CONTEXT,
   MAX_TRACER_DOCUMENT_CHARS,
   MAX_TRACER_HISTORY_MESSAGES,
-  MAX_TRACER_MESSAGE_CHARS
+  MAX_TRACER_MESSAGE_CHARS,
+  MAX_TRACER_OUTLINE_ROLES,
+  MAX_TRACER_OUTLINE_WEAKNESSES
 } from './costGuard'
 
 // Tracer is the only AI feature here that is a real conversation, which
@@ -51,6 +53,39 @@ function buildContextSummary(context: TracerContext): string {
       })
       .join('\n')
     parts.push(`Claims Tracely has flagged in it:\n${claims}`)
+  }
+
+  // The structural read, when the draft came from Tracely's own editor. Sent
+  // as the role sequence plus the findings rather than as prose about them:
+  // it is a handful of tokens, and it is what turns "how do I explain my
+  // evidence" from a generic writing-class answer into one about the
+  // paragraph the student is looking at.
+  //
+  // The provisional caveat travels with it deliberately. Tracer must not
+  // assert that a draft has no counterargument when the classifier never read
+  // half of it — the same rule findWeaknesses enforces by withholding
+  // whole-draft findings while any paragraph is unlabelled.
+  const outline = context.outline
+  if (outline) {
+    // Truncated rather than sampled: the first N paragraphs are the ones a
+    // student is most likely to be asking about, and saying how many were
+    // dropped keeps Tracer from reasoning about a draft it was only shown part
+    // of as though it had seen all of it.
+    const shownRoles = outline.roles.slice(0, MAX_TRACER_OUTLINE_ROLES)
+    const rolesOverflow = outline.roles.length - shownRoles.length
+    const roles =
+      shownRoles.map((role, i) => `${i + 1}. ${role}`).join(', ') +
+      (rolesOverflow > 0 ? ` (+${rolesOverflow} further paragraph${rolesOverflow === 1 ? '' : 's'} not listed)` : '')
+    const lines = [
+      `Tracely's structural read of "${outline.title}" — structure score ${outline.score}/100${
+        outline.complete ? '' : ' (PROVISIONAL: some paragraphs could not be labelled, so do not tell the student anything is missing from the draft as a whole)'
+      }.`,
+      `What each paragraph is doing: ${roles}.`
+    ]
+    if (outline.weaknesses.length > 0) {
+      lines.push(`Weaknesses found:\n${outline.weaknesses.map((w) => `- ${w}`).join('\n')}`)
+    }
+    parts.push(lines.join('\n'))
   }
 
   return parts.join('\n\n')

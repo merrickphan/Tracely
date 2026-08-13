@@ -81,6 +81,10 @@ import type {
   SettingsScanInstalledAppsResponse,
   SettingsSetRequest,
   SettingsSetResponse,
+  StructureAnalyzeRequest,
+  StructureAnalyzeResponse,
+  StructureGetRequest,
+  StructureGetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
   TracerCloseResponse,
@@ -146,6 +150,12 @@ const api = {
       ipcRenderer.invoke(IPC.DOCUMENTS_SAVE, req),
     remove: (req: DocumentsRemoveRequest): Promise<DocumentsRemoveResponse> =>
       ipcRenderer.invoke(IPC.DOCUMENTS_REMOVE, req)
+  },
+  structure: {
+    analyze: (req: StructureAnalyzeRequest): Promise<StructureAnalyzeResponse> =>
+      ipcRenderer.invoke(IPC.STRUCTURE_ANALYZE, req),
+    get: (req: StructureGetRequest): Promise<StructureGetResponse> =>
+      ipcRenderer.invoke(IPC.STRUCTURE_GET, req)
   },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET, {}),

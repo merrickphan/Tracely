@@ -1,5 +1,12 @@
 import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent } from '@shared/ipc-contract'
-import type { AuthUser, DocumentRecord } from '@shared/types'
+import type {
+  AuthUser,
+  Claim,
+  DocumentOutline,
+  DocumentRecord,
+  EvidenceCoverage,
+  ScoreBreakdown
+} from '@shared/types'
 
 // Deliberately `Window['tracely']` rather than a direct import of
 // src/preload/index.ts. Both resolve to the same `TracelyApi`, but pulling
@@ -36,6 +43,25 @@ export type Scenario = {
   failRelay: boolean
   /** Add a delay to async calls so loading states are actually visible. */
   latencyMs: number
+  /**
+   * Which Structure outline to serve.
+   *
+   * 'heuristic' is what the local rules produce with no relay: two paragraphs
+   * unlabelled, `complete: false`, whole-draft weaknesses withheld. 'none'
+   * covers a document that has never been analyzed, and 'stale' one edited
+   * since. The confident, fully classified state is otherwise unreachable in
+   * the preview, since there is no relay behind the harness to produce it.
+   */
+  structure: 'heuristic' | 'classified' | 'stale' | 'none'
+}
+
+/** What a claim's breakdown looks like once a search has found something. */
+const FOUND_BREAKDOWN: ScoreBreakdown = {
+  sourceCount: 0.33,
+  quality: 0.6,
+  recency: 0.7,
+  relevance: 0.5,
+  support: 0
 }
 
 export const defaultScenario: Scenario = {
@@ -43,7 +69,8 @@ export const defaultScenario: Scenario = {
   relayConfigured: true,
   tracerMessages: 'thread',
   failRelay: false,
-  latencyMs: 0
+  latencyMs: 0,
+  structure: 'heuristic'
 }
 
 /** Names of every call the harness logs, so the UI can show what fired. */
@@ -86,19 +113,50 @@ export function createMockApi(
     return fx.user
   }
 
+  // Mutable so an evidence search visibly resolves a claim, exactly as the
+  // real store would. Reset per document, like every other bit of preview
+  // state, because the mock is constructed once per bridge.
+  let previewClaims: Claim[] = [...fx.claims]
   let previewDocs: DocumentRecord[] = [...fx.documents]
   let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
   let nextId = 100
+
+  /** Mirrors computeEvidenceCoverage in the main process. */
+  const coverageOf = (claims: Claim[]): EvidenceCoverage => {
+    const resolved = claims.filter((c) => c.strengthScore !== null)
+    return {
+      detected: claims.length,
+      withRelevantSource: claims.filter((c) => (c.scoreBreakdown?.sourceCount ?? 0) > 0).length,
+      meanStrength: resolved.length
+        ? Math.round(resolved.reduce((sum, c) => sum + (c.strengthScore ?? 0), 0) / resolved.length)
+        : null,
+      unchecked: claims.length - resolved.length
+    }
+  }
+
+  const outlineForScenario = (): DocumentOutline | null => {
+    if (scenario.structure === 'none') return null
+    return scenario.structure === 'classified' ? fx.documentOutlineClassified : fx.documentOutline
+  }
 
   return {
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
       getResult: () =>
-        ok('analyze.getResult', { analysis: fx.analysis, claims: fx.claims, evidenceByClaimId: {} })
+        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} })
     },
     evidence: {
-      find: () =>
-        ok('evidence.find', {
+      // Records the result against the claim, so the Structure rail's
+      // "Check if supportable" flow can actually be reviewed: without this the
+      // claim stays unchecked forever and the button never resolves into a
+      // score, which is the half of the interaction worth looking at.
+      find: (req) => {
+        previewClaims = previewClaims.map((claim) =>
+          claim.id === req.claimId && claim.strengthScore === null
+            ? { ...claim, strengthScore: 42, scoreBreakdown: FOUND_BREAKDOWN }
+            : claim
+        )
+        return ok('evidence.find', {
           evidence: fx.evidence,
           strengthScore: fx.claims[0].strengthScore ?? 0,
           // `support` is how much of the evidence actually agrees with the
@@ -111,7 +169,8 @@ export function createMockApi(
             relevance: 0,
             support: 0
           }
-        }),
+        })
+      },
       getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence })
     },
     citation: {
@@ -173,6 +232,38 @@ export function createMockApi(
       remove: (req) => {
         previewDocs = previewDocs.filter((d) => d.id !== req.id)
         return ok('documents.remove', { ok: true as const })
+      }
+    },
+    structure: {
+      // Serves a fixture rather than running the real engine: analyzeStructure
+      // lives in the main process and reaches for node:crypto, so it cannot be
+      // imported into a renderer iframe. The fixtures are hand-computed from
+      // the same rubric — see the score trace in fixtures.ts.
+      // Analyzing always yields an outline, including under the 'none'
+      // scenario — 'none' means "nothing stored yet", which is a fact about
+      // the store, not about whether analysis can run.
+      //
+      // Coverage is recomputed from previewClaims rather than served from the
+      // fixture, mirroring what the real handler does by reading the database.
+      // A frozen coverage line would still say "1 not checked" directly above
+      // a claim that had just resolved to a score — a contradiction the real
+      // app cannot produce, and exactly the kind of thing a reviewer would
+      // waste time chasing.
+      analyze: (req) =>
+        ok('structure.analyze', {
+          outline: {
+            ...(outlineForScenario() ?? fx.documentOutline),
+            documentId: req.documentId ?? null,
+            coverage: coverageOf(previewClaims)
+          }
+        }),
+      get: (req) => {
+        const outline = outlineForScenario()
+        if (!outline) return ok('structure.get', { outline: null, stale: false })
+        return ok('structure.get', {
+          outline: { ...outline, documentId: req.documentId },
+          stale: scenario.structure === 'stale'
+        })
       }
     },
     settings: {
@@ -310,7 +401,8 @@ export function createMockApi(
           messages: tracerMsgs,
           context: fx.tracerContext,
           relayConfigured: scenario.relayConfigured,
-          focusedClaimId: null
+          focusedClaimId: null,
+          focusedPrompt: null
         }),
       listConversations: () => ok('tracer.listConversations', { conversations: fx.tracerConversations }),
       newConversation: () => {

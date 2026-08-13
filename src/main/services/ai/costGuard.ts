@@ -35,10 +35,29 @@ export const MIN_CLAIM_CONFIDENCE = 0.4
 // re-sent on every message, so an uncapped conversation grows quadratically
 // in tokens. Trimming the OLDEST turns keeps the exchange the user is
 // actually in the middle of intact.
+// Structure classification. Mirrored in the relay's lib/limits.ts.
+//
+// The order these are applied in is load-bearing: cap each paragraph to
+// MAX_STRUCTURE_PARAGRAPH_CHARS first, then the assembled text to
+// MAX_STRUCTURE_INPUT_CHARS. Slicing the assembled string instead lets a long
+// introduction eat the whole budget, so the conclusion is never labelled and
+// two of the six score components silently read as absent rather than as
+// unassessed — a wrong score with no visible cause.
+export const MAX_STRUCTURE_PARAGRAPHS = 24
+export const MAX_STRUCTURE_PARAGRAPH_CHARS = 320
+export const MAX_STRUCTURE_INPUT_CHARS = 8000
+
 export const MAX_TRACER_MESSAGE_CHARS = 2000
 export const MAX_TRACER_HISTORY_MESSAGES = 12
 export const MAX_TRACER_DOCUMENT_CHARS = 4000
 export const MAX_TRACER_CLAIMS_IN_CONTEXT = 8
+// The structural read is bounded like everything else that rides along on a
+// Tracer turn. Document text and claims were capped; roles and weaknesses were
+// not, and both scale with the draft — a 60-paragraph document sent 60 role
+// labels and however many weaknesses fell out of them on EVERY message, since
+// the whole context is rebuilt per turn.
+export const MAX_TRACER_OUTLINE_ROLES = 24
+export const MAX_TRACER_OUTLINE_WEAKNESSES = 8
 
 export function truncateForClaimDetection(text: string): string {
   return text.length > MAX_CLAIM_DETECTION_INPUT_CHARS

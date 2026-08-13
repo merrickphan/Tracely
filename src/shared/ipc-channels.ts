@@ -30,6 +30,10 @@ export const IPC = {
   DOCUMENTS_LATEST: 'documents:latest',
   DOCUMENTS_SAVE: 'documents:save',
   DOCUMENTS_REMOVE: 'documents:remove',
+
+  STRUCTURE_ANALYZE: 'structure:analyze',
+  STRUCTURE_GET: 'structure:get',
+
   CLIPBOARD_READ: 'clipboard:read',
   CLIPBOARD_WRITE: 'clipboard:write',
 

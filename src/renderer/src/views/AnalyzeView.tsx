@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Claim, DocumentRecord } from '@shared/types'
+import type { Claim, DocumentOutline, DocumentRecord } from '@shared/types'
+import { splitParagraphs } from '@shared/paragraphSplit'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
+import StructurePanel from '../components/StructurePanel'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
@@ -105,6 +107,7 @@ function DocumentEditor({
   onDocNameChange,
   onBack,
   onRunInsights,
+  onRefreshClaims,
   insightsLoading,
   claims,
   error,
@@ -114,7 +117,14 @@ function DocumentEditor({
   docName: string
   onDocNameChange: (v: string) => void
   onBack: () => void
-  onRunInsights: (bodyText: string) => void
+  /**
+   * Runs claim detection and resolves with the analysis id, so the Structure
+   * rail can map the detected claims onto paragraphs without making the user
+   * press two buttons in the right order. Resolves null if detection failed.
+   */
+  onRunInsights: (bodyText: string) => Promise<string | null>
+  /** Re-reads the analysis so claim scores updated by an evidence search show. */
+  onRefreshClaims: (analysisId: string) => Promise<void>
   insightsLoading: boolean
   claims: Claim[] | null
   error: string | null
@@ -129,6 +139,26 @@ function DocumentEditor({
   const colorInputRef = useRef<HTMLInputElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const alignMenuRef = useRef<HTMLDivElement>(null)
+
+  // ---- Structure rail ----------------------------------------------------
+  const [structureOpen, setStructureOpen] = useState(false)
+  const [outline, setOutline] = useState<DocumentOutline | null>(null)
+  // handleInput is a plain function re-created every render and called from an
+  // uncontrolled contentEditable, so it must not close over `outline` — it
+  // would read whatever value was current when that render's handler was
+  // attached. A ref is the value at call time.
+  const outlineRef = useRef<DocumentOutline | null>(null)
+  useEffect(() => {
+    outlineRef.current = outline
+  }, [outline])
+  const [outlineStale, setOutlineStale] = useState(false)
+  const [outlineLoading, setOutlineLoading] = useState(false)
+  const [outlineError, setOutlineError] = useState<string | null>(null)
+  const [activeParagraph, setActiveParagraph] = useState<number | null>(null)
+  const [checking, setChecking] = useState<{ done: number; total: number } | null>(null)
+  // Recomputed from the live editor rather than stored on the outline, which
+  // deliberately carries no prose — see DocumentOutline.
+  const [paragraphTexts, setParagraphTexts] = useState<string[]>([])
 
   const [wordCount, setWordCount] = useState(0)
   const [fontFamily, setFontFamily] = useState('Arial')
@@ -241,6 +271,14 @@ function DocumentEditor({
     }
     bodyHtmlRef.current = editor.innerHTML
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
+    setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+    // Editing invalidates the reading. Without this, `outlineStale` was only
+    // ever set by the stored-outline load, so typing left a stale analysis
+    // looking current AND let runStructure reuse its analysisId — bucketing
+    // claims into paragraphs they had since moved out of. Guarded on the
+    // current value so an already-stale outline does not re-render per
+    // keystroke.
+    setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
     // Typing can end a pending style (Enter starts a fresh block), so the
     // toolbar has to follow the caret, not just explicit toolbar clicks.
     syncFormatState()
@@ -286,6 +324,10 @@ function DocumentEditor({
   // a new document would both read a null id and both INSERT — the same bug a
   // third way, and one a ref alone does not close.
   const inFlightRef = useRef<Promise<void>>(Promise.resolve())
+  // The analysis the structure rail maps claims from. A ref for the same
+  // reason docIdRef is one: it is read inside async work that must not be
+  // re-created when it changes.
+  const analysisIdRef = useRef<string | null>(null)
   /**
    * The editor's HTML as of the last input event.
    *
@@ -372,8 +414,146 @@ function DocumentEditor({
     }
   }, [flushSave])
 
+  // ---- Structure ---------------------------------------------------------
+
+  /**
+   * Runs the analysis. Detects claims first when none have been detected yet,
+   * because the role heuristics key off where claims fall — without them a
+   * thesis is unfindable and the score would be misleadingly low for a reason
+   * the user cannot see.
+   *
+   * Never automatic. This is the only relay-touching path in the editor, and
+   * `handleInput` fires on every keystroke.
+   */
+  async function runStructure(): Promise<void> {
+    setOutlineLoading(true)
+    setOutlineError(null)
+    try {
+      const text = bodyText()
+      // Re-detect when the text has moved on. Claim offsets are what map
+      // claims onto paragraphs, so reusing an analysis of older text would
+      // bucket claims into paragraphs they are no longer in.
+      const reuse = analysisIdRef.current !== null && !outlineStale
+      const analysisId = reuse ? analysisIdRef.current : await onRunInsights(text)
+      analysisIdRef.current = analysisId
+      const res = await tracelyApi.analyzeStructure({
+        documentId: docIdRef.current,
+        text,
+        analysisId
+      })
+      setOutline(res.outline)
+      setParagraphTexts(splitParagraphs(text).map((p) => p.text))
+      // Only clear the flag if the draft has not moved on while the analysis
+      // was running. Clearing it unconditionally presented a reading of text
+      // the user had already edited past as current.
+      setOutlineStale(bodyText() !== text)
+    } catch (err) {
+      setOutlineError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setOutlineLoading(false)
+    }
+  }
+
+  // Load a stored outline when the rail is opened on a saved document. Reading
+  // it is free; re-analyzing is not, so this never triggers one — a stale
+  // result is shown with its banner and the user decides.
+  useEffect(() => {
+    if (!structureOpen || outline || !docIdRef.current) return
+    let cancelled = false
+    void tracelyApi
+      .getStructure(docIdRef.current, bodyText())
+      .then(async (res) => {
+        if (cancelled || !res.outline) return
+        setOutline(res.outline)
+        setOutlineStale(res.stale)
+        // Restore the claims the outline's paragraph claimIds refer to.
+        // Without this a reopened document shows an outline that knows claims
+        // exist and can say nothing about any of them, because ids alone are
+        // not resolvable. Reading a stored analysis costs no relay call.
+        if (res.outline.analysisId) {
+          analysisIdRef.current = res.outline.analysisId
+          await onRefreshClaims(res.outline.analysisId)
+        }
+      })
+      .catch(() => {
+        // A missing stored outline is the normal case for a document that has
+        // never been analyzed, not an error worth showing.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [structureOpen, outline, onRefreshClaims])
+
+  /**
+   * Runs the evidence search for claims that have not been checked.
+   *
+   * Serial, and with a visible count, rather than fired off in parallel.
+   * `aggregator.ts` gives each provider a 6s timeout and `rateLimiter.ts`
+   * serialises Semantic Scholar at roughly a second a call, so eight claims at
+   * once is a 15-45 second wait — and this codebase already refuses to show
+   * progress it cannot back (see AnalyzingPanel). One claim at a time means the
+   * count is real and partial results land as they arrive.
+   *
+   * These are the four free academic APIs, not the paid relay, which is why
+   * this can be offered as a button per claim at all.
+   */
+  async function checkClaims(ids: string[]): Promise<void> {
+    if (ids.length === 0) return
+    setChecking({ done: 0, total: ids.length })
+    for (const [i, id] of ids.entries()) {
+      try {
+        await tracelyApi.findEvidence(id)
+      } catch {
+        // One claim's search failing must not abandon the rest of the queue.
+      }
+      setChecking({ done: i + 1, total: ids.length })
+    }
+    setChecking(null)
+
+    // Re-read both sides: the claims so their new strength scores render, and
+    // the outline so coverage and the unsupported-claim weaknesses reflect what
+    // the search actually found. Neither costs a relay call.
+    const analysisId = analysisIdRef.current
+    if (analysisId) await onRefreshClaims(analysisId)
+    await runStructure()
+  }
+
+  /**
+   * Scrolls the editor to a paragraph.
+   *
+   * Block children with text map 1:1 onto `splitParagraphs`' output, since both
+   * skip empty lines: execCommand puts each Enter in its own <div> and
+   * innerText renders it as one '\n'. Text typed before the first Enter has no
+   * element wrapper at all, which is why this degrades to doing nothing rather
+   * than scrolling somewhere arbitrary.
+   */
+  function selectParagraph(index: number): void {
+    setActiveParagraph(index)
+    const editor = editorRef.current
+    if (!editor) return
+    const blocks = Array.from(editor.children).filter(
+      (el) => (el.textContent ?? '').trim().length > 0
+    )
+    // 'auto', not 'smooth'. Smooth scrolling is driven by the compositor, and
+    // it silently does nothing when the window is not compositing frames —
+    // measured in the preview harness, where a smooth call left scrollTop at
+    // 890 and an identical 'auto' call moved it to 0. Clicking a weakness and
+    // watching nothing happen is a broken feature; arriving instantly is not.
+    // Same reasoning as the overlay's no-fill-mode entrance animation.
+    //
+    // It also reads better here: these jumps cross most of the document, and
+    // animating a long jump is the disorienting case the overlay already
+    // suppresses for large deltas.
+    blocks[index - 1]?.scrollIntoView({ block: 'center', behavior: 'auto' })
+  }
+
   return (
-    <div className="docedit-view">
+    // Row, not column. `.docedit-main` holds everything that was previously a
+    // direct child — critically including `.docedit-wordcount` and
+    // `.docedit-error`, which are positioned against it. Left as siblings of
+    // the rail they would become flex items of the row and land beside it.
+    <div className={`docedit-view${structureOpen ? ' with-structure' : ''}`}>
+      <div className="docedit-main">
       <div className="docedit-toolbar">
         <button className="docedit-back" onClick={onBack}>
           <BackIcon size={12} />
@@ -517,10 +697,25 @@ function DocumentEditor({
         </span>
         <button
           className="docedit-insights"
-          onClick={() => onRunInsights(bodyText())}
+          onClick={() => void onRunInsights(bodyText())}
           disabled={insightsLoading || !bodyText().trim()}
         >
           {insightsLoading ? 'Analyzing…' : 'AI Insights'}
+        </button>
+        {/*
+          Separate from AI Insights rather than replacing it: the two answer
+          different questions. AI Insights asks whether the sentences are true;
+          this asks whether the essay works. Opening the rail does not analyze
+          — a stored outline loads, and anything costing a relay call waits for
+          an explicit press inside the panel.
+        */}
+        <button
+          className={`docedit-insights docedit-structure-toggle${structureOpen ? ' active' : ''}`}
+          onClick={() => setStructureOpen((open) => !open)}
+          aria-pressed={structureOpen}
+          title="Read this draft as an argument"
+        >
+          Structure
         </button>
         {/*
           "Share" and "•••" were here, permanently disabled with "isn't
@@ -551,11 +746,29 @@ function DocumentEditor({
       {claims && claims.length === 0 ? <p className="muted docedit-error">No checkable claims detected.</p> : null}
 
       {claims && claims.length > 0 ? (
-        <section className="docedit-results">
-          {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} />
-          ))}
-        </section>
+          <section className="docedit-results">
+            {claims.map((claim) => (
+              <ClaimCard key={claim.id} claim={claim} />
+            ))}
+          </section>
+        ) : null}
+      </div>
+
+      {structureOpen ? (
+        <StructurePanel
+          outline={outline}
+          claims={claims ?? []}
+          paragraphTexts={paragraphTexts}
+          stale={outlineStale}
+          loading={outlineLoading}
+          error={outlineError}
+          activeParagraph={activeParagraph}
+          checking={checking}
+          onAnalyze={() => void runStructure()}
+          onCheckClaims={(ids) => void checkClaims(ids)}
+          onSelectParagraph={selectParagraph}
+          onClose={() => setStructureOpen(false)}
+        />
       ) : null}
     </div>
   )
@@ -585,17 +798,33 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function runDetection(source: string): Promise<void> {
-    if (!source.trim()) return
+  // Resolves with the analysis id so the document editor's Structure rail can
+  // chain onto it; the paste-text path ignores the return value.
+  async function runDetection(source: string): Promise<string | null> {
+    if (!source.trim()) return null
     setLoading(true)
     setError(null)
     try {
       const res = await tracelyApi.detectClaims(source, 'main')
       setClaims(res.claims)
+      return res.analysisId
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      return null
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Re-reads persisted claims after an evidence search has updated their
+  // scores. No relay call — the analysis is already stored.
+  async function refreshClaims(analysisId: string): Promise<void> {
+    try {
+      const res = await tracelyApi.getAnalysisResult(analysisId)
+      setClaims(res.claims)
+    } catch {
+      // The scores are cosmetic here; the outline's coverage is read straight
+      // from the database and stays correct either way.
     }
   }
 
@@ -633,7 +862,8 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         docName={docName}
         onDocNameChange={setDocName}
         onBack={() => setDocEditorOpen(false)}
-        onRunInsights={(bodyText) => void runDetection(bodyText)}
+        onRunInsights={runDetection}
+        onRefreshClaims={refreshClaims}
         insightsLoading={loading}
         claims={claims}
         error={error}
