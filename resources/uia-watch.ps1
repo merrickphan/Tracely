@@ -405,12 +405,25 @@ try {
       # different bug from "rects came back empty".
       try { $rangeTextPreview = $range.GetText(120) } catch { $rangeTextPreview = "<error: $($_.Exception.Message)>" }
 
-      try {
-        $range.ScrollIntoView($true) | Out-Null
-      } catch {
-        $scrollError = $_.Exception.Message
-      }
-
+      # No ScrollIntoView here. It used to run unconditionally, for every
+      # tracked claim, on every 1.2s poll — so Screen Watch actively scrolled
+      # the user's document out from under them while they were reading it.
+      #
+      # It is not needed: GetBoundingRectangles reports the currently visible
+      # portion of a range from the provider's existing layout, and returns
+      # empty or degenerate rects for anything off-screen, which
+      # Get-RectsFromBoundingArray already filters. That is exactly the
+      # documented invariant "underlines only ever appear over currently
+      # visible text" — which the scroll was quietly defeating by dragging
+      # every claim into view so it could be measured.
+      #
+      # It also made the measurements mutually inconsistent: with N claims the
+      # loop scrolled to claim 1, measured, then scrolled to claim 2 — moving
+      # the document — so every claim but the last was measured against a
+      # layout that no longer existed by the time the payload was sent.
+      #
+      # The identical call in -Mode insert is user-initiated and stays.
+      # $scrollError is still emitted so the output shape is unchanged.
       try {
         $flat = $range.GetBoundingRectangles()
         # Off-screen/scrolled-out matches come back degenerate (zero or

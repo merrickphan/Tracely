@@ -88,7 +88,12 @@ export function setOverlayMouseEventsCaptured(capture: boolean): void {
 // pixels, already scale-converted by the caller) rather than the whole
 // display — so underlines and the widget only ever draw over the app
 // that's actually focused, not wherever else happens to share the monitor.
-export function showOverlayOnWindow(bounds: Rectangle): BrowserWindow {
+//
+// Split from showing it. Moving and showing in one call meant the window was
+// repositioned over the NEW app before the payload describing it had been sent,
+// so for one IPC hop the previous document's underlines were painted against
+// the new window's origin.
+export function positionOverlayWindow(bounds: Rectangle): BrowserWindow {
   const win = overlayWindow ?? createOverlayWindow()
 
   const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`
@@ -97,8 +102,40 @@ export function showOverlayOnWindow(bounds: Rectangle): BrowserWindow {
     currentBoundsKey = key
   }
 
-  if (!win.isVisible()) win.showInactive()
   return win
+}
+
+/** Shows the overlay without taking focus. Safe to call every tick. */
+export function presentOverlay(): void {
+  const win = overlayWindow
+  if (!win || win.isDestroyed()) return
+  if (!win.isVisible()) win.showInactive()
+}
+
+// A send issued while the entry is still loading is silently dropped, and the
+// overlay's own first payload is exactly that case. One slot rather than a
+// queue: only the latest state is worth delivering, and it cannot pile up
+// handlers if a burst of ticks arrives during load.
+let pendingSend: { channel: string; payload: unknown } | null = null
+
+export function sendToOverlay(channel: string, payload: unknown): void {
+  const win = overlayWindow
+  if (!win || win.isDestroyed()) return
+
+  if (win.webContents.isLoading()) {
+    const first = pendingSend === null
+    pendingSend = { channel, payload }
+    if (first) {
+      win.webContents.once('did-finish-load', () => {
+        const queued = pendingSend
+        pendingSend = null
+        if (queued && !win.isDestroyed()) win.webContents.send(queued.channel, queued.payload)
+      })
+    }
+    return
+  }
+
+  win.webContents.send(channel, payload)
 }
 
 export function hideOverlay(): void {

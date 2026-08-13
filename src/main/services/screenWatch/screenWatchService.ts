@@ -5,6 +5,7 @@ import type {
   ScreenWatchClaimCitation,
   ScreenWatchClaimEvidence,
   ScreenWatchClaimSummary,
+  ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
   ScreenWatchStatus,
   TracerContext
@@ -22,11 +23,18 @@ import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
-import { getOverlayWindow, hideOverlay, showOverlayOnWindow } from '../../windows/overlayWindow'
+import {
+  getOverlayWindow,
+  hideOverlay,
+  positionOverlayWindow,
+  presentOverlay,
+  sendToOverlay
+} from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
+import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
-import { setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
+import { clearHoverState, setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
 import {
   insertCitationText,
   takeUiaSnapshot,
@@ -135,6 +143,20 @@ let authRequired = false
 const RETRY_COOLDOWN_MS = 5000
 let lastSkipReason: string | null = null
 
+// Consecutive `ok:false` snapshots. A closing or repainting window produces
+// these routinely, so one is not evidence of anything.
+let snapshotFailures = 0
+// Hiding is free and one good tick undoes it — but doing it at the first
+// failure would reintroduce the blink useStableUnderlines exists to suppress.
+const HIDE_AFTER_FAILURES = 2
+// Resetting costs STABLE_MS + MIN_ANALYSIS_INTERVAL_MS (24s), a relay call and
+// three four-provider searches, so it waits for more evidence than hiding does.
+const RESET_AFTER_FAILURES = 3
+
+// Identifies which *document* is being watched, so claims from one do not
+// linger over another. Not the text itself — see isDifferentDocument.
+let lastDocumentKey: string | null = null
+
 export interface HoverTarget {
   claimId: string
   kind: 'claim' | 'widget'
@@ -164,6 +186,10 @@ let widgetExpanded = false
 // waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
 let lastUpdateInputs: {
   windowRect: ScreenRect
+  // Carried so redrawOverlay() reproduces the same clip the tick that computed
+  // it used. Without it a redraw would clip against the window alone and the
+  // underlines would visibly shift onto the app's toolbar.
+  controlRect: ScreenRect | null
   claimRects: { id: string; rects: ScreenRect[] }[]
   claims: Claim[]
   fullText: string
@@ -291,7 +317,21 @@ export function getScreenWatchStatus(): ScreenWatchStatus {
   return lastStatus
 }
 
+/**
+ * Bumped by every reset, and captured before any asynchronous work that will
+ * write back into the tracking state.
+ *
+ * `detecting` stops a second detection starting while one is in flight, but it
+ * does nothing about a RESET arriving in the middle — focus moving to another
+ * app, a document switch, repeated snapshot failures. The relay call then
+ * resolves into a world it no longer describes and repopulates currentClaims,
+ * currentSpans and the evidence searches for a document that is no longer on
+ * screen. Comparing generations is how a late result learns it is stale.
+ */
+let trackingGeneration = 0
+
 function resetTrackingState(): void {
+  trackingGeneration++
   pendingText = ''
   pendingSince = 0
   lastAnalyzedText = ''
@@ -311,6 +351,134 @@ function resetTrackingState(): void {
   activePopoverClaimId = null
   activePopoverRectAbsolute = null
   lastSentPayloadKey = null
+  lastDocumentKey = null
+}
+
+const EMPTY_OVERLAY_PAYLOAD: ScreenWatchOverlayUpdateEvent = { underlines: [], widget: null }
+
+/**
+ * Clears what the overlay is showing, then hides it.
+ *
+ * `hideOverlay()` alone was not enough and this is the main reason underlines
+ * lingered: it hides the native window, but the React tree inside keeps its
+ * `underlines` and `widget` state forever, so the previous document's marks
+ * were repainted the moment the window was shown again — against whatever
+ * window it had since been moved to.
+ *
+ * Three details are load-bearing:
+ *
+ *   - `widget: null`, not merely `underlines: []`. `useStableUnderlines` keys
+ *     its 900ms grace hold off `widget.claims`, so an empty-underlines payload
+ *     that kept the widget would HOLD every rect for another 900ms rather than
+ *     clearing them.
+ *   - It writes `lastSentPayloadKey`. Without that, a later payload that
+ *     happened to match the pre-clear one would be swallowed by the dedupe in
+ *     `updateOverlayAndWidget` and the overlay would stay blank permanently.
+ *   - It clears hover too. `OverlayApp` synthesizes a popover from the hover
+ *     event when `widget.claims` has no match, so an empty payload on its own
+ *     leaves the card floating over a cleared overlay.
+ */
+function clearOverlay(): void {
+  const key = JSON.stringify(EMPTY_OVERLAY_PAYLOAD)
+  if (lastSentPayloadKey !== key) {
+    lastSentPayloadKey = key
+    sendToOverlay(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, EMPTY_OVERLAY_PAYLOAD)
+  }
+  hoverTargets = []
+  clearHoverState()
+  hideOverlay()
+}
+
+// How much of the shorter document's vocabulary must appear in the other for
+// them to be treated as the same document, and how many distinct words are
+// needed before the comparison is trusted at all. Below that floor a heading
+// and a first sentence could differ entirely while both being the same file
+// mid-load, so it declines to judge instead.
+const SAME_DOCUMENT_CONTAINMENT = 0.35
+const MIN_TOKENS_TO_JUDGE = 12
+
+/**
+ * Distinct words of five characters or more.
+ *
+ * The length filter is a cheap stopword filter. Nearly every English function
+ * word — "the", "and", "that", "with", "this", "from", "have", "been" — is four
+ * characters or fewer, and leaving them in makes any two English documents look
+ * alike, which is the opposite of what this measure is for.
+ */
+function contentTokens(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length >= 5) out.add(word)
+  }
+  return out
+}
+
+/**
+ * Fraction of the shorter text's vocabulary that also occurs in the longer one.
+ *
+ * Containment rather than Jaccard on purpose: typing, appending a paragraph and
+ * deleting one all change the size of one side without changing how much of the
+ * smaller side the larger one contains, so every editing operation scores near
+ * 1. Two genuinely different documents score low no matter how their lengths
+ * compare — which is exactly the case the previous length-delta test could not
+ * see.
+ */
+function contentContainment(a: string, b: string): number {
+  const setA = contentTokens(a)
+  const setB = contentTokens(b)
+  const smaller = setA.size <= setB.size ? setA : setB
+  const larger = smaller === setA ? setB : setA
+  // Too little to judge — report "same", since a false negative is the cheap
+  // direction (see below).
+  if (smaller.size < MIN_TOKENS_TO_JUDGE) return 1
+  let shared = 0
+  for (const word of smaller) if (larger.has(word)) shared++
+  return shared / smaller.size
+}
+
+/**
+ * Whether the watched *document* changed, or null if it looks like the same one.
+ *
+ * NOT "the text changed". The text-changed branch below is the typing path — it
+ * is true on essentially every poll while someone writes, and claims are
+ * designed to survive that and be re-located each tick. Clearing there would
+ * wipe every underline on every keystroke.
+ *
+ * Two signals, both deliberately conservative. A false negative costs nothing:
+ * the normal STABLE_MS/MIN_ANALYSIS_INTERVAL_MS path corrects it within ~24s.
+ * A false positive collapses an open panel, kills an in-flight citation flow
+ * (the renderer keys it by claim id, and re-detection mints new UUIDs) and
+ * re-fires three four-provider searches.
+ */
+function documentChangeReason(processName: string, text: string): string | null {
+  // The common real trigger, and free: Word -> Chrome with both allowlisted
+  // previously kept Word's claims alive over the browser.
+  if (lastDocumentKey !== null && lastDocumentKey !== processName) {
+    return `process ${lastDocumentKey} -> ${processName}`
+  }
+  if (!pendingText) return null
+
+  // Backstop for switching documents inside one app — Word to Word, or tab to
+  // tab in one browser, where the process name is identical and cannot help.
+  //
+  // This used to require a shared prefix under 20% AND a length change of 200+
+  // characters. The second condition is what made it miss: two documents of
+  // similar length are the ordinary case, not the exotic one — two drafts of
+  // the same essay, two tabs of the same site, page 2 and page 3 of anything —
+  // and switching between them cleared neither test. The old claims and the
+  // widget stayed live for the ~24s the slow path takes, and because
+  // underlines are re-located each tick by FindText, any phrase the two
+  // documents happened to share got underlined in the new one on the strength
+  // of the old one's analysis.
+  //
+  // Vocabulary containment replaces both conditions and is independent of
+  // length, so same-length switches are caught while in-place rewriting (which
+  // keeps almost all of its vocabulary) is not.
+  const shorter = Math.min(text.length, pendingText.length)
+  if (shorter < 40) return null
+  const containment = contentContainment(text, pendingText)
+  if (containment >= SAME_DOCUMENT_CONTAINMENT) return null
+  return `content diverged (${Math.round(containment * 100)}% shared vocabulary, ${pendingText.length} -> ${text.length} chars)`
 }
 
 async function tick(): Promise<void> {
@@ -321,7 +489,35 @@ async function tick(): Promise<void> {
 
     if (!snapshot.ok) {
       lastError = snapshot.error
-      logScreenWatch(`snapshot failed: ${snapshot.error}`)
+
+      // Freeze for the same reason a `skip: "self"` freezes, and check it
+      // BEFORE counting. A backgrounded watched app is *more* likely to blow
+      // uiaSnapshot's 4s budget while Tracer holds focus, so without this the
+      // failure path becomes a second door into exactly the wipe the "self"
+      // guard exists to prevent — and it opens in the situation that provokes
+      // it most.
+      if (isTracerWindowOpen()) {
+        logScreenWatch(`snapshot failed while Tracer is open (frozen): ${snapshot.error}`)
+        return
+      }
+
+      // This branch used to return without hiding or resetting anything, with
+      // no counter — and a closing window is exactly what produces it, since
+      // FocusedElement keeps handing back a dying element until focus settles.
+      // So the previous document's underlines stayed on screen unbounded while
+      // the status UI simultaneously reported "not active".
+      //
+      // Asymmetric on purpose. Hiding is free and one tick undoes it. Resetting
+      // costs STABLE_MS + MIN_ANALYSIS_INTERVAL_MS (24s), a relay call and
+      // three four-provider searches, so it waits for more evidence. And
+      // hiding at the first failure would reintroduce the blink that
+      // useStableUnderlines exists to suppress.
+      snapshotFailures++
+      logScreenWatch(`snapshot failed (${snapshotFailures} in a row): ${snapshot.error}`)
+      if (snapshotFailures >= HIDE_AFTER_FAILURES) clearOverlay()
+      // `===` not `>=`: fire the expensive half exactly once.
+      if (snapshotFailures === RESET_AFTER_FAILURES) resetTrackingState()
+
       emitStatus({
         enabled,
         active: false,
@@ -334,6 +530,9 @@ async function tick(): Promise<void> {
       })
       return
     }
+    // Any ok:true snapshot counts as a recovery, including a skip — a skip is
+    // a successful read of a target we don't want, not a failed read.
+    snapshotFailures = 0
 
     if (snapshot.skip) {
       // Talking to Tracer means Tracely itself is the foreground app, which
@@ -357,7 +556,7 @@ async function tick(): Promise<void> {
           `skipping (${snapshot.reason}) on ${'processName' in snapshot ? (snapshot.processName ?? 'unknown') : 'unknown'}`
         )
       }
-      hideOverlay()
+      clearOverlay()
       resetTrackingState()
       emitStatus({
         enabled,
@@ -377,7 +576,7 @@ async function tick(): Promise<void> {
       // Not an error — the user just hasn't allowed this app. Bail out
       // before any text ever reaches detectClaims: this is the actual
       // token-usage and privacy boundary, not just a UI filter.
-      hideOverlay()
+      clearOverlay()
       resetTrackingState()
       logScreenWatch(`focused app ${snapshot.processName} is not on the allowed list, skipping`)
       emitStatus({
@@ -392,6 +591,20 @@ async function tick(): Promise<void> {
       })
       return
     }
+
+    // Claims from one document must not stay live over another. Placed after
+    // the allowlist gate and before the pendingText bookkeeping below, which
+    // also makes it automatically Tracer-safe: the `skip: "self"` freeze
+    // returns long before this, so none of it runs while Tracer has focus.
+    const documentChange = documentChangeReason(snapshot.processName, snapshot.text)
+    if (documentChange) {
+      logScreenWatch(
+        `different document (${documentChange}) — dropping ${currentClaims.length} claim(s)`
+      )
+      clearOverlay()
+      resetTrackingState()
+    }
+    lastDocumentKey = snapshot.processName
 
     if (snapshot.text !== pendingText) {
       pendingText = snapshot.text
@@ -411,9 +624,17 @@ async function tick(): Promise<void> {
       detecting = true
       lastAnalysisAt = Date.now()
       const textAtRequestTime = pendingText
+      const generationAtRequestTime = trackingGeneration
       logScreenWatch(`text stable, triggering detectClaims (len ${textAtRequestTime.length})`)
       detectClaims(textAtRequestTime)
         .then((detected) => {
+          if (trackingGeneration !== generationAtRequestTime) {
+            logScreenWatch(
+              `discarding detectClaims result: tracking reset while it was in flight ` +
+                `(gen ${generationAtRequestTime} -> ${trackingGeneration})`
+            )
+            return
+          }
           // Only mark this text "done" on success — a failure must stay
           // retryable rather than being silently marked as already-tried.
           lastAnalyzedText = textAtRequestTime
@@ -445,6 +666,9 @@ async function tick(): Promise<void> {
           void tick()
         })
         .catch((err) => {
+          // A failure from a discarded generation must not put a cooldown on
+          // the document now being watched, nor report its error as current.
+          if (trackingGeneration !== generationAtRequestTime) return
           retryAfter = Date.now() + RETRY_COOLDOWN_MS
           lastError = err instanceof Error ? err.message : String(err)
           // A 401 is not a transient fault to retry past — it will keep failing
@@ -486,7 +710,13 @@ async function tick(): Promise<void> {
       )
     }
 
-    updateOverlayAndWidget(snapshot.windowRect, snapshot.claimRects, currentClaims, snapshot.text)
+    updateOverlayAndWidget(
+      snapshot.windowRect,
+      snapshot.controlRect ?? null,
+      snapshot.claimRects,
+      currentClaims,
+      snapshot.text
+    )
 
     emitStatus({
       enabled,
@@ -546,6 +776,7 @@ function redrawOverlay(): void {
   if (!lastUpdateInputs) return
   updateOverlayAndWidget(
     lastUpdateInputs.windowRect,
+    lastUpdateInputs.controlRect,
     lastUpdateInputs.claimRects,
     lastUpdateInputs.claims,
     lastUpdateInputs.fullText
@@ -841,6 +1072,7 @@ export async function undoCitationForClaim(claimId: string): Promise<void> {
 
 function updateOverlayAndWidget(
   windowRect: ScreenRect,
+  controlRect: ScreenRect | null,
   claimRects: { id: string; rects: ScreenRect[] }[],
   claims: Claim[],
   fullText: string
@@ -856,17 +1088,49 @@ function updateOverlayAndWidget(
   // the overlay would wipe exactly what the user opened Tracer to ask about.
   // Tracer is protected positionally instead, in hoverTracking, so the
   // overlay can stay visible without ever capturing a click meant for it.
+  //
+  // `focusedShieldableWindow()` rather than checking getMainWindow()/
+  // getFloatingWindow() directly — that is the one-rule shield this branch
+  // merged with, and duplicating its focus test here is exactly what it was
+  // written to stop. `clearOverlay()` rather than `hideOverlay()`, because
+  // hiding alone is what left stale underlines to be re-shown on the next
+  // present; clearing the state with it is this branch's whole point.
   const focused = focusedShieldableWindow()
   if (focused === 'main' || focused === 'floating') {
-    hideOverlay()
+    clearOverlay()
     return
   }
 
-  lastUpdateInputs = { windowRect, claimRects, claims, fullText }
+  // A genuine change of target — a different app, or a resized window. NOT a
+  // pure translation: dragging the watched window leaves every window-local
+  // rect identical, so clearing there would blink the underlines on every move.
+  const targetChanged =
+    lastUpdateInputs !== null &&
+    (lastUpdateInputs.windowRect.width !== windowRect.width ||
+      lastUpdateInputs.windowRect.height !== windowRect.height)
 
-  const underlines = (Array.isArray(claimRects) ? claimRects : []).filter(
-    (r) => Array.isArray(r.rects) && r.rects.length > 0
-  )
+  lastUpdateInputs = { windowRect, controlRect, claimRects, claims, fullText }
+
+  // Clear BEFORE the window is moved or resized under the old content.
+  if (targetChanged) clearOverlay()
+
+  // Clip in physical pixels, on the single source both the drawn rects and the
+  // hover hit-test region are derived from, so the two cannot disagree — an
+  // unclipped rect hanging off the window edge used to be invisible and still
+  // open a popover. controlRect is preferred because the window includes the
+  // app's own toolbars, and text scrolled under a sticky header still reports a
+  // valid rect that was then drawn on top of the header.
+  const clip = resolveClip([controlRect, windowRect])
+  const underlines = (Array.isArray(claimRects) ? claimRects : [])
+    .map((r) => ({
+      ...r,
+      rects: !Array.isArray(r.rects)
+        ? []
+        : clip
+          ? r.rects.map((rect) => clipUnderline(rect, clip)).filter((x): x is ScreenRect => x !== null)
+          : r.rects
+    }))
+    .filter((r) => r.rects.length > 0)
 
   if (underlines.length === 0 && claims.length > 0) {
     logScreenWatch(`${claims.length} claim(s) tracked but none located on screen (off-screen or no match)`)
@@ -904,7 +1168,11 @@ function updateOverlayAndWidget(
   // whenever a supported text field is focused — like Grammarly's icon —
   // independent of whether any claims were found yet, so the overlay stays
   // shown for that even with zero underlines.
-  const win = showOverlayOnWindow({
+  // Positioned only. Showing happens at the very end, after the payload
+  // describing this window has actually been sent — moving and showing in one
+  // call painted the previous document's rects against the new window's origin
+  // for one IPC hop.
+  const win = positionOverlayWindow({
     x: Math.round(windowLogical.x),
     y: Math.round(windowLogical.y),
     width: Math.max(1, Math.round(windowLogical.width)),
@@ -1081,11 +1349,21 @@ function updateOverlayAndWidget(
   // window that's a plausible source of visible flicker. Skip the send
   // (and the resulting re-render) when nothing observable changed.
   const payloadKey = JSON.stringify(payload)
-  if (payloadKey === lastSentPayloadKey) return
-  lastSentPayloadKey = payloadKey
+  if (payloadKey !== lastSentPayloadKey) {
+    lastSentPayloadKey = payloadKey
+    sendToOverlay(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
+    emitTracerContext()
+  }
 
-  win.webContents.send(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
-  emitTracerContext()
+  // Outside the dedupe, and last. This used to be an early `return`, with the
+  // show happening near the top of the function — so simply moving the show
+  // after the send would have stopped the overlay ever appearing whenever the
+  // payload was unchanged, which is the steady state for the badge-only case
+  // (a focused text field with no claims found). Showing after the send is the
+  // whole point: the window is never presented describing the previous
+  // document.
+  void win
+  presentOverlay()
 }
 
 /**
