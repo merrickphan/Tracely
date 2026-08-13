@@ -57,7 +57,12 @@ export const PROVIDER_MIN_INTERVAL_MS = {
   // The catalogue is cached for the process lifetime, so this normally gates
   // only one request. It also prevents simultaneous retries after an outage
   // from becoming a burst.
-  worldbank: 250
+  worldbank: 250,
+  // Link repair, not search — one request per DOI whose link is a bare
+  // resolver. Unpaywall publishes a daily volume cap (100k) rather than a
+  // rate, so this exists to keep a fan-out from arriving as a burst, and is
+  // low because the lookups run concurrently and already gate on need.
+  unpaywall: 100
 } as const
 
 // NCBI raises the ceiling to 10 req/sec for requests carrying an api_key.
