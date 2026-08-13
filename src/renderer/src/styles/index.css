@@ -1198,9 +1198,20 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.08);
 }
 
+/* Was `background: var(--accent-wash)`, which is rgba(244,123,32,0.07) in the
+   default theme — a 7% wash over a 4% grey button, i.e. no perceptible
+   difference between "bold is on" and "bold is off". A formatting toggle has
+   to read as pressed at a glance, so this uses the solid accent at a weight
+   that survives being a 22px button. */
 .docedit-toolbtn.active {
-  background: var(--accent-wash);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.docedit-toolbtn.active:hover {
+  background: var(--accent);
+  filter: brightness(0.94);
 }
 
 .docedit-toolbtn.bold {
@@ -1373,8 +1384,18 @@ textarea:disabled {
   font-weight: 600;
 }
 
+/* `.docedit-wordcount` is position:absolute with a solid white background,
+   pinned bottom-left — and a positioned element paints over a static sibling
+   regardless of DOM order. This <p> is that static sibling, so the first ~80px
+   of every failure message ("Relay request failed: …") rendered underneath the
+   badge and the error read as truncated nonsense, or as nothing happening at
+   all. `.docedit-results` already solves this for itself with position+z-index;
+   this needs the same, plus left room so short messages clear the badge. */
 .docedit-error {
-  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+  padding: 10px 24px 10px 130px;
+  margin: 0;
 }
 
 .docedit-results {
@@ -2821,4 +2842,195 @@ textarea:disabled {
 }
 .settings-danger-row > div:first-child {
   min-width: 0;
+}
+
+/* Home — third quick link, matching the Settings/New Session pair above it.
+   Drawn as an SVG rather than a PNG like the other two only because no such
+   asset exists; size and opacity match so the row reads as one set. */
+.home-libraryicon {
+  left: 551px;
+  top: 244px;
+  width: 36px;
+  height: 36px;
+  opacity: 0.36;
+  color: #4a4a4a;
+}
+
+.home-link-library {
+  left: 552px;
+  top: 263px;
+  width: 123px;
+  font-size: 20px;
+}
+
+/* Library — the reader for what "Save to Library" writes. Uses the same card
+   shell as the Analyze view: rounded, bordered, its own shadow, and the card
+   is the drag handle while the body inside is the scroller (Chromium blocks
+   wheel scroll inside a drag region — see .analyze-view). */
+.library-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+.library-body {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-app-region: no-drag;
+  padding: 64px 56px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.library-header h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  margin-bottom: 4px;
+}
+
+.library-header p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.library-search {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.library-empty {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.library-row {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+}
+
+.library-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.library-row-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  /* A flex child defaults to its content width, so a long unbroken title
+     would push the saved-on date off the card instead of wrapping. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.library-row-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.library-row-title a:hover {
+  text-decoration: underline;
+}
+
+.library-row-saved {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-row-meta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.library-row-oa {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--score-good-wash);
+  color: var(--score-good);
+  white-space: nowrap;
+}
+
+.library-row-notes {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.library-row-notes-edit textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.library-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-row-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.library-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Document editor — autosave indicator. Deliberately quiet: it confirms the
+   work is safe without asking to be looked at. */
+.docedit-savestate {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--label);
+  padding: 0 4px;
+  min-width: 46px;
+  text-align: right;
 }

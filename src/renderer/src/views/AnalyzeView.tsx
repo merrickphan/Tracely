@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Claim } from '@shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Claim, DocumentRecord } from '@shared/types'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import TextArea from '../components/TextArea'
@@ -107,7 +107,9 @@ function DocumentEditor({
   onRunInsights,
   insightsLoading,
   claims,
-  error
+  error,
+  initialDoc,
+  onSaved
 }: {
   docName: string
   onDocNameChange: (v: string) => void
@@ -116,6 +118,12 @@ function DocumentEditor({
   insightsLoading: boolean
   claims: Claim[] | null
   error: string | null
+  /** The document being reopened, or null for a new one. */
+  initialDoc: DocumentRecord | null
+  /** Every successful save, so the parent's idea of "the latest document"
+   *  cannot go stale — it fetches once, and without this, leaving and
+   *  re-entering the editor restored the body as it was at app start. */
+  onSaved: (doc: DocumentRecord) => void
 }): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null)
   const colorInputRef = useRef<HTMLInputElement>(null)
@@ -129,6 +137,33 @@ function DocumentEditor({
   const [align, setAlign] = useState<Align>('left')
   const [alignMenuOpen, setAlignMenuOpen] = useState(false)
 
+  // Pull the toolbar's lit/unlit state from the browser's own command state,
+  // which is the only thing that actually knows it — execCommand('bold') with
+  // a collapsed caret sets a *pending* typing style, so there is nothing in
+  // the DOM to read and nothing React can derive it from.
+  const syncFormatState = useCallback((): void => {
+    const editor = editorRef.current
+    if (!editor || document.activeElement !== editor) return
+    const bold = document.queryCommandState('bold')
+    const italic = document.queryCommandState('italic')
+    const underline = document.queryCommandState('underline')
+    // Functional + identity-preserving, because this also runs on every
+    // keystroke: returning a fresh object literal unconditionally would
+    // re-render the editor on each character for no reason.
+    setFormat((prev) =>
+      prev.bold === bold && prev.italic === italic && prev.underline === underline
+        ? prev
+        : { bold, italic, underline }
+    )
+    setAlign(
+      document.queryCommandState('justifyCenter')
+        ? 'center'
+        : document.queryCommandState('justifyRight')
+          ? 'right'
+          : 'left'
+    )
+  }, [])
+
   useEffect(() => {
     function handleSelectionChange(): void {
       const editor = editorRef.current
@@ -137,22 +172,11 @@ function DocumentEditor({
       if (sel && sel.rangeCount > 0) {
         savedRangeRef.current = sel.getRangeAt(0).cloneRange()
       }
-      setFormat({
-        bold: document.queryCommandState('bold'),
-        italic: document.queryCommandState('italic'),
-        underline: document.queryCommandState('underline')
-      })
-      setAlign(
-        document.queryCommandState('justifyCenter')
-          ? 'center'
-          : document.queryCommandState('justifyRight')
-            ? 'right'
-            : 'left'
-      )
+      syncFormatState()
     }
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [])
+  }, [syncFormatState])
 
   useEffect(() => {
     if (!alignMenuOpen) return
@@ -187,6 +211,10 @@ function DocumentEditor({
   function exec(command: string, value?: string): void {
     focusAndRestore()
     document.execCommand(command, false, value)
+    // Toggling at a collapsed caret changes no selection, so no
+    // 'selectionchange' event follows and the toolbar would stay unlit while
+    // the command is genuinely active. Read the state back directly instead.
+    syncFormatState()
   }
 
   function applyFontSize(px: number): void {
@@ -211,10 +239,138 @@ function DocumentEditor({
     if (!text.trim() && editor.innerHTML !== '') {
       editor.innerHTML = ''
     }
+    bodyHtmlRef.current = editor.innerHTML
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0)
+    // Typing can end a pending style (Enter starts a fresh block), so the
+    // toolbar has to follow the caret, not just explicit toolbar clicks.
+    syncFormatState()
+    queueSave()
   }
 
   const bodyText = (): string => editorRef.current?.innerText ?? ''
+
+  // ---- Persistence -------------------------------------------------------
+  //
+  // The body lives in an uncontrolled contentEditable node (a controlled one
+  // would reset the caret on every keystroke), which meant it existed ONLY in
+  // that node: pressing Back unmounted the component and destroyed the work
+  // with no warning, and reopening gave a blank editor.
+  //
+  // Autosave rather than a save button, because the thing that lost work was
+  // a navigation the user had no reason to think was destructive.
+
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>(initialDoc ? 'saved' : 'idle')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Read inside the debounced timer without making it a dependency.
+  const docNameRef = useRef(docName)
+  docNameRef.current = docName
+
+  // The id of the row being written, in a ref rather than state.
+  //
+  // It was state, read through `flushSave`'s closure, and that produced a
+  // duplicate document on the very first autosave by two separate routes:
+  //
+  //  1. Setting it changed `flushSave`'s identity, which re-ran the unmount
+  //     effect below. Its cleanup saw `saveTimer.current` still holding the id
+  //     of the timer that had *already fired* (a fired timeout's id stays
+  //     truthy) and read that as "work is pending", calling the previous
+  //     `flushSave` — still closed over `docId === null`, so it INSERTed again.
+  //  2. Any keystroke while the first save was in flight scheduled a timer
+  //     bound to the then-current closure, also with `docId === null`. It fired
+  //     after the id had arrived and INSERTed a second row regardless.
+  //
+  // A ref fixes both at once: there is one authoritative id, no stale copy of
+  // it can exist, and `flushSave` stops changing identity.
+  const docIdRef = useRef<string | null>(initialDoc?.id ?? null)
+  // Saves are chained rather than allowed to overlap. Two concurrent saves on
+  // a new document would both read a null id and both INSERT — the same bug a
+  // third way, and one a ref alone does not close.
+  const inFlightRef = useRef<Promise<void>>(Promise.resolve())
+  /**
+   * The editor's HTML as of the last input event.
+   *
+   * `flushSave` cannot rely on `editorRef.current` alone. React detaches refs
+   * during deletion but runs passive effect cleanups AFTER that, so by the time
+   * the unmount cleanup below fires, `editorRef.current` is already null and
+   * the save it exists to perform returns immediately without writing. Typing
+   * and pressing Back inside the 900ms debounce lost the edit outright.
+   *
+   * Mirroring the html here costs one assignment per input event and makes the
+   * flush independent of whether the node is still mounted.
+   */
+  const bodyHtmlRef = useRef<string>(initialDoc?.bodyHtml ?? '')
+
+  const flushSave = useCallback((): Promise<void> => {
+    const run = async (): Promise<void> => {
+      // Prefer the live node when it is still mounted, since it is the truth;
+      // fall back to the mirror when it is not, which is exactly the unmount
+      // case this save has to survive.
+      const bodyHtml = editorRef.current?.innerHTML ?? bodyHtmlRef.current
+      // Never create a row for an editor the user opened and never typed in.
+      if (!docIdRef.current && !bodyHtml.trim() && !docNameRef.current.trim()) return
+      setSaveState('saving')
+      try {
+        const res = await tracelyApi.saveDocument({
+          id: docIdRef.current,
+          title: docNameRef.current,
+          bodyHtml
+        })
+        // Before the awaits below, so anything queued behind this save already
+        // sees an UPDATE target rather than inserting its own row.
+        docIdRef.current = res.document.id
+        onSaved(res.document)
+        setSaveState('saved')
+      } catch {
+        // Leave the indicator off "saved" rather than claiming a save that did
+        // not happen. The next keystroke retries.
+        setSaveState('idle')
+      }
+    }
+    // `run` on both settlements: one failed save must not stall the chain.
+    const next = inFlightRef.current.then(run, run)
+    inFlightRef.current = next
+    return next
+  }, [onSaved])
+
+  // 900ms: long enough that a burst of typing is one write, short enough that
+  // almost nothing is at risk. Every db.run() re-serializes the entire SQLite
+  // image (storage/db.ts), so per-keystroke saving would rewrite the whole
+  // database file per character.
+  const queueSave = useCallback((): void => {
+    setSaveState('idle')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      // Cleared before running, not after: the unmount cleanup treats a
+      // truthy ref as "there is still pending work to flush", and a fired
+      // timer's id stays truthy forever otherwise.
+      saveTimer.current = null
+      void flushSave()
+    }, 900)
+  }, [flushSave])
+
+  // Restore the last document into the uncontrolled node exactly once.
+  useEffect(() => {
+    if (initialDoc && editorRef.current) {
+      editorRef.current.innerHTML = initialDoc.bodyHtml
+      handleInput()
+    }
+    // Mount only: re-running would clobber whatever the user has since typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // A pending debounce must not be lost to unmount — that is the exact case
+  // this whole section exists to fix. `flushSave` is identity-stable now, so
+  // this runs on real unmount only, rather than re-running (and re-flushing)
+  // every time the document id changed.
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current)
+        saveTimer.current = null
+        void flushSave()
+      }
+    }
+  }, [flushSave])
 
   return (
     <div className="docedit-view">
@@ -229,7 +385,11 @@ function DocumentEditor({
           className="docedit-name"
           placeholder="Doc name"
           value={docName}
-          onChange={(e) => onDocNameChange(e.target.value)}
+          onChange={(e) => {
+            onDocNameChange(e.target.value)
+            // Renaming is an edit too — it used to feed nothing but this input.
+            queueSave()
+          }}
         />
         <div className="docedit-divider" />
         <select
@@ -259,6 +419,8 @@ function DocumentEditor({
         </select>
         <button
           className={`docedit-toolbtn bold ${format.bold ? 'active' : ''}`}
+          aria-pressed={format.bold}
+          title="Bold"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('bold')}
         >
@@ -266,6 +428,8 @@ function DocumentEditor({
         </button>
         <button
           className={`docedit-toolbtn underline ${format.underline ? 'active' : ''}`}
+          aria-pressed={format.underline}
+          title="Underline"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('underline')}
         >
@@ -273,6 +437,8 @@ function DocumentEditor({
         </button>
         <button
           className={`docedit-toolbtn italic ${format.italic ? 'active' : ''}`}
+          aria-pressed={format.italic}
+          title="Italic"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec('italic')}
         >
@@ -346,6 +512,9 @@ function DocumentEditor({
           ) : null}
         </div>
         <div className="docedit-spacer" />
+        <span className="docedit-savestate">
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
+        </span>
         <button
           className="docedit-insights"
           onClick={() => onRunInsights(bodyText())}
@@ -398,6 +567,20 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   const [text, setText] = useState('')
   const [docEditorOpen, setDocEditorOpen] = useState(false)
   const [docName, setDocName] = useState('')
+  // The document to reopen. Fetched once so "Create Document" can continue the
+  // last one instead of silently starting a blank page over the top of it —
+  // there was no way to get back to previous work at all before, because there
+  // was no previous work: it lived in a DOM node that unmounting destroyed.
+  const [latestDoc, setLatestDoc] = useState<DocumentRecord | null>(null)
+  const [latestDocLoaded, setLatestDocLoaded] = useState(false)
+
+  useEffect(() => {
+    tracelyApi
+      .getLatestDocument()
+      .then((res) => setLatestDoc(res.document))
+      .catch(() => {})
+      .finally(() => setLatestDocLoaded(true))
+  }, [])
   const [claims, setClaims] = useState<Claim[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -418,7 +601,10 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
 
   function handleCta(): void {
     if (sourceType === 'document') {
-      setDocName(text.trim())
+      // A typed name starts a new document; an empty box continues the last
+      // one, which is the only way back into previous work.
+      const named = text.trim()
+      setDocName(named || latestDoc?.title || '')
       setClaims(null)
       setError(null)
       setDocEditorOpen(true)
@@ -441,6 +627,9 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   if (docEditorOpen) {
     return (
       <DocumentEditor
+        // Remounts when the target document changes, so the restore-once
+        // effect inside runs against the right body.
+        key={text.trim() ? 'new' : (latestDoc?.id ?? 'new')}
         docName={docName}
         onDocNameChange={setDocName}
         onBack={() => setDocEditorOpen(false)}
@@ -448,6 +637,8 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         insightsLoading={loading}
         claims={claims}
         error={error}
+        initialDoc={text.trim() ? null : latestDoc}
+        onSaved={setLatestDoc}
       />
     )
   }
@@ -500,9 +691,9 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
             variant="primary"
             className="analyze-cta"
             onClick={handleCta}
-            disabled={loading || (sourceType !== 'document' && !text.trim())}
+            disabled={loading || (sourceType === "document" ? !latestDocLoaded : !text.trim())}
           >
-            {SOURCE_CTA[sourceType]}
+            {sourceType === 'document' && !latestDocLoaded ? 'Loading…' : SOURCE_CTA[sourceType]}
           </Button>
           {claims ? (
             <span className="muted">

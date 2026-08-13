@@ -25,6 +25,11 @@ export const IPC = {
 
   HISTORY_CLEAR: 'history:clear',
 
+  DOCUMENTS_LIST: 'documents:list',
+  DOCUMENTS_GET: 'documents:get',
+  DOCUMENTS_LATEST: 'documents:latest',
+  DOCUMENTS_SAVE: 'documents:save',
+  DOCUMENTS_REMOVE: 'documents:remove',
   CLIPBOARD_READ: 'clipboard:read',
   CLIPBOARD_WRITE: 'clipboard:write',
 

@@ -3,6 +3,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import type { CitationStyle, ClaimType, CritiqueVerdict, SourceProvider } from '@shared/types'
 import type {
   ScreenWatchClaimCitation,
+  ScreenWatchClaimEvidence,
   ScreenWatchClaimSummary,
   ScreenWatchEvidenceArticle,
   ScreenWatchHoverEvent,
@@ -764,6 +765,86 @@ function problemKindFor(claim: ScreenWatchClaimSummary): ProblemKind {
   return claim.claimType === 'statistic' ? 'statistic' : 'citation'
 }
 
+// Why this exists, and why it isn't just `problemKindFor`:
+//
+// The underline the user hovered is coloured by bucketFor(claimType) — four
+// distinct colours (factual orange, statistic purple, causal blue, other red).
+// The popup, however, collapsed every one of them that wasn't a statistic into
+// the single title "Missing citation", with a description asserting the claim
+// "isn't backed by a source anywhere in your document". So four visibly
+// different underlines said the same thing, and they said it even when the
+// background evidence search had already come back with well-scoring sources —
+// the card had `claim.evidence.count` in hand and used it only to pick the
+// button label.
+//
+// Two independent axes were being flattened into one:
+//   - WHAT KIND of assertion this is        -> claimType, which is the colour
+//   - HOW IT FARED against the evidence     -> evidence.count / evidence.score
+// so the title now names the kind, and the description reports the finding.
+// Thresholds are the same 70/40 bands as evidenceScoreColor and the main app's
+// ClaimCard, so "weak" means the same number everywhere in the product.
+
+type SupportLevel = 'none' | 'weak' | 'mixed' | 'strong'
+
+function supportLevelFor(evidence: ScreenWatchClaimEvidence): SupportLevel {
+  if (evidence.count === 0) return 'none'
+  if (evidence.score >= 70) return 'strong'
+  if (evidence.score >= 40) return 'mixed'
+  return 'weak'
+}
+
+const KIND_NOUN: Record<Bucket, string> = {
+  statistic: 'figure',
+  factual: 'claim',
+  causal: 'cause-and-effect claim',
+  other: 'statement'
+}
+
+/** Title + description for a claim whose evidence search has resolved. */
+function problemCopyFor(claim: ScreenWatchClaimSummary, evidence: ScreenWatchClaimEvidence): {
+  title: string
+  description: string
+} {
+  const bucket = bucketFor(claim.claimType)
+  const level = supportLevelFor(evidence)
+  const noun = KIND_NOUN[bucket]
+  const n = evidence.count
+  const sources = `${n} source${n === 1 ? '' : 's'}`
+
+  if (level === 'none') {
+    return {
+      title: bucket === 'statistic' ? 'Unverified figure' : 'No supporting sources',
+      description:
+        bucket === 'statistic'
+          ? "A search of the academic databases turned up nothing carrying this figure. Check the number against its original source before citing it."
+          : `A search of the academic databases turned up nothing supporting this ${noun}. It may still be true — but you have nothing to cite for it yet.`
+    }
+  }
+
+  if (level === 'weak') {
+    return {
+      title: bucket === 'causal' ? 'Cause and effect not established' : 'Evidence is weak',
+      description:
+        bucket === 'causal'
+          ? `${sources} touch on this, but score ${evidence.score}/100 for supporting a causal link specifically. Correlation in the literature is not the same as the cause you have asserted here.`
+          : `${sources} came back, but they score ${evidence.score}/100 for actually supporting this ${noun} — they are related rather than confirming. Read them before leaning on them.`
+    }
+  }
+
+  if (level === 'mixed') {
+    return {
+      title: 'Partially supported',
+      description: `${sources} score ${evidence.score}/100 for this ${noun} — enough to cite, but they qualify it rather than confirm it outright. Consider softening how strongly it is stated.`
+    }
+  }
+
+  // strong — the claim holds up; the only thing missing is the attribution.
+  return {
+    title: 'Missing citation',
+    description: `${sources} support this ${noun} (${evidence.score}/100). It reads as unattributed, though — add a citation so the reader can follow it.`
+  }
+}
+
 function ProblemCard({
   claim,
   onSuggestFix,
@@ -795,15 +876,23 @@ function ProblemCard({
     )
   }
 
-  const dot: Bucket = kind === 'weak-reasoning' ? 'other' : 'factual'
-  const title =
-    kind === 'weak-reasoning' ? 'Weak reasoning' : kind === 'statistic' ? 'Unverified statistic' : 'Missing citation'
-  const description =
+  // The dot now carries the claim's own bucket colour, so it matches the
+  // underline that was hovered to open this card. It was hardcoded to
+  // factual-orange for everything except weak reasoning, which meant hovering
+  // a purple or blue underline produced an orange dot.
+  const dot: Bucket = bucketFor(claim.claimType)
+  const copy =
     kind === 'weak-reasoning'
-      ? (claim.critique ?? "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.")
-      : kind === 'statistic'
-        ? "This figure doesn't appear in any of your uploaded sources yet. Add a citation or double-check the number."
-        : "This claim isn't backed by a source anywhere in your document. Add a citation to support it."
+      ? {
+          title: 'Weak reasoning',
+          description:
+            claim.critique ??
+            "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument."
+        }
+      : // `kind` is only 'searching' when evidence is null, and that case
+        // returned above — so evidence is non-null here.
+        problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence)
+  const { title, description } = copy
   const primaryLabel =
     kind === 'weak-reasoning' ? 'Suggest fix' : claim.evidence && claim.evidence.count > 0 ? 'Add citation' : 'Find a source'
   const onPrimary = kind === 'weak-reasoning' ? onSuggestFix : onStartCitationFlow
@@ -948,8 +1037,15 @@ function CitationFlowCard({
         </div>
         {state.showWorksCited ? (
           <div style={{ border: '1px solid #eeeef1', borderRadius: 10, padding: '8px 10px', background: '#fafafa' }}>
+            {/*
+              "Added to Works Cited" was not true. Only the in-text form is
+              written into the document; nothing appends to a works-cited list,
+              and citationByClaimId is per-session and never persisted — a
+              student reads that phrase as "the list at the end of my essay".
+              This labels the string below it, which is what it actually is.
+            */}
             <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-              Added to Works Cited
+              Works Cited entry — copy into your reference list
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.5, color: '#3a3a3a' }}>{state.citation.worksCitedEntry}</div>
           </div>
@@ -962,7 +1058,7 @@ function CitationFlowCard({
             Done
           </button>
           <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
-            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+            {state.showWorksCited ? 'Hide full citation' : 'View full citation'}
           </button>
           <button
             className="tracely-btn-secondary"
