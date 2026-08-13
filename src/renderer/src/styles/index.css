@@ -3128,6 +3128,186 @@ textarea:disabled {
   animation: panel-fade-in 0.16s ease-out;
 }
 
+/* Home — third quick link, matching the Settings/New Session pair above it.
+   Drawn as an SVG rather than a PNG like the other two only because no such
+   asset exists; size and opacity match so the row reads as one set. */
+.home-libraryicon {
+  left: 551px;
+  top: 244px;
+  width: 36px;
+  height: 36px;
+  opacity: 0.36;
+  color: #4a4a4a;
+}
+
+.home-link-library {
+  left: 552px;
+  top: 263px;
+  width: 123px;
+  font-size: 20px;
+}
+
+/* Library — the reader for what "Save to Library" writes. Uses the same card
+   shell as the Analyze view: rounded, bordered, its own shadow, and the card
+   is the drag handle while the body inside is the scroller (Chromium blocks
+   wheel scroll inside a drag region — see .analyze-view). */
+.library-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+.library-body {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-app-region: no-drag;
+  padding: 64px 56px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.library-header h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  margin-bottom: 4px;
+}
+
+.library-header p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.library-search {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.library-empty {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.library-row {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+}
+
+.library-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.library-row-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  /* A flex child defaults to its content width, so a long unbroken title
+     would push the saved-on date off the card instead of wrapping. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.library-row-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.library-row-title a:hover {
+  text-decoration: underline;
+}
+
+.library-row-saved {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-row-meta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.library-row-oa {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--score-good-wash);
+  color: var(--score-good);
+  white-space: nowrap;
+}
+
+.library-row-notes {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.library-row-notes-edit textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.library-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-row-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.library-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Settings > Preferences — global-shortcut capture field. Reads as an input
    but is a button, because it captures a key chord rather than text. */
 .settings-hotkey {

@@ -1,0 +1,47 @@
+{
+  "essay": "02-remote-work.txt",
+  "labelledBy": "imported from eval/baseline.md",
+  "report": "report-2026-08-08T02-37-26-088Z.json",
+  "imported": true,
+  "draft": {
+    "roles": null
+  },
+  "claims": [
+    {
+      "text": "A randomized controlled trial at a Chinese travel agency found that employees working from home were roughly 13 percent more productive than their in-office counterparts, and that attrition fell by half.",
+      "paragraph": 1,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 1,
+        "total": 8
+      },
+      "note": "Chinese travel agency RCT, 13% more productive",
+      "sources": []
+    },
+    {
+      "text": "Meanwhile, commercial office vacancy rates in major American cities reached record highs after 2020, which has put real pressure on municipal tax bases that depend on commercial property assessments.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 3,
+        "total": 8
+      },
+      "note": "Office vacancy rates hit record highs",
+      "sources": []
+    },
+    {
+      "text": "Research suggests that fully remote workers are less likely to be promoted than colleagues who come in, a gap sometimes attributed to reduced visibility rather than reduced output.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 0,
+        "total": 6
+      },
+      "note": "Remote workers less likely to be promoted",
+      "sources": []
+    }
+  ]
+}

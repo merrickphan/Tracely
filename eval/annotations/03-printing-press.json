@@ -1,0 +1,71 @@
+{
+  "essay": "03-printing-press.txt",
+  "labelledBy": "imported from eval/baseline.md",
+  "report": "report-2026-08-08T02-37-26-088Z.json",
+  "imported": true,
+  "draft": {
+    "roles": null
+  },
+  "claims": [
+    {
+      "text": "Johannes Gutenberg introduced movable-type printing to Europe around 1450, and within fifty years printing presses were operating in more than two hundred European cities.",
+      "paragraph": 1,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 3,
+        "total": 8
+      },
+      "note": "Gutenberg c.1450, 200+ cities within fifty years",
+      "sources": []
+    },
+    {
+      "text": "Movable type had already existed in Korea and China for centuries before Gutenberg, which complicates any account that treats the technology itself as the decisive variable.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 5,
+        "total": 8
+      },
+      "note": "Movable type existed in Korea and China first",
+      "sources": []
+    },
+    {
+      "text": "The Protestant Reformation depended on cheap pamphlets, and so did an enormous volume of witch-hunting literature.",
+      "paragraph": 3,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 2,
+        "total": 8
+      },
+      "note": "Reformation depended on pamphlets, so did witch-hunting literature",
+      "sources": []
+    },
+    {
+      "text": "Cities that adopted printing early experienced faster economic growth in the following century, though disentangling that from the fact that wealthier cities could afford presses in the first place is genuinely difficult.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 2,
+        "total": 8
+      },
+      "note": "Cities adopting printing early grew faster",
+      "sources": []
+    },
+    {
+      "text": "What distinguished the European case was the alphabet's small character set, an existing paper industry, and a merchant class with money to spend on books.",
+      "paragraph": 2,
+      "verdict": null,
+      "citationWorthy": "yes",
+      "support": {
+        "rel": 2,
+        "total": 8
+      },
+      "note": "Alphabet, paper industry, merchant class",
+      "sources": []
+    }
+  ]
+}
