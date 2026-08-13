@@ -1,7 +1,6 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { loadEnv, relayDefines } from './scripts/env.mjs'
 
 // Which .env is read — and therefore which backend this build talks to — is
@@ -60,17 +59,14 @@ export default defineConfig({
     }
   },
   renderer: {
-    // Tailwind is scoped to the Tracer window by import, not by config: only
-    // `src/renderer/src/styles/tracer.css` pulls it in, and only tracer.tsx
-    // imports that file. The other three entries (index/floating/overlay)
-    // stay on the inline-style + styles/index.css idiom they already use, so
-    // Tailwind's preflight reset can't reach them.
-    plugins: [react(), tailwindcss()],
+    // Tailwind came in with the Tracer window and left with it: no entry
+    // imports a Tailwind stylesheet now, so the plugin has nothing to
+    // generate. The three remaining entries (index/floating/overlay) are on
+    // the inline-style + styles/index.css idiom, which is what kept
+    // Tailwind's preflight reset out of them even while Tracer shipped it.
+    plugins: [react()],
     resolve: {
       alias: {
-        // shadcn's registry emits `@/components/ui/...` imports verbatim, so
-        // `@` has to resolve to the renderer source root for pasted
-        // components to work without hand-editing every import.
         '@': resolve(__dirname, 'src/renderer/src'),
         '@renderer': resolve(__dirname, 'src/renderer/src'),
         '@shared': resolve(__dirname, 'src/shared')
@@ -81,8 +77,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           floating: resolve(__dirname, 'src/renderer/floating.html'),
-          overlay: resolve(__dirname, 'src/renderer/overlay.html'),
-          tracer: resolve(__dirname, 'src/renderer/tracer.html')
+          overlay: resolve(__dirname, 'src/renderer/overlay.html')
         }
       }
     }

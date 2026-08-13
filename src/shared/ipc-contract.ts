@@ -260,6 +260,22 @@ export interface ScreenRect {
 // in the overlay payload that gets re-sent on every change; the full list is
 // only ever fetched from the main Tracely window via the existing
 // EVIDENCE_FIND flow, not through Screen Watch.
+/**
+ * What is wrong with a claim. Mirrors ScreenWatchProblemKind in
+ * services/screenWatch/problemKind.ts, which is where it is decided — declared
+ * here because the renderer needs the union and must not import main.
+ */
+export type ScreenWatchProblemKind =
+  | 'searching'
+  | 'weak-reasoning'
+  | 'contradicted-claim'
+  | 'unverified-statistic'
+  | 'no-sources'
+  | 'weak-evidence'
+  | 'partial-evidence'
+  | 'missing-citation'
+  | 'cited-unverified'
+
 export interface ScreenWatchEvidenceArticle {
   title: string
   venue: string | null
@@ -277,6 +293,14 @@ export interface ScreenWatchClaimEvidence {
   score: number
   count: number
   articles: ScreenWatchEvidenceArticle[]
+  // The four factors the score is made of. The widget's single-claim card
+  // ("Argument check" in Figma) shows them as a 2x2 breakdown, which is the
+  // whole reason the score is a published formula rather than a model's
+  // opinion — a student who disagrees with 34/100 can see which factor cost
+  // them the points. `support` is omitted: it is weighted 0 on the no-stance
+  // path, which ml/index.ts establishes is the only path a packaged build
+  // takes, so showing it would report a factor that cannot vary.
+  breakdown: ScoreBreakdown
 }
 
 // Set once the user has actually inserted a citation into the watched
@@ -294,6 +318,28 @@ export interface ScreenWatchClaimSummary {
   text: string
   claimType: ClaimType
   confidence: number
+  /**
+   * The writer already put a citation in this sentence — (Smith, 2020),
+   * "Smith (2020)", [3], a DOI.
+   *
+   * Screen Watch had no way to know this: `citation` below is set only when
+   * TRACELY inserted one. So a properly cited sentence was told, in those
+   * words, that it was "Missing citation" — and because a cited sentence tends
+   * to be a searchable one, it also scored well, which is the band that copy
+   * comes from. Both the card's wording and whether the claim is shown at all
+   * turn on this now.
+   */
+  hasInlineCitation: boolean
+  /**
+   * Every problem this claim has, worst first — decided in main so the
+   * underline and this card cannot disagree.
+   *
+   * A sentence can be in more than one kind of trouble at once. The card shows
+   * only the first and badges the count; dismissing or fixing it advances to
+   * the next, so fixing what is shown never reveals a second problem the
+   * writer had no idea was there.
+   */
+  problemKinds: ScreenWatchProblemKind[]
   // null while the background search hasn't resolved yet (or failed) for
   // this claim — the renderer shows a loading state, not a zero score.
   evidence: ScreenWatchClaimEvidence | null
@@ -438,7 +484,20 @@ export interface ScreenWatchWidget {
 }
 
 export interface ScreenWatchOverlayUpdateEvent {
-  underlines: { id: string; rects: ScreenRect[]; claimType: ClaimType }[]
+  /**
+   * `problemKind` is what the mark is coloured by. `claimType` rides along for
+   * the popover's type dot, but it must NOT drive the underline: colouring by
+   * claim type meant every factual claim in a document was the same orange
+   * whatever state it was in, and the underline — the part of Screen Watch
+   * people actually read — carried no information about the problem at all.
+   */
+  underlines: {
+    id: string
+    rects: ScreenRect[]
+    claimType: ClaimType
+    /** Worst first. The mark is coloured by [0]; length > 1 shows a count. */
+    problemKinds: ScreenWatchProblemKind[]
+  }[]
   widget: ScreenWatchWidget | null
 }
 

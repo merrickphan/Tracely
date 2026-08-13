@@ -5,10 +5,118 @@ export interface SentenceSpan {
 }
 
 /**
- * Approximate sentence splitter (doesn't special-case abbreviations like
- * "Dr." or decimals like "3.14" — good enough here, since spans are only
- * used as selectable units, and every span is always a real, exact substring
- * of the source text by construction, never a generated approximation).
+ * Abbreviations whose trailing period is not a sentence end.
+ *
+ * Deliberately short. Every entry earns its place by appearing in real prose
+ * this splitter has been run over; a long speculative list is a long list of
+ * chances to merge two real sentences.
+ */
+const ABBREVIATIONS = new Set([
+  'dr',
+  'mr',
+  'mrs',
+  'ms',
+  'prof',
+  'st',
+  'jr',
+  'sr',
+  'vs',
+  'etc',
+  'fig',
+  'no',
+  'pp',
+  'al',
+  'inc',
+  'ltd',
+  'co',
+  'ed',
+  'eds',
+  'vol',
+  'approx',
+  'cf',
+  'med'
+])
+
+/**
+ * How far past a period a closing bracket may be and still count as enclosing
+ * it. A citation parenthetical is short; anything longer is more likely an
+ * unmatched bracket somewhere later in the text.
+ */
+const BRACKET_LOOKAHEAD = 120
+
+/**
+ * Whether this period sits inside a bracket that actually closes.
+ *
+ * BOTH halves are required, and the second is not decoration. Counting depth
+ * alone means a single unmatched "(" — a smiley, a truncated UIA read, a
+ * stray bracket in a list — suppresses every boundary after it, and the whole
+ * document arrives at the relay as one enormous claim. That is a worse failure
+ * than the one this rule exists to fix, and it is exactly what the first
+ * version did; the test for it is in sentenceSplit.test.ts.
+ */
+function isInsideBrackets(text: string, dotIndex: number, spanStart: number): boolean {
+  let depth = 0
+  for (let i = spanStart; i < dotIndex; i++) {
+    const ch = text[i]
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+  }
+  if (depth === 0) return false
+
+  const limit = Math.min(text.length, dotIndex + BRACKET_LOOKAHEAD)
+  for (let i = dotIndex + 1; i < limit; i++) {
+    const ch = text[i]
+    if (ch === ')' || ch === ']') return true
+    // A new bracket opening first means the earlier one was never closed.
+    if (ch === '(' || ch === '[') return false
+  }
+  return false
+}
+
+/**
+ * Whether the period ending at `dotIndex` is a real sentence boundary.
+ *
+ * Three ways it is not, all of them found in a single meticulously cited
+ * position paper that Screen Watch mangled:
+ *
+ *  - **Inside brackets.** `(Thomas R. Leinbach, 2026)` was split in two, which
+ *    severs the citation from the sentence that carries it — so the half with
+ *    the claim in it looked uncited, and the half with the source in it looked
+ *    like a sentence fragment. This is the structural rule and it is the one
+ *    that matters: a period inside an unclosed `(` is never a sentence end.
+ *  - **An initial.** `Gregory P. Margarian`, and equally `U.S.`, `e.g.`,
+ *    `i.e.` — in every case the period follows a lone letter. "88% of
+ *    international students in the U.S. have become less politically involved"
+ *    was cut in half mid-clause, and the relay was then asked to find claims
+ *    in each half.
+ *  - **A known abbreviation.** `Dr.`, `etc.`, `vol.`
+ *
+ * The cost of a wrong answer here is asymmetric, which is why the rules lean
+ * toward NOT splitting: two sentences merged is one over-long claim, while one
+ * sentence split is a truncated claim, a truncated search query, and a
+ * citation that has vanished from the text it belongs to.
+ */
+function isRealBoundary(text: string, dotIndex: number, spanStart: number): boolean {
+  if (isInsideBrackets(text, dotIndex, spanStart)) return false
+
+  if (text[dotIndex] !== '.') return true
+
+  // The run of letters immediately before the period.
+  let i = dotIndex - 1
+  while (i >= 0 && /[A-Za-z]/.test(text[i])) i--
+  const word = text.slice(i + 1, dotIndex)
+
+  // A single letter: an initial (`R.`) or one segment of a dotted abbreviation
+  // (`U.S.`, `e.g.`). Both are mid-sentence.
+  if (word.length === 1) return false
+  return !ABBREVIATIONS.has(word.toLowerCase())
+}
+
+/**
+ * Approximate sentence splitter. Every span is always a real, exact substring
+ * of the source text by construction, never a generated approximation —
+ * `claimSpans.ts` computes underline offsets from these, so that invariant is
+ * load-bearing rather than a nicety.
  */
 export function splitSentences(text: string): SentenceSpan[] {
   const spans: SentenceSpan[] = []
@@ -28,6 +136,11 @@ export function splitSentences(text: string): SentenceSpan[] {
   let match: RegExpExecArray | null
 
   while ((match = boundary.exec(text))) {
+    // A newline always ends a span; only punctuation boundaries are checked,
+    // and the check reads the FIRST character of the match, which is the
+    // terminator itself.
+    if (!match[0].startsWith('\n') && !isRealBoundary(text, match.index, start)) continue
+
     const end = match.index + match[0].length
     const raw = text.slice(start, end)
     if (raw.trim().length > 0) {

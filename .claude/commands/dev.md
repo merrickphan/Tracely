@@ -16,7 +16,7 @@ false.
 
 `.env` holds **production** values, so a bare `npm run dev` spends the real
 OpenAI key and counts against real quota on every Analyze, every Screen Watch
-detection, every Tracer message. Fine for looking at a button. Not fine for
+detection, every critique. Fine for looking at a button. Not fine for
 running detection twenty times while tuning something.
 
 `TRACELY_ENV=staging` reads `.env.staging` instead: separate Supabase project,

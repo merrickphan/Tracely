@@ -135,11 +135,22 @@ function startsWithMarker(text: string, markers: string[]): boolean {
   // prose rather than edge cases: an opening quotation mark or bracket, and a
   // short coordinating conjunction ("But in conclusion, ...").
   const opening = firstSentence(text).slice(0, 60).toLowerCase()
-  return markers.some((marker) => OPENER.get(marker)!.test(opening))
+  // Built on demand rather than read out of a prebuilt map with `!`. The map
+  // was populated from two of the four marker lists, so passing a third to
+  // this function threw a TypeError from inside the structure engine — a
+  // latent crash gated only on nobody adding a call site.
+  return markers.some((marker) => {
+    let re = OPENER.get(marker)
+    if (!re) {
+      re = openerFor(marker)
+      OPENER.set(marker, re)
+    }
+    return re.test(opening)
+  })
 }
 
 /**
- * One anchored matcher per marker, built once at module load.
+ * One anchored matcher per marker, memoised on first use.
  *
  * No escaping: every marker is plain lowercase words and spaces. If one ever
  * needs a regex metacharacter, escape it here rather than at the call site.
@@ -153,9 +164,31 @@ function openerFor(marker: string): RegExp {
   return new RegExp(String.raw`^["'‘“(\[]?\s*(?:and|but|so|yet)?\s*${marker}\b`)
 }
 
+/**
+ * Word-bounded, not a substring match.
+ *
+ * `lower.includes(marker)` was finding "thus" inside "enthusiasm",
+ * "enthusiastic" and "enthusiast" — ordinary essay words. Any paragraph
+ * containing one scored full marks for a reasoning connective it never used
+ * (warrant is 20 of the 100 points) and had its `warrant-gap` weakness
+ * suppressed, so the draft was told its reasoning was fine on the strength of
+ * the word "enthusiasm".
+ *
+ * The plural/singular pairs already in these lists ("the implication" and
+ * "the implications") stay correct: `\b` after the singular fails against the
+ * "s", and the plural entry matches it instead.
+ */
+const CONTAINS = new Map<string, RegExp>()
 function containsMarker(text: string, markers: string[]): boolean {
   const lower = text.toLowerCase()
-  return markers.some((marker) => lower.includes(marker))
+  return markers.some((marker) => {
+    let re = CONTAINS.get(marker)
+    if (!re) {
+      re = new RegExp(String.raw`\b${marker}\b`)
+      CONTAINS.set(marker, re)
+    }
+    return re.test(lower)
+  })
 }
 
 /** Same anchored opening as startsWithMarker, for the pattern form. */
@@ -179,10 +212,6 @@ function citationCount(text: string): number {
 }
 
 const MIN_CITATIONS_FOR_EVIDENCE = 2
-
-for (const marker of [...CONCLUSION_MARKERS, ...COUNTERARGUMENT_MARKERS]) {
-  OPENER.set(marker, openerFor(marker))
-}
 
 export function hasSignificanceMarker(text: string): boolean {
   return containsMarker(text, SIGNIFICANCE_MARKERS)

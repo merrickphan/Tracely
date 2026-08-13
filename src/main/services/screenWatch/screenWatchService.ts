@@ -8,14 +8,12 @@ import type {
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
   ScreenWatchStatus,
-  ScreenWatchStructure,
-  TracerContext
+  ScreenWatchStructure
 } from '@shared/ipc-contract'
 import type {
   CitationStyle,
   Claim,
   CritiqueVerdict,
-  DocumentOutline,
   EvidenceItem,
   ScoreBreakdown,
   Source
@@ -31,10 +29,8 @@ import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
-import { getClaimsByAnalysis } from '../storage/claimsRepo'
 import { getSetting, setSetting } from '../storage/settingsRepo'
 import { sourceHashFor } from '../structure/analyzeStructure'
-import { getInAppOutlineContext } from '../structure/outlineContext'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
   getOverlayWindow,
@@ -44,7 +40,6 @@ import {
   sendToOverlay
 } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
-import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
 import {
   computeAllPanelSize,
   computeStructurePanelSize,
@@ -52,6 +47,8 @@ import {
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
 } from './panelSize'
+import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
+import { problemKindsFor, problemSeverity } from './problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
@@ -166,6 +163,9 @@ let watchStructure: { key: string; structure: ScreenWatchStructure | null } | nu
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
 let critiqueByClaimId = new Map<string, { critique: string; verdict: CritiqueVerdict }>()
+// Whether this detection's one budgeted automatic critique has been spent.
+// Reset wherever critiqueByClaimId is — a fresh claim set gets a fresh budget.
+let autoCritiqueSpent = false
 // Results of the focused "Find a source" search (findSourceForClaim) — kept
 // separate from evidenceResultByClaimId (the broader background auto-search)
 // since it's a distinct, user-triggered search that can use a different
@@ -228,9 +228,6 @@ export function getHoverTargets(): HoverTarget[] {
 let widgetExpanded = false
 // Cached so toggling expanded/collapsed can redraw immediately instead of
 // waiting up to POLL_INTERVAL_MS for the next scheduled snapshot.
-// When Screen Watch last captured a document. Compared against the in-app
-// editor's last analysis to decide which one Tracer should talk about.
-let lastTracerContextAt: number | null = null
 let lastUpdateInputs: {
   windowRect: ScreenRect
   // Carried so redrawOverlay() reproduces the same clip the tick that computed
@@ -386,6 +383,7 @@ function resetTrackingState(): void {
   watchStructure = null
   evidenceResultByClaimId = new Map()
   critiqueByClaimId = new Map()
+  autoCritiqueSpent = false
   findSourceResultByClaimId = new Map()
   citationByClaimId = new Map()
   faviconByUrl = new Map()
@@ -538,17 +536,6 @@ async function tick(): Promise<void> {
     if (!snapshot.ok) {
       lastError = snapshot.error
 
-      // Freeze for the same reason a `skip: "self"` freezes, and check it
-      // BEFORE counting. A backgrounded watched app is *more* likely to blow
-      // uiaSnapshot's 4s budget while Tracer holds focus, so without this the
-      // failure path becomes a second door into exactly the wipe the "self"
-      // guard exists to prevent — and it opens in the situation that provokes
-      // it most.
-      if (isTracerWindowOpen()) {
-        logScreenWatch(`snapshot failed while Tracer is open (frozen): ${snapshot.error}`)
-        return
-      }
-
       // This branch used to return without hiding or resetting anything, with
       // no counter — and a closing window is exactly what produces it, since
       // FocusedElement keeps handing back a dying element until focus settles.
@@ -583,18 +570,6 @@ async function tick(): Promise<void> {
     snapshotFailures = 0
 
     if (snapshot.skip) {
-      // Talking to Tracer means Tracely itself is the foreground app, which
-      // UIA reports as `skip: "self"`. Treating that like any other skip
-      // would wipe the very claims the user opened Tracer to ask about and
-      // hide the underlines out from under them mid-question. So while the
-      // Tracer window is up, a "self" skip freezes Screen Watch instead:
-      // keep the claims, keep the overlay drawn where it was, and pick the
-      // document back up on the next tick after Tracer is closed. Every
-      // other skip reason (and "self" with Tracer closed) still resets.
-      if (snapshot.reason === 'self' && isTracerWindowOpen()) {
-        return
-      }
-
       // Logged only on change, not every tick — "not-editable-control-type"
       // in particular would otherwise spam the log constantly while just
       // browsing a normal webpage.
@@ -705,6 +680,7 @@ async function tick(): Promise<void> {
           // previous one no longer applies to anything currently shown.
           evidenceResultByClaimId = new Map()
           critiqueByClaimId = new Map()
+          autoCritiqueSpent = false
           findSourceResultByClaimId = new Map()
           citationByClaimId = new Map()
           // Free and local, so it runs on the same automatic footing as the
@@ -840,6 +816,7 @@ function leanEvidence(claimId: string): ScreenWatchClaimEvidence | null {
   return {
     score: result.score,
     count: result.evidence.length,
+    breakdown: result.breakdown,
     articles: result.evidence.slice(0, MAX_ARTICLES_IN_OVERLAY).map((item) => ({
       title: item.title,
       venue: item.venue,
@@ -945,10 +922,74 @@ function triggerEvidenceSearch(claims: Claim[]): void {
         // claim has a relevant source, so evidence landing changes the reading.
         refreshWatchOutline()
         redrawOverlay()
+        void autoCritique(claim)
       })
       .catch((err) => {
         logScreenWatch(`background evidence search failed for claim ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
       })
+  }
+}
+
+/**
+ * Critique the single highest-confidence claim, once its evidence has landed.
+ *
+ * This is the one place Screen Watch spends a relay call it was not asked for,
+ * and it exists because without it "Weak reasoning" is UNREACHABLE. The card
+ * only shows it when `critiqueVerdict` is set, critique only ran on an explicit
+ * click, and passive watching therefore had exactly one thing it could ever
+ * say: something about citations. A tool that claims to check reasoning and
+ * structurally cannot is worse than one that does not claim it.
+ *
+ * Bounded hard, because the original reason for not doing this was real:
+ *
+ *  - ONE claim per detection, the top by confidence — not the three that get an
+ *    evidence search, and never the whole set.
+ *  - Only after that claim's evidence resolved, so the critique has something
+ *    to reason about rather than judging a claim in a vacuum.
+ *  - Only if it is still current, and never twice for the same claim.
+ *  - Detection is already gated to one per MIN_ANALYSIS_INTERVAL_MS past an
+ *    80-char delta, so this adds at most one relay call per detection — the
+ *    same order as the detectClaims call that produced the claim.
+ *
+ * Failures are swallowed to the log. An unprompted critique that could not run
+ * is not something to interrupt someone's writing about.
+ */
+async function autoCritique(claim: Claim): Promise<void> {
+  // The budget is ONE call per detection, claimed by the first eligible claim
+  // rather than reserved for the highest-confidence one.
+  //
+  // It used to be `currentClaims.slice(0, 1)`, which meant the single most
+  // confident claim held the budget whether or not it could use it — and
+  // autoCritique needs evidence to reason about, so a top claim whose search
+  // returned nothing (common: retrieval is the weakest part of this pipeline)
+  // silently disabled the reasoning check for the WHOLE document. Nothing fell
+  // through to claim 2. Since `problemKindFor` only reports "weak reasoning"
+  // when a critique exists, that is most of why passive watching so rarely
+  // says anything about reasoning.
+  //
+  // Claims are confidence-sorted (claimDetection.ts) and evidence resolves
+  // roughly in flight order, so in practice the top claim still wins whenever
+  // it has evidence at all.
+  if (autoCritiqueSpent) return
+  if (currentClaims.slice(0, MAX_AUTO_EVIDENCE_CLAIMS).every((c) => c.id !== claim.id)) return
+  if (critiqueByClaimId.has(claim.id)) return
+  const evidence = evidenceResultByClaimId.get(claim.id)
+  if (!evidence || evidence.evidence.length === 0) return
+
+  // Claimed BEFORE the await. Three evidence searches can resolve in the same
+  // tick, and without this all three would pass the check and fire.
+  autoCritiqueSpent = true
+  const generationAtRequestTime = trackingGeneration
+  try {
+    const items = evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i))
+    const result = await generateCritique(withEvidenceScores(claim), items)
+    if (trackingGeneration !== generationAtRequestTime) return
+    if (!currentClaims.some((c) => c.id === claim.id)) return
+    critiqueByClaimId.set(claim.id, result)
+    logScreenWatch(`auto-critique for ${claim.id.slice(0, 8)}: ${result.verdict}`)
+    redrawOverlay()
+  } catch (err) {
+    logScreenWatch(`auto-critique failed for ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -966,6 +1007,16 @@ export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWa
     score: result.score,
     breakdown: result.breakdown
   })
+  // The critique was an argument ABOUT the evidence that just got replaced —
+  // it cites its sources by number ("supported by evidence 2", per
+  // CRITIQUE_SYSTEM_PROMPT), and those numbers now point into a different
+  // list. Keeping it left the panel showing a fresh source list beside a
+  // verdict reasoned over the old one, and `problemKindsFor` reporting "weak
+  // reasoning" on grounds nothing on screen still supports. Dropping it puts
+  // the claim back to offering "Critique Argument", which is the truth.
+  if (critiqueByClaimId.delete(claimId)) {
+    logScreenWatch(`dropped stale critique for ${claimId.slice(0, 8)} — its evidence was refreshed`)
+  }
   refreshWatchOutline()
   redrawOverlay()
   return leanEvidence(claimId)
@@ -1183,13 +1234,6 @@ function updateOverlayAndWidget(
   // main or the floating claim checker between their immediate focus handlers
   // and the next UIA poll.
   //
-  // Tracer is shieldable too (see overlayShield.ts) but is deliberately NOT
-  // hidden for here: talking to Tracer must hold the claims and underlines in
-  // place — that is the whole point of the "self" skip in tick() — and hiding
-  // the overlay would wipe exactly what the user opened Tracer to ask about.
-  // Tracer is protected positionally instead, in hoverTracking, so the
-  // overlay can stay visible without ever capturing a click meant for it.
-  //
   // `focusedShieldableWindow()` rather than checking getMainWindow()/
   // getFloatingWindow() directly — that is the one-rule shield this branch
   // merged with, and duplicating its focus test here is exactly what it was
@@ -1211,9 +1255,6 @@ function updateOverlayAndWidget(
       lastUpdateInputs.windowRect.height !== windowRect.height)
 
   lastUpdateInputs = { windowRect, controlRect, claimRects, claims, fullText }
-  // Stamped so getTracerContext can tell whether Screen Watch or the in-app
-  // editor saw a document more recently — see outlineContext.ts.
-  lastTracerContextAt = Date.now()
 
   // Clear BEFORE the window is moved or resized under the old content.
   if (targetChanged) clearOverlay()
@@ -1224,8 +1265,48 @@ function updateOverlayAndWidget(
   // open a popover. controlRect is preferred because the window includes the
   // app's own toolbars, and text scrolled under a sticky header still reports a
   // valid rect that was then drawn on top of the header.
+  /** Decided once here, so the underline and the card cannot disagree. */
+  const problemKindById = new Map(
+    claims.map((c) => {
+      const evidence = evidenceResultByClaimId.get(c.id)
+      return [
+        c.id,
+        problemKindsFor({
+          claimType: c.claimType,
+          hasInlineCitation: hasInlineCitation(c.text),
+          evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
+          critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
+        })
+      ] as const
+    })
+  )
+
+  /**
+   * Claims with nothing to say about them, which are not drawn at all.
+   *
+   * Read straight off `problemKindsFor` rather than re-tested here. It used to
+   * be its own predicate — cited AND scoring at least 70 — which
+   * meant two functions decided whether a sentence was worth interrupting
+   * someone about, on different rules, and the gap between them was where a
+   * cited claim the databases had no opinion on ended up flagged. One function
+   * owns the judgement now; an empty list is its way of saying "nothing".
+   */
+  const settled = new Set(
+    claims.filter((c) => (problemKindById.get(c.id) ?? ['searching']).length === 0).map((c) => c.id)
+  )
+  if (settled.size > 0) {
+    logScreenWatch(
+      `not flagging ${settled.size} claim(s) with nothing to report: ` +
+        claims
+          .filter((c) => settled.has(c.id))
+          .map((c) => `${inlineCitationKind(c.text)}/${evidenceResultByClaimId.get(c.id)?.score ?? '-'}`)
+          .join(', ')
+    )
+  }
+
   const clip = resolveClip([controlRect, windowRect])
   const underlines = (Array.isArray(claimRects) ? claimRects : [])
+    .filter((r) => !settled.has(r.id))
     .map((r) => ({
       ...r,
       rects: !Array.isArray(r.rects)
@@ -1299,7 +1380,8 @@ function updateOverlayAndWidget(
   const localized = underlines.map((u) => ({
     id: u.id,
     rects: u.rects.map(toLocal),
-    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual'
+    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual',
+    problemKinds: problemKindById.get(u.id) ?? ['searching']
   }))
 
   // Anchored to a fixed corner of the focused app's window, not the focused
@@ -1373,8 +1455,18 @@ function updateOverlayAndWidget(
     )
   }
 
-  const claimSummaries: ScreenWatchClaimSummary[] = [...claims]
-    .sort((a, b) => b.confidence - a.confidence)
+  const claimSummaries: ScreenWatchClaimSummary[] = claims
+    .filter((c) => !settled.has(c.id))
+    // Severity first, confidence only to break ties. Confidence says how sure
+    // Tracely is that a sentence IS a claim — not how much trouble it is in —
+    // so sorting by it alone buried the reasoning failure under tidy claims
+    // that merely wanted a citation.
+    .sort((a, b) => {
+      const worst = (id: string): number =>
+        problemSeverity(problemKindById.get(id)?.[0] ?? 'searching')
+      const bySeverity = worst(a.id) - worst(b.id)
+      return bySeverity !== 0 ? bySeverity : b.confidence - a.confidence
+    })
     .map((c) => {
       const critique = critiqueByClaimId.get(c.id)
       const citation = citationByClaimId.get(c.id)
@@ -1383,6 +1475,8 @@ function updateOverlayAndWidget(
         text: c.text,
         claimType: c.claimType,
         confidence: c.confidence,
+        hasInlineCitation: hasInlineCitation(c.text),
+        problemKinds: problemKindById.get(c.id) ?? ['searching'],
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,
@@ -1412,7 +1506,7 @@ function updateOverlayAndWidget(
       rect: activeLocal,
       expanded: widgetExpanded,
       viewMode: widgetViewMode,
-      claimCount: claims.length,
+      claimCount: claimSummaries.length,
       claims: claimSummaries,
       totalInfoCount,
       // Read, never computed here. This function runs on every poll tick and
@@ -1468,7 +1562,6 @@ function updateOverlayAndWidget(
   if (payloadKey !== lastSentPayloadKey) {
     lastSentPayloadKey = payloadKey
     sendToOverlay(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
-    emitTracerContext()
   }
 
   // Outside the dedupe, and last. This used to be an early `return`, with the
@@ -1480,92 +1573,6 @@ function updateOverlayAndWidget(
   // document.
   void win
   presentOverlay()
-}
-
-/**
- * What Tracer is allowed to see: the text of the watched document and the
- * claims currently flagged in it. Read live from the same in-memory state
- * the overlay draws from — deliberately NOT from the database, since Screen
- * Watch persists none of this (see the note on synthesizeClaim).
- *
- * Returns empty context rather than throwing when Screen Watch is off or no
- * allowed app is focused: Tracer is still useful as a plain tutor with no
- * document in hand, it just can't refer to anything specific.
- */
-export function getTracerContext(): TracerContext {
-  // Tracely's own document editor, when it has been analyzed more recently
-  // than Screen Watch saw anything. Without this branch, asking Tracer about
-  // the paragraph you are looking at in the editor gets an answer about
-  // whatever external document Screen Watch last read — UIA reports `skip:
-  // "self"` while Tracely is foreground, so its snapshot is always stale here.
-  const inApp = getInAppOutlineContext(lastTracerContextAt)
-  if (inApp) {
-    return {
-      processName: inApp.documentTitle,
-      documentText: inApp.outline.paragraphs.length ? inApp.documentText : '',
-      claims: inAppClaims(inApp.outline),
-      outline: {
-        title: inApp.documentTitle,
-        score: inApp.outline.score,
-        complete: inApp.outline.complete,
-        roles: inApp.outline.paragraphs.map((p) => p.role),
-        weaknesses: inApp.outline.weaknesses.map((w) => w.message)
-      }
-    }
-  }
-
-  const claims = lastUpdateInputs?.claims ?? currentClaims
-  const structure = watchStructure?.structure ?? null
-  return {
-    processName: lastStatus.active ? lastStatus.processName : null,
-    documentText: lastUpdateInputs?.fullText ?? '',
-    claims: claims.map((c) => ({
-      id: c.id,
-      text: c.text,
-      claimType: c.claimType,
-      evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
-    })),
-    // Screen Watch used to send Tracer the claims but never the shape of the
-    // argument they sat in, so a tutor asked "is my essay working?" could only
-    // talk about individual sentences. Absent when the structural read was
-    // withheld — see structureFit.ts — rather than sent as an empty outline,
-    // which Tracer would read as "this draft has none of these things".
-    outline: structure
-      ? {
-          // Deliberately not `processName`: that is 'WINWORD.EXE', it is
-          // already carried separately above, and a prompt interpolating it as
-          // the document's title reads as nonsense.
-          title: 'the document on screen',
-          score: structure.score,
-          complete: structure.complete,
-          roles: structure.paragraphs.map((p) => p.role),
-          weaknesses: structure.weaknesses.map((w) => w.message)
-        }
-      : undefined
-  }
-}
-
-/**
- * Claims for the in-app path, read from the store rather than from Screen
- * Watch's in-memory map — the editor's claims are persisted, unlike these.
- */
-function inAppClaims(outline: DocumentOutline): TracerContext['claims'] {
-  if (!outline.analysisId) return []
-  return getClaimsByAnalysis(outline.analysisId).map((claim) => ({
-    id: claim.id,
-    text: claim.text,
-    claimType: claim.claimType,
-    evidenceScore: claim.strengthScore
-  }))
-}
-
-// Pushed to the Tracer window whenever the watched document or its claims
-// change, so an open conversation's "what I can see" header stays live
-// instead of being a snapshot from whenever the window happened to open.
-function emitTracerContext(): void {
-  const win = getTracerWindow()
-  if (!win || win.isDestroyed() || !win.isVisible()) return
-  win.webContents.send(IPC_EVENTS.TRACER_CONTEXT_CHANGED, getTracerContext())
 }
 
 export function isScreenWatchEnabled(): boolean {

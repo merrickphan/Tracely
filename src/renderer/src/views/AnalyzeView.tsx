@@ -719,8 +719,7 @@ function DocumentEditor({
         </button>
         {/*
           "Share" and "•••" were here, permanently disabled with "isn't
-          available yet". Same reasoning that already removed Share from
-          Tracer's action row: local-first, no account, no permalink, nothing to
+          available yet". Local-first, no account, no permalink, nothing to
           share TO. A button that can never be enabled is worse than no button —
           it takes up space promising something that is not coming.
         */}
