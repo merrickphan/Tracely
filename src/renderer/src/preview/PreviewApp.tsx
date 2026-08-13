@@ -10,7 +10,6 @@ import * as fx from './fixtures'
 export type PreviewBridge = {
   scenario: Scenario
   log: (method: string) => void
-  onTracerClose: () => void
 }
 
 // Real dimensions, read off the BrowserWindow definitions in src/main/windows/.
@@ -43,14 +42,6 @@ const SURFACES: Surface[] = [
     height: MAIN_WINDOW.height
   },
   {
-    id: 'tracer',
-    label: 'Tracer',
-    hint: 'tracer.html · 420 × 620 · the ai-elements chat surface',
-    src: '/tracer.html',
-    width: 420,
-    height: 620
-  },
-  {
     id: 'floating',
     label: 'Floating popup',
     hint: 'floating.html · 380 × 480 · global-hotkey clipboard capture',
@@ -72,7 +63,7 @@ const SURFACES: Surface[] = [
 const ZOOMS = [0.75, 1, 1.25]
 
 export default function PreviewApp(): JSX.Element {
-  const [active, setActive] = useState<string[]>(['tracer'])
+  const [active, setActive] = useState<string[]>(['overlay'])
   const [scenario, setScenario] = useState<Scenario>(defaultScenario)
   const [zoom, setZoom] = useState(1)
   const [calls, setCalls] = useState<string[]>([])
@@ -89,18 +80,13 @@ export default function PreviewApp(): JSX.Element {
     setCalls((prev) => [method, ...prev].slice(0, 200))
   }, [])
 
-  const onTracerClose = useCallback(() => {
-    setActive((prev) => prev.filter((id) => id !== 'tracer'))
-  }, [])
-
   // Published before any iframe loads; bootstrap.ts reads it synchronously.
   useEffect(() => {
     ;(window as Window & { __tracelyPreview?: PreviewBridge }).__tracelyPreview = {
       scenario,
-      log,
-      onTracerClose
+      log
     }
-  }, [scenario, log, onTracerClose])
+  }, [scenario, log])
 
   function update<K extends keyof Scenario>(key: K, value: Scenario[K]): void {
     setScenario((prev) => ({ ...prev, [key]: value }))
@@ -175,15 +161,6 @@ export default function PreviewApp(): JSX.Element {
               <option value="notConfigured">Auth not configured</option>
             </select>
           </Field>
-          <Field label="Tracer thread">
-            <select
-              value={scenario.tracerMessages}
-              onChange={(e) => update('tracerMessages', e.target.value as Scenario['tracerMessages'])}
-            >
-              <option value="thread">Populated</option>
-              <option value="empty">Empty (starters)</option>
-            </select>
-          </Field>
           <Field label="Structure">
             <select
               value={scenario.structure}
@@ -210,7 +187,7 @@ export default function PreviewApp(): JSX.Element {
             />
             <span>
               <strong>Relay configured</strong>
-              <em>off ⇒ Tracer composer disables itself</em>
+              <em>off ⇒ Critique Argument refuses up front</em>
             </span>
           </label>
           <label className="preview-check">

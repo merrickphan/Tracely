@@ -170,8 +170,8 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       await tracelyApi.clearHistory(scope === 'all')
       setClearDone(
         scope === 'all'
-          ? 'History, saved sources, citations and Tracer conversations deleted.'
-          : 'Analysis history and Tracer conversations deleted. Saved sources kept.'
+          ? 'History, saved sources and citations deleted.'
+          : 'Analysis history deleted. Saved sources kept.'
       )
     } catch (err) {
       setClearError(err instanceof Error ? err.message : String(err))
@@ -407,8 +407,8 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
             title={clearConfirm === 'all' ? 'Delete everything?' : 'Clear analysis history?'}
             message={
               clearConfirm === 'all'
-                ? 'Deletes every past analysis, every source you saved, every citation generated, and all Tracer conversations. This machine holds the only copy.'
-                : 'Deletes every past analysis and its claims and evidence, plus your Tracer conversations. Saved sources are kept.'
+                ? 'Deletes every past analysis, every source you saved and every citation generated. This machine holds the only copy.'
+                : 'Deletes every past analysis and its claims and evidence. Saved sources are kept.'
             }
             confirmLabel={clearConfirm === 'all' ? 'Delete everything' : 'Clear history'}
             danger
@@ -686,10 +686,6 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                   </Button>
                 </div>
               </div>
-              <p className="muted settings-app-note">
-                Both also delete your Tracer conversations, because those quote your own writing back at you —
-                leaving them behind would defeat the point of the control.
-              </p>
               {clearError ? <p className="error-text">{clearError}</p> : null}
               {clearDone ? <p className="muted">{clearDone}</p> : null}
             </div>

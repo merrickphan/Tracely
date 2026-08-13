@@ -69,7 +69,7 @@ from the commit it was supposedly built from.
 
 **Keep branches short-lived.** Open a PR within a day or two. Long-lived
 branches are the single largest source of pain in this repo's history: a
-six-hunk conflict in `TracerApp.tsx` came from `main` rebuilding a component on
+six-hunk conflict in a renderer component came from `main` rebuilding it on
 Tailwind while a branch kept editing the pre-Tailwind version, and 421 lines
 once sat uncommitted in stale worktrees.
 

@@ -13,9 +13,13 @@ import type {
   EvidenceItem,
   DocumentOutline,
   DocumentRecord,
+  EvidenceCoverage,
   LibraryItem,
+  ParagraphOutline,
   ParagraphRole,
   ScoreBreakdown,
+  StructureComponents,
+  StructureWeakness,
   SourceProvider,
   Theme,
   TracerConversation,
@@ -256,6 +260,22 @@ export interface ScreenRect {
 // in the overlay payload that gets re-sent on every change; the full list is
 // only ever fetched from the main Tracely window via the existing
 // EVIDENCE_FIND flow, not through Screen Watch.
+/**
+ * What is wrong with a claim. Mirrors ScreenWatchProblemKind in
+ * services/screenWatch/problemKind.ts, which is where it is decided — declared
+ * here because the renderer needs the union and must not import main.
+ */
+export type ScreenWatchProblemKind =
+  | 'searching'
+  | 'weak-reasoning'
+  | 'contradicted-claim'
+  | 'unverified-statistic'
+  | 'no-sources'
+  | 'weak-evidence'
+  | 'partial-evidence'
+  | 'missing-citation'
+  | 'cited-unverified'
+
 export interface ScreenWatchEvidenceArticle {
   title: string
   venue: string | null
@@ -273,6 +293,14 @@ export interface ScreenWatchClaimEvidence {
   score: number
   count: number
   articles: ScreenWatchEvidenceArticle[]
+  // The four factors the score is made of. The widget's single-claim card
+  // ("Argument check" in Figma) shows them as a 2x2 breakdown, which is the
+  // whole reason the score is a published formula rather than a model's
+  // opinion — a student who disagrees with 34/100 can see which factor cost
+  // them the points. `support` is omitted: it is weighted 0 on the no-stance
+  // path, which ml/index.ts establishes is the only path a packaged build
+  // takes, so showing it would report a factor that cannot vary.
+  breakdown: ScoreBreakdown
 }
 
 // Set once the user has actually inserted a citation into the watched
@@ -290,6 +318,28 @@ export interface ScreenWatchClaimSummary {
   text: string
   claimType: ClaimType
   confidence: number
+  /**
+   * The writer already put a citation in this sentence — (Smith, 2020),
+   * "Smith (2020)", [3], a DOI.
+   *
+   * Screen Watch had no way to know this: `citation` below is set only when
+   * TRACELY inserted one. So a properly cited sentence was told, in those
+   * words, that it was "Missing citation" — and because a cited sentence tends
+   * to be a searchable one, it also scored well, which is the band that copy
+   * comes from. Both the card's wording and whether the claim is shown at all
+   * turn on this now.
+   */
+  hasInlineCitation: boolean
+  /**
+   * Every problem this claim has, worst first — decided in main so the
+   * underline and this card cannot disagree.
+   *
+   * A sentence can be in more than one kind of trouble at once. The card shows
+   * only the first and badges the count; dismissing or fixing it advances to
+   * the next, so fixing what is shown never reveals a second problem the
+   * writer had no idea was there.
+   */
+  problemKinds: ScreenWatchProblemKind[]
   // null while the background search hasn't resolved yet (or failed) for
   // this claim — the renderer shows a loading state, not a zero score.
   evidence: ScreenWatchClaimEvidence | null
@@ -364,6 +414,43 @@ export interface ScreenWatchCritiqueClaimResponse {
   verdict: CritiqueVerdict
 }
 
+/**
+ * The structural read of the watched document, as the overlay needs it.
+ *
+ * A projection of `DocumentOutline` rather than the thing itself. Dropped:
+ * `documentId`/`analysisId` (both null — Screen Watch persists nothing),
+ * `sourceHash`/`schemaVersion` (no stored outline to compare against),
+ * `analyzedAt` (a changing timestamp would defeat the payload dedupe in
+ * updateOverlayAndWidget for no benefit — there is no stale banner here), and
+ * `rolesFrom` (always 'heuristic' on this path, so the overlay states it
+ * outright instead of branching on a field with one value).
+ *
+ * Null whenever `structureFit` judges the extracted text unfit to score. The
+ * overlay hides the score chip entirely in that case rather than showing a
+ * number nobody can act on.
+ */
+export interface ScreenWatchStructure {
+  score: number
+  /** False when any paragraph is `unknown` — the score is then provisional. */
+  complete: boolean
+  components: StructureComponents
+  coverage: EvidenceCoverage
+  weaknesses: StructureWeakness[]
+  paragraphs: ParagraphOutline[]
+  /**
+   * First line of each paragraph, index-aligned so `previews[p.index - 1]`
+   * belongs to `p`.
+   *
+   * `DocumentOutline` deliberately carries no prose, and the in-app panel joins
+   * roles onto the live editor text instead. The overlay has no copy of the
+   * watched document, and shipping one would mean the whole UIA read in every
+   * payload — so main truncates here. Not a new exposure: `ScreenWatchHoverEvent`
+   * already carries the full document text to this renderer on every widget
+   * hover.
+   */
+  previews: string[]
+}
+
 export interface ScreenWatchWidget {
   rect: ScreenRect
   // Whether `rect` is the collapsed launcher circle or the expanded stats
@@ -376,20 +463,41 @@ export interface ScreenWatchWidget {
   // shows every currently-flagged claim in a grid. Determines `rect`'s
   // actual size (see computeAllPanelSize in screenWatchService.ts) since
   // "no scrolling" means the panel itself has to grow/shrink to fit.
-  viewMode: 'single' | 'all'
+  // 'structure' is the draft's structural read — same width as 'all' so the
+  // bottom-right-anchored panel does not jump sideways when switching, and the
+  // one mode whose body is allowed to scroll (paragraph count is unbounded).
+  viewMode: 'single' | 'all' | 'structure'
   claimCount: number
   // Ordered by confidence, highest first — the popup/panel picks which one
   // to show (hovered claim, or the top one by default) from this list
   // rather than needing a separate round-trip per claim.
   claims: ScreenWatchClaimSummary[]
-  // claims.length + the evidence item count of every claim whose search has
-  // resolved so far — the single "how much has been found" number the
-  // widget badge and panel header show.
+  // The number of sources found across every currently-flagged claim — the
+  // single "how much has been found" number the widget badge and panel header
+  // show. Sources only: it once also added +1 per claim and was deliberately
+  // deflated, and structural weaknesses are deliberately NOT folded in either
+  // (they are heuristic, and they are exactly what goes noisy when paragraph
+  // extraction misfires — see structureFit.ts).
   totalInfoCount: number
+  // Null when there is no trustworthy structural read; see ScreenWatchStructure.
+  structure: ScreenWatchStructure | null
 }
 
 export interface ScreenWatchOverlayUpdateEvent {
-  underlines: { id: string; rects: ScreenRect[]; claimType: ClaimType }[]
+  /**
+   * `problemKind` is what the mark is coloured by. `claimType` rides along for
+   * the popover's type dot, but it must NOT drive the underline: colouring by
+   * claim type meant every factual claim in a document was the same orange
+   * whatever state it was in, and the underline — the part of Screen Watch
+   * people actually read — carried no information about the problem at all.
+   */
+  underlines: {
+    id: string
+    rects: ScreenRect[]
+    claimType: ClaimType
+    /** Worst first. The mark is coloured by [0]; length > 1 shows a count. */
+    problemKinds: ScreenWatchProblemKind[]
+  }[]
   widget: ScreenWatchWidget | null
 }
 
@@ -413,7 +521,7 @@ export interface ScreenWatchSetWidgetExpandedResponse {
 }
 
 export interface ScreenWatchSetWidgetViewModeRequest {
-  mode: 'single' | 'all'
+  mode: 'single' | 'all' | 'structure'
 }
 export interface ScreenWatchSetWidgetViewModeResponse {
   ok: true

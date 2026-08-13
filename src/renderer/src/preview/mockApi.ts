@@ -1,4 +1,8 @@
-import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent } from '@shared/ipc-contract'
+import type {
+  ScreenWatchClaimSummary,
+  ScreenWatchHoverEvent,
+  ScreenWatchOverlayUpdateEvent
+} from '@shared/ipc-contract'
 import type {
   AuthUser,
   Claim,
@@ -35,10 +39,8 @@ import * as fx from './fixtures'
 export type Scenario = {
   /** Signed-in state — drives App.tsx's auth gate. */
   auth: 'ready' | 'signedOut' | 'needsName' | 'notConfigured'
-  /** With no relay compiled in, Tracer's composer disables itself. */
+  /** With no relay compiled in, every relay-backed action refuses up front. */
   relayConfigured: boolean
-  /** Start Tracer on a blank conversation vs. a populated one. */
-  tracerMessages: 'empty' | 'thread'
   /** Make every relay-backed call reject, to review error states. */
   failRelay: boolean
   /** Add a delay to async calls so loading states are actually visible. */
@@ -67,7 +69,6 @@ const FOUND_BREAKDOWN: ScoreBreakdown = {
 export const defaultScenario: Scenario = {
   auth: 'ready',
   relayConfigured: true,
-  tracerMessages: 'thread',
   failRelay: false,
   latencyMs: 0,
   structure: 'heuristic'
@@ -76,11 +77,7 @@ export const defaultScenario: Scenario = {
 /** Names of every call the harness logs, so the UI can show what fired. */
 export type CallLogEntry = { at: number; method: string }
 
-export function createMockApi(
-  scenario: Scenario,
-  log: (method: string) => void,
-  onTracerClose: () => void
-): TracelyApi {
+export function createMockApi(scenario: Scenario, log: (method: string) => void): TracelyApi {
   let latency = scenario.latencyMs
 
   async function ok<T>(method: string, value: T): Promise<T> {
@@ -118,7 +115,21 @@ export function createMockApi(
   // state, because the mock is constructed once per bridge.
   let previewClaims: Claim[] = [...fx.claims]
   let previewDocs: DocumentRecord[] = [...fx.documents]
-  let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
+  // Screen Watch's claims are pushed, not fetched: the real service folds a
+  // refresh or a critique into its in-memory claim and redraws the overlay, so
+  // the panel's two result states are only reachable here if the mock does the
+  // same. Without this, "Critique Argument" logged an IPC call and the card
+  // never changed.
+  let watchClaims: ScreenWatchClaimSummary[] = [...fx.screenWatchClaims]
+  let lastWidget: { expanded: boolean; viewMode: 'single' | 'all' | 'structure' } = {
+    expanded: fx.overlayUpdate.widget?.expanded ?? false,
+    viewMode: fx.overlayUpdate.widget?.viewMode ?? 'single'
+  }
+
+  function patchWatchClaim(claimId: string, patch: Partial<ScreenWatchClaimSummary>): void {
+    watchClaims = watchClaims.map((c) => (c.id === claimId ? { ...c, ...patch } : c))
+    emitWidget({})
+  }
   let nextId = 100
 
   /** Mirrors computeEvidenceCoverage in the main process. */
@@ -137,6 +148,44 @@ export function createMockApi(
   const outlineForScenario = (): DocumentOutline | null => {
     if (scenario.structure === 'none') return null
     return scenario.structure === 'classified' ? fx.documentOutlineClassified : fx.documentOutline
+  }
+
+  // Rebuild the overlay payload the way screenWatchService would, so the
+  // widget's own controls actually move it. Panel size is computed in main in
+  // production (hoverTracking.ts hit-tests the same rect the renderer draws),
+  // so the sizes here mirror panelSize.ts — if they drift, the preview lies
+  // about how much room the content has.
+  function emitWidget(patch: {
+    expanded?: boolean
+    viewMode?: 'single' | 'all' | 'structure'
+  }): void {
+    const w = window as Window & {
+      __previewEmitOverlay?: (e: ScreenWatchOverlayUpdateEvent) => void
+    }
+    if (!w.__previewEmitOverlay) return
+    const base = fx.overlayUpdate.widget
+    if (!base) return
+    const viewMode = patch.viewMode ?? lastWidget.viewMode
+    const expanded = patch.expanded ?? lastWidget.expanded
+    lastWidget = { expanded, viewMode }
+    // Taken from panelSize.ts for this fixture's shape (3 claims, 4 weaknesses,
+    // 6 paragraphs), not estimated: PANEL_WIDTH = 480, SINGLE_PANEL_HEIGHT =
+    // 532, computeAllPanelSize(3) = 313, computeStructurePanelSize({4, 6}) =
+    // 568. Guessing these makes the preview claim more or less room than the
+    // real panel has, which is the one thing it must not do — re-read them from
+    // that module whenever its constants change rather than adjusting by eye.
+    const rect = expanded
+      ? {
+          x: 90,
+          y: 20,
+          width: 480,
+          height: viewMode === 'single' ? 532 : viewMode === 'all' ? 313 : 568
+        }
+      : { x: 520, y: 300, width: 56, height: 56 }
+    w.__previewEmitOverlay({
+      ...fx.overlayUpdate,
+      widget: { ...base, claims: watchClaims, rect, expanded, viewMode }
+    })
   }
 
   return {
@@ -311,17 +360,38 @@ export function createMockApi(
     screenWatch: {
       setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),
       getStatus: () => ok('screenWatch.getStatus', fx.screenWatchStatus),
-      setWidgetExpanded: () => ok('screenWatch.setWidgetExpanded', { ok: true as const }),
-      setWidgetViewMode: () => ok('screenWatch.setWidgetViewMode', { ok: true as const }),
+      // These two re-emit the overlay payload rather than only logging.
+      // In production the service owns widget geometry and pushes a new
+      // payload back, so the panel's own Back / Show all / score chip / close
+      // buttons are how you navigate it. Returning a bare ok left every one of
+      // them inert in the preview, which is precisely where they need
+      // exercising — the overlay is the hardest surface to reach for real.
+      setWidgetExpanded: (req) => {
+        emitWidget({ expanded: req.expanded, viewMode: req.expanded ? undefined : 'single' })
+        return ok('screenWatch.setWidgetExpanded', { ok: true as const })
+      },
+      setWidgetViewMode: (req) => {
+        emitWidget({ expanded: true, viewMode: req.mode })
+        return ok('screenWatch.setWidgetViewMode', { ok: true as const })
+      },
       widgetDragStart: () => ok('screenWatch.widgetDragStart', { ok: true as const }),
       widgetDragEnd: () => ok('screenWatch.widgetDragEnd', { ok: true as const }),
       setActivePopoverRect: () => ok('screenWatch.setActivePopoverRect', { ok: true as const }),
-      refreshEvidence: () => ok('screenWatch.refreshEvidence', { evidence: fx.screenWatchClaims[0].evidence }),
-      critiqueClaim: () =>
-        relay('screenWatch.critiqueClaim', {
-          critique: fx.claims[0].critique ?? '',
-          verdict: fx.claims[0].critiqueVerdict ?? ('weak' as const)
-        }),
+      refreshEvidence: async (req) => {
+        const result = await ok('screenWatch.refreshEvidence', {
+          evidence: fx.screenWatchEvidenceRefreshed
+        })
+        patchWatchClaim(req.claimId, { evidence: fx.screenWatchEvidenceRefreshed })
+        return result
+      },
+      critiqueClaim: async (req) => {
+        const result = await relay('screenWatch.critiqueClaim', {
+          critique: fx.screenWatchCritique,
+          verdict: 'weak' as const
+        })
+        patchWatchClaim(req.claimId, { critique: fx.screenWatchCritique, critiqueVerdict: 'weak' })
+        return result
+      },
       findSource: () =>
         ok('screenWatch.findSource', {
           candidates: fx.sources.map((s, i) => ({
@@ -344,78 +414,6 @@ export function createMockApi(
           }
         }),
       undoCitation: () => ok('screenWatch.undoCitation', { ok: true as const })
-    },
-    tracer: {
-      open: () => ok('tracer.open', { ok: true as const }),
-      close: () => {
-        log('tracer.close')
-        onTracerClose()
-        return Promise.resolve({ ok: true as const })
-      },
-      send: async (req) => {
-        const userMessage = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'user' as const,
-          content: req.message,
-          createdAt: fx.T0
-        }
-        const reply = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'tracer' as const,
-          content:
-            'This is a preview reply — no relay was contacted. It is deliberately several sentences long, and contains a paragraph break, so the bubble, the wrapping and the action row underneath all get exercised at a realistic size.\n\nSwitch the "fail relay" scenario on to review the error state instead.',
-          createdAt: fx.T0
-        }
-        const result = await relay('tracer.send', { userMessage, reply })
-        tracerMsgs = [...tracerMsgs, userMessage, reply]
-        return result
-      },
-      // Mirrors the real handler: the discarded exchange is dropped from the
-      // transcript before the replacement is appended, so a retry replaces the
-      // answer you didn't like rather than appending a second copy of the
-      // question. Reviewing the retry state in the preview harness only tells
-      // you anything if it behaves that way here too.
-      retry: async (req) => {
-        const previous = [...tracerMsgs].reverse().find((m) => m.role === 'user')
-        if (!previous) throw new Error('Nothing to retry')
-
-        const kept = tracerMsgs.slice(0, tracerMsgs.findIndex((m) => m.id === previous.id))
-        const userMessage = { ...previous, id: `pm${nextId++}`, createdAt: fx.T0 }
-        const reply = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'tracer' as const,
-          content:
-            'This is a retried preview reply — deliberately different from the first, so you can see that the old answer was replaced rather than a second one appended.',
-          createdAt: fx.T0
-        }
-        const result = await relay('tracer.retry', { userMessage, reply })
-        tracerMsgs = [...kept, userMessage, reply]
-        return result
-      },
-      getConversation: (req) =>
-        ok('tracer.getConversation', {
-          conversation: fx.tracerConversations.find((c) => c.id === req.conversationId) ?? fx.tracerConversations[0],
-          messages: tracerMsgs,
-          context: fx.tracerContext,
-          relayConfigured: scenario.relayConfigured,
-          focusedClaimId: null,
-          focusedPrompt: null
-        }),
-      listConversations: () => ok('tracer.listConversations', { conversations: fx.tracerConversations }),
-      newConversation: () => {
-        tracerMsgs = []
-        return ok('tracer.newConversation', { conversation: fx.tracerConversations[0] })
-      },
-      deleteConversation: () => ok('tracer.deleteConversation', { ok: true as const })
-    },
-    onTracerContextChanged: (cb) => subscribe('onTracerContextChanged', fx.tracerContext, cb),
-    onTracerOpened: (cb) => {
-      log('onTracerOpened (subscribe)')
-      const id = window.setTimeout(() => cb(), 0)
-      return () => window.clearTimeout(id)
     },
     onClipboardCaptured: (cb) =>
       subscribe('onClipboardCaptured', { text: fx.analysis.sourceText }, cb),

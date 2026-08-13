@@ -11,7 +11,6 @@ import { registerProfileHandlers } from './profileHandlers'
 import { registerScreenWatchHandlers } from './screenWatchHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
 import { registerStructureHandlers } from './structureHandlers'
-import { registerTracerHandlers } from './tracerHandlers'
 import { registerWindowHandlers } from './windowHandlers'
 
 export function registerIpcHandlers(): void {
@@ -29,5 +28,4 @@ export function registerIpcHandlers(): void {
   registerScreenWatchHandlers()
   registerProfileHandlers()
   registerAuthHandlers()
-  registerTracerHandlers()
 }

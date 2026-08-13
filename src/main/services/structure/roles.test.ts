@@ -39,6 +39,17 @@ describe('hasWarrantMarker', () => {
   it('is case insensitive', () => {
     strictEqual(hasWarrantMarker('Turnout fell. THEREFORE the result was close.'), true)
   })
+
+  it('does not find "thus" inside "enthusiasm"', () => {
+    // The marker list was matched with String.includes, so every one of these
+    // ordinary sentences counted as a reasoning connective — worth up to 20 of
+    // the 100 points, and enough to suppress the paragraph's warrant-gap.
+    strictEqual(hasWarrantMarker('Turnout fell. Enthusiasm for the policy grew.'), false)
+    strictEqual(hasWarrantMarker('Turnout fell. The students were enthusiastic.'), false)
+    strictEqual(hasWarrantMarker('Turnout fell. He was an enthusiast of the method.'), false)
+    // Still found when it is actually the word.
+    strictEqual(hasWarrantMarker('Turnout fell. Thus the result was close.'), true)
+  })
 })
 
 describe('hasSignificanceMarker', () => {

@@ -16,7 +16,7 @@ false.
 
 `.env` holds **production** values, so a bare `npm run dev` spends the real
 OpenAI key and counts against real quota on every Analyze, every Screen Watch
-detection, every Tracer message. Fine for looking at a button. Not fine for
+detection, every critique. Fine for looking at a button. Not fine for
 running detection twenty times while tuning something.
 
 `TRACELY_ENV=staging` reads `.env.staging` instead: separate Supabase project,
@@ -49,4 +49,6 @@ that only breaks once packaged — the ML worker loading out of `app.asar`, the
 installer, auto-update. v0.3.76 shipped with the entire ML stack excluded and
 dev was completely happy.
 
-For those, build a real installer with `/preview`.
+For those, build a real installer with `/beta`. (`/preview` is the UI harness —
+real renderer, mocked everything else — which cannot see packaging problems
+either.)

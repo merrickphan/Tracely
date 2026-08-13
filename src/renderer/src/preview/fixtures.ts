@@ -6,8 +6,8 @@ import type {
   ProfileInfo,
   ScreenWatchClaimSummary,
   ScreenWatchOverlayUpdateEvent,
+  ScreenWatchStructure,
   ScreenWatchStatus,
-  TracerContext
 } from '@shared/ipc-contract'
 import type {
   Analysis,
@@ -20,8 +20,6 @@ import type {
   EvidenceItem,
   LibraryItem,
   Source,
-  TracerConversation,
-  TracerMessage
 } from '@shared/types'
 
 // Fixed rather than Date.now() so a screenshot taken today and one taken
@@ -353,74 +351,21 @@ export const documentOutlineClassified: DocumentOutline = {
   ]
 }
 
-export const tracerConversations: TracerConversation[] = [
-  { id: 'tc1', title: 'Why did you flag this claim?', createdAt: T0, updatedAt: T0 },
-  { id: 'tc2', title: 'How do I tell if a source is credible?', createdAt: T0, updatedAt: T0 },
-  {
-    id: 'tc3',
-    title: 'What makes my argument about standardized testing weak, exactly?',
-    createdAt: T0,
-    updatedAt: T0
-  }
-]
-
-export const tracerMessages: TracerMessage[] = [
-  {
-    id: 'tm1',
-    conversationId: 'tc1',
-    role: 'user',
-    content: 'Why did you flag this claim, and how would I strengthen it?\n\n"Screen time causes depression in teenagers."',
-    createdAt: T0
-  },
-  {
-    id: 'tm2',
-    conversationId: 'tc1',
-    role: 'tracer',
-    content:
-      'Because the sentence asserts causation, but the studies usually cited for it are cross-sectional — they measure screen time and mood at the same moment.\n\nAsk yourself: could the arrow point the other way? A teenager who is already depressed may withdraw to their phone. Until your source rules that out, "causes" is doing more work than the evidence supports.\n\nTwo honest fixes: soften the verb ("is associated with"), or find a longitudinal study that measures screen time first and mood later. The Okonkwo 2023 cohort in your evidence list is the second kind — read what it actually concludes before you cite it, though.',
-    createdAt: T0
-  },
-  {
-    id: 'tm3',
-    conversationId: 'tc1',
-    role: 'user',
-    content: 'So should I just delete the sentence?',
-    createdAt: T0
-  },
-  {
-    id: 'tm4',
-    conversationId: 'tc1',
-    role: 'tracer',
-    // tm2 above is deliberately markdown-free and this one deliberately is not:
-    // together they cover both halves of the rendering contract — plain prose
-    // must survive verbatim, and markdown must actually render.
-    content:
-      'That is your call, not mine — but **deleting is usually the weaker move**. The observation underneath the sentence is real and worth keeping; it is only the causal verb that overreaches.\n\nTry this instead:\n\n1. Rewrite it with the weakest verb you can still defend.\n2. Check whether the sentence would survive a reader looking up your source.\n\nNote that `is associated with` is not a hedge — it is a *more precise* claim than "causes", and you can defend it.',
-    createdAt: T0
-  }
-]
-
-export const tracerContext: TracerContext = {
-  processName: 'WINWORD.EXE',
-  documentText: analysis.sourceText,
-  // Not Claim[] — TracerContext carries a trimmed shape (see ipc-contract).
-  claims: claims.map((c) => ({
-    id: c.id,
-    text: c.text,
-    claimType: c.claimType,
-    evidenceScore: c.strengthScore
-  }))
-}
-
 export const screenWatchClaims: ScreenWatchClaimSummary[] = [
   {
     id: 'c1',
     text: 'Screen time causes depression in teenagers.',
     claimType: 'causal',
     confidence: 0.93,
+    hasInlineCitation: false,
+    problemKinds: ['weak-reasoning', 'partial-evidence'],
     evidence: {
       score: 34,
       count: 6,
+      // Hand-traced against WEIGHTS_WITHOUT_STANCE in search/scoring.ts:
+      // .3(.42) + .25(.5) + .3(.31) + .15(.2) = .126 + .125 + .093 + .03 = .374
+      // -> 37, close enough to the fixture's 34 to read as the same claim.
+      breakdown: { sourceCount: 0.5, quality: 0.31, recency: 0.2, relevance: 0.42, support: 0 },
       articles: [
         {
           title: 'Adolescent screen time and depressive symptoms: a three-year longitudinal cohort',
@@ -437,6 +382,14 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
           provider: 'crossref',
           url: 'https://doi.org/10.1073/pnas.2210918120',
           faviconDataUrl: null
+        },
+        {
+          title: 'Displacement or distress? Two accounts of adolescent smartphone use',
+          venue: 'Journal of Adolescence',
+          year: 2021,
+          provider: 'semanticscholar',
+          url: 'https://doi.org/10.1016/j.adolescence.2021.04.006',
+          faviconDataUrl: null
         }
       ]
     },
@@ -449,7 +402,14 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: '70% of adolescents who use social media for more than three hours a day report symptoms of anxiety.',
     claimType: 'statistic',
     confidence: 0.87,
-    evidence: { score: 61, count: 4, articles: [] },
+    hasInlineCitation: false,
+    problemKinds: ['unverified-statistic'],
+    evidence: {
+      score: 61,
+      count: 4,
+      breakdown: { sourceCount: 0.83, quality: 0.72, recency: 0.55, relevance: 0.38, support: 0 },
+      articles: []
+    },
     critique: null,
     critiqueVerdict: null,
     citation: null
@@ -459,6 +419,8 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     text: 'This is the clearest public-health crisis of our generation.',
     claimType: 'opinion',
     confidence: 0.55,
+    hasInlineCitation: false,
+    problemKinds: ['missing-citation'],
     // null evidence exercises the "search still running" state, which is
     // otherwise only visible for the second or two after detection.
     evidence: null,
@@ -479,21 +441,150 @@ export const screenWatchStatus: ScreenWatchStatus = {
   blockedApp: null
 }
 
+/**
+ * The structural read Screen Watch computes over the watched document.
+ *
+ * Score traced by hand against scoreDraft's rubric, so a change to the formula
+ * shows up here as a disagreement rather than as a fixture quietly following it:
+ *
+ *   thesis            20/20  role 'thesis' at index 0
+ *   governing claims  20/20  body = slice(1,-1) = 4 paragraphs, 2 carry role
+ *                            'claim', expected = ceil(4 * 0.5) = 2, so 2/2
+ *   warrant           13/20  owed by 'claim'|'evidence' = paragraphs 2, 3, 4;
+ *                            2 of 3 have a connective -> 20 * 2/3
+ *   counterargument   15/15  paragraph 5
+ *   significance       0/15  no significance paragraph, no so-what in the
+ *                            conclusion — which is why 'no-significance' is
+ *                            in the weakness list below
+ *   conclusion        10/10  role 'conclusion' in last position
+ *                    ------
+ *                    78/100
+ *
+ * `complete: true` (no 'unknown' role), so the whole-draft weaknesses are
+ * allowed to fire. Set a role to 'unknown' to exercise the Provisional badge
+ * and watch 'no-significance' correctly disappear.
+ */
+export const screenWatchStructure: ScreenWatchStructure = {
+  score: 78,
+  complete: true,
+  components: {
+    thesis: 20,
+    governingClaims: 20,
+    warrant: 13.333333333333332,
+    counterargument: 15,
+    significance: 0,
+    conclusion: 10
+  },
+  // Matches screenWatchClaims: c1 (34) and c2 (61) found sources, c3 searched
+  // and found nothing — which is what makes it an 'unsupported-claim' rather
+  // than an unchecked one.
+  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 42, unchecked: 0 },
+  weaknesses: [
+    {
+      kind: 'unsupported-claim',
+      paragraphIndex: 6,
+      claimId: 'c3',
+      message: 'The claim in the 6th paragraph has no supporting source yet.',
+      tracerPrompt:
+        'Tracely could not find evidence for one of my claims. How should I go about checking it?'
+    },
+    {
+      kind: 'warrant-gap',
+      paragraphIndex: 3,
+      claimId: null,
+      message:
+        'The 3rd paragraph presents evidence without explaining how it supports the argument.',
+      tracerPrompt:
+        'In my 3rd paragraph, how do I explain what my evidence actually shows without just restating it?'
+    },
+    {
+      kind: 'new-claim-in-conclusion',
+      paragraphIndex: 6,
+      claimId: 'c3',
+      message:
+        'The conclusion introduces a new claim. Anything asserted here has no room left to be supported.',
+      tracerPrompt: 'My conclusion makes a new claim. Where should that argument go instead?'
+    },
+    {
+      // paragraphIndex null — the case the overlay must render as a plain
+      // "Draft" chip rather than a jump target.
+      kind: 'no-significance',
+      paragraphIndex: null,
+      claimId: null,
+      message:
+        'The draft never says why this matters. A reader finishes knowing what is true but not what follows from it.',
+      tracerPrompt:
+        'My essay proves its point but never says why it matters. How do I write that without overclaiming?'
+    }
+  ],
+  paragraphs: [
+    { index: 1, role: 'thesis', hasWarrant: false, claimIds: [] },
+    { index: 2, role: 'claim', hasWarrant: true, claimIds: ['c1'] },
+    // The one paragraph owed a warrant that has none — the warrant-gap above.
+    { index: 3, role: 'evidence', hasWarrant: false, claimIds: [] },
+    { index: 4, role: 'claim', hasWarrant: true, claimIds: ['c2'] },
+    { index: 5, role: 'counterargument', hasWarrant: true, claimIds: [] },
+    { index: 6, role: 'conclusion', hasWarrant: true, claimIds: ['c3'] }
+  ],
+  previews: [
+    'Schools should delay their start times, because the sleep teenagers lose to an early bell…',
+    'Screen time causes depression in teenagers. Adolescents who spend longer on their phones…',
+    'Twenge and Campbell (2018) found a dose-response relationship. Orben and Przybylski (2019)…',
+    '70% of adolescents who use social media for more than three hours a day report symptoms…',
+    'Some researchers argue the effect sizes here are trivially small, and that is fair — the…',
+    'In conclusion, schools must act. Districts that moved to a later bell saw graduation rates…'
+  ]
+}
+
 // Underline rects are in overlay-window-local coordinates. The preview
 // renders the overlay into a fixed-size frame, so these are chosen to land
 // inside it rather than copied from a real screen capture.
+/**
+ * What "Refresh Evidence" lands: the same three sources plus one the previous
+ * search missed, so the panel's "Updated just now" chip and its "New" row have
+ * something real to mark. Deliberately a genuine superset — the card decides
+ * which rows are new by diffing against the pre-refresh set, and a fixture that
+ * simply replaced the list would light every row up.
+ */
+export const screenWatchEvidenceRefreshed: ScreenWatchClaimSummary['evidence'] = {
+  score: 41,
+  count: 9,
+  breakdown: { sourceCount: 0.75, quality: 0.38, recency: 0.44, relevance: 0.42, support: 0 },
+  articles: [
+    {
+      title: 'Longitudinal evidence on smartphone use and adolescent mood: a 2024 replication',
+      venue: 'Nature Human Behaviour',
+      year: 2024,
+      provider: 'openalex',
+      url: 'https://doi.org/10.1038/s41562-024-01822-x',
+      faviconDataUrl: null
+    },
+    ...screenWatchClaims[0].evidence!.articles
+  ]
+}
+
+/**
+ * A critique in the shape the relay actually returns — one paragraph under 120
+ * words, not a bulleted list. The panel's critique view has to read this back
+ * into the design's issue rows, so the fixture must be the awkward case rather
+ * than a tidy list that would make the parser look better than it is.
+ */
+export const screenWatchCritique =
+  'The claim asserts causation from evidence that is largely cross-sectional. Evidence 2 measures screen time and mood at the same moment, so it cannot establish which came first — a withdrawn teenager may reach for a phone rather than the other way round.\n\nIt also generalises from adolescents in high-income countries to "teenagers" without qualification. Narrow the population, or soften "causes" to "is associated with", which evidence 1 does support.'
+
 export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
   underlines: [
-    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal' },
+    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal', problemKinds: ['weak-reasoning', 'partial-evidence'] },
     {
       id: 'c2',
       rects: [
         { x: 60, y: 120, width: 420, height: 18 },
         { x: 60, y: 142, width: 180, height: 18 }
       ],
-      claimType: 'statistic'
+      claimType: 'statistic',
+      problemKinds: ['unverified-statistic']
     },
-    { id: 'c3', rects: [{ x: 60, y: 174, width: 330, height: 18 }], claimType: 'opinion' }
+    { id: 'c3', rects: [{ x: 60, y: 174, width: 330, height: 18 }], claimType: 'opinion', problemKinds: ['missing-citation'] }
   ],
   widget: {
     rect: { x: 520, y: 300, width: 56, height: 56 },
@@ -501,6 +592,7 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
     viewMode: 'single',
     claimCount: screenWatchClaims.length,
     claims: screenWatchClaims,
-    totalInfoCount: screenWatchClaims.length + 10
+    totalInfoCount: screenWatchClaims.length + 10,
+    structure: screenWatchStructure
   }
 }
