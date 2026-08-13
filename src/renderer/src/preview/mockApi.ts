@@ -1,5 +1,16 @@
-import type { ScreenWatchHoverEvent, ScreenWatchOverlayUpdateEvent } from '@shared/ipc-contract'
-import type { AuthUser, DocumentRecord } from '@shared/types'
+import type {
+  ScreenWatchClaimSummary,
+  ScreenWatchHoverEvent,
+  ScreenWatchOverlayUpdateEvent
+} from '@shared/ipc-contract'
+import type {
+  AuthUser,
+  Claim,
+  DocumentOutline,
+  DocumentRecord,
+  EvidenceCoverage,
+  ScoreBreakdown
+} from '@shared/types'
 
 // Deliberately `Window['tracely']` rather than a direct import of
 // src/preload/index.ts. Both resolve to the same `TracelyApi`, but pulling
@@ -28,32 +39,45 @@ import * as fx from './fixtures'
 export type Scenario = {
   /** Signed-in state — drives App.tsx's auth gate. */
   auth: 'ready' | 'signedOut' | 'needsName' | 'notConfigured'
-  /** With no relay compiled in, Tracer's composer disables itself. */
+  /** With no relay compiled in, every relay-backed action refuses up front. */
   relayConfigured: boolean
-  /** Start Tracer on a blank conversation vs. a populated one. */
-  tracerMessages: 'empty' | 'thread'
   /** Make every relay-backed call reject, to review error states. */
   failRelay: boolean
   /** Add a delay to async calls so loading states are actually visible. */
   latencyMs: number
+  /**
+   * Which Structure outline to serve.
+   *
+   * 'heuristic' is what the local rules produce with no relay: two paragraphs
+   * unlabelled, `complete: false`, whole-draft weaknesses withheld. 'none'
+   * covers a document that has never been analyzed, and 'stale' one edited
+   * since. The confident, fully classified state is otherwise unreachable in
+   * the preview, since there is no relay behind the harness to produce it.
+   */
+  structure: 'heuristic' | 'classified' | 'stale' | 'none'
+}
+
+/** What a claim's breakdown looks like once a search has found something. */
+const FOUND_BREAKDOWN: ScoreBreakdown = {
+  sourceCount: 0.33,
+  quality: 0.6,
+  recency: 0.7,
+  relevance: 0.5,
+  support: 0
 }
 
 export const defaultScenario: Scenario = {
   auth: 'ready',
   relayConfigured: true,
-  tracerMessages: 'thread',
   failRelay: false,
-  latencyMs: 0
+  latencyMs: 0,
+  structure: 'heuristic'
 }
 
 /** Names of every call the harness logs, so the UI can show what fired. */
 export type CallLogEntry = { at: number; method: string }
 
-export function createMockApi(
-  scenario: Scenario,
-  log: (method: string) => void,
-  onTracerClose: () => void
-): TracelyApi {
+export function createMockApi(scenario: Scenario, log: (method: string) => void): TracelyApi {
   let latency = scenario.latencyMs
 
   async function ok<T>(method: string, value: T): Promise<T> {
@@ -86,19 +110,102 @@ export function createMockApi(
     return fx.user
   }
 
+  // Mutable so an evidence search visibly resolves a claim, exactly as the
+  // real store would. Reset per document, like every other bit of preview
+  // state, because the mock is constructed once per bridge.
+  let previewClaims: Claim[] = [...fx.claims]
   let previewDocs: DocumentRecord[] = [...fx.documents]
-  let tracerMsgs = scenario.tracerMessages === 'empty' ? [] : fx.tracerMessages
+  // Screen Watch's claims are pushed, not fetched: the real service folds a
+  // refresh or a critique into its in-memory claim and redraws the overlay, so
+  // the panel's two result states are only reachable here if the mock does the
+  // same. Without this, "Critique Argument" logged an IPC call and the card
+  // never changed.
+  let watchClaims: ScreenWatchClaimSummary[] = [...fx.screenWatchClaims]
+  let lastWidget: { expanded: boolean; viewMode: 'single' | 'all' | 'structure' } = {
+    expanded: fx.overlayUpdate.widget?.expanded ?? false,
+    viewMode: fx.overlayUpdate.widget?.viewMode ?? 'single'
+  }
+
+  function patchWatchClaim(claimId: string, patch: Partial<ScreenWatchClaimSummary>): void {
+    watchClaims = watchClaims.map((c) => (c.id === claimId ? { ...c, ...patch } : c))
+    emitWidget({})
+  }
   let nextId = 100
+
+  /** Mirrors computeEvidenceCoverage in the main process. */
+  const coverageOf = (claims: Claim[]): EvidenceCoverage => {
+    const resolved = claims.filter((c) => c.strengthScore !== null)
+    return {
+      detected: claims.length,
+      withRelevantSource: claims.filter((c) => (c.scoreBreakdown?.sourceCount ?? 0) > 0).length,
+      meanStrength: resolved.length
+        ? Math.round(resolved.reduce((sum, c) => sum + (c.strengthScore ?? 0), 0) / resolved.length)
+        : null,
+      unchecked: claims.length - resolved.length
+    }
+  }
+
+  const outlineForScenario = (): DocumentOutline | null => {
+    if (scenario.structure === 'none') return null
+    return scenario.structure === 'classified' ? fx.documentOutlineClassified : fx.documentOutline
+  }
+
+  // Rebuild the overlay payload the way screenWatchService would, so the
+  // widget's own controls actually move it. Panel size is computed in main in
+  // production (hoverTracking.ts hit-tests the same rect the renderer draws),
+  // so the sizes here mirror panelSize.ts — if they drift, the preview lies
+  // about how much room the content has.
+  function emitWidget(patch: {
+    expanded?: boolean
+    viewMode?: 'single' | 'all' | 'structure'
+  }): void {
+    const w = window as Window & {
+      __previewEmitOverlay?: (e: ScreenWatchOverlayUpdateEvent) => void
+    }
+    if (!w.__previewEmitOverlay) return
+    const base = fx.overlayUpdate.widget
+    if (!base) return
+    const viewMode = patch.viewMode ?? lastWidget.viewMode
+    const expanded = patch.expanded ?? lastWidget.expanded
+    lastWidget = { expanded, viewMode }
+    // Taken from panelSize.ts for this fixture's shape (3 claims, 4 weaknesses,
+    // 6 paragraphs), not estimated: PANEL_WIDTH = 480, SINGLE_PANEL_HEIGHT =
+    // 532, computeAllPanelSize(3) = 313, computeStructurePanelSize({4, 6}) =
+    // 568. Guessing these makes the preview claim more or less room than the
+    // real panel has, which is the one thing it must not do — re-read them from
+    // that module whenever its constants change rather than adjusting by eye.
+    const rect = expanded
+      ? {
+          x: 90,
+          y: 20,
+          width: 480,
+          height: viewMode === 'single' ? 532 : viewMode === 'all' ? 313 : 568
+        }
+      : { x: 520, y: 300, width: 56, height: 56 }
+    w.__previewEmitOverlay({
+      ...fx.overlayUpdate,
+      widget: { ...base, claims: watchClaims, rect, expanded, viewMode }
+    })
+  }
 
   return {
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
       getResult: () =>
-        ok('analyze.getResult', { analysis: fx.analysis, claims: fx.claims, evidenceByClaimId: {} })
+        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} })
     },
     evidence: {
-      find: () =>
-        ok('evidence.find', {
+      // Records the result against the claim, so the Structure rail's
+      // "Check if supportable" flow can actually be reviewed: without this the
+      // claim stays unchecked forever and the button never resolves into a
+      // score, which is the half of the interaction worth looking at.
+      find: (req) => {
+        previewClaims = previewClaims.map((claim) =>
+          claim.id === req.claimId && claim.strengthScore === null
+            ? { ...claim, strengthScore: 42, scoreBreakdown: FOUND_BREAKDOWN }
+            : claim
+        )
+        return ok('evidence.find', {
           evidence: fx.evidence,
           strengthScore: fx.claims[0].strengthScore ?? 0,
           // `support` is how much of the evidence actually agrees with the
@@ -111,7 +218,8 @@ export function createMockApi(
             relevance: 0,
             support: 0
           }
-        }),
+        })
+      },
       getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence })
     },
     citation: {
@@ -175,6 +283,38 @@ export function createMockApi(
         return ok('documents.remove', { ok: true as const })
       }
     },
+    structure: {
+      // Serves a fixture rather than running the real engine: analyzeStructure
+      // lives in the main process and reaches for node:crypto, so it cannot be
+      // imported into a renderer iframe. The fixtures are hand-computed from
+      // the same rubric — see the score trace in fixtures.ts.
+      // Analyzing always yields an outline, including under the 'none'
+      // scenario — 'none' means "nothing stored yet", which is a fact about
+      // the store, not about whether analysis can run.
+      //
+      // Coverage is recomputed from previewClaims rather than served from the
+      // fixture, mirroring what the real handler does by reading the database.
+      // A frozen coverage line would still say "1 not checked" directly above
+      // a claim that had just resolved to a score — a contradiction the real
+      // app cannot produce, and exactly the kind of thing a reviewer would
+      // waste time chasing.
+      analyze: (req) =>
+        ok('structure.analyze', {
+          outline: {
+            ...(outlineForScenario() ?? fx.documentOutline),
+            documentId: req.documentId ?? null,
+            coverage: coverageOf(previewClaims)
+          }
+        }),
+      get: (req) => {
+        const outline = outlineForScenario()
+        if (!outline) return ok('structure.get', { outline: null, stale: false })
+        return ok('structure.get', {
+          outline: { ...outline, documentId: req.documentId },
+          stale: scenario.structure === 'stale'
+        })
+      }
+    },
     settings: {
       get: () => ok('settings.get', fx.settings),
       set: () => ok('settings.set', fx.settings),
@@ -220,17 +360,38 @@ export function createMockApi(
     screenWatch: {
       setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),
       getStatus: () => ok('screenWatch.getStatus', fx.screenWatchStatus),
-      setWidgetExpanded: () => ok('screenWatch.setWidgetExpanded', { ok: true as const }),
-      setWidgetViewMode: () => ok('screenWatch.setWidgetViewMode', { ok: true as const }),
+      // These two re-emit the overlay payload rather than only logging.
+      // In production the service owns widget geometry and pushes a new
+      // payload back, so the panel's own Back / Show all / score chip / close
+      // buttons are how you navigate it. Returning a bare ok left every one of
+      // them inert in the preview, which is precisely where they need
+      // exercising — the overlay is the hardest surface to reach for real.
+      setWidgetExpanded: (req) => {
+        emitWidget({ expanded: req.expanded, viewMode: req.expanded ? undefined : 'single' })
+        return ok('screenWatch.setWidgetExpanded', { ok: true as const })
+      },
+      setWidgetViewMode: (req) => {
+        emitWidget({ expanded: true, viewMode: req.mode })
+        return ok('screenWatch.setWidgetViewMode', { ok: true as const })
+      },
       widgetDragStart: () => ok('screenWatch.widgetDragStart', { ok: true as const }),
       widgetDragEnd: () => ok('screenWatch.widgetDragEnd', { ok: true as const }),
       setActivePopoverRect: () => ok('screenWatch.setActivePopoverRect', { ok: true as const }),
-      refreshEvidence: () => ok('screenWatch.refreshEvidence', { evidence: fx.screenWatchClaims[0].evidence }),
-      critiqueClaim: () =>
-        relay('screenWatch.critiqueClaim', {
-          critique: fx.claims[0].critique ?? '',
-          verdict: fx.claims[0].critiqueVerdict ?? ('weak' as const)
-        }),
+      refreshEvidence: async (req) => {
+        const result = await ok('screenWatch.refreshEvidence', {
+          evidence: fx.screenWatchEvidenceRefreshed
+        })
+        patchWatchClaim(req.claimId, { evidence: fx.screenWatchEvidenceRefreshed })
+        return result
+      },
+      critiqueClaim: async (req) => {
+        const result = await relay('screenWatch.critiqueClaim', {
+          critique: fx.screenWatchCritique,
+          verdict: 'weak' as const
+        })
+        patchWatchClaim(req.claimId, { critique: fx.screenWatchCritique, critiqueVerdict: 'weak' })
+        return result
+      },
       findSource: () =>
         ok('screenWatch.findSource', {
           candidates: fx.sources.map((s, i) => ({
@@ -253,77 +414,6 @@ export function createMockApi(
           }
         }),
       undoCitation: () => ok('screenWatch.undoCitation', { ok: true as const })
-    },
-    tracer: {
-      open: () => ok('tracer.open', { ok: true as const }),
-      close: () => {
-        log('tracer.close')
-        onTracerClose()
-        return Promise.resolve({ ok: true as const })
-      },
-      send: async (req) => {
-        const userMessage = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'user' as const,
-          content: req.message,
-          createdAt: fx.T0
-        }
-        const reply = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'tracer' as const,
-          content:
-            'This is a preview reply — no relay was contacted. It is deliberately several sentences long, and contains a paragraph break, so the bubble, the wrapping and the action row underneath all get exercised at a realistic size.\n\nSwitch the "fail relay" scenario on to review the error state instead.',
-          createdAt: fx.T0
-        }
-        const result = await relay('tracer.send', { userMessage, reply })
-        tracerMsgs = [...tracerMsgs, userMessage, reply]
-        return result
-      },
-      // Mirrors the real handler: the discarded exchange is dropped from the
-      // transcript before the replacement is appended, so a retry replaces the
-      // answer you didn't like rather than appending a second copy of the
-      // question. Reviewing the retry state in the preview harness only tells
-      // you anything if it behaves that way here too.
-      retry: async (req) => {
-        const previous = [...tracerMsgs].reverse().find((m) => m.role === 'user')
-        if (!previous) throw new Error('Nothing to retry')
-
-        const kept = tracerMsgs.slice(0, tracerMsgs.findIndex((m) => m.id === previous.id))
-        const userMessage = { ...previous, id: `pm${nextId++}`, createdAt: fx.T0 }
-        const reply = {
-          id: `pm${nextId++}`,
-          conversationId: req.conversationId,
-          role: 'tracer' as const,
-          content:
-            'This is a retried preview reply — deliberately different from the first, so you can see that the old answer was replaced rather than a second one appended.',
-          createdAt: fx.T0
-        }
-        const result = await relay('tracer.retry', { userMessage, reply })
-        tracerMsgs = [...kept, userMessage, reply]
-        return result
-      },
-      getConversation: (req) =>
-        ok('tracer.getConversation', {
-          conversation: fx.tracerConversations.find((c) => c.id === req.conversationId) ?? fx.tracerConversations[0],
-          messages: tracerMsgs,
-          context: fx.tracerContext,
-          relayConfigured: scenario.relayConfigured,
-          focusedClaimId: null
-        }),
-      listConversations: () => ok('tracer.listConversations', { conversations: fx.tracerConversations }),
-      newConversation: () => {
-        tracerMsgs = []
-        return ok('tracer.newConversation', { conversation: fx.tracerConversations[0] })
-      },
-      deleteConversation: () => ok('tracer.deleteConversation', { ok: true as const })
-    },
-    onTracerContextChanged: (cb) => subscribe('onTracerContextChanged', fx.tracerContext, cb),
-    onTracerOpened: (cb) => {
-      log('onTracerOpened (subscribe)')
-      const id = window.setTimeout(() => cb(), 0)
-      return () => window.clearTimeout(id)
     },
     onClipboardCaptured: (cb) =>
       subscribe('onClipboardCaptured', { text: fx.analysis.sourceText }, cb),

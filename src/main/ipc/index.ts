@@ -10,7 +10,7 @@ import { registerLibraryHandlers } from './libraryHandlers'
 import { registerProfileHandlers } from './profileHandlers'
 import { registerScreenWatchHandlers } from './screenWatchHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
-import { registerTracerHandlers } from './tracerHandlers'
+import { registerStructureHandlers } from './structureHandlers'
 import { registerWindowHandlers } from './windowHandlers'
 
 export function registerIpcHandlers(): void {
@@ -23,9 +23,9 @@ export function registerIpcHandlers(): void {
   registerCritiqueHandlers()
   registerCitationHandlers()
   registerDocumentsHandlers()
+  registerStructureHandlers()
   registerLibraryHandlers()
   registerScreenWatchHandlers()
   registerProfileHandlers()
   registerAuthHandlers()
-  registerTracerHandlers()
 }

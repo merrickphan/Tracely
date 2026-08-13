@@ -8,9 +8,16 @@ import type {
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
   ScreenWatchStatus,
-  TracerContext
+  ScreenWatchStructure
 } from '@shared/ipc-contract'
-import type { CitationStyle, Claim, CritiqueVerdict, EvidenceItem, Source } from '@shared/types'
+import type {
+  CitationStyle,
+  Claim,
+  CritiqueVerdict,
+  EvidenceItem,
+  ScoreBreakdown,
+  Source
+} from '@shared/types'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
 import { isAuthError } from '../ai/client'
@@ -23,6 +30,7 @@ import { getFaviconDataUrl } from '../search/favicon'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
+import { sourceHashFor } from '../structure/analyzeStructure'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import {
   getOverlayWindow,
@@ -32,7 +40,16 @@ import {
   sendToOverlay
 } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
-import { getTracerWindow, isTracerWindowOpen } from '../../windows/tracerWindow'
+import {
+  computeAllPanelSize,
+  computeStructurePanelSize,
+  SINGLE_PANEL_HEIGHT,
+  SINGLE_PANEL_WIDTH,
+  WIDGET_SIZE
+} from './panelSize'
+import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
+import { problemKindsFor, problemSeverity } from './problemKind'
+import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { clearHoverState, setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
@@ -118,7 +135,30 @@ let currentClaims: Claim[] = []
 // from `currentClaims` (rather than mutating strengthScore on the Claim
 // objects directly) since results arrive asynchronously, one claim at a
 // time, well after currentClaims was already set.
-let evidenceResultByClaimId = new Map<string, { evidence: NormalizedSourceResult[]; score: number }>()
+// `breakdown` is carried, not just `score`, because structure's evidence
+// coverage reads `scoreBreakdown.sourceCount` rather than `strengthScore` (see
+// structure/evidenceCoverage.ts). Folding only the score onto a synthesized
+// claim makes it read as SEARCHED BUT UNSOURCED, so findWeaknesses would emit
+// "no supporting source yet" for every claim that in fact has sources — with
+// those sources visible one view-mode away in the same panel.
+// findEvidenceCached has always returned it; this used to discard it.
+let evidenceResultByClaimId = new Map<
+  string,
+  { evidence: NormalizedSourceResult[]; score: number; breakdown: ScoreBreakdown }
+>()
+/**
+ * The structural read of the watched document, memoised.
+ *
+ * Recomputed only when its inputs actually change, for two reasons. The cheap
+ * one is that tick() runs every POLL_INTERVAL_MS and redrawOverlay() fires
+ * again on every resolved favicon. The load-bearing one is that
+ * updateOverlayAndWidget dedupes its IPC push by JSON.stringify of the whole
+ * payload — a structure object rebuilt each tick would differ by object
+ * identity only, defeat that dedupe, and re-render the overlay on top of
+ * another app at 1.2s intervals forever.
+ */
+let watchStructure: { key: string; structure: ScreenWatchStructure | null } | null = null
+
 // Critique is never run automatically here (unlike evidence search) — it's
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
@@ -207,7 +247,7 @@ let widgetManualPos: { x: number; y: number } | null = null
 // scrolling — the panel's actual pixel size (see updateOverlayAndWidget)
 // depends on this, so it has to be known server-side rather than left as a
 // renderer-only toggle the way the hover popover's own single/all switch is.
-export type WidgetViewMode = 'single' | 'all'
+export type WidgetViewMode = 'single' | 'all' | 'structure'
 let widgetViewMode: WidgetViewMode = 'single'
 
 export function setWidgetExpanded(expanded: boolean): void {
@@ -337,6 +377,7 @@ function resetTrackingState(): void {
   pendingSince = 0
   lastAnalyzedText = ''
   currentClaims = []
+  watchStructure = null
   evidenceResultByClaimId = new Map()
   critiqueByClaimId = new Map()
   findSourceResultByClaimId = new Map()
@@ -491,17 +532,6 @@ async function tick(): Promise<void> {
     if (!snapshot.ok) {
       lastError = snapshot.error
 
-      // Freeze for the same reason a `skip: "self"` freezes, and check it
-      // BEFORE counting. A backgrounded watched app is *more* likely to blow
-      // uiaSnapshot's 4s budget while Tracer holds focus, so without this the
-      // failure path becomes a second door into exactly the wipe the "self"
-      // guard exists to prevent — and it opens in the situation that provokes
-      // it most.
-      if (isTracerWindowOpen()) {
-        logScreenWatch(`snapshot failed while Tracer is open (frozen): ${snapshot.error}`)
-        return
-      }
-
       // This branch used to return without hiding or resetting anything, with
       // no counter — and a closing window is exactly what produces it, since
       // FocusedElement keeps handing back a dying element until focus settles.
@@ -536,18 +566,6 @@ async function tick(): Promise<void> {
     snapshotFailures = 0
 
     if (snapshot.skip) {
-      // Talking to Tracer means Tracely itself is the foreground app, which
-      // UIA reports as `skip: "self"`. Treating that like any other skip
-      // would wipe the very claims the user opened Tracer to ask about and
-      // hide the underlines out from under them mid-question. So while the
-      // Tracer window is up, a "self" skip freezes Screen Watch instead:
-      // keep the claims, keep the overlay drawn where it was, and pick the
-      // document back up on the next tick after Tracer is closed. Every
-      // other skip reason (and "self" with Tracer closed) still resets.
-      if (snapshot.reason === 'self' && isTracerWindowOpen()) {
-        return
-      }
-
       // Logged only on change, not every tick — "not-editable-control-type"
       // in particular would otherwise spam the log constantly while just
       // browsing a normal webpage.
@@ -660,6 +678,9 @@ async function tick(): Promise<void> {
           critiqueByClaimId = new Map()
           findSourceResultByClaimId = new Map()
           citationByClaimId = new Map()
+          // Free and local, so it runs on the same automatic footing as the
+          // evidence search above rather than waiting to be asked.
+          refreshWatchOutline()
           triggerEvidenceSearch(currentClaims)
           // Don't wait for the next scheduled poll tick to show results —
           // that adds up to POLL_INTERVAL_MS of dead time on top of the
@@ -735,42 +756,10 @@ async function tick(): Promise<void> {
   }
 }
 
-// Matches the Figma "Collapsed Launcher" mockup's 56px circle.
-const WIDGET_SIZE = 56
 // Fixed distance from the focused window's bottom-right corner — matches
 // where the Figma mockups place it, and (deliberately) has nothing to do
 // with where the focused control or text cursor currently is.
 const EDGE_MARGIN = 24
-// Single-claim panel — big enough for the full action card (claim text,
-// evidence row, Check Claim/Find Evidence buttons, and the critique
-// result once run), with scrolling only when the watched window forces the
-// panel below its ideal size. Must match OverlayApp.tsx's
-// POPOVER_WIDTH/EST_HEIGHT-equivalent sizing intent for the same content.
-const SINGLE_PANEL_WIDTH = 400
-const SINGLE_PANEL_HEIGHT = 400
-// "Show all" — a single vertical column (not a grid) so each row has room
-// to show real article titles, not just a count. Sized per-claim-count
-// below (computeAllPanelSize) so a normal number of claims fits with no
-// scrolling; height is capped (MAX_LIST_PANEL_HEIGHT) for the rare case of
-// many claims at once, since letting the panel grow past the screen would
-// just reintroduce clipping — the renderer scrolls internally only past
-// that cap. Mirrored client-side in OverlayApp.tsx (GRID_*) — keep in sync.
-const GRID_CARD_WIDTH = 364
-const GRID_CARD_HEIGHT = 108
-const GRID_GAP = 10
-const GRID_HEADER_HEIGHT = 44
-const GRID_PADDING = 18
-const MAX_LIST_PANEL_HEIGHT = 560
-
-function computeAllPanelSize(claimCount: number): { width: number; height: number } {
-  const count = Math.max(1, claimCount)
-  const naturalHeight = GRID_PADDING * 2 + GRID_HEADER_HEIGHT + count * GRID_CARD_HEIGHT + (count - 1) * GRID_GAP
-  return {
-    width: GRID_PADDING * 2 + GRID_CARD_WIDTH,
-    height: Math.min(naturalHeight, MAX_LIST_PANEL_HEIGHT)
-  }
-}
-
 let lastSentPayloadKey: string | null = null
 
 function redrawOverlay(): void {
@@ -822,6 +811,7 @@ function leanEvidence(claimId: string): ScreenWatchClaimEvidence | null {
   return {
     score: result.score,
     count: result.evidence.length,
+    breakdown: result.breakdown,
     articles: result.evidence.slice(0, MAX_ARTICLES_IN_OVERLAY).map((item) => ({
       title: item.title,
       venue: item.venue,
@@ -918,7 +908,14 @@ function triggerEvidenceSearch(claims: Claim[]): void {
         // to a different app) by the time this resolves — a result for a
         // claim that's no longer current would only show stale data.
         if (!currentClaims.some((c) => c.id === claim.id)) return
-        evidenceResultByClaimId.set(claim.id, { evidence: result.evidence, score: result.score })
+        evidenceResultByClaimId.set(claim.id, {
+          evidence: result.evidence,
+          score: result.score,
+          breakdown: result.breakdown
+        })
+        // Coverage and the unsupported-claim weakness both turn on whether a
+        // claim has a relevant source, so evidence landing changes the reading.
+        refreshWatchOutline()
         redrawOverlay()
       })
       .catch((err) => {
@@ -926,6 +923,29 @@ function triggerEvidenceSearch(claims: Claim[]): void {
       })
   }
 }
+
+/*
+ * There is deliberately no automatic critique here.
+ *
+ * A bounded one — a single relay call per detection, spent on the first of the
+ * top claims whose evidence resolved — was built and shipped to the beta
+ * channel, then pulled before the first stable release that would have carried
+ * it. Screen Watch is passive and always-on, so it is the one surface where an
+ * unprompted call to the *paid* relay is a bill the user did not ask for and
+ * cannot see being run up. Evidence search stays automatic because it only hits
+ * the four free public APIs; critique does not, and that is the whole line.
+ *
+ * The known cost, which is real and should not be rediscovered as a bug:
+ * `problemKindFor` reports "Weak reasoning" only when `critiqueVerdict` is set,
+ * and critique now only ever runs from an explicit click on "Critique Argument"
+ * (see `critiqueClaim`). So passive watching can report on citations and
+ * evidence, but never on reasoning, until the user asks. Everything needed to
+ * change that is still here — `synthesizeEvidenceItem`, `withEvidenceScores`
+ * and the evidence map all remain — so putting it back behind an opt-in
+ * Settings toggle is a small change, and is the shape it should return in.
+ *
+ * `git log` has the implementation.
+ */
 
 // User-initiated re-run of evidence search for one claim (the overlay's
 // "Find Evidence"/"Refresh Evidence" button) — same search as
@@ -936,9 +956,83 @@ export async function refreshEvidenceForClaim(claimId: string): Promise<ScreenWa
   if (!claim) return null
   const result = await findEvidenceCached(claim.searchQuery, claim.text)
   if (!currentClaims.some((c) => c.id === claimId)) return null
-  evidenceResultByClaimId.set(claimId, { evidence: result.evidence, score: result.score })
+  evidenceResultByClaimId.set(claimId, {
+    evidence: result.evidence,
+    score: result.score,
+    breakdown: result.breakdown
+  })
+  // The critique was an argument ABOUT the evidence that just got replaced —
+  // it cites its sources by number ("supported by evidence 2", per
+  // CRITIQUE_SYSTEM_PROMPT), and those numbers now point into a different
+  // list. Keeping it left the panel showing a fresh source list beside a
+  // verdict reasoned over the old one, and `problemKindsFor` reporting "weak
+  // reasoning" on grounds nothing on screen still supports. Dropping it puts
+  // the claim back to offering "Critique Argument", which is the truth.
+  if (critiqueByClaimId.delete(claimId)) {
+    logScreenWatch(`dropped stale critique for ${claimId.slice(0, 8)} — its evidence was refreshed`)
+  }
+  refreshWatchOutline()
   redrawOverlay()
   return leanEvidence(claimId)
+}
+
+/**
+ * Recompute the structural read if anything it depends on has moved.
+ *
+ * The key is deliberately the three things the outline is a function of: the
+ * analyzed text, which claims were found in it, and which of those now have a
+ * relevant source (coverage and the `unsupported-claim` weakness both turn on
+ * that, and evidence arrives asynchronously well after detection). Anything
+ * finer — a timestamp, an evidence count — would rebuild the object without
+ * changing what it says, and cost the payload dedupe.
+ */
+function refreshWatchOutline(): void {
+  if (!lastAnalyzedText) {
+    watchStructure = null
+    return
+  }
+
+  const sourced = currentClaims
+    .map((claim) => `${claim.id}:${(evidenceResultByClaimId.get(claim.id)?.breakdown.sourceCount ?? 0) > 0 ? 1 : 0}`)
+    .sort()
+    .join(',')
+  const key = `${sourceHashFor(lastAnalyzedText)}|${currentClaims.map((c) => c.id).join(',')}|${sourced}`
+  if (watchStructure?.key === key) return
+
+  const structure = computeWatchOutline({
+    analyzedText: lastAnalyzedText,
+    claims: currentClaims.map(withEvidenceScores),
+    analyzedAt: new Date().toISOString()
+  })
+  watchStructure = { key, structure }
+  if (structure) {
+    logScreenWatch(
+      `structure: ${structure.score}/100${structure.complete ? '' : ' (provisional)'}, ` +
+        `${structure.paragraphs.length} paragraph(s), ${structure.weaknesses.length} weakness(es)`
+    )
+  }
+}
+
+/**
+ * A Screen Watch claim with whatever its evidence search found folded in.
+ *
+ * Screen Watch claims are synthesized in memory with `strengthScore: null` and
+ * no breakdown, because nothing here is ever written to the claims table. Any
+ * consumer that expects a scored `Claim` — `generateCritique`, and structure's
+ * `computeEvidenceCoverage` — has to be handed this instead of the raw claim.
+ *
+ * BOTH fields, deliberately. `computeEvidenceCoverage` decides "has a relevant
+ * source" from `scoreBreakdown.sourceCount`, not from `strengthScore`, so
+ * folding only the score marks a claim resolved-but-unsourced and produces an
+ * "unsupported claim" weakness for every claim that actually has sources.
+ */
+function withEvidenceScores(claim: Claim): Claim {
+  const evidence = evidenceResultByClaimId.get(claim.id)
+  return {
+    ...claim,
+    strengthScore: evidence?.score ?? null,
+    scoreBreakdown: evidence?.breakdown ?? null
+  }
 }
 
 // User-initiated only (the overlay's "Check Claim" button) — unlike
@@ -949,8 +1043,7 @@ export async function critiqueClaim(claimId: string): Promise<{ critique: string
   if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
   const evidence = evidenceResultByClaimId.get(claimId)
   const evidenceItems = evidence ? evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i)) : []
-  const claimWithScore: Claim = { ...claim, strengthScore: evidence?.score ?? null }
-  const result = await generateCritique(claimWithScore, evidenceItems)
+  const result = await generateCritique(withEvidenceScores(claim), evidenceItems)
   if (currentClaims.some((c) => c.id === claimId)) {
     critiqueByClaimId.set(claimId, result)
     redrawOverlay()
@@ -1095,13 +1188,6 @@ function updateOverlayAndWidget(
   // main or the floating claim checker between their immediate focus handlers
   // and the next UIA poll.
   //
-  // Tracer is shieldable too (see overlayShield.ts) but is deliberately NOT
-  // hidden for here: talking to Tracer must hold the claims and underlines in
-  // place — that is the whole point of the "self" skip in tick() — and hiding
-  // the overlay would wipe exactly what the user opened Tracer to ask about.
-  // Tracer is protected positionally instead, in hoverTracking, so the
-  // overlay can stay visible without ever capturing a click meant for it.
-  //
   // `focusedShieldableWindow()` rather than checking getMainWindow()/
   // getFloatingWindow() directly — that is the one-rule shield this branch
   // merged with, and duplicating its focus test here is exactly what it was
@@ -1133,8 +1219,48 @@ function updateOverlayAndWidget(
   // open a popover. controlRect is preferred because the window includes the
   // app's own toolbars, and text scrolled under a sticky header still reports a
   // valid rect that was then drawn on top of the header.
+  /** Decided once here, so the underline and the card cannot disagree. */
+  const problemKindById = new Map(
+    claims.map((c) => {
+      const evidence = evidenceResultByClaimId.get(c.id)
+      return [
+        c.id,
+        problemKindsFor({
+          claimType: c.claimType,
+          hasInlineCitation: hasInlineCitation(c.text),
+          evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
+          critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
+        })
+      ] as const
+    })
+  )
+
+  /**
+   * Claims with nothing to say about them, which are not drawn at all.
+   *
+   * Read straight off `problemKindsFor` rather than re-tested here. It used to
+   * be its own predicate — cited AND scoring at least 70 — which
+   * meant two functions decided whether a sentence was worth interrupting
+   * someone about, on different rules, and the gap between them was where a
+   * cited claim the databases had no opinion on ended up flagged. One function
+   * owns the judgement now; an empty list is its way of saying "nothing".
+   */
+  const settled = new Set(
+    claims.filter((c) => (problemKindById.get(c.id) ?? ['searching']).length === 0).map((c) => c.id)
+  )
+  if (settled.size > 0) {
+    logScreenWatch(
+      `not flagging ${settled.size} claim(s) with nothing to report: ` +
+        claims
+          .filter((c) => settled.has(c.id))
+          .map((c) => `${inlineCitationKind(c.text)}/${evidenceResultByClaimId.get(c.id)?.score ?? '-'}`)
+          .join(', ')
+    )
+  }
+
   const clip = resolveClip([controlRect, windowRect])
   const underlines = (Array.isArray(claimRects) ? claimRects : [])
+    .filter((r) => !settled.has(r.id))
     .map((r) => ({
       ...r,
       rects: !Array.isArray(r.rects)
@@ -1208,7 +1334,8 @@ function updateOverlayAndWidget(
   const localized = underlines.map((u) => ({
     id: u.id,
     rects: u.rects.map(toLocal),
-    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual'
+    claimType: claims.find((c) => c.id === u.id)?.claimType ?? 'factual',
+    problemKinds: problemKindById.get(u.id) ?? ['searching']
   }))
 
   // Anchored to a fixed corner of the focused app's window, not the focused
@@ -1225,10 +1352,16 @@ function updateOverlayAndWidget(
     width: WIDGET_SIZE,
     height: WIDGET_SIZE
   }
+  const structure = watchStructure?.structure ?? null
   const desiredPanelSize =
     widgetViewMode === 'all'
       ? computeAllPanelSize(claims.length)
-      : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
+      : widgetViewMode === 'structure'
+        ? computeStructurePanelSize({
+            weaknessCount: structure?.weaknesses.length ?? 0,
+            paragraphCount: structure?.paragraphs.length ?? 0
+          })
+        : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
   // Some watched windows are narrower/shorter than the ideal 400px card. The
   // overlay itself is clipped to that window, so an unclamped panel makes its
   // right/bottom actions unreachable. Keep a small inset and let the renderer
@@ -1276,8 +1409,18 @@ function updateOverlayAndWidget(
     )
   }
 
-  const claimSummaries: ScreenWatchClaimSummary[] = [...claims]
-    .sort((a, b) => b.confidence - a.confidence)
+  const claimSummaries: ScreenWatchClaimSummary[] = claims
+    .filter((c) => !settled.has(c.id))
+    // Severity first, confidence only to break ties. Confidence says how sure
+    // Tracely is that a sentence IS a claim — not how much trouble it is in —
+    // so sorting by it alone buried the reasoning failure under tidy claims
+    // that merely wanted a citation.
+    .sort((a, b) => {
+      const worst = (id: string): number =>
+        problemSeverity(problemKindById.get(id)?.[0] ?? 'searching')
+      const bySeverity = worst(a.id) - worst(b.id)
+      return bySeverity !== 0 ? bySeverity : b.confidence - a.confidence
+    })
     .map((c) => {
       const critique = critiqueByClaimId.get(c.id)
       const citation = citationByClaimId.get(c.id)
@@ -1286,6 +1429,8 @@ function updateOverlayAndWidget(
         text: c.text,
         claimType: c.claimType,
         confidence: c.confidence,
+        hasInlineCitation: hasInlineCitation(c.text),
+        problemKinds: problemKindById.get(c.id) ?? ['searching'],
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,
@@ -1307,6 +1452,7 @@ function updateOverlayAndWidget(
       claimCount: number
       claims: ScreenWatchClaimSummary[]
       totalInfoCount: number
+      structure: ScreenWatchStructure | null
     }
   } = {
     underlines: localized,
@@ -1314,9 +1460,14 @@ function updateOverlayAndWidget(
       rect: activeLocal,
       expanded: widgetExpanded,
       viewMode: widgetViewMode,
-      claimCount: claims.length,
+      claimCount: claimSummaries.length,
       claims: claimSummaries,
-      totalInfoCount
+      totalInfoCount,
+      // Read, never computed here. This function runs on every poll tick and
+      // on every resolved favicon; refreshWatchOutline owns when the reading
+      // is actually redone, and returning the same object identity is what
+      // keeps the dedupe below working.
+      structure
     }
   }
 
@@ -1365,7 +1516,6 @@ function updateOverlayAndWidget(
   if (payloadKey !== lastSentPayloadKey) {
     lastSentPayloadKey = payloadKey
     sendToOverlay(IPC_EVENTS.SCREENWATCH_OVERLAY_UPDATE, payload)
-    emitTracerContext()
   }
 
   // Outside the dedupe, and last. This used to be an early `return`, with the
@@ -1377,39 +1527,6 @@ function updateOverlayAndWidget(
   // document.
   void win
   presentOverlay()
-}
-
-/**
- * What Tracer is allowed to see: the text of the watched document and the
- * claims currently flagged in it. Read live from the same in-memory state
- * the overlay draws from — deliberately NOT from the database, since Screen
- * Watch persists none of this (see the note on synthesizeClaim).
- *
- * Returns empty context rather than throwing when Screen Watch is off or no
- * allowed app is focused: Tracer is still useful as a plain tutor with no
- * document in hand, it just can't refer to anything specific.
- */
-export function getTracerContext(): TracerContext {
-  const claims = lastUpdateInputs?.claims ?? currentClaims
-  return {
-    processName: lastStatus.active ? lastStatus.processName : null,
-    documentText: lastUpdateInputs?.fullText ?? '',
-    claims: claims.map((c) => ({
-      id: c.id,
-      text: c.text,
-      claimType: c.claimType,
-      evidenceScore: evidenceResultByClaimId.get(c.id)?.score ?? null
-    }))
-  }
-}
-
-// Pushed to the Tracer window whenever the watched document or its claims
-// change, so an open conversation's "what I can see" header stays live
-// instead of being a snapshot from whenever the window happened to open.
-function emitTracerContext(): void {
-  const win = getTracerWindow()
-  if (!win || win.isDestroyed() || !win.isVisible()) return
-  win.webContents.send(IPC_EVENTS.TRACER_CONTEXT_CHANGED, getTracerContext())
 }
 
 export function isScreenWatchEnabled(): boolean {

@@ -228,8 +228,13 @@ export function queryOne<T = Record<string, SqlValue>>(sql: string, params: SqlP
 
 export function resetDatabase(): void {
   if (!dbPath) return
+  // document_structure is in this list for the same reason it is in
+  // clearAnalysisHistory's: its weakness messages and role labels are
+  // statements about the user's own writing. It was missing here, which meant
+  // the WEAKER clear removed it and the stronger one left it behind — exactly
+  // backwards, and the sort of asymmetry a reader would assume was deliberate.
   getDb().exec(
-    'DELETE FROM claim_evidence; DELETE FROM citations; DELETE FROM library_items; DELETE FROM claims; DELETE FROM analyses; DELETE FROM sources; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
+    'DELETE FROM claim_evidence; DELETE FROM citations; DELETE FROM library_items; DELETE FROM claims; DELETE FROM analyses; DELETE FROM sources; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations; DELETE FROM document_structure;'
   )
   // Deleting rows does not shrink a SQLite file, so without this a user who
   // clears everything for privacy reasons still ships the same
@@ -242,9 +247,14 @@ export function resetDatabase(): void {
 // writing back at them, so leaving them behind would defeat the point of
 // "Clear Analysis History" as a privacy control, even though they live in
 // their own tables rather than analyses/claims.
+// document_structure goes with them for two reasons: its weakness messages
+// quote paragraph positions in the user's writing, and its claim ids point at
+// claims this statement is about to delete — leaving it would strand an
+// outline referring to analyses that no longer exist. The documents themselves
+// are the user's work and stay, exactly as the library does.
 export function clearAnalysisHistory(): void {
   getDb().exec(
-    'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations;'
+    'DELETE FROM claim_evidence; DELETE FROM claims; DELETE FROM analyses; DELETE FROM request_cache; DELETE FROM tracer_messages; DELETE FROM tracer_conversations; DELETE FROM document_structure;'
   )
   getDb().exec('VACUUM')
   persist()

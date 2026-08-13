@@ -16,7 +16,6 @@ import { createTray } from './tray'
 import { initAutoUpdater } from './updater'
 import { createFloatingWindow } from './windows/floatingWindow'
 import { createMainWindow, getMainWindow, setQuitting, showMainWindow } from './windows/mainWindow'
-import { createTracerWindow } from './windows/tracerWindow'
 
 // Google's OAuth consent screen opens in the user's real default browser
 // (Electron can't embed it), then redirects to this custom scheme to hand
@@ -96,25 +95,22 @@ if (!gotLock) {
 
     createMainWindow()
     createFloatingWindow()
-    // Created hidden at boot like the floating window, so the first "Ask
-    // Tracer" click opens instantly instead of paying for a renderer boot.
-    createTracerWindow()
     createTray()
     registerIpcHandlers()
     registerGlobalHotkey(getSetting('hotkeyAccelerator'))
     registerScreenWatchHotkey(getSetting('screenWatchHotkeyAccelerator'))
     initAutoUpdater()
     initScreenWatch()
-    // Same "pay it at boot, not in front of the user" reasoning as the
-    // hidden Tracer window above and the ML worker below: the first
+    // Same "pay it at boot, not in front of the user" reasoning as the ML
+    // worker below: the first
     // uia-watch.ps1 run costs ~1160ms against ~380ms for later ones, and
     // without this that penalty lands on the moment Screen Watch is turned
     // on and the user is waiting for the widget. Loads assemblies only —
     // it reads no window text (see warmUpUia).
     warmUpUia()
 
-    // Same reasoning as the hidden Tracer window above: pay the one-time cost
-    // at boot rather than in front of the user. Measured, the first
+    // Same reasoning as warmUpUia above: pay the one-time cost at boot rather
+    // than in front of the user. Measured, the first
     // findEvidence call spent 10.0 seconds on local work against ~1.2s for
     // later ones — worker spawn, the transformers import, onnxruntime init and
     // ~22MB of weights, all of it once. Reads as "the app is slow to find

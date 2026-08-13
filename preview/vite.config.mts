@@ -1,14 +1,12 @@
 import { resolve } from 'path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 
 const repo = resolve(__dirname, '..')
 
-// The four real windows. Each is served as its own document inside an iframe
-// in the harness, so their stylesheets can't collide — Tracer ships Tailwind
-// (preflight reset included) and the others don't.
-const PREVIEWED_ENTRIES = ['/index.html', '/floating.html', '/overlay.html', '/tracer.html']
+// The three real windows. Each is served as its own document inside an iframe
+// in the harness, so their stylesheets can't collide.
+const PREVIEWED_ENTRIES = ['/index.html', '/floating.html', '/overlay.html']
 
 /**
  * Injects the mock-IPC bootstrap into each real entry, dev-server-side only.
@@ -44,7 +42,7 @@ export default defineConfig({
   // Must be src/renderer: the shipped HTML files reference their entries as
   // /src/<name>.tsx, which only resolves with the renderer as Vite's root.
   root: resolve(repo, 'src/renderer'),
-  plugins: [react(), tailwindcss(), injectMockBridge()],
+  plugins: [react(), injectMockBridge()],
   resolve: {
     alias: {
       '@': resolve(repo, 'src/renderer/src'),

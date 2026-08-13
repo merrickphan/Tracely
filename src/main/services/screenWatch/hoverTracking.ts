@@ -1,7 +1,7 @@
 import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
-import { focusedShieldableWindow, isPointOverOpenTracer } from '../../windows/overlayShield'
+import { focusedShieldableWindow } from '../../windows/overlayShield'
 import { getOverlayWindow, setOverlayMouseEventsCaptured } from '../../windows/overlayWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
 import type { ScreenRect } from './uiaSnapshot'
@@ -103,15 +103,12 @@ function poll(): void {
   // The overlay is at the screen-saver always-on-top level, above every
   // other Tracely window. Whichever one owns focus, release native capture so
   // a stale Screen Watch target can never turn transparent pixels into a
-  // click shield over its controls — and, for Tracer, so the frozen
-  // underlines behind it aren't hit-tested while the user is typing a
-  // question about them (Screen Watch itself is frozen in that situation by
-  // the "self" skip in screenWatchService.tick).
+  // click shield over its controls.
   //
-  // One rule rather than a branch per window: Tracer used to be checked
-  // separately *below* the dragActive early-return, so a widget drag
-  // interrupted by Tracer taking focus kept native capture until some later
-  // drag ended. Clearing dragActive uniformly closes that.
+  // One rule rather than a branch per window, and it runs ABOVE the
+  // dragActive early-return: a widget drag interrupted by another Tracely
+  // window taking focus used to keep native capture until some later drag
+  // ended. Clearing dragActive uniformly closes that.
   if (focusedShieldableWindow() !== null) {
     dragActive = false
     clearHover()
@@ -127,16 +124,6 @@ function poll(): void {
   }
 
   const cursor = screen.getCursorScreenPoint()
-
-  // Tracer stays open and unfocused while the user goes back to writing, and
-  // the overlay stays visible over it — so unlike main and floating it can't
-  // be protected by hiding the overlay, and focus alone doesn't cover the
-  // case where the overlay has been re-raised above it. Never capture over
-  // its rect. See isPointOverOpenTracer for why that ordering is reachable.
-  if (isPointOverOpenTracer(cursor)) {
-    clearHover()
-    return
-  }
 
   const activeClaimId = hoveredKey?.split(':')[0] ?? null
 

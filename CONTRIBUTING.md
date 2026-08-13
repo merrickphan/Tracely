@@ -55,7 +55,7 @@ mode here, and it has already happened once in this repo.
 
 **Keep pull requests small and short-lived.** A branch open for a week is a
 merge conflict with a delay fuse. The worst conflict in this project's history —
-six hunks in `TracerApp.tsx` — happened because `main` rebuilt a component on
+six hunks in one renderer component — happened because `main` rebuilt it on
 Tailwind while a branch kept editing the version that existed before.
 
 **Pull `main` daily** while a branch is open. Conflicts found early are typing;

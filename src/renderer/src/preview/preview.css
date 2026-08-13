@@ -1,7 +1,6 @@
 /* Harness chrome only. Nothing here can reach the previewed surfaces —
-   they're real documents inside iframes, which is the whole reason the
-   harness can show Tracer (Tailwind preflight) next to the main window
-   (styles/index.css) without the two fighting. */
+   they're real documents inside iframes, so a surface with its own reset
+   can never fight the harness or its neighbours. */
 :root {
   color-scheme: dark;
   --bg: #131317;
