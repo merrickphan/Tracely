@@ -163,9 +163,6 @@ let watchStructure: { key: string; structure: ScreenWatchStructure | null } | nu
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
 let critiqueByClaimId = new Map<string, { critique: string; verdict: CritiqueVerdict }>()
-// Whether this detection's one budgeted automatic critique has been spent.
-// Reset wherever critiqueByClaimId is — a fresh claim set gets a fresh budget.
-let autoCritiqueSpent = false
 // Results of the focused "Find a source" search (findSourceForClaim) — kept
 // separate from evidenceResultByClaimId (the broader background auto-search)
 // since it's a distinct, user-triggered search that can use a different
@@ -383,7 +380,6 @@ function resetTrackingState(): void {
   watchStructure = null
   evidenceResultByClaimId = new Map()
   critiqueByClaimId = new Map()
-  autoCritiqueSpent = false
   findSourceResultByClaimId = new Map()
   citationByClaimId = new Map()
   faviconByUrl = new Map()
@@ -680,7 +676,6 @@ async function tick(): Promise<void> {
           // previous one no longer applies to anything currently shown.
           evidenceResultByClaimId = new Map()
           critiqueByClaimId = new Map()
-          autoCritiqueSpent = false
           findSourceResultByClaimId = new Map()
           citationByClaimId = new Map()
           // Free and local, so it runs on the same automatic footing as the
@@ -922,7 +917,6 @@ function triggerEvidenceSearch(claims: Claim[]): void {
         // claim has a relevant source, so evidence landing changes the reading.
         refreshWatchOutline()
         redrawOverlay()
-        void autoCritique(claim)
       })
       .catch((err) => {
         logScreenWatch(`background evidence search failed for claim ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
@@ -930,68 +924,28 @@ function triggerEvidenceSearch(claims: Claim[]): void {
   }
 }
 
-/**
- * Critique the single highest-confidence claim, once its evidence has landed.
+/*
+ * There is deliberately no automatic critique here.
  *
- * This is the one place Screen Watch spends a relay call it was not asked for,
- * and it exists because without it "Weak reasoning" is UNREACHABLE. The card
- * only shows it when `critiqueVerdict` is set, critique only ran on an explicit
- * click, and passive watching therefore had exactly one thing it could ever
- * say: something about citations. A tool that claims to check reasoning and
- * structurally cannot is worse than one that does not claim it.
+ * A bounded one — a single relay call per detection, spent on the first of the
+ * top claims whose evidence resolved — was built and shipped to the beta
+ * channel, then pulled before the first stable release that would have carried
+ * it. Screen Watch is passive and always-on, so it is the one surface where an
+ * unprompted call to the *paid* relay is a bill the user did not ask for and
+ * cannot see being run up. Evidence search stays automatic because it only hits
+ * the four free public APIs; critique does not, and that is the whole line.
  *
- * Bounded hard, because the original reason for not doing this was real:
+ * The known cost, which is real and should not be rediscovered as a bug:
+ * `problemKindFor` reports "Weak reasoning" only when `critiqueVerdict` is set,
+ * and critique now only ever runs from an explicit click on "Critique Argument"
+ * (see `critiqueClaim`). So passive watching can report on citations and
+ * evidence, but never on reasoning, until the user asks. Everything needed to
+ * change that is still here — `synthesizeEvidenceItem`, `withEvidenceScores`
+ * and the evidence map all remain — so putting it back behind an opt-in
+ * Settings toggle is a small change, and is the shape it should return in.
  *
- *  - ONE claim per detection, the top by confidence — not the three that get an
- *    evidence search, and never the whole set.
- *  - Only after that claim's evidence resolved, so the critique has something
- *    to reason about rather than judging a claim in a vacuum.
- *  - Only if it is still current, and never twice for the same claim.
- *  - Detection is already gated to one per MIN_ANALYSIS_INTERVAL_MS past an
- *    80-char delta, so this adds at most one relay call per detection — the
- *    same order as the detectClaims call that produced the claim.
- *
- * Failures are swallowed to the log. An unprompted critique that could not run
- * is not something to interrupt someone's writing about.
+ * `git log` has the implementation.
  */
-async function autoCritique(claim: Claim): Promise<void> {
-  // The budget is ONE call per detection, claimed by the first eligible claim
-  // rather than reserved for the highest-confidence one.
-  //
-  // It used to be `currentClaims.slice(0, 1)`, which meant the single most
-  // confident claim held the budget whether or not it could use it — and
-  // autoCritique needs evidence to reason about, so a top claim whose search
-  // returned nothing (common: retrieval is the weakest part of this pipeline)
-  // silently disabled the reasoning check for the WHOLE document. Nothing fell
-  // through to claim 2. Since `problemKindFor` only reports "weak reasoning"
-  // when a critique exists, that is most of why passive watching so rarely
-  // says anything about reasoning.
-  //
-  // Claims are confidence-sorted (claimDetection.ts) and evidence resolves
-  // roughly in flight order, so in practice the top claim still wins whenever
-  // it has evidence at all.
-  if (autoCritiqueSpent) return
-  if (currentClaims.slice(0, MAX_AUTO_EVIDENCE_CLAIMS).every((c) => c.id !== claim.id)) return
-  if (critiqueByClaimId.has(claim.id)) return
-  const evidence = evidenceResultByClaimId.get(claim.id)
-  if (!evidence || evidence.evidence.length === 0) return
-
-  // Claimed BEFORE the await. Three evidence searches can resolve in the same
-  // tick, and without this all three would pass the check and fire.
-  autoCritiqueSpent = true
-  const generationAtRequestTime = trackingGeneration
-  try {
-    const items = evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i))
-    const result = await generateCritique(withEvidenceScores(claim), items)
-    if (trackingGeneration !== generationAtRequestTime) return
-    if (!currentClaims.some((c) => c.id === claim.id)) return
-    critiqueByClaimId.set(claim.id, result)
-    logScreenWatch(`auto-critique for ${claim.id.slice(0, 8)}: ${result.verdict}`)
-    redrawOverlay()
-  } catch (err) {
-    logScreenWatch(`auto-critique failed for ${claim.id.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`)
-  }
-}
 
 // User-initiated re-run of evidence search for one claim (the overlay's
 // "Find Evidence"/"Refresh Evidence" button) — same search as
