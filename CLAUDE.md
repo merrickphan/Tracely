@@ -69,7 +69,7 @@ npm run dist:win     # build + electron-builder --win -> installer in release/
 npm run dist:mac     # build + electron-builder --mac (untested, config-only)
 ```
 
-There is no test suite and no lint script currently configured. `npm run typecheck` is the only automated correctness check — run it after making changes.
+There is no lint script configured. The two automated correctness checks are `npm run typecheck` and `npm test` (Node's built-in runner over `src/**/*.test.ts` — 282 tests, 57 suites, under a second). Run both after making changes; neither costs anything. This line previously claimed there was no test suite, which sent agents pushing on typecheck alone.
 
 ### Relay setup for AI features
 

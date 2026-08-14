@@ -27,8 +27,8 @@ unless you are told otherwise.
 3. **Stay inside the scope the issue names.** Finishing early is not a reason to
    add adjacent improvements; it makes a small reviewable change into a large
    unreviewable one. Raise the idea instead.
-4. **Run `npm run typecheck` before committing.** It is the only automated
-   correctness check here.
+4. **Run `npm run typecheck` and `npm test` before committing.** Both are fast
+   and both are cheap; neither touches the network or spends anything.
 5. **Push the branch and hand back the pull request link.** `git push` prints one.
 6. **Never merge, and never release.** A human decides both.
 
@@ -60,8 +60,21 @@ maintainer's, and require a `GH_TOKEN` you do not have.
 
 ## Always do these
 
-**Run `npm run typecheck` before pushing.** It is the only automated correctness
-check this project has. There is no test suite yet.
+**Run `npm run typecheck` AND `npm test` before pushing.** These are the two
+automated correctness checks this project has, and they are free.
+
+`npm test` runs Node's built-in runner over `src/**/*.test.ts` — 282 tests
+across 57 suites, in under a second. This file used to say "there is no test
+suite yet", which was true when it was written and has not been for a while; an
+agent that believed it skipped the only check that can catch a logic regression,
+because typecheck cannot.
+
+Note the constraint that shapes what is testable: the runner uses Node's type
+stripping, whose ESM resolver rejects the extensionless relative imports used
+throughout this codebase. **A module with a relative *value* import cannot be
+unit tested.** That is why the tested modules are leaves — see the Structure
+section of CLAUDE.md, which explains which logic was deliberately pushed into
+leaf modules so it could be covered.
 
 **Commit before building.** `electron-builder` packages the *working tree*, not
 `HEAD`, so an uncommitted edit can end up inside an installer while being absent
