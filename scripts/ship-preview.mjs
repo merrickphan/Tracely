@@ -2,10 +2,21 @@
 /**
  * Publish a preview build for review, without touching production.
  *
- * The counterpart to ship.mjs. That script collects every agent onto main and
- * cuts a real release; this one publishes whatever branch you're standing on
- * as a prerelease, so a change can be installed and used before anyone decides
- * it belongs on main.
+ * The counterpart to ship.mjs. That script cuts a real release for real users;
+ * this one publishes a prerelease that can be installed and used without one.
+ *
+ * Two modes, decided by the branch you are standing on:
+ *
+ *  - **From `main`: the integration build.** What would ship right now, if the
+ *    merged work were released. This is the one everybody installs and leaves
+ *    installed, because it is the only build that shows the integrated whole.
+ *  - **From a `feat/*` branch: a branch preview.** One change, installable
+ *    before anyone decides it belongs on main.
+ *
+ * Both produce the same artifact and publish to the same channel, so an install
+ * follows whichever was published last. In practice that means integration
+ * builds, with the occasional branch preview when someone wants eyes on a
+ * change early — and the next integration build takes the channel back.
  *
  * Two mechanisms keep it away from production users:
  *
@@ -42,11 +53,44 @@ if (out('git status --porcelain')) die('Uncommitted work. Commit it first — a 
 
 const branch = out('git rev-parse --abbrev-ref HEAD')
 if (branch === 'HEAD') die('Detached HEAD — check out a branch first.')
-if (branch === 'main') {
-  die('You are on main. Previews are for reviewing work before it reaches main;\nto publish from main, use npm run ship.')
+
+// Two kinds of preview, and main is the important one.
+//
+// This script used to refuse main outright, on the reasoning that previews are
+// for reviewing work *before* it lands. That is true of a branch preview and it
+// left a real gap: there was no way to publish "what would ship right now".
+// `npm run ship` publishes to production users, so the only build anyone could
+// install of integrated main was a real release.
+//
+// The consequence, with more than one person working: everyone ran `npm run
+// dev` against their own tree and saw a different app. Nobody could see the
+// integrated whole without cutting a release for real users.
+//
+// So main is now allowed, as the INTEGRATION build. It is the same artifact
+// either way — "Tracely Preview", staging backend, beta.yml — which means
+// anyone who installs it once keeps receiving whichever preview was published
+// last. That is the point: install once, and the shared build follows main.
+const isIntegration = branch === 'main'
+
+if (isIntegration) {
+  // A branch preview is reproducible from its branch. An integration build has
+  // to be reproducible from origin/main specifically, or "what would ship" is
+  // whatever happened to be on one laptop.
+  run('git fetch origin main --quiet')
+  if (out('git rev-parse HEAD') !== out('git rev-parse origin/main')) {
+    die(
+      'Local main is not in sync with origin/main.\n' +
+        'An integration build has to be exactly what is on the remote, or it is not\n' +
+        'what would ship. Pull or push first, then run this again.'
+    )
+  }
 }
 
-console.log(`\n1/5  Preview from '${branch}'`)
+console.log(
+  isIntegration
+    ? `\n1/5  Integration preview from 'main' — this is what would ship right now`
+    : `\n1/5  Branch preview from '${branch}'`
+)
 
 // Before the bump, so a blocked preview costs nothing rather than burning a
 // version number on every failed attempt — same ordering as ship.mjs.
