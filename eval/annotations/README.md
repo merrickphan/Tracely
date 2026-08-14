@@ -92,6 +92,11 @@ comparable across the format change.
 | `marg` | right topic, doesn't evidence the claim as phrased |
 | `irr` | not about this claim at all |
 
+**Read [`../RUBRIC.md`](../RUBRIC.md) before applying these.** The rel/marg
+boundary is where labelling drifts between sessions — it moved the reported
+precision 7 points between 2026-08-08 and 2026-08-09 with no code change in
+between. The rubric is the decision procedure that stops that.
+
 ### `draft.roles`
 
 One role per paragraph, in order, from the same set as `ParagraphRole` in
