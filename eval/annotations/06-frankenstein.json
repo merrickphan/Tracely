@@ -1,0 +1,34 @@
+{
+  "essay": "06-frankenstein.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["thesis", "evidence", "evidence", "conclusion"]
+  },
+  "note": "A close reading, and the first essay in the set the academic APIs largely cannot help with. Every other essay is one where retrieval SHOULD find something, so the set can currently only measure whether good sources are found — never whether the tool knows when to stay quiet. Here exactly one sentence is citation-worthy and the rest are textual observation and interpretation. That makes this the only essay in eval/ that measures a false-positive rate. A tool that flags the interpretive sentences is not being cautious, it is telling a student their own reading needs a source.",
+  "claims": [
+    {
+      "text": "The novel was published anonymously in 1818, and the revised 1831 edition carries a new preface in which Shelley describes the book's origin during a stay at the Villa Diodati.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The one genuinely checkable sentence: publication facts, well documented, and the kind of thing a literature student does need to cite. If retrieval finds nothing usable here while flagging the interpretive claims, that inversion is the finding."
+    },
+    {
+      "text": "The moment of animation takes up barely a paragraph.",
+      "paragraph": 1,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "A verifiable statement about the primary text, settled by opening the novel rather than by finding a paper. Not citation-worthy in any style guide. Included specifically because it LOOKS like a factual assertion and will read as one to a claim detector."
+    },
+    {
+      "text": "When the creature finally speaks, he speaks in the register of the books he found, which is why his eloquence startles readers who came expecting a monster.",
+      "paragraph": 2,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "The student's own argument. There is a real critical literature on the creature's education and any of it will retrieve well on these keywords — which is the trap. Surfacing Frankenstein criticism here is topical relevance, not evidence for this reading, so every such source is marg at best. This claim alone should generate several honest marg labels."
+    }
+  ]
+}
