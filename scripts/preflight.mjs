@@ -22,12 +22,18 @@ import { loadEnv } from './env.mjs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const RELEASE_BRANCH = 'main'
 
-// Preview mode (PREFLIGHT_PREVIEW=1, set by ship-preview.mjs) publishes a
-// prerelease off whatever branch an agent is working on, so the two gates that
-// exist to protect *production* — "must be on main", "must match origin/main"
-// — are re-pointed at the current branch rather than dropped. Everything else
-// (clean tree, typecheck, live relay, version actually ahead) still applies:
-// a preview build that's broken in those ways wastes a review cycle.
+// Preview mode (PREFLIGHT_PREVIEW=1, set by ship-preview.mjs) means this run is
+// building a prerelease against staging rather than a release against
+// production. What it changes is the environment banner and the label; every
+// gate still applies.
+//
+// The branch re-pointing below is now vestigial: ship-preview.mjs refuses to run
+// anywhere but main, so targetBranch resolves to main either way. It used to
+// matter, when previews could be cut from a feature branch — that was removed
+// because branch and main previews share one beta channel, and publishing from
+// a branch silently replaced everyone's installed Preview with unmerged work.
+// Left in place rather than deleted so this file keeps working if a preview is
+// ever legitimately cut from somewhere else again.
 const PREVIEW = process.env.PREFLIGHT_PREVIEW === '1'
 
 let failed = false

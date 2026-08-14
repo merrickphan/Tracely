@@ -1,0 +1,110 @@
+name: preview
+
+# Publishes an integration preview every time main moves.
+#
+# Before this existed, the only way to get an installable build of integrated
+# main was for Merrick to run `npm run ship:preview` on his own laptop. That
+# made the shared beta depend on one machine being awake and one person
+# remembering, so in practice it never happened between releases and reviewers
+# were left running `npm run dev` against their own trees — each seeing a
+# different app.
+#
+# Now: merge to main -> this builds on Windows -> the beta channel updates ->
+# every installed "Tracely Preview" picks it up on next launch. Nobody's laptop
+# is in the loop.
+#
+# This deliberately does NOT cut real releases. `npm run ship` stays a manual
+# decision on Merrick's machine, so the production Supabase and relay
+# credentials never enter CI. The blast radius of everything here is the beta
+# channel, which only reviewers install.
+
+on:
+  push:
+    branches: [main]
+
+# A second merge while a build is running should supersede it, not queue behind
+# it — the newer build is a strict superset of main. `cancel-in-progress` and
+# not a queue, because two concurrent runs would both try to bump the version
+# and one would lose the push race.
+concurrency:
+  group: preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # ship-preview.mjs commits the version bump and pushes it back to main.
+    # That push is itself a push to main, so without this guard the workflow
+    # would retrigger itself forever, one beta per cycle, until someone noticed
+    # the Actions bill of minutes and a releases page with four hundred
+    # prereleases on it.
+    #
+    # Also skipped on forks, where none of the secrets below exist and the
+    # build would fail on the first preflight check rather than doing anything
+    # useful.
+    if: >-
+      github.repository == 'merrickphan/Tracely' &&
+      !startsWith(github.event.head_commit.message, 'Preview v')
+
+    # electron-builder --win produces an NSIS installer, which needs Windows.
+    # This is the whole reason the cloud routines cannot publish previews
+    # themselves: they run on Linux.
+    runs-on: windows-latest
+
+    # ship-preview.mjs pushes the version bump commit and force-moves the tag.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # preflight compares HEAD against origin/main and ship-preview.mjs
+          # moves a tag, so the shallow default clone is not enough.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24 to match check.yml and local dev — npm test runs .ts files
+          # through Node's type stripping, which does not exist on 20.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # loadEnv() refuses to fall back to .env when staging is requested, and
+      # it is right to: that fallback would build something labelled "preview",
+      # point it at the production relay and production Supabase, and publish it
+      # to reviewers. So the file has to exist, and it has to hold staging
+      # values. It is gitignored, so writing it here does not dirty the tree
+      # that preflight is about to check.
+      #
+      # NCBI and Semantic Scholar keys are optional — they are used by the eval
+      # harness rather than the build, and an empty value degrades those
+      # providers rather than breaking the installer.
+      - name: write .env.staging
+        shell: bash
+        run: |
+          cat > .env.staging <<'EOF'
+          RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
+          RELAY_TOKEN=${{ secrets.STAGING_RELAY_TOKEN }}
+          SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          NCBI_API_KEY=${{ secrets.NCBI_API_KEY }}
+          SEMANTIC_SCHOLAR_API_KEY=${{ secrets.SEMANTIC_SCHOLAR_API_KEY }}
+          EOF
+
+      # ship-preview.mjs runs `git commit` and `git push`. A fresh runner has no
+      # identity configured, so the commit fails before the build ever starts.
+      - name: configure git identity
+        shell: bash
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # GH_TOKEN is read from the environment here rather than .env.release,
+      # which does not and should not exist in CI. GITHUB_TOKEN is scoped to
+      # this repository and expires when the job ends.
+      - name: build and publish preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run ship:preview
