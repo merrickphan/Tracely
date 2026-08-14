@@ -113,14 +113,36 @@ try {
 }
 
 console.log('\n3/5  Bumping to a prerelease version')
-// From 0.3.75 this gives 0.3.76-beta.0, then -beta.1, and so on. A later
-// `npm version patch` in ship.mjs collapses that to a clean 0.3.76, which
-// outranks every beta of it — so previews never block the real release.
-run('npm version prerelease --preid=beta --no-git-tag-version')
-const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-run(`git commit -am "Preview v${version}"`)
-run(`git push origin ${branch}`)
-console.log(`     v${version}`)
+// Two ways to pick the number, because CI cannot write to main.
+//
+// `check` is a required status check on main. A required check blocks *every*
+// push, not just merges — and a freshly pushed commit has by definition not run
+// it yet. So CI pushing its own version-bump commit is a deadlock: the push is
+// rejected pending a check that cannot start until the push succeeds. That is
+// not a misconfiguration to work around; a branch that requires review-by-CI
+// should not have a bot committing straight to it.
+//
+// So in CI the version comes from the run number instead of from the last one.
+// GITHUB_RUN_NUMBER increases by one per run of this workflow and never repeats,
+// which is all electron-updater needs — it compares versions and only ever moves
+// forward. Nothing is committed and nothing is pushed; package.json on main stays
+// at whatever the last real release left there, and the bump exists only inside
+// the build. A later `npm version patch` in ship.mjs produces a clean 0.3.x that
+// outranks every beta of it, exactly as before.
+const CI = !!process.env.GITHUB_ACTIONS
+let version
+if (CI) {
+  const base = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version.split('-')[0]
+  version = `${base}-beta.${process.env.GITHUB_RUN_NUMBER}`
+  run(`npm version ${version} --no-git-tag-version --allow-same-version`)
+  console.log(`     v${version}  (from run number; not committed)`)
+} else {
+  run('npm version prerelease --preid=beta --no-git-tag-version')
+  version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
+  run(`git commit -am "Preview v${version}"`)
+  run(`git push origin ${branch}`)
+  console.log(`     v${version}`)
+}
 
 console.log('\n4/5  Loading GH_TOKEN')
 // The environment first, then the file.
@@ -146,7 +168,14 @@ if (token) {
 }
 
 console.log('\n5/5  Build + publish preview')
-run('npm run preflight', { env: previewEnv })
+// The second preflight re-checks everything now that the version is settled.
+// Locally that is worth doing. In CI it cannot pass and should not: the bump is
+// deliberately uncommitted there, so "working tree clean" is false by design and
+// "in sync with origin" would be too. Everything else it checks was already
+// verified at 2/5 against the identical tree, and the CI version is monotonic by
+// construction rather than by comparison, so there is nothing left for it to
+// catch that the first run did not.
+if (!CI) run('npm run preflight', { env: previewEnv })
 run('npm run preview:win', { env: { ...previewEnv, GH_TOKEN: token } })
 
 // Point the tag at the commit that was actually built.
@@ -161,10 +190,24 @@ run('npm run preview:win', { env: { ...previewEnv, GH_TOKEN: token } })
 //
 // Forced because the tag already exists by this point: electron-builder made
 // it a moment ago, in the wrong place.
-const built = out('git rev-parse HEAD')
-run(`git tag -f v${version} ${built}`)
-run(`git push -f origin v${version}`)
-console.log(`     tag v${version} -> ${built.slice(0, 7)} (${branch})`)
+// Only locally, and only still necessary there.
+//
+// electron-builder creates the GitHub release through the API without a
+// target_commitish, so GitHub puts the tag at the DEFAULT BRANCH's head rather
+// than at whatever was built. That used to matter a great deal, when previews
+// could be cut from a feature branch: the tag landed on some unrelated commit on
+// main and the installer could not be reproduced from it.
+//
+// Previews now only ever come from main, so the default branch head IS the built
+// commit and the tag is already right. The correction below is kept for the local
+// path, where the bump commit advances HEAD past what electron-builder saw. In CI
+// nothing is committed and nothing can be pushed to a protected branch anyway.
+if (!CI) {
+  const built = out('git rev-parse HEAD')
+  run(`git tag -f v${version} ${built}`)
+  run(`git push -f origin v${version}`)
+  console.log(`     tag v${version} -> ${built.slice(0, 7)} (${branch})`)
+}
 
 console.log(`
 Published preview v${version} as a GitHub prerelease.
