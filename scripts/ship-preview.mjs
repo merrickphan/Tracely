@@ -118,10 +118,27 @@ run(`git push origin ${branch}`)
 console.log(`     v${version}`)
 
 console.log('\n4/5  Loading GH_TOKEN')
-const envFile = join(ROOT, '.env.release')
-if (!existsSync(envFile)) die('.env.release not found — GH_TOKEN is required to publish.')
-const token = readFileSync(envFile, 'utf8').match(/^GH_TOKEN=(.+)$/m)?.[1]?.trim()
-if (!token) die('No GH_TOKEN in .env.release.')
+// The environment first, then the file.
+//
+// `.github/workflows/preview.yml` runs this script on a Windows runner so that
+// merging to main publishes a preview without anyone's laptop being involved.
+// CI has no `.env.release` and must not have one — it is the file holding the
+// release token, and it is gitignored precisely so it never reaches this public
+// repository. There, GITHUB_TOKEN arrives in the environment instead.
+//
+// Environment wins over the file so a one-off local run can use a different
+// token without editing `.env.release` and forgetting to put it back.
+let token = process.env.GH_TOKEN?.trim()
+if (token) {
+  console.log('     from the environment')
+} else {
+  const envFile = join(ROOT, '.env.release')
+  if (!existsSync(envFile))
+    die('No GH_TOKEN in the environment, and no .env.release — one of the two is required to publish.')
+  token = readFileSync(envFile, 'utf8').match(/^GH_TOKEN=(.+)$/m)?.[1]?.trim()
+  if (!token) die('No GH_TOKEN in .env.release.')
+  console.log('     from .env.release')
+}
 
 console.log('\n5/5  Build + publish preview')
 run('npm run preflight', { env: previewEnv })
