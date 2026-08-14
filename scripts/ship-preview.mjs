@@ -5,18 +5,19 @@
  * The counterpart to ship.mjs. That script cuts a real release for real users;
  * this one publishes a prerelease that can be installed and used without one.
  *
- * Two modes, decided by the branch you are standing on:
+ * **From `main` only.** What would ship right now, if the merged work were
+ * released. Everyone installs it once and leaves it installed, because it is
+ * the only build that shows the integrated whole.
  *
- *  - **From `main`: the integration build.** What would ship right now, if the
- *    merged work were released. This is the one everybody installs and leaves
- *    installed, because it is the only build that shows the integrated whole.
- *  - **From a `feat/*` branch: a branch preview.** One change, installable
- *    before anyone decides it belongs on main.
+ * Branch previews used to be allowed and are now refused — see the gate below.
+ * Everything published here lands on the same beta channel, so an install
+ * follows whichever build was published last, and a branch preview would take
+ * that channel away from everyone until the next merge.
  *
- * Both produce the same artifact and publish to the same channel, so an install
- * follows whichever was published last. In practice that means integration
- * builds, with the occasional branch preview when someone wants eyes on a
- * change early — and the next integration build takes the channel back.
+ * You will rarely run this by hand. `.github/workflows/preview.yml` runs it on
+ * a Windows runner on every push to main, which is how a merge reaches Tracely
+ * Preview without anyone's laptop being involved. Running it locally is for
+ * when CI is broken and you need a build anyway.
  *
  * Two mechanisms keep it away from production users:
  *
@@ -54,43 +55,47 @@ if (out('git status --porcelain')) die('Uncommitted work. Commit it first — a 
 const branch = out('git rev-parse --abbrev-ref HEAD')
 if (branch === 'HEAD') die('Detached HEAD — check out a branch first.')
 
-// Two kinds of preview, and main is the important one.
+// main only. Branch previews are gone on purpose.
 //
-// This script used to refuse main outright, on the reasoning that previews are
-// for reviewing work *before* it lands. That is true of a branch preview and it
-// left a real gap: there was no way to publish "what would ship right now".
-// `npm run ship` publishes to production users, so the only build anyone could
-// install of integrated main was a real release.
+// This gate has now been all three ways, and each move was right at the time.
+// It originally refused main, because a preview was for reviewing work *before*
+// it landed. That left no way to publish "what would ship right now", so main
+// was allowed alongside branches. Both then published to the same beta channel,
+// and an install follows whichever was published last.
 //
-// The consequence, with more than one person working: everyone ran `npm run
-// dev` against their own tree and saw a different app. Nobody could see the
-// integrated whole without cutting a release for real users.
+// That collision is why branches are refused now. With CI publishing from main
+// on every merge, a branch preview does not add a review path — it silently
+// replaces the shared build for everyone who has Preview installed, with one
+// person's unmerged work, until the next merge takes the channel back. Two
+// people comparing notes on "the preview" would be looking at different
+// software and have no way to tell.
 //
-// So main is now allowed, as the INTEGRATION build. It is the same artifact
-// either way — "Tracely Preview", staging backend, beta.yml — which means
-// anyone who installs it once keeps receiving whichever preview was published
-// last. That is the point: install once, and the shared build follows main.
-const isIntegration = branch === 'main'
-
-if (isIntegration) {
-  // A branch preview is reproducible from its branch. An integration build has
-  // to be reproducible from origin/main specifically, or "what would ship" is
-  // whatever happened to be on one laptop.
-  run('git fetch origin main --quiet')
-  if (out('git rev-parse HEAD') !== out('git rev-parse origin/main')) {
-    die(
-      'Local main is not in sync with origin/main.\n' +
-        'An integration build has to be exactly what is on the remote, or it is not\n' +
-        'what would ship. Pull or push first, then run this again.'
-    )
-  }
+// The review path that replaced it is faster anyway: merge it, and CI has the
+// change in Preview within minutes. If something genuinely needs eyes before it
+// lands, that is what `npm run dev` and the PR diff are for.
+if (branch !== 'main') {
+  die(
+    `On '${branch}'. Previews are published from main only.\n\n` +
+      'Both branch and main previews go to the same beta channel, so publishing\n' +
+      "from here would replace everyone's Tracely Preview with your unmerged\n" +
+      'branch until the next merge to main overwrote it.\n\n' +
+      'Merge it instead — .github/workflows/preview.yml builds and publishes\n' +
+      'every push to main, so it reaches Preview within minutes.'
+  )
 }
 
-console.log(
-  isIntegration
-    ? `\n1/5  Integration preview from 'main' — this is what would ship right now`
-    : `\n1/5  Branch preview from '${branch}'`
-)
+// Reproducible from origin/main specifically, or "what would ship" is whatever
+// happened to be sitting on one laptop.
+run('git fetch origin main --quiet')
+if (out('git rev-parse HEAD') !== out('git rev-parse origin/main')) {
+  die(
+    'Local main is not in sync with origin/main.\n' +
+      'An integration build has to be exactly what is on the remote, or it is not\n' +
+      'what would ship. Pull or push first, then run this again.'
+  )
+}
+
+console.log(`\n1/5  Integration preview from 'main' — this is what would ship right now`)
 
 // Before the bump, so a blocked preview costs nothing rather than burning a
 // version number on every failed attempt — same ordering as ship.mjs.
