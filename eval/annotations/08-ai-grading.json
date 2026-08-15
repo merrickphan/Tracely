@@ -1,0 +1,50 @@
+{
+  "essay": "08-ai-grading.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["thesis", "evidence", "evidence", "conclusion"]
+  },
+  "note": "The failure mode this set could not see: a citation to a source that does not exist. 05-social-media covers miscitation — a REAL paper (Orben and Przybylski 2019) that says something other than what the sentence claims. Nothing covers the other half of that pair, which is now the more common one in student drafts written with a chatbot open. The two look identical to retrieval: both produce a claim carrying an author-year that the evidence list cannot match, and in both cases the search will confidently return adjacent literature. Distinguishing them is the product's entire pitch. Second gap: claim 2's only evidence is vendor-published and too recent to be indexed anywhere, so it is the first claim in the set where the correct answer is 'the source that would settle this is real, is public, and is not in any of the four APIs'. Deliberately a weak draft — README asks for roughly 3:1 flawed to clean, and this one has no defensible claim in it at all.",
+  "claims": [
+    {
+      "text": "Ramirez and Doyle (2024) found that students who received AI-generated feedback improved their essay scores by 23 percent over a single semester, a larger effect than any human intervention has produced.",
+      "paragraph": 2,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "FABRICATED CITATION, and the verdict above is wrong in a way I could not fix without inventing schema. No paper matching this author-year-and-finding could be located; it is written to look exactly like the citations a chatbot invents. 'miscited' is the natural label and validation refuses it, correctly — miscited requires citedSource.says, and a source that does not exist says nothing. 'unsupported' is what is left, and it is too generous: it means 'nothing found either way, may still be true', which is precisely the reading a fabricated citation does not deserve. RUBRIC.md now carries this as an open question rather than a decision — adding a verdict changes the instrument, and that is Merrick's call, not mine. Until it is settled, this claim is under-labelled and any fit that leans on it inherits that."
+    },
+    {
+      "text": "Their sample was large and the effect held across grade levels, so the usual complaints about small studies do not apply here.",
+      "paragraph": 2,
+      "verdict": "unsupported",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "The second sentence of a fabricated citation, which is where the tell usually is: it describes methodology in the vaguest terms available ('large', 'held across grade levels') because there is nothing to describe. Not independently citation-worthy — it inherits from the sentence before it. Included because a claim detector that flags this separately is asking a student to source their own summary of a study that was already flagged, and a detector that ignores it misses that the fabrication is two sentences long, not one."
+    },
+    {
+      "text": "GPT-5 class models now score above the median human rater on the AP English Language essay rubric, according to the vendor's own published evaluation.",
+      "paragraph": 3,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "Not fabricated and not necessarily false — structurally unreachable. The evidence a marker would want is a vendor evaluation published on a company site within the last few months: real, public, citable, and indexed by none of OpenAlex, Crossref, Semantic Scholar or PubMed. Every source retrieval CAN return here is older work about automated essay scoring, which is the right topic and a different proposition, so marg under question 2 of the ladder. This is the first claim in the set that distinguishes 'nothing exists' from 'nothing these four providers index', and those should not produce the same output to a student."
+    },
+    {
+      "text": "Every student I know already uses one, so the honest thing for schools to do is grade with them too instead of pretending otherwise.",
+      "paragraph": 3,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Anecdote plus a policy conclusion drawn from it. Nothing can source 'every student I know'. The reasoning is the actual weakness — the leap from what students do to what schools ought to do is unwarranted — and that is a critique finding, not a citation finding. Useful precisely because it will retrieve well: there is a real literature on student AI adoption rates, and every bit of it is marg against a sentence about the author's acquaintances."
+    },
+    {
+      "text": "If a machine can produce it, we should stop pretending the five-paragraph essay was ever about thinking.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "A value judgement, included for the same reason as the interpretive sentences in 06-frankenstein: false-positive control. Flagging this tells a student their opinion needs a footnote."
+    }
+  ]
+}

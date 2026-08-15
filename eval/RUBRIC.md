@@ -59,6 +59,26 @@ of X does not evidence a claim about the prevalence of X.**
 
 **3. Otherwise → `rel`.**
 
+### Scale is part of specificity
+
+*Added 2026-08-15 with essays 07–09, and not yet reviewed. It is an extension of
+question 1's existing wording rather than a new rule, but say so if you disagree
+— it decides most of the labels in `09-parking-minimums`.*
+
+Question 1 says "at the claim's specificity", and geographic scale is the case
+where that bites hardest, because a national source answering a local claim
+looks like a good answer. Two situations that feel the same and are not:
+
+| the claim | the source | label | why |
+|---|---|---|---|
+| *our council voted last year to remove parking minimums* | a study of parking reform in several US cities | `marg` | same topic, same specificity (city policy), **different proposition** — it reports effects elsewhere, not what this council did |
+| *the vacancy rate downtown has been under two percent* | a national urban housing series | `irr` | the number **is** the topic, and a national number is not a local one. One level up, exactly like the AASM sleep statement against a school-start-times claim |
+
+The test: if the sentence asserts a *measurement*, a source measuring something
+else's version of it fails question 1 and never reaches question 2. If the
+sentence asserts a *fact about a policy or event*, a source about the same kind
+of policy passes question 1 and is decided at question 2 — nearly always `marg`.
+
 ## Two demotions
 
 **A source you cannot read past the title is `marg` at best.**
@@ -84,7 +104,27 @@ These are lexical collisions. They fail question 1, so they never reach the
 adjacent is what inflates the marginal column while strict precision stays
 flat — visible in the re-run, where marginal rose 11 points as strict fell 7.
 
-## The case this rubric does not settle
+## The cases this rubric does not settle
+
+**A citation to a source that does not exist.** `08-ai-grading` cites *Ramirez
+and Doyle (2024)*, which is invented — written to look exactly like what a
+chatbot produces. There is no verdict for it.
+
+`miscited` is the natural label and validation rejects it, correctly: it
+requires `citedSource.says`, and a source that does not exist says nothing. What
+is left is `unsupported`, which reads *"nothing found either way; may still be
+true"* — far too generous for a fabricated reference, and it puts the most
+serious thing a draft can do in the same bucket as a claim nobody has studied
+yet. The annotation is filed as `unsupported` with the gap written on it.
+
+This is a decision, not a derivation: a new verdict changes what every
+downstream fit is measuring, and `05-social-media` versus `08-ai-grading` is now
+the pair that shows why the distinction matters — real-source-wrong-claim and
+no-source-at-all produce identical retrieval behaviour and are not the same
+mistake. **Merrick's call.** If a `fabricated` verdict is wanted, it goes in
+`CLAIM_VERDICTS` in `eval/scripts/annotations.mjs` and probably wants the
+mirror-image validation rule to `miscited`: it must record what was searched for
+and not found, or it is an accusation rather than a label.
 
 **Compound sentences.** Several claims in the set assert two things at once —
 04-energy-access C3 carries both a transmission-loss statistic and an
@@ -92,7 +132,14 @@ unevidenced assertion about utility revenue. A source that nails one half and
 is silent on the other has no obvious label, and the ladder above does not
 decide it.
 
-The provisional rule used in the 04–06 annotations is: **label against the half
+`07-antibiotic-resistance` C3 is the cleanest instance yet and was added for
+this: the first half is a real published figure (~30% of US outpatient
+antibiotic prescriptions unnecessary) and the second half is an unevidenced
+causal leap about hospital infections. It will score well on sources while its
+actual assertion goes unevidenced, which is the cost of the provisional rule
+made visible.
+
+The provisional rule used in the 04–09 annotations is: **label against the half
 the retrieval query was built from, and note the split.** It is provisional
 because it is a decision, not a derivation, and it should be settled
 deliberately rather than by whoever labels next. Until then it is at least
