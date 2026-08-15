@@ -282,7 +282,7 @@ export const documentOutline: DocumentOutline = {
   // searched. Kept consistent deliberately — an outline claiming 2 detected
   // beside a list of 3 is the kind of quiet mismatch the preview exists to
   // surface, not to contain.
-  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 48, unchecked: 1 },
+  coverage: { detected: 3, withRelevantSource: 2, withOwnCitation: 1, meanStrength: 48, unchecked: 1 },
   weaknesses: [
     {
       kind: 'warrant-gap',
@@ -478,7 +478,7 @@ export const screenWatchStructure: ScreenWatchStructure = {
   // Matches screenWatchClaims: c1 (34) and c2 (61) found sources, c3 searched
   // and found nothing — which is what makes it an 'unsupported-claim' rather
   // than an unchecked one.
-  coverage: { detected: 3, withRelevantSource: 2, meanStrength: 42, unchecked: 0 },
+  coverage: { detected: 3, withRelevantSource: 2, withOwnCitation: 1, meanStrength: 42, unchecked: 0 },
   // A believable school essay rather than round numbers: 1,240 words over 71
   // sentences is ~17.5 words per sentence and ~5 minutes to read, which is what
   // the stats row should show. Round figures here would hide an arithmetic

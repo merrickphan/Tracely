@@ -3647,6 +3647,16 @@ textarea:disabled {
   color: var(--muted-2);
 }
 
+/* What Tracely's own search found, under what the writer cited. Deliberately
+   quieter than .argscore-verdict: it is a report on retrieval, not a judgement
+   on the draft, and it used to be phrased as one. */
+.argscore-verdict-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* Ring. Colour comes from the tone- class so it tracks the same 70/40 bands
    every other score in the app uses. */
 .argscore-ring-track { fill: none; stroke: var(--surface-2); }

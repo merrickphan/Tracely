@@ -264,7 +264,24 @@ export interface StructureWeakness {
 
 export interface EvidenceCoverage {
   detected: number
+  /**
+   * Claims Tracely's OWN search found a relevant source for.
+   *
+   * Not the same as "claims that have a source" — see `withOwnCitation`. This
+   * number is only ever about what retrieval turned up.
+   */
   withRelevantSource: number
+  /**
+   * Claims the writer already cited themselves, detected by
+   * `hasInlineCitation` over the claim sentence.
+   *
+   * Counted separately and never merged into `withRelevantSource`, because they
+   * answer different questions and only this one is about the draft rather than
+   * about Tracely. Reporting coverage without it was the defect: a meticulously
+   * cited essay read as "0 of 7 claims have a source", since retrieval had
+   * either not run or not happened to surface the same paper the writer used.
+   */
+  withOwnCitation: number
   /** Mean strengthScore over claims whose search has resolved; null if none have. */
   meanStrength: number | null
   unchecked: number

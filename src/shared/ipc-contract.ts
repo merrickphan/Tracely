@@ -25,6 +25,7 @@ import type {
   TracerConversation,
   TracerMessage
 } from './types'
+import type { ScreenWatchProblemKind } from './problemKind'
 
 // Note: CitationStyle is already 'APA' | 'MLA' | 'Chicago' — reused as-is for
 // the Screen Watch citation flow below, same enum the main app's citation
@@ -267,20 +268,15 @@ export interface ScreenRect {
 // only ever fetched from the main Tracely window via the existing
 // EVIDENCE_FIND flow, not through Screen Watch.
 /**
- * What is wrong with a claim. Mirrors ScreenWatchProblemKind in
- * services/screenWatch/problemKind.ts, which is where it is decided — declared
- * here because the renderer needs the union and must not import main.
+ * What is wrong with a claim. Re-exported from the one place it is declared.
+ *
+ * This used to be a hand-maintained copy of the union in
+ * services/screenWatch/problemKind.ts, because the renderer needs it and must
+ * not import main. problemKind.ts is a pure function of `@shared/types` and now
+ * lives in shared/ itself, so both sides can import the real thing and the copy
+ * can no longer drift from the logic that produces it.
  */
-export type ScreenWatchProblemKind =
-  | 'searching'
-  | 'weak-reasoning'
-  | 'contradicted-claim'
-  | 'unverified-statistic'
-  | 'no-sources'
-  | 'weak-evidence'
-  | 'partial-evidence'
-  | 'missing-citation'
-  | 'cited-unverified'
+export type { ScreenWatchProblemKind }
 
 export interface ScreenWatchEvidenceArticle {
   title: string

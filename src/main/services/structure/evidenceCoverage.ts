@@ -1,3 +1,10 @@
+// Relative, not '@shared/...', and it has to stay that way: this is a RUNTIME
+// import, and `npm test` runs the .test.ts beside it through node --test with
+// type stripping and no bundler, which resolves tsconfig path aliases for
+// `import type` only. The alias form fails at require() time with
+// MODULE_NOT_FOUND. (analyzeStructure.ts value-imports '@shared/claimSpans'
+// with the alias and pays for it by having no test of its own.)
+import { hasInlineCitation } from '../../../shared/inlineCitation.ts'
 import type { Claim, EvidenceCoverage } from '@shared/types'
 
 /**
@@ -39,6 +46,7 @@ export function computeEvidenceCoverage(claims: Claim[]): EvidenceCoverage {
   return {
     detected: claims.length,
     withRelevantSource: claims.filter(hasRelevantSource).length,
+    withOwnCitation: claims.filter((claim) => hasInlineCitation(claim.text)).length,
     meanStrength:
       strengths.length === 0
         ? null

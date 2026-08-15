@@ -11,6 +11,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
+    // A non-test file that both (a) value-imports another module by relative
+    // path and (b) has a .test.ts beside it has to write that import with an
+    // explicit `.ts`, because `npm test` runs it through `node --test` as real
+    // ESM and Node's resolver does not guess extensions. Without this flag tsc
+    // rejects exactly the spelling Node requires, so the two could not both be
+    // satisfied and the escape hatch was to leave the module untested (see the
+    // note in analyzeStructure.ts). Safe here: `noEmit` is on and the real
+    // build goes through electron-vite, which resolves .ts specifiers itself.
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["src/shared/*"]

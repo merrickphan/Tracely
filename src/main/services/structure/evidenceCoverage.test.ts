@@ -6,11 +6,11 @@ import { claimsWithoutEvidence, computeEvidenceCoverage } from './evidenceCovera
  * `sourceCount` is the only breakdown factor read; the rest are filled with a
  * constant so a change to the others can't silently affect these assertions.
  */
-function claim(id: string, strengthScore: number | null, sourceCount: number | null) {
+function claim(id: string, strengthScore: number | null, sourceCount: number | null, text?: string) {
   return {
     id,
     analysisId: 'a1',
-    text: `claim ${id}`,
+    text: text ?? `claim ${id}`,
     claimType: 'factual' as const,
     confidence: 0.8,
     searchQuery: id,
@@ -31,12 +31,20 @@ const supported = claim('supported', 72, 0.5)
 const searchedEmpty = claim('empty', 18, 0)
 /** Never searched. */
 const unchecked = claim('unchecked', null, null)
+/** Never searched, but the writer cited it themselves. */
+const citedByWriter = claim(
+  'cited',
+  null,
+  null,
+  'Laptop users score lower on conceptual questions (Mueller & Oppenheimer, 2014).'
+)
 
 describe('computeEvidenceCoverage', () => {
   it('counts detected, supported and unchecked separately', () => {
     deepStrictEqual(computeEvidenceCoverage([supported, searchedEmpty, unchecked]), {
       detected: 3,
       withRelevantSource: 1,
+      withOwnCitation: 0,
       meanStrength: 45,
       unchecked: 1
     })
@@ -46,9 +54,31 @@ describe('computeEvidenceCoverage', () => {
     deepStrictEqual(computeEvidenceCoverage([unchecked, unchecked]), {
       detected: 2,
       withRelevantSource: 0,
+      withOwnCitation: 0,
       meanStrength: null,
       unchecked: 2
     })
+  })
+
+  it("counts the writer's own citations, whether or not retrieval has run", () => {
+    // The defect this exists for: a cited draft read as "0 of N claims have a
+    // source" because retrieval was the only thing counted. Both numbers are
+    // reported, and neither is folded into the other — they answer different
+    // questions.
+    deepStrictEqual(computeEvidenceCoverage([citedByWriter, unchecked]), {
+      detected: 2,
+      withRelevantSource: 0,
+      withOwnCitation: 1,
+      meanStrength: null,
+      unchecked: 2
+    })
+  })
+
+  it('counts a claim that is both cited and retrieved in both columns', () => {
+    const both = claim('both', 72, 0.5, 'Screen time tracks with lower wellbeing (Twenge et al., 2018).')
+    const coverage = computeEvidenceCoverage([both])
+    strictEqual(coverage.withRelevantSource, 1)
+    strictEqual(coverage.withOwnCitation, 1)
   })
 
   it('averages only over claims whose search resolved', () => {
@@ -66,6 +96,7 @@ describe('computeEvidenceCoverage', () => {
     deepStrictEqual(computeEvidenceCoverage([]), {
       detected: 0,
       withRelevantSource: 0,
+      withOwnCitation: 0,
       meanStrength: null,
       unchecked: 0
     })

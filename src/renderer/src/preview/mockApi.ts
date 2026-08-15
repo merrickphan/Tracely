@@ -1,3 +1,4 @@
+import { hasInlineCitation } from '@shared/inlineCitation'
 import type {
   ScreenWatchClaimSummary,
   ScreenWatchHoverEvent,
@@ -138,6 +139,7 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     return {
       detected: claims.length,
       withRelevantSource: claims.filter((c) => (c.scoreBreakdown?.sourceCount ?? 0) > 0).length,
+      withOwnCitation: claims.filter((c) => hasInlineCitation(c.text)).length,
       meanStrength: resolved.length
         ? Math.round(resolved.reduce((sum, c) => sum + (c.strengthScore ?? 0), 0) / resolved.length)
         : null,
