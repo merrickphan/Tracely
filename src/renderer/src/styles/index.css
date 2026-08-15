@@ -3794,3 +3794,188 @@ textarea:disabled {
 .argscore-btn.primary:hover { filter: brightness(1.05); }
 .argscore-btn.secondary { background: var(--surface); color: var(--text); }
 .argscore-btn.secondary:hover { background: var(--surface-2); }
+
+/* -- Argument Score: navigation between the four frames -------------------- */
+
+.argscore-back {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.argscore-back:hover { color: var(--text); }
+
+.argscore-section-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.argscore-section-row .argscore-section { flex: 1; }
+
+.argscore-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.argscore-link:hover { text-decoration: underline; }
+
+/* A paragraph row is a button now — every one opens its detail view. */
+.argscore-para {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.argscore-para:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.argscore-para:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.argscore-verdict-pill {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.argscore-verdict-pill.tone-good { color: var(--score-good); background: var(--score-good-wash); }
+.argscore-verdict-pill.tone-mid  { color: var(--score-mid);  background: var(--score-mid-wash); }
+.argscore-verdict-pill.tone-low  { color: var(--score-low);  background: var(--score-low-wash); }
+
+/* .argscore-weakness is a span inside the paragraph button (blocks cannot nest
+   in a button's flow without breaking its baseline), the -block variant is the
+   standalone paragraph used in the detail and summary views. */
+.argscore-weakness {
+  display: block;
+  margin-top: 7px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--score-mid-wash);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-2);
+}
+
+.argscore-weakness-block {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted-2);
+}
+
+.argscore-detail { padding-top: 4px; }
+
+.argscore-detail-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.argscore-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.argscore-quote {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted-2);
+}
+
+.argscore-uncited {
+  border: 1px solid var(--score-mid);
+  border-radius: 10px;
+  background: var(--score-mid-wash);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.argscore-uncited-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--score-mid);
+}
+
+.argscore-uncited-text {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
+
+.argscore-claim {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.argscore-claim p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted-2); }
+
+.argscore-claim-score {
+  flex-shrink: 0;
+  min-width: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.argscore-claim-score.tone-good { color: var(--score-good); }
+.argscore-claim-score.tone-mid  { color: var(--score-mid); }
+.argscore-claim-score.tone-low  { color: var(--score-low); }
+
+.argscore-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.argscore-strength .argscore-eyebrow { flex: 1; }
+
+.argscore-strength-score {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.argscore-strength-score small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.argscore-strength-score.tone-good { color: var(--score-good); }
+.argscore-strength-score.tone-mid  { color: var(--score-mid); }
+.argscore-strength-score.tone-low  { color: var(--score-low); }
+
+.argscore-breakdown { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
