@@ -14,7 +14,22 @@ const CLAIM_TYPE_LABEL: Record<Claim['claimType'], string> = {
   opinion: 'Opinion'
 }
 
-export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JSX.Element {
+export default function ClaimCard({
+  claim: initialClaim,
+  autoAction,
+  onUpdated
+}: {
+  claim: Claim
+  /**
+   * Kick off the chosen check as soon as the card mounts, instead of waiting
+   * for a button. The dashboard's Home already asked which check the user
+   * wanted before submitting, so making them pick again per card would be
+   * asking the same question twice.
+   */
+  autoAction?: 'evidence' | 'critique'
+  /** A score or critique landed — the Sessions list re-reads its pills. */
+  onUpdated?: () => void
+}): JSX.Element {
   const [claim, setClaim] = useState(initialClaim)
   const [evidence, setEvidence] = useState<EvidenceItem[] | null>(null)
   const [loadingEvidence, setLoadingEvidence] = useState(false)
