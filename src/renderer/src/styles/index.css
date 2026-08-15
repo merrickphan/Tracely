@@ -3904,20 +3904,48 @@ textarea:disabled {
   border-top: 1px solid var(--border);
 }
 
+/* Full-height pills, not 10px-rounded rects — the shape on 370:135 and 404:129,
+   where the primary is an orange→red gradient and the secondary a white outline. */
 .argscore-btn {
   flex: 1;
-  height: 40px;
-  border-radius: 10px;
-  font-size: 13px;
+  height: 44px;
+  border-radius: 999px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border-strong);
 }
 
-.argscore-btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-.argscore-btn.primary:hover { filter: brightness(1.05); }
+.argscore-btn.primary {
+  background: linear-gradient(90deg, #f97316 0%, #ea3a0c 100%);
+  border-color: transparent;
+  color: #fff;
+}
+.argscore-btn.primary:hover { filter: brightness(1.06); }
 .argscore-btn.secondary { background: var(--surface); color: var(--text); }
 .argscore-btn.secondary:hover { background: var(--surface-2); }
+
+/* The letter chip, on its own row under OVERALL SCORE as the frames place it. */
+.argscore-grade {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.argscore-grade.tone-good { color: var(--score-good); background: var(--score-good-wash); }
+.argscore-grade.tone-mid  { color: var(--score-mid);  background: var(--score-mid-wash); }
+.argscore-grade.tone-low  { color: var(--score-low);  background: var(--score-low-wash); }
+
+.argscore-grade-line {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
 
 /* -- Argument Score: navigation between the four frames -------------------- */
 

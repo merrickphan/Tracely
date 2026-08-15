@@ -31,11 +31,30 @@ import Spinner from './Spinner'
  * expect to return through — his call, and it matches the design putting the
  * identical label in both places.
  *
- * The labels throughout are the rubric's own, not the design's. Those frames
- * grade an essay (Thesis Clarity, Grammar & Mechanics, a B+ chip, "above
- * average for this assignment type"); Tracely measures how an argument is built
- * and none of that. So no letter grade — there is no band — and no cohort line,
- * because there is no cohort.
+ * THE LABELS ARE THE DESIGN'S. This is the correction to the mistake that ran
+ * through PRs #46-#50 and is worth writing down, because it was invisible from
+ * inside every one of them.
+ *
+ * This file used to say the opposite: that the frames grade an essay and Tracely
+ * measures how an argument is built, so it would keep the rubric's own words and
+ * drop the design's — no "Essay Grade" title, no letter chip, no cohort line.
+ * Defensible in isolation. What it meant in practice is that four PRs in a row
+ * "fixed" which frame the buttons ROUTED to while the card those routes led to
+ * never looked like the frame at all. Merrick kept saying "make it this frame"
+ * and screenshotting 370:135; the routing kept getting fixed; the screen kept
+ * not changing. Asked why, the honest answer was this paragraph.
+ *
+ * So: the title is "Essay Grade", the chip is a letter, the buttons read "View
+ * Full Report" / "Back to Summary" / "Re-grade Essay". A letter grade is a
+ * presentation of `outline.score`, which is a real number the rubric computes —
+ * see GRADE_BANDS, whose bands are set so 82 reads B+ exactly as the frame does.
+ *
+ * ONE line in these frames is not a presentation of anything Tracely has:
+ * "Above average for this assignment type" asserts a comparison against other
+ * students' work, and there is no cohort and no assignment type to compare
+ * against. That slot keeps the design's position, size and weight and says what
+ * the score band means instead. Everything else on 370:135 and 404:129 is the
+ * design's, verbatim.
  */
 
 const ROLE_LABEL: Record<ParagraphRole, string> = {
@@ -83,6 +102,37 @@ function toneFor(score: number): 'good' | 'mid' | 'low' {
 
 function verdictFor(pct: number): string {
   return pct >= 70 ? 'Strong' : pct >= 40 ? 'Developing' : 'Needs work'
+}
+
+/**
+ * The letter on the chip, and the line under it.
+ *
+ * Both are presentations of `outline.score` — the rubric number scoreDraft.ts
+ * already computes — and nothing else. The bands are set so 82 reads B+, which
+ * is what the design's own frame shows for 82.
+ *
+ * The design's line there is "Above average for this assignment type". That one
+ * is not a presentation of anything: it asserts a comparison against other
+ * students' work on the same assignment, and Tracely has no cohort, no
+ * assignment type, and no way to acquire either. It is the single sentence in
+ * these frames that cannot be made true by rendering it, so the slot keeps the
+ * design's position, size and weight and says what the band actually means.
+ */
+const GRADE_BANDS: Array<[number, string, string]> = [
+  [90, 'A', 'Built the way the rubric asks for'],
+  [85, 'A-', 'Strong throughout, with small gaps'],
+  [80, 'B+', 'Well built — a few gaps to close'],
+  [75, 'B', 'Solid, with parts left implied'],
+  [70, 'B-', 'The shape is there; the support is thin'],
+  [65, 'C+', 'Half the argument is doing the work'],
+  [60, 'C', 'Key moves are missing or unstated'],
+  [50, 'D', 'Reads as notes rather than an argument'],
+  [0, 'F', 'Not yet arguing anything the rubric can find']
+]
+
+function gradeFor(score: number): { letter: string; line: string } {
+  const band = GRADE_BANDS.find(([floor]) => score >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
+  return { letter: band[1], line: band[2] }
 }
 
 /** 238 wpm — Brysbaert 2019, silent reading of English prose. */
@@ -311,6 +361,7 @@ function ScoreReport({
   const { detected, withRelevantSource, withOwnCitation, unchecked } = outline.coverage
   const checked = detected - unchecked
   const { words, sentences, uniqueWords } = readingStats(paragraphTexts)
+  const grade = gradeFor(outline.score)
 
   const claimed = new Set<keyof StructureComponents>()
   const rows = outline.paragraphs.map((paragraph) => {
@@ -332,12 +383,14 @@ function ScoreReport({
 
   return (
     <>
-      <ModalHead title="Argument Score" onClose={onClose} />
+      <ModalHead title="Essay Grade" onClose={onClose} />
 
       <div className="argscore-summary">
         <ScoreRing score={outline.score} size={compact ? 132 : 96} />
         <div className="argscore-summary-text">
           <span className="argscore-eyebrow">Overall score</span>
+          <span className={`argscore-grade tone-${toneFor(outline.score)}`}>{grade.letter}</span>
+          <p className="argscore-grade-line">{grade.line}</p>
           {!outline.complete ? <span className="argscore-provisional">Provisional</span> : null}
           {/*
             THREE different facts, never one number. This line said "0 of 7
@@ -358,19 +411,25 @@ function ScoreReport({
 
             Collapsing any two of these is how the bug happened. Keep them apart.
           */}
-          <p className="argscore-verdict">
-            {detected === 0 ? (
-              'No checkable claims in this draft yet.'
-            ) : (
-              <>
-                <b>
-                  {withOwnCitation} of {detected}
-                </b>{' '}
-                {detected === 1 ? 'claim carries' : 'claims carry'} a citation you wrote
-              </>
-            )}
-          </p>
-          {detected > 0 ? (
+          {/* Not on the compact widget. 370:135 is a ring, an eyebrow, a grade
+              and one line — nothing else — and the claim counts pushed it two
+              rows taller than the frame. They live in the full report, which
+              has the room the design gave it. */}
+          {!compact ? (
+            <p className="argscore-verdict">
+              {detected === 0 ? (
+                'No checkable claims in this draft yet.'
+              ) : (
+                <>
+                  <b>
+                    {withOwnCitation} of {detected}
+                  </b>{' '}
+                  {detected === 1 ? 'claim carries' : 'claims carry'} a citation you wrote
+                </>
+              )}
+            </p>
+          ) : null}
+          {!compact && detected > 0 ? (
             <p className="argscore-verdict-sub">
               {checked === 0 ? (
                 'Not checked against the literature yet.'
@@ -415,7 +474,7 @@ function ScoreReport({
                 per-claim surface and does not belong in the paragraph flow. */}
             {claims.length > 0 ? (
               <button className="argscore-link" onClick={() => onView({ name: 'argument' })}>
-                Open argument check →
+                Open Argument Check →
               </button>
             ) : null}
           </div>
@@ -470,18 +529,20 @@ function ScoreReport({
         </div>
       ) : null}
 
+      {/* The frames' own labels and shapes: a filled orange-gradient pill beside
+          an outlined white one, both full-height, splitting the width. */}
       <footer className="argscore-foot">
         {compact ? (
           <button className="argscore-btn primary" onClick={() => onView({ name: 'full' })}>
-            View full report
+            View Full Report
           </button>
         ) : (
           <button className="argscore-btn primary" onClick={() => onView({ name: 'summary' })}>
-            Back to summary
+            Back to Summary
           </button>
         )}
         <button className="argscore-btn secondary" onClick={onReanalyze}>
-          Re-check
+          Re-grade Essay
         </button>
       </footer>
     </>
