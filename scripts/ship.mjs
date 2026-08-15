@@ -2,8 +2,11 @@
 /**
  * One-command release: check, bump, build, publish.
  *
- * It merges nothing. Integration happens when a feature is done, not when a
- * release is due, so this only publishes what is already on main.
+ * It integrates nothing. Fast-forwarding main to origin is the one exception,
+ * and it is not integration — it moves to commits that are already the remote's
+ * tip, and refuses the moment a real merge would be needed. Bringing branches
+ * together happens when a feature is done, not when a release is due, so this
+ * only publishes what is already on main.
  *
  * The steps are ordered so the irreversible one is last and gated. preflight
  * runs inside release:win and refuses to publish unless main is clean, in
@@ -51,6 +54,46 @@ if (branch !== 'main') {
       `  git checkout main && git merge --no-ff ${branch} && git push\n\n` +
       `then run npm run ship again.`
   )
+}
+
+// main falls behind origin every time a PR merges on GitHub, which is most of
+// the time — v0.3.84 was blocked nine commits behind. preflight is right to
+// refuse to publish a commit that isn't the tip of the remote, since the tag
+// would point at something nobody else can fetch. But a hard stop made that
+// gate fire on the one condition whose entire fix is `git pull`, typed by hand,
+// followed by running the whole release again from the top.
+//
+// So do the pull here. It is safe *because* it is a fast-forward and nothing
+// else: no merge commit, no conflict, and therefore no chance of resolving one
+// badly under release pressure. The working tree was checked clean above, so
+// there is nothing local for it to overwrite.
+//
+// Diverged main is the case this deliberately does not handle. Local commits
+// *and* remote commits means someone pushed straight to main while a PR landed,
+// and choosing what belongs in the release is integration — the thing this
+// script exists to keep out of release time (see the header). It stops instead.
+//
+// preflight still checks sync on its own afterwards. This narrows what reaches
+// the gate; it does not remove the gate.
+try {
+  run('git fetch --quiet origin main')
+  const behind = Number(out('git rev-list --count HEAD..origin/main'))
+  const ahead = Number(out('git rev-list --count origin/main..HEAD'))
+  if (behind && ahead) {
+    die(
+      `main has diverged from origin/main — ${ahead} local commit(s), ${behind} remote.\n\n` +
+        `Ship will not reconcile that for you. Sort it out, then run npm run ship again:\n\n` +
+        `  git pull --rebase origin main`
+    )
+  }
+  if (behind) {
+    console.log(`\nSyncing main — ${behind} commit(s) behind origin`)
+    run('git merge --ff-only origin/main')
+  }
+} catch {
+  // Offline, or main has never been pushed. preflight tells both stories
+  // properly a few lines down, and a second message here would only drift out
+  // of step with that one. Fall through and let the gate speak.
 }
 
 // Before bumping, not after: a blocked ship should cost nothing, and bumping
