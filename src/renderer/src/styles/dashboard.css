@@ -1,32 +1,5 @@
-/*
- * The dashboard shell, wearing Tracely's own theme.
- *
- * The `--dashboard-*` layer below always mapped onto index.css's tokens, so
- * the frame, surfaces and text followed the app already. What did not were the
- * rules that skipped this layer and wrote colours directly, and they broke the
- * two things the theme is FOR:
- *
- *   Dark mode. `#ffffff`, `#111111`, `#f6f6f5` and friends state a light page
- *   as fact. Every one is now an ink/surface/border token, which index.css
- *   redefines under the dark block, so they invert instead of staying put.
- *
- *   The accent picker. Appearance offers orange/blue/green/purple and sets
- *   `data-accent` on the root, which moves `--accent`. The focus rings and
- *   button glows were hardcoded `rgba(255, 79, 0, …)` — Braden's orange, and a
- *   near-miss of Tracely's `#f47b20` at that — so they stayed orange whatever
- *   was picked. They are now `color-mix` over `--dashboard-accent`, keeping the
- *   same softness while following the live accent.
- *
- * Status pills and the live dot use `--score-good/-mid/-low` and their washes,
- * the same 70/40 bands the Essay Grade report, the ClaimCard and the Screen
- * Watch overlay all grade with — so "supported" is one green across the
- * product rather than one green per surface.
- *
- * The `var(--token, #fallback)` defaults are kept as defence for a stylesheet
- * loading before index.css. They should never actually fire.
- */
 .dashboard-app {
-  --dashboard-accent: var(--accent, #f47b20);
+  --dashboard-accent: var(--accent, #ff4f00);
   --dashboard-accent-strong: color-mix(in srgb, var(--dashboard-accent), #000000 10%);
   --dashboard-accent-soft: color-mix(in srgb, var(--dashboard-accent), transparent 93%);
   --dashboard-background: var(--bg, #f4f4f3);
@@ -179,8 +152,8 @@
 }
 
 .dashboard-nav-item.is-active {
-  background: var(--ink);
-  color: var(--ink-contrast);
+  background: #090909;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -246,7 +219,7 @@
   border: 1px solid var(--dashboard-accent);
   border-radius: 8px;
   background: var(--dashboard-accent);
-  color: var(--primary-contrast);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -262,7 +235,7 @@
 .dashboard-new-session:hover,
 .dashboard-secondary-action:hover:not(:disabled) {
   filter: brightness(0.97);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--dashboard-accent) 14%, transparent);
+  box-shadow: 0 4px 12px rgba(255, 79, 0, 0.14);
 }
 
 .dashboard-new-session:active,
@@ -314,8 +287,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--ink-contrast);
+  background: #111111;
+  color: #ffffff;
   object-fit: cover;
   font-size: 10px;
   font-weight: 700;
@@ -400,11 +373,11 @@
 
 .dashboard-textarea-shell:focus-within {
   border-color: var(--dashboard-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dashboard-accent) 9%, transparent);
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.09);
 }
 
 .dashboard-textarea-shell.has-error {
-  border-color: var(--score-low);
+  border-color: #c94338;
 }
 
 .dashboard-textarea-shell textarea {
@@ -471,7 +444,7 @@
 
 .dashboard-form-error {
   margin: 8px 1px 0;
-  color: var(--score-low);
+  color: #b8372f;
   font-size: 11px;
   line-height: 1.4;
 }
@@ -508,7 +481,7 @@
 }
 
 .dashboard-mode:hover {
-  border-color: var(--border-strong);
+  border-color: #c9c9c5;
 }
 
 .dashboard-mode:active {
@@ -517,7 +490,7 @@
 
 .dashboard-mode.is-selected {
   border-color: var(--dashboard-accent);
-  background: color-mix(in srgb, var(--dashboard-accent) 2%, transparent);
+  background: rgba(255, 79, 0, 0.025);
   color: var(--dashboard-accent);
 }
 
@@ -533,9 +506,9 @@
   width: 11px;
   height: 11px;
   flex: 0 0 11px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid #b4b4af;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 2px var(--surface);
+  box-shadow: inset 0 0 0 2px #ffffff;
 }
 
 .dashboard-mode.is-selected .dashboard-mode-indicator {
@@ -576,7 +549,7 @@
   border: 1px solid var(--dashboard-accent);
   border-radius: 8px;
   background: var(--dashboard-accent);
-  color: var(--primary-contrast);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -585,7 +558,7 @@
 
 .dashboard-check-button:hover:not(:disabled) {
   background: var(--dashboard-accent-strong);
-  box-shadow: 0 5px 14px color-mix(in srgb, var(--dashboard-accent) 18%, transparent);
+  box-shadow: 0 5px 14px rgba(255, 79, 0, 0.18);
 }
 
 .dashboard-check-button:active:not(:disabled) {
@@ -686,7 +659,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: var(--surface-2);
+  background: #f6f6f5;
   color: var(--dashboard-muted);
 }
 
@@ -733,9 +706,9 @@
   white-space: nowrap;
 }
 
-.dashboard-status-supported { background: var(--score-good-wash); color: var(--score-good); }
-.dashboard-status-mixed { background: var(--score-mid-wash); color: var(--score-mid); }
-.dashboard-status-review { background: var(--score-low-wash); color: var(--score-low); }
+.dashboard-status-supported { background: #e2f4e8; color: #247747; }
+.dashboard-status-mixed { background: #fff0cf; color: #94610b; }
+.dashboard-status-review { background: #fde5e2; color: #a33c34; }
 
 .dashboard-session-empty,
 .dashboard-page-message {
@@ -774,9 +747,9 @@
 .dashboard-feature-copy small { display: block; margin-top: 5px; color: var(--dashboard-muted); font-size: 9px; }
 .dashboard-feature-title-row { display: flex; align-items: center; gap: 7px; }
 .dashboard-live-state { display: inline-flex; align-items: center; gap: 4px; color: var(--dashboard-muted); font-size: 9px; }
-.dashboard-live-state::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--border-strong); }
-.dashboard-live-state.is-on { color: var(--score-good); }
-.dashboard-live-state.is-on::before { background: var(--score-good); }
+.dashboard-live-state::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #b5b5b0; }
+.dashboard-live-state.is-on { color: #247747; }
+.dashboard-live-state.is-on::before { background: #36a267; }
 
 .dashboard-help-grid {
   display: grid;
@@ -861,7 +834,7 @@
 .dashboard-results .claim-text { margin: 10px 0 14px; font-size: 13px; line-height: 1.5; }
 .dashboard-results .claim-actions { gap: 8px; }
 .dashboard-results .claim-actions .btn { min-height: 34px; padding: 7px 13px; border-radius: 7px; font-size: 10px; }
-.dashboard-results .claim-actions .btn-primary { border: 1px solid var(--dashboard-accent); background: var(--dashboard-accent); box-shadow: none; color: var(--primary-contrast); }
+.dashboard-results .claim-actions .btn-primary { border: 1px solid var(--dashboard-accent); background: var(--dashboard-accent); box-shadow: none; color: #ffffff; }
 .dashboard-results .claim-actions .btn-secondary { border: 1px solid var(--dashboard-border-strong); background: var(--dashboard-surface); color: var(--dashboard-text); }
 
 /* Embedded New Session reuses the existing document/link analysis surface,
@@ -907,7 +880,7 @@
 .dashboard-main .source-tile.active { border-color: var(--dashboard-accent); background: var(--dashboard-accent-soft); color: var(--dashboard-accent); }
 .dashboard-main .analyze-input .textarea { width: 100%; max-width: none; min-height: 42px; max-height: 110px; padding: 11px 12px; border-color: var(--dashboard-border-strong); border-radius: 7px; font-size: 11px; resize: vertical; }
 .dashboard-main .analyze-input-actions { width: 100%; margin-top: 12px; }
-.dashboard-main .analyze-cta { width: auto; min-width: 140px; height: 38px; padding: 8px 15px; border-radius: 8px; background: var(--dashboard-accent); box-shadow: 0 5px 12px color-mix(in srgb, var(--dashboard-accent) 16%, transparent); font-size: 11px; }
+.dashboard-main .analyze-cta { width: auto; min-width: 140px; height: 38px; padding: 8px 15px; border-radius: 8px; background: var(--dashboard-accent); box-shadow: 0 5px 12px rgba(255, 79, 0, 0.16); font-size: 11px; }
 .dashboard-main .analyze-view > .results-panel { position: static; width: min(100%, 720px); margin-top: 22px; }
 .dashboard-main .analyze-view > .error-text,
 .dashboard-main .analyze-view > .muted { position: static; margin-top: 14px; }
@@ -951,17 +924,17 @@
 .dashboard-settings .settings-field textarea { min-height: 56px; resize: vertical; }
 .dashboard-settings .settings-static-value.is-unavailable { background: var(--dashboard-surface-subtle); color: var(--dashboard-muted); }
 .dashboard-settings .btn { min-height: 34px; padding: 7px 12px; border-radius: 7px; font-size: 10px; }
-.dashboard-settings .btn-dark { background: var(--ink); color: var(--ink-contrast); }
+.dashboard-settings .btn-dark { background: #101010; color: #ffffff; }
 .dashboard-settings .btn:disabled { opacity: 0.45; }
 .settings-actions { display: flex; align-items: center; gap: 8px; }
 .settings-avatar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.dashboard-settings .settings-avatar { width: 42px; height: 42px; object-fit: cover; border-radius: 50%; background: var(--ink); color: var(--ink-contrast); font-size: 12px; }
+.dashboard-settings .settings-avatar { width: 42px; height: 42px; object-fit: cover; border-radius: 50%; background: #111111; color: #ffffff; font-size: 12px; }
 .settings-avatar-row > div > p { margin: 3px 0 0; color: var(--dashboard-muted); font-size: 8px; }
 .settings-upload-button { padding: 5px 8px; border: 1px solid var(--dashboard-border); border-radius: 6px; background: var(--dashboard-surface); color: var(--dashboard-text); font-size: 9px; cursor: pointer; }
 .settings-upload-button:hover { border-color: var(--dashboard-accent); color: var(--dashboard-accent); }
 .settings-color-options { min-height: 34px; display: flex; align-items: center; gap: 8px; }
 .settings-color-options button { width: 22px; height: 22px; padding: 0; border: 2px solid var(--dashboard-surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--dashboard-border); cursor: pointer; }
-.settings-color-options button.is-selected { box-shadow: 0 0 0 2px var(--ink); }
+.settings-color-options button.is-selected { box-shadow: 0 0 0 2px #111111; }
 .dashboard-settings .settings-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--dashboard-border); border-radius: 7px; cursor: pointer; }
 .settings-toggle-row span { display: flex; flex-direction: column; gap: 2px; }
 .settings-toggle-row strong { font-size: 10px; }
