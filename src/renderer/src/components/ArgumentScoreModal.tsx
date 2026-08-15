@@ -163,8 +163,12 @@ export default function ArgumentScoreModal({
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
-  // Opens on the full report, per the spec. Not compact-first.
-  const [view, setView] = useState<View>({ name: 'full' })
+  // Opens on the compact widget — 370:135 — and everything else is reached from
+  // there. This has now been both ways: PR #46 opened compact, #47 opened the
+  // full report on his instruction, and he corrected it back with the frame
+  // attached. Compact is the landing view; do not flip it again without him
+  // saying so in as many words.
+  const [view, setView] = useState<View>({ name: 'summary' })
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Argument score">
@@ -261,7 +265,8 @@ function ScoreReport({
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
-  const { detected, withRelevantSource } = outline.coverage
+  const { detected, withRelevantSource, unchecked } = outline.coverage
+  const checked = detected - unchecked
   const { words, sentences, uniqueWords } = readingStats(paragraphTexts)
 
   const claimed = new Set<keyof StructureComponents>()
@@ -291,10 +296,42 @@ function ScoreReport({
         <div className="argscore-summary-text">
           <span className="argscore-eyebrow">Overall score</span>
           {!outline.complete ? <span className="argscore-provisional">Provisional</span> : null}
+          {/*
+            This line was wrong, and wrong in the worst direction — it read as an
+            accusation. It said "0 of 7 claims have a source" about drafts whose
+            claims had simply never been searched, and about drafts that were
+            fully cited.
+
+            Two facts it was collapsing into one number:
+            - `withRelevantSource` counts claims where TRACELY'S evidence search
+              found something. It knows nothing about citations already written
+              in the document, so a properly cited claim still counts as 0.
+            - `unchecked` counts claims no search has run on at all. The overlay
+              states this separately, with a comment saying the number must not
+              imply a search has run when it has not. I dropped that guard when
+              porting the panel here; this restores it.
+
+            So: never state a ratio when nothing has been checked, and never say
+            "has a source" when the honest claim is "Tracely found evidence".
+          */}
           <p className="argscore-verdict">
-            {detected === 0
-              ? 'No checkable claims in this draft yet.'
-              : `${withRelevantSource} of ${detected} ${detected === 1 ? 'claim has' : 'claims have'} a source.`}
+            {detected === 0 ? (
+              'No checkable claims in this draft yet.'
+            ) : checked === 0 ? (
+              <>
+                {detected} {detected === 1 ? 'claim' : 'claims'} found · none checked yet
+              </>
+            ) : (
+              <>
+                <b>
+                  {withRelevantSource} of {checked}
+                </b>{' '}
+                checked {checked === 1 ? 'claim has' : 'claims have'} evidence Tracely could find
+                {unchecked > 0 ? (
+                  <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
+                ) : null}
+              </>
+            )}
           </p>
         </div>
       </div>
