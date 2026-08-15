@@ -1,0 +1,7 @@
+Every English teacher I know is quietly worried that AI will grade essays better than they do, and the research says they are right to worry.
+
+Ramirez and Doyle (2024) found that students who received AI-generated feedback improved their essay scores by 23 percent over a single semester, a larger effect than any human intervention has produced. Their sample was large and the effect held across grade levels, so the usual complaints about small studies do not apply here.
+
+The models have also caught up on the task itself. GPT-5 class models now score above the median human rater on the AP English Language essay rubric, according to the vendor's own published evaluation. Every student I know already uses one, so the honest thing for schools to do is grade with them too instead of pretending otherwise.
+
+None of this means teachers are replaceable. It means the thing being measured was never really writing. If a machine can produce it, we should stop pretending the five-paragraph essay was ever about thinking.
