@@ -265,7 +265,7 @@ function ScoreReport({
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
-  const { detected, withRelevantSource, unchecked } = outline.coverage
+  const { detected, withRelevantSource, withOwnCitation, unchecked } = outline.coverage
   const checked = detected - unchecked
   const { words, sentences, uniqueWords } = readingStats(paragraphTexts)
 
@@ -297,42 +297,51 @@ function ScoreReport({
           <span className="argscore-eyebrow">Overall score</span>
           {!outline.complete ? <span className="argscore-provisional">Provisional</span> : null}
           {/*
-            This line was wrong, and wrong in the worst direction — it read as an
-            accusation. It said "0 of 7 claims have a source" about drafts whose
-            claims had simply never been searched, and about drafts that were
-            fully cited.
+            THREE different facts, never one number. This line said "0 of 7
+            claims have a source" about drafts that were fully cited, which is
+            an accusation, and the least believable thing the panel can print
+            over an essay whose every paragraph carries a reference.
 
-            Two facts it was collapsing into one number:
-            - `withRelevantSource` counts claims where TRACELY'S evidence search
-              found something. It knows nothing about citations already written
-              in the document, so a properly cited claim still counts as 0.
-            - `unchecked` counts claims no search has run on at all. The overlay
-              states this separately, with a comment saying the number must not
-              imply a search has run when it has not. I dropped that guard when
-              porting the panel here; this restores it.
+            - `withOwnCitation` — citations the WRITER wrote, from
+              hasInlineCitation. A fact about the draft, knowable with no
+              search at all, so it leads.
+            - `withRelevantSource` — what TRACELY'S search turned up. A fact
+              about retrieval. It stays on its own line and is never phrased as
+              "has a source", because Tracely failing to find a paper is not
+              the same as the claim being unsourced.
+            - `unchecked` — claims no search has run on. Stated separately and
+              never folded into a ratio, so the number cannot imply a search
+              has run when it has not.
 
-            So: never state a ratio when nothing has been checked, and never say
-            "has a source" when the honest claim is "Tracely found evidence".
+            Collapsing any two of these is how the bug happened. Keep them apart.
           */}
           <p className="argscore-verdict">
             {detected === 0 ? (
               'No checkable claims in this draft yet.'
-            ) : checked === 0 ? (
-              <>
-                {detected} {detected === 1 ? 'claim' : 'claims'} found · none checked yet
-              </>
             ) : (
               <>
                 <b>
-                  {withRelevantSource} of {checked}
+                  {withOwnCitation} of {detected}
                 </b>{' '}
-                checked {checked === 1 ? 'claim has' : 'claims have'} evidence Tracely could find
-                {unchecked > 0 ? (
-                  <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
-                ) : null}
+                {detected === 1 ? 'claim carries' : 'claims carry'} a citation you wrote
               </>
             )}
           </p>
+          {detected > 0 ? (
+            <p className="argscore-verdict-sub">
+              {checked === 0 ? (
+                'Not checked against the literature yet.'
+              ) : (
+                <>
+                  Tracely found supporting evidence for {withRelevantSource} of the {checked} it
+                  checked
+                  {unchecked > 0 ? (
+                    <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
+                  ) : null}
+                </>
+              )}
+            </p>
+          ) : null}
         </div>
       </div>
 

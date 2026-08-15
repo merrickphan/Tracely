@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { Claim, DocumentOutline, DocumentRecord } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import StructurePanel from '../components/StructurePanel'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
+import DocumentMarkLayer from '../components/DocumentMarkLayer'
+import { markAt, measureMarks } from '../components/documentMarks'
+import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
@@ -137,6 +141,7 @@ function DocumentEditor({
   onSaved: (doc: DocumentRecord) => void
 }): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const colorInputRef = useRef<HTMLInputElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const alignMenuRef = useRef<HTMLDivElement>(null)
@@ -164,6 +169,27 @@ function DocumentEditor({
   // Recomputed from the live editor rather than stored on the outline, which
   // deliberately carries no prose — see DocumentOutline.
   const [paragraphTexts, setParagraphTexts] = useState<string[]>([])
+
+  // ---- Inline marks ------------------------------------------------------
+  //
+  // The underlines from the Figma "Inline Detection" frames. Measured against
+  // the contentEditable and drawn in a layer beside it — see documentMarks.ts
+  // for why nothing here may touch the DOM the user is typing into.
+  const [marks, setMarks] = useState<DocumentMark[]>([])
+  const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
+  const [wrapWidth, setWrapWidth] = useState(0)
+  // Claims the writer has waved away this session. Client-side only: a
+  // dismissal is "I know, leave me alone while I finish this paragraph", not a
+  // durable judgement about the sentence, and persisting it would mean a real
+  // problem could be hidden forever by one impatient click.
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  // Bumped whenever something that moves text happens, to re-measure. A counter
+  // rather than the text itself: identical text can still need re-measuring
+  // after a font or alignment change.
+  const [measureTick, setMeasureTick] = useState(0)
+  // The pointer is inside the popover, so leaving the underline must not close
+  // it — otherwise the card vanishes as you reach for its buttons.
+  const insidePopoverRef = useRef(false)
 
   const [wordCount, setWordCount] = useState(0)
   const [fontFamily, setFontFamily] = useState('Arial')
@@ -284,6 +310,8 @@ function DocumentEditor({
     // current value so an already-stale outline does not re-render per
     // keystroke.
     setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
+    // Every keystroke reflows the text the marks were measured against.
+    setMeasureTick((n) => n + 1)
     // Typing can end a pending style (Enter starts a fresh block), so the
     // toolbar has to follow the caret, not just explicit toolbar clicks.
     syncFormatState()
@@ -420,6 +448,67 @@ function DocumentEditor({
   }, [flushSave])
 
   // ---- Structure ---------------------------------------------------------
+
+  /**
+   * Re-measures the underlines.
+   *
+   * useLayoutEffect, not useEffect: these are absolute positions over live
+   * text, and measuring after paint shows the marks in their old places for a
+   * frame every time the text reflows — visible as a flicker on every keystroke
+   * in a flagged paragraph.
+   *
+   * rAF-batched because a keystroke fires this and a ResizeObserver callback in
+   * the same tick, and getClientRects forces layout each time.
+   */
+  useLayoutEffect(() => {
+    const body = editorRef.current
+    const wrap = wrapRef.current
+    if (!body || !wrap) return
+    let frame = 0
+    frame = requestAnimationFrame(() => {
+      const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
+      setMarks(measureMarks(body, wrap, live))
+      setWrapWidth(wrap.clientWidth)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [claims, dismissed, measureTick, structureOpen, fontFamily, fontSize, align])
+
+  // The editor reflows on window resize and when the Structure rail opens, and
+  // neither goes through handleInput.
+  useEffect(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const observer = new ResizeObserver(() => setMeasureTick((n) => n + 1))
+    observer.observe(wrap)
+    return () => observer.disconnect()
+  }, [])
+
+  /**
+   * Opens the popover for whatever underline the pointer is over.
+   *
+   * Hit-tested against the measured rects rather than by putting elements under
+   * the cursor: the layer sits over a contentEditable, and anything that
+   * accepts a pointer event there is something the writer cannot click through
+   * to place their caret.
+   */
+  function handleBodyMouseMove(event: ReactMouseEvent<HTMLDivElement>): void {
+    const wrap = wrapRef.current
+    if (!wrap || marks.length === 0) {
+      if (activeMark) setActiveMark(null)
+      return
+    }
+    if (insidePopoverRef.current) return
+    const rect = wrap.getBoundingClientRect()
+    const x = event.clientX - rect.left + wrap.scrollLeft
+    const y = event.clientY - rect.top + wrap.scrollTop
+    const hit = markAt(marks, x, y)
+    if (!hit) {
+      if (activeMark) setActiveMark(null)
+      return
+    }
+    if (activeMark?.mark.claim.id === hit.mark.claim.id) return
+    setActiveMark(hit)
+  }
 
   /**
    * Runs the analysis. Detects claims first when none have been detected yet,
@@ -745,7 +834,14 @@ function DocumentEditor({
         */}
       </div>
 
-      <div className="docedit-body-wrap">
+      <div
+        className="docedit-body-wrap"
+        ref={wrapRef}
+        onMouseMove={handleBodyMouseMove}
+        onMouseLeave={() => {
+          if (!insidePopoverRef.current) setActiveMark(null)
+        }}
+      >
         <div
           ref={editorRef}
           className="docedit-body"
@@ -753,6 +849,39 @@ function DocumentEditor({
           suppressContentEditableWarning
           data-placeholder="Start typing…"
           onInput={handleInput}
+        />
+        {/*
+          Drawn after the body so it paints over the text, but the layer and
+          every mark in it are pointer-events: none — the writer clicks through
+          to place their caret exactly as if this were not here. Only the
+          popover takes the pointer.
+        */}
+        <DocumentMarkLayer
+          marks={marks}
+          active={activeMark}
+          wrapWidth={wrapWidth}
+          onFindSource={(mark) => {
+            // The claim's own evidence search, then the report opened on it —
+            // the same "Find Evidence" destination the design reaches from the
+            // paragraph detail, so both routes land in one place.
+            setScoreOpen(true)
+            void checkClaims([mark.claim.id])
+          }}
+          onSuggestFix={(mark) => {
+            setScoreOpen(true)
+            void checkClaims([mark.claim.id])
+          }}
+          onDismiss={(mark) => {
+            setDismissed((prev) => new Set(prev).add(mark.claim.id))
+            setActiveMark(null)
+          }}
+          onPopoverEnter={() => {
+            insidePopoverRef.current = true
+          }}
+          onPopoverLeave={() => {
+            insidePopoverRef.current = false
+            setActiveMark(null)
+          }}
         />
       </div>
 

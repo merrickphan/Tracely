@@ -47,8 +47,8 @@ import {
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
 } from './panelSize'
-import { hasInlineCitation, inlineCitationKind } from './inlineCitation'
-import { problemKindsFor, problemSeverity } from './problemKind'
+import { hasInlineCitation, inlineCitationKind } from '@shared/inlineCitation'
+import { problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
