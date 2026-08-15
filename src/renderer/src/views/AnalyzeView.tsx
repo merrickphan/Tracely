@@ -1321,7 +1321,11 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
           // Naming a document is a title, not a paragraph — without this the
           // shared textarea with the paste-text box renders 6 lines tall for
           // a few words.
-          style={sourceType === 'document' ? { maxWidth: 320, resize: 'none', textAlign: 'center' } : undefined}
+          // Figma 58:223 draws this at the tile row's own 620px, left-aligned
+          // with 16px of lead-in — not a narrow centred field. It was 320 and
+          // centred, which under a 620px tile row is the widest single thing on
+          // the screen sitting over a box half its width.
+          style={sourceType === 'document' ? { maxWidth: 620, resize: 'none', textAlign: 'left' } : undefined}
         />
 
         <div className="analyze-input-actions">
@@ -1333,12 +1337,18 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
           >
             {sourceType === 'document' && !latestDocLoaded ? 'Loading…' : SOURCE_CTA[sourceType]}
           </Button>
-          {claims ? (
-            <span className="muted">
-              {claims.length} claim{claims.length === 1 ? '' : 's'} detected
-            </span>
-          ) : null}
         </div>
+
+        {/* Its own row, not a sibling of the button inside `.analyze-input-actions`.
+            That row centres its children as a group, so the moment this count
+            appeared it shoved the CTA left of centre — the design (58:225) has
+            the button alone and centred, and it should stay centred whether or
+            not a run has produced claims. */}
+        {claims ? (
+          <p className="muted analyze-feedback">
+            {claims.length} claim{claims.length === 1 ? '' : 's'} detected
+          </p>
+        ) : null}
 
         {error ? <p className="error-text analyze-feedback">{error}</p> : null}
 

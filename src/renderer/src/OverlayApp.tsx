@@ -37,6 +37,8 @@ import {
   popoverCopyFor
 } from './components/problemCopy'
 import type { Bucket } from './components/problemCopy'
+// Same band, same score, both surfaces — see the note in essayGrade.ts.
+import { gradeFor } from './components/essayGrade'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
@@ -1327,6 +1329,198 @@ function ScoreChip({
   )
 }
 
+/**
+ * The Screen Watch panel in 'grade' mode — Figma "Essay Grade Widget" (370:191).
+ *
+ * Every number below is the frame's own, read with get_design_context rather
+ * than eyeballed off a screenshot: 560x321 at 28px radius, 24/22 padding, 22px
+ * between blocks, a 116px ring, and two 251px pills with a 10px gutter. This
+ * card draws its OWN chrome and header, so unlike 'single'/'all'/'structure' it
+ * replaces the shared panel box rather than filling it — the design gives it a
+ * close button and no drag title, and it is centred rather than cornered.
+ *
+ * The ring is drawn as an SVG arc, not the frame's two exported ring images.
+ * Those images encode 82/100 specifically; a score of 41 rendered with them
+ * would show an 82% arc. The geometry (116px box, 10px stroke) is the frame's.
+ */
+const GRADE_RING_TRACK = '#e7ebe8'
+/** The frame's green, which is not the app's #16a34a — same family, 4pt darker. */
+const GRADE_GREEN = '#168449'
+const GRADE_PILL_BG = '#ddf2e0'
+
+function gradeRingColor(score: number): string {
+  if (score >= 70) return GRADE_GREEN
+  if (score >= 40) return '#b3690a'
+  return '#d6301a'
+}
+
+function EssayGradePanel({
+  structure,
+  onClose,
+  onFullReport
+}: {
+  structure: ScreenWatchStructure | null
+  onClose: () => void
+  onFullReport: () => void
+}): JSX.Element {
+  const score = structure?.score ?? 0
+  const { letter, line } = gradeFor(score)
+  const ring = gradeRingColor(score)
+
+  // 116px box, 10px stroke => r 53. The arc starts at 12 o'clock (the rotation
+  // below) and runs clockwise, as the frame's does.
+  const R = 53
+  const CIRC = 2 * Math.PI * R
+
+  return (
+    <>
+      <div style={{ height: 30, position: 'relative', flexShrink: 0, width: '100%' }}>
+        <div style={{ position: 'absolute', left: 0, top: 3.5, fontSize: 19, fontWeight: 600, color: '#1a1a1f' }}>
+          Essay Grade
+        </div>
+        <button
+          className="tracely-btn-text"
+          onClick={onClose}
+          title="Close"
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            width: 30,
+            height: 30,
+            borderRadius: 999,
+            border: 'none',
+            background: '#eaf2ec',
+            color: '#376049',
+            fontFamily: 'inherit',
+            fontSize: 17,
+            lineHeight: 1,
+            cursor: 'pointer',
+            padding: 0
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
+
+      <div style={{ height: 116, position: 'relative', flexShrink: 0, width: '100%' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, width: 116, height: 116 }}>
+          <svg width={116} height={116} viewBox="0 0 116 116" aria-hidden="true">
+            <circle cx={58} cy={58} r={R} fill="none" stroke={GRADE_RING_TRACK} strokeWidth={10} />
+            <circle
+              cx={58}
+              cy={58}
+              r={R}
+              fill="none"
+              stroke={ring}
+              strokeWidth={10}
+              strokeLinecap="round"
+              strokeDasharray={`${(CIRC * Math.max(0, Math.min(100, score))) / 100} ${CIRC}`}
+              transform="rotate(-90 58 58)"
+            />
+          </svg>
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 38,
+              textAlign: 'center',
+              fontSize: 30,
+              fontWeight: 600,
+              color: '#1a1a1f',
+              lineHeight: 1
+            }}
+          >
+            {structure ? score : '—'}
+          </div>
+          <div
+            style={{ position: 'absolute', left: 0, right: 0, top: 74, textAlign: 'center', fontSize: 12, color: DIM }}
+          >
+            / 100
+          </div>
+        </div>
+
+        <div style={{ position: 'absolute', left: 144, top: 22.5, width: 241, height: 71 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>OVERALL SCORE</div>
+          <div
+            style={{
+              position: 'absolute',
+              top: 22,
+              left: 0,
+              height: 24,
+              borderRadius: 999,
+              background: GRADE_PILL_BG,
+              color: GRADE_GREEN,
+              fontSize: 13,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0 10px'
+            }}
+          >
+            {structure ? letter : '—'}
+          </div>
+          {/* The frame says "Above average for this assignment type" here. There
+              is no cohort and no assignment type, so the slot keeps its place
+              and says what the band means — see essayGrade.ts. */}
+          <div style={{ position: 'absolute', top: 55, left: 0, fontSize: 13, fontWeight: 600, color: W_BODY }}>
+            {structure ? line : 'No reading of this draft yet'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
+
+      <div style={{ height: 41, display: 'flex', gap: 10, flexShrink: 0, width: '100%' }}>
+        <button
+          className="tracely-btn-primary"
+          onClick={onFullReport}
+          style={{
+            width: 251,
+            height: 41,
+            border: 'none',
+            borderRadius: 999,
+            background: 'linear-gradient(to right, #f97316, #dc2626)',
+            color: '#fff',
+            fontFamily: 'inherit',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer'
+          }}
+        >
+          View Full Report
+        </button>
+        <button
+          className="tracely-btn-secondary"
+          disabled
+          // Not a missing feature. The structural read is recomputed locally on
+          // every poll (see refreshWatchOutline) — the score on this card is
+          // already live, so a re-grade button would do nothing but redraw it.
+          title="The score updates on its own as you write"
+          style={{
+            width: 251,
+            height: 41,
+            border: '1.5px solid #d3d8d4',
+            borderRadius: 999,
+            background: '#fff',
+            color: '#2d362f',
+            fontFamily: 'inherit',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'default',
+            opacity: 0.6
+          }}
+        >
+          Re-grade Essay
+        </button>
+      </div>
+    </>
+  )
+}
+
 // -- Argument Score: the Figma "Essay Grade" frames, labelled honestly -------
 //
 // Layout from "Real Tracely UI" (k7R5x1M9alKktaMLlZFSJn) frames 370:135 (widget),
@@ -2423,6 +2617,20 @@ export default function OverlayApp(): JSX.Element {
   }
 
   /**
+   * The score chip's target — Figma's "Essay Grade Widget" card.
+   *
+   * The chip used to open 'structure' directly, which is the design's FULL
+   * report: the whole rubric, the weaknesses and a row per paragraph, all at
+   * once. The frames put the summary card first and the breakdown behind "View
+   * Full Report", so that is the order here too.
+   */
+  function showGrade(): void {
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'grade' })
+    setHover(null)
+  }
+
+  /**
    * Light up the claim underlines belonging to one paragraph, so a weakness in
    * the panel points at something on the actual screen.
    *
@@ -2976,6 +3184,50 @@ export default function OverlayApp(): JSX.Element {
             // and its ¶ chip renders as plain text rather than a dead button.
             const liveClaimIds = new Set(visibleClaims.map((c) => c.id))
             const topClaim = visibleClaims.find((c) => c.id === selectedClaimId) ?? visibleClaims[0] ?? null
+
+            // 'grade' brings its own box. The frame gives it a 28px radius, its
+            // own header with a close button and no drag title, so wrapping it
+            // in the shared panel chrome below would double the border and the
+            // header. Everything else still shares that chrome.
+            if (widget.viewMode === 'grade') {
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: panelPos.x,
+                    top: panelPos.y,
+                    width: widget.rect.width,
+                    height: widget.rect.height,
+                    boxSizing: 'border-box',
+                    background: '#fff',
+                    // `outline`, not `border`. A Figma stroke does not consume
+                    // the frame's own padding box, but a CSS border does: with
+                    // `border: 1px` the 560px card offers 510px of content
+                    // instead of 512, and the design's two 251px pills came out
+                    // at 250. An outline pulled back over the edge draws the
+                    // same hairline and costs no layout.
+                    outline: '1px solid #000',
+                    outlineOffset: -1,
+                    borderRadius: 28,
+                    boxShadow: '0px 10px 28px -4px rgba(15, 26, 20, 0.14)',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    padding: '22px 24px',
+                    gap: 22,
+                    pointerEvents: 'auto'
+                  }}
+                >
+                  <EssayGradePanel
+                    structure={widget.structure}
+                    onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
+                    onFullReport={showStructure}
+                  />
+                </div>
+              )
+            }
+
             return (
               <div
                 style={{
@@ -3028,8 +3280,10 @@ export default function OverlayApp(): JSX.Element {
                       this click through the drag-threshold path. */}
                   <ScoreChip
                     structure={widget.structure}
+                    // No 'grade' arm: that mode returns its own card above, so
+                    // this chrome only ever renders for the other three.
                     active={widget.viewMode === 'structure'}
-                    onOpen={showStructure}
+                    onOpen={showGrade}
                   />
                   <div
                     onMouseDown={(e) =>

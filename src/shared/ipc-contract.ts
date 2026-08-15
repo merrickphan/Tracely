@@ -523,7 +523,12 @@ export interface ScreenWatchWidget {
   // 'structure' is the draft's structural read — same width as 'all' so the
   // bottom-right-anchored panel does not jump sideways when switching, and the
   // one mode whose body is allowed to scroll (paragraph count is unbounded).
-  viewMode: 'single' | 'all' | 'structure'
+  // 'grade' is the design's "Essay Grade Widget" (Figma 370:191) — the ring,
+  // the band and the two actions. It is the one mode that is NOT the width of
+  // the others (560 against 480) and NOT anchored bottom-right: the frame
+  // centres it over the document, so the jump-sideways argument above does not
+  // apply to it. See GRADE_PANEL_WIDTH in panelSize.ts.
+  viewMode: 'single' | 'all' | 'structure' | 'grade'
   claimCount: number
   // Ordered by confidence, highest first — the popup/panel picks which one
   // to show (hovered claim, or the top one by default) from this list
@@ -578,7 +583,7 @@ export interface ScreenWatchSetWidgetExpandedResponse {
 }
 
 export interface ScreenWatchSetWidgetViewModeRequest {
-  mode: 'single' | 'all' | 'structure'
+  mode: 'single' | 'all' | 'structure' | 'grade'
 }
 export interface ScreenWatchSetWidgetViewModeResponse {
   ok: true

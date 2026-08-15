@@ -77,6 +77,23 @@ export const MAX_LIST_PANEL_HEIGHT = 568
  */
 export const PANEL_WIDTH = GRID_PADDING * 2 + GRID_CARD_WIDTH
 
+/**
+ * 'grade' — the Figma "Essay Grade Widget" frame (370:191), 560x321.
+ *
+ * The one panel that does not share PANEL_WIDTH, and the one that is centred
+ * rather than anchored to the bottom-right corner. Both come straight off the
+ * frame: it is drawn at x=155 in an 870-wide document, which is dead centre,
+ * and at 560 it is wider than the 480 every other mode uses. The "all modes
+ * agree on width so the panel doesn't jump" rule still holds for the three
+ * corner-anchored modes; a centred panel has no corner to jump away from.
+ *
+ * Fixed rather than measured for the same reason SINGLE_PANEL_HEIGHT is: main
+ * sizes the rect the click-through hit-test derives from, and it cannot ask the
+ * renderer how tall the card came out.
+ */
+export const GRADE_PANEL_WIDTH = 560
+export const GRADE_PANEL_HEIGHT = 321
+
 export function computeAllPanelSize(claimCount: number): { width: number; height: number } {
   const count = Math.max(1, claimCount)
   const naturalHeight =
