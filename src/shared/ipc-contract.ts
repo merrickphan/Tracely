@@ -136,6 +136,12 @@ export interface LibraryRemoveResponse {
 export type SettingsGetRequest = Record<string, never>
 export type SettingsGetResponse = AppSettings
 
+export type AppGetInfoRequest = Record<string, never>
+export interface AppGetInfoResponse {
+  version: string
+  isPreview: boolean
+}
+
 export interface SettingsSetRequest {
   defaultCitationStyle?: CitationStyle
   hotkeyAccelerator?: string
@@ -219,12 +225,6 @@ export interface ShellOpenExternalRequest {
 }
 export interface ShellOpenExternalResponse {
   ok: true
-}
-
-export interface AppGetBuildInfoResponse {
-  version: string
-  /** True only in builds published by `npm run ship:preview` — never in a real release. */
-  isPreview: boolean
 }
 
 export interface FloatingClipboardCapturedEvent {
