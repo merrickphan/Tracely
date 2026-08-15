@@ -4,18 +4,18 @@ name: preview
 #
 # Before this existed, the only way to get an installable build of integrated
 # main was for Merrick to run `npm run ship:preview` on his own laptop. That
-# made the shared beta depend on one machine being awake and one person
+# made the shared preview depend on one machine being awake and one person
 # remembering, so in practice it never happened between releases and reviewers
 # were left running `npm run dev` against their own trees — each seeing a
 # different app.
 #
-# Now: merge to main -> this builds on Windows -> the beta channel updates ->
+# Now: merge to main -> this builds on Windows -> the preview channel updates ->
 # every installed "Tracely Preview" picks it up on next launch. Nobody's laptop
 # is in the loop.
 #
 # This deliberately does NOT cut real releases. `npm run ship` stays a manual
 # decision on Merrick's machine, so the production Supabase and relay
-# credentials never enter CI. The blast radius of everything here is the beta
+# credentials never enter CI. The blast radius of everything here is the preview
 # channel, which only reviewers install.
 
 on:

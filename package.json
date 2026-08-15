@@ -15,7 +15,7 @@
     "dist:win": "npm run fetch-models && electron-vite build && electron-builder --win",
     "dist:mac": "npm run fetch-models && electron-vite build && electron-builder --mac",
     "release:win": "npm run preflight && npm run fetch-models && electron-vite build && electron-builder --win --publish always",
-    "preview:win": "npm run fetch-models && electron-vite build && electron-builder --win --publish always -c.appId=com.tracely.app.preview -c.productName=\"Tracely Preview\" -c.extraMetadata.name=tracely-preview -c.publish.releaseType=prerelease -c.publish.channel=beta -c.directories.output=release-preview",
+    "preview:win": "npm run fetch-models && electron-vite build && electron-builder --win --publish always -c.appId=com.tracely.app.preview -c.productName=\"Tracely Preview\" -c.extraMetadata.name=tracely-preview -c.publish.releaseType=prerelease -c.publish.channel=preview -c.directories.output=release-preview",
     "preflight": "node scripts/preflight.mjs",
     "fetch-models": "node scripts/fetch-models.mjs",
     "verify-packaged-ml": "node scripts/verify-packaged-ml.mjs",

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { autoUpdater, NsisUpdater } from 'electron-updater'
 import { getMainWindow } from './windows/mainWindow'
+import { isPreviewBuild } from './appIdentity'
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
@@ -30,7 +31,39 @@ export function initAutoUpdater(): void {
     // Check for Updates... from the tray became a silent no-op, because
     // runCheck early-returns on it.
     checking = false
+    const wasManual = manualCheck
     manualCheck = false
+
+    // A preview build must never install a stable release.
+    //
+    // Tracely Preview is a separate application, not a channel of Tracely — its
+    // own appId, install directory and database. electron-updater does not know
+    // that. It treats `alpha` and `beta` as ranked channels of one app and will
+    // offer a prerelease client any newer STABLE release, which is correct for
+    // one app with two channels and wrong here: accepting it installs production
+    // Tracely and leaves Preview untouched, so Preview never moves again.
+    //
+    // On 2026-08-14 that stranded a Preview on 0.3.83-beta.2 with
+    // Tracely-Setup-0.3.84.exe queued in its updater cache, three builds behind
+    // while APPROVALS rows said the work was "in Preview".
+    //
+    // `-c.publish.channel=preview` in package.json is what actually keeps them
+    // apart. This asserts the same rule somewhere it cannot be undone by editing
+    // one CLI flag in one npm script, because the failure is invisible: nothing
+    // errors, the wrong app just installs.
+    if (isPreviewBuild() && !info.version.includes('-')) {
+      console.warn(`[updater] ignoring stable ${info.version} — this is a preview build`)
+      if (wasManual) {
+        showMessageBox(getMainWindow(), {
+          type: 'info',
+          title: 'No preview updates',
+          message: `You're on the newest preview.`,
+          detail: `Tracely ${info.version} is a production release, and Preview only installs preview builds.`
+        })
+      }
+      return
+    }
+
     const win = getMainWindow()
     showMessageBox(win, {
       type: 'info',

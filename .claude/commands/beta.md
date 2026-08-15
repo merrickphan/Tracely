@@ -1,10 +1,15 @@
 ---
-description: Build and publish a staging build to the beta channel (was /preview)
+description: Build and publish a staging build to the preview channel (was /preview)
 ---
 
 Publish a preview build. It installs **alongside** stable rather than upgrading
 over it, keeps its own database under `%APPDATA%\Tracely Preview`, and publishes
-to `beta.yml` — so production installs poll `latest.yml` and never see it.
+to `preview.yml` — so production installs poll `latest.yml` and never see it.
+
+The channel is `preview`, not `beta`, and that is deliberate: electron-updater
+ranks `alpha`/`beta` as channels of one app and will offer a beta client any
+newer stable release. Preview is a separate application, so that hands reviewers
+the production installer. See the header of `scripts/ship-preview.mjs`.
 
 ## What makes this safe to try things in
 
