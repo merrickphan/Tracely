@@ -189,6 +189,12 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     const rect = expanded
       ? viewMode === 'grade'
         ? { x: 100, y: 80, width: 560, height: 321 }
+        : viewMode === 'report'
+          ? // REPORT_PANEL_* is 560x1210, which main clamps to the watched
+            // window. 760x480 here is smaller than most, so this is the clamped
+            // height — the harness should show the scrolling case, not a
+            // 1210px card no real window would give it.
+            { x: 100, y: 8, width: 560, height: 464 }
         : {
             x: 90,
             y: 20,

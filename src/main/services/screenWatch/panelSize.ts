@@ -94,6 +94,18 @@ export const PANEL_WIDTH = GRID_PADDING * 2 + GRID_CARD_WIDTH
 export const GRADE_PANEL_WIDTH = 560
 export const GRADE_PANEL_HEIGHT = 321
 
+/**
+ * 'report' — the same card expanded, Figma 404:185: 560x1210.
+ *
+ * 1210 is taller than most windows this is drawn over, and that is fine: the
+ * caller already clamps a panel to the watched window minus an inset, and the
+ * renderer scrolls the card's body. Asking for the frame's real height means a
+ * tall window gets the whole report with no scrollbar at all, which is what the
+ * frame draws; a short one scrolls instead of clipping.
+ */
+export const REPORT_PANEL_WIDTH = 560
+export const REPORT_PANEL_HEIGHT = 1210
+
 export function computeAllPanelSize(claimCount: number): { width: number; height: number } {
   const count = Math.max(1, claimCount)
   const naturalHeight =
