@@ -1069,7 +1069,15 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
         key={text.trim() ? 'new' : (latestDoc?.id ?? 'new')}
         docName={docName}
         onDocNameChange={setDocName}
-        onBack={() => setDocEditorOpen(false)}
+        onBack={() => {
+          setDocEditorOpen(false)
+          // claims/error belong to whichever screen last ran detection. The
+          // document editor writes into the same state the picker reads at
+          // the bottom of "Start a new session" (line ~1153) — without this,
+          // going Back left the doc's claim list rendered under the picker.
+          setClaims(null)
+          setError(null)
+        }}
         onRunInsights={runDetection}
         onRefreshClaims={refreshClaims}
         insightsLoading={loading}
