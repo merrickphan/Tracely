@@ -1,9 +1,13 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
-import type { AnalyzeDetectClaimsResponse, AnalyzeGetResultResponse } from '@shared/ipc-contract'
+import type {
+  AnalyzeDetectClaimsResponse,
+  AnalyzeGetResultResponse,
+  AnalyzeListSessionsResponse
+} from '@shared/ipc-contract'
 import { detectClaims } from '../services/ai/claimDetection'
-import { createAnalysis, getAnalysis } from '../services/storage/analysesRepo'
+import { createAnalysis, getAnalysis, listAnalyses } from '../services/storage/analysesRepo'
 import { getClaimsByAnalysis, insertClaims } from '../services/storage/claimsRepo'
 
 const detectSchema = z.object({
@@ -38,4 +42,11 @@ export function registerAnalyzeHandlers(): void {
     if (!analysis) throw new Error('Analysis not found')
     return { analysis, claims: getClaimsByAnalysis(analysisId) }
   })
+
+  ipcMain.handle(IPC.ANALYZE_LIST_SESSIONS, (): AnalyzeListSessionsResponse => ({
+    sessions: listAnalyses().map((analysis) => ({
+      analysis,
+      claims: getClaimsByAnalysis(analysis.id)
+    }))
+  }))
 }

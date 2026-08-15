@@ -115,7 +115,18 @@ const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX
   { id: 'privacy', label: 'Privacy', icon: ShieldIcon }
 ]
 
-export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
+export default function SettingsView({
+  onNavigate,
+  embedded = false
+}: {
+  onNavigate: (tab: Tab) => void
+  /**
+   * Rendered inside the dashboard shell, which already draws the window frame
+   * and the nav rail. Suppresses this view's own Back link and outer chrome so
+   * there are not two ways out of the same screen.
+   */
+  embedded?: boolean
+}): JSX.Element {
   const [section, setSection] = useState<Section>('profile')
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -373,8 +384,39 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
   }
 
   return (
-    <div className="settings-view">
+    <div className={`settings-view${embedded ? ' is-embedded' : ''}`}>
+      {/*
+        Two layouts, one set of panels.
+
+        Standalone keeps the left rail with its own Back link. Embedded in the
+        dashboard shell there is already a nav rail two inches to the left, so a
+        second vertical nav beside it reads as two apps in one window — the
+        design puts these across the top as tabs instead. Only the chrome
+        differs; every panel below is shared, which is the point. Porting the
+        dashboard branch's own Settings file would have been the easy way to get
+        this layout and would have silently dropped the build-version row and
+        everything else Settings gained after that branch was cut.
+      */}
+      {embedded ? (
+        <header className="settings-embedded-head">
+          <h1>Settings</h1>
+          <p>Manage your Tracely profile, appearance, privacy, and preferences.</p>
+          <nav className="settings-tabs">
+            {NAV.map((n) => (
+              <button
+                key={n.id}
+                className={`settings-tab${section === n.id ? ' active' : ''}`}
+                aria-current={section === n.id ? 'page' : undefined}
+                onClick={() => setSection(n.id)}
+              >
+                {n.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+      ) : null}
       <div className="settings-shell">
+        {!embedded ? (
         <aside className="settings-sidebar">
           <div className="settings-sidebar-header">
             <button className="settings-back-link" onClick={() => onNavigate('home')}>
@@ -408,6 +450,7 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
             </div>
           ) : null}
         </aside>
+        ) : null}
 
         {confirmingSignOut ? (
           <ConfirmDialog

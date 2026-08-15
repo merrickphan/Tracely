@@ -194,7 +194,9 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
       getResult: () =>
-        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} })
+        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} }),
+      listSessions: () =>
+        ok('analyze.listSessions', { sessions: [{ analysis: fx.analysis, claims: previewClaims }] })
     },
     evidence: {
       // Records the result against the claim, so the Structure rail's

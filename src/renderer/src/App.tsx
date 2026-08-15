@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@shared/types'
 import AnalyzeView from './views/AnalyzeView'
+import DashboardView from './views/DashboardView'
 import LibraryView from './views/LibraryView'
 import HomeView from './views/HomeView'
 import LoginView from './views/LoginView'
@@ -99,14 +100,18 @@ export default function App(): JSX.Element {
     )
   }
 
+  // The signed-in surface is the dashboard shell — nav rail, greeting, and the
+  // pages hanging off it. It owns its own routing, so `tab` no longer decides
+  // what renders once you are past the gate.
+  //
+  // HomeView and LibraryView are still imported and still work; nothing in the
+  // rail reaches them. Home is replaced outright by the dashboard's own home,
+  // and Library has no entry in the design's rail. Left in place rather than
+  // deleted, because removing a working view is a separate decision from
+  // changing the shell around it.
   return (
     <div className="app-shell">
-      <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
-        {tab === 'home' ? <HomeView onNavigate={setTab} firstName={user?.firstName ?? null} /> : null}
-        {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} /> : null}
-        {tab === 'library' ? <LibraryView onNavigate={setTab} /> : null}
-        {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
-      </main>
+      <DashboardView firstName={user?.firstName ?? 'there'} />
     </div>
   )
 }
