@@ -49,6 +49,9 @@ export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width,
     height,
+    // Without this, Electron falls back to OS default placement (often
+    // hugging a screen edge rather than the middle) since no x/y is given.
+    center: true,
     // Still not user-resizable; `applyMainWindowFontSize` resizes it
     // programmatically, which Electron allows regardless of this flag.
     resizable: false,
