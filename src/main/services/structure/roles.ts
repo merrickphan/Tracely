@@ -113,7 +113,33 @@ const WARRANT_MARKERS = [
   'in other words',
   'the reason',
   'this is why',
-  'follows that'
+  'follows that',
+  // Causal connectives that carry a warrant without announcing it in the
+  // register a rubric expects. The list above is the vocabulary of an essay
+  // that has been taught to signpost; these are how the same move is made in
+  // formal expository prose, which is what a position paper is written in.
+  //
+  // Added after a nine-sentence MUN paragraph that reasons causally in almost
+  // every sentence — "fear speaking out ... DUE TO risks to their livelihood",
+  // "quality of life has decreased AS approximately 20% avoid travelling" —
+  // scored 0 of 20 for warrant, because it never once wrote "therefore".
+  //
+  // 'due to' and 'owing to' are safe where a bare 'as' or 'since' would not be:
+  // both are unambiguously causal, while "as" is more often temporal or
+  // comparative ("as migration rose", "as many as 20%") and would fire on
+  // nearly every paragraph ever written.
+  'due to',
+  'owing to',
+  'leads to',
+  'leading to',
+  'results in',
+  'resulting in',
+  'gives rise to',
+  'stems from',
+  'driven by',
+  'contributes to',
+  'accounts for',
+  'so that'
 ]
 
 /** The paragraph's first sentence, or the whole text if it has only one. */
@@ -205,10 +231,44 @@ function startsWithCounterargument(text: string): boolean {
  * one; a paragraph that is a RUN of attributions is presenting evidence, which
  * is the thing `evidence-stacking` looks for two of in a row.
  */
-const CITATION_PATTERN = /\((?:[12]\d{3}[a-z]?)\)|\bet al\b/g
+/**
+ * The FALLBACK only. `heuristicRoles` takes a `hasCitation` predicate and the
+ * real caller passes `hasInlineCitation` from `@shared/inlineCitation`, which
+ * knows APA, MLA author-page, MLA title, Chicago, numeric, DOI and URL forms.
+ *
+ * This pattern was the sole detector until it was traced on a real MUN position
+ * paper and found **0 of 5** citations in it: it requires the year to sit alone
+ * inside the bracket, so `(Tyche Hendricks, 2024)` fails, and it needs a year at
+ * all, so the three MLA title citations — `("Background to the Convention")` —
+ * fail too. With the count stuck at 0 the `evidence` role below could never be
+ * returned, which in turn made `warrant` unearnable and left `evidence-stacking`
+ * in weaknesses.ts unreachable.
+ *
+ * It survives only because this module must stay a leaf `npm test` can load
+ * (see afterFirstSentence), so it cannot value-import the shared detector
+ * itself. Injection keeps the good one in production and the tests running.
+ */
+const FALLBACK_CITATION_PATTERN = /\((?:[12]\d{3}[a-z]?)\)|\bet al\b/g
 
-function citationCount(text: string): number {
-  return (text.match(CITATION_PATTERN) ?? []).length
+export type CitationPredicate = (sentence: string) => boolean
+
+function fallbackHasCitation(sentence: string): boolean {
+  FALLBACK_CITATION_PATTERN.lastIndex = 0
+  return FALLBACK_CITATION_PATTERN.test(sentence)
+}
+
+/**
+ * How many of the paragraph's sentences carry a citation.
+ *
+ * Per SENTENCE, not per regex match. The old count matched patterns anywhere in
+ * the paragraph, so one sentence citing two papers looked like two pieces of
+ * evidence; what `evidence-stacking` is actually looking for is a RUN of
+ * attributed sentences.
+ */
+function citationCount(text: string, hasCitation: CitationPredicate): number {
+  return text
+    .split(/(?<=[.!?]["'’”)\]]*)\s+/)
+    .filter((sentence) => sentence.trim().length > 0 && hasCitation(sentence)).length
 }
 
 const MIN_CITATIONS_FOR_EVIDENCE = 2
@@ -260,6 +320,12 @@ export interface HeuristicRoleInput {
   paragraphs: ParagraphSpan[]
   /** Detected claim ids per 1-based paragraph index. */
   claimsByParagraph: Map<number, string[]>
+  /**
+   * How to tell whether a sentence carries a citation. `analyzeStructure`
+   * passes the shared detector; omitting it falls back to the weak local
+   * pattern, which is why the fallback is documented as a liability.
+   */
+  hasCitation?: CitationPredicate
 }
 
 export interface HeuristicRoles {
@@ -273,21 +339,30 @@ export interface HeuristicRoles {
  * and position beats claim presence, because the opening claim of an essay is
  * its thesis rather than one body claim among many.
  */
-export function heuristicRoles({ paragraphs, claimsByParagraph }: HeuristicRoleInput): HeuristicRoles {
+export function heuristicRoles({
+  paragraphs,
+  claimsByParagraph,
+  hasCitation = fallbackHasCitation
+}: HeuristicRoleInput): HeuristicRoles {
   const roles: ParagraphRole[] = []
   const warranted: boolean[] = []
   const lastIndex = paragraphs.length
 
   for (const paragraph of paragraphs) {
     const hasClaim = (claimsByParagraph.get(paragraph.index) ?? []).length > 0
-    roles.push(roleFor(paragraph, hasClaim, lastIndex))
+    roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation))
     warranted.push(hasWarrantMarker(paragraph.text))
   }
 
   return { roles, warranted }
 }
 
-function roleFor(paragraph: ParagraphSpan, hasClaim: boolean, lastIndex: number): ParagraphRole {
+function roleFor(
+  paragraph: ParagraphSpan,
+  hasClaim: boolean,
+  lastIndex: number,
+  hasCitation: CitationPredicate
+): ParagraphRole {
   const { text, index } = paragraph
 
   if (startsWithMarker(text, CONCLUSION_MARKERS)) return 'conclusion'
@@ -313,7 +388,7 @@ function roleFor(paragraph: ParagraphSpan, hasClaim: boolean, lastIndex: number)
   // Without this branch `roleFor` could never return 'evidence' at all, and
   // `evidence-stacking` in weaknesses.ts was unreachable dead code on the
   // heuristic path. Found by tracing a draft written to trigger it.
-  if (citationCount(text) >= MIN_CITATIONS_FOR_EVIDENCE) return 'evidence'
+  if (citationCount(text, hasCitation) >= MIN_CITATIONS_FOR_EVIDENCE) return 'evidence'
 
   return hasClaim ? 'claim' : 'unknown'
 }

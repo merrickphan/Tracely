@@ -1,4 +1,4 @@
-import { strictEqual } from 'node:assert/strict'
+import { ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { COMPONENT_MAX, scoreDraft, type ScoreSignals } from './scoreDraft.ts'
 
@@ -214,5 +214,39 @@ describe('scoreDraft — completeness and bounds', () => {
       const value = score(shape, { soWhatInConclusion: true })
       strictEqual(value >= 0 && value <= 100, true, `out of range for ${shape.join(',')}`)
     }
+  })
+})
+
+describe('scoreDraft — refuses to grade a draft the rubric cannot measure', () => {
+  // A real single-paragraph MUN position paper — nine sentences, five
+  // citations, a thesis and a close — scored 20/100 and was shown an F. Four of
+  // the six components read `roles.slice(1, -1)` or the paragraphs inside it,
+  // which is empty for a one-paragraph draft, so 80 points were unreachable
+  // however good the writing was.
+  it('reports a single paragraph as unmeasurable rather than failing it', () => {
+    const result = scoreDraft(outline('thesis'), NO_SIGNALS)
+    strictEqual(result.applicable, false)
+    strictEqual(result.score, 0)
+  })
+
+  it('does the same for two paragraphs, which still have no body', () => {
+    strictEqual(scoreDraft(outline('thesis', 'conclusion'), NO_SIGNALS).applicable, false)
+  })
+
+  it('grades from three paragraphs up, where the body slice is non-empty', () => {
+    const result = scoreDraft(outline('thesis', 'claim+', 'conclusion'), NO_SIGNALS)
+    strictEqual(result.applicable, true)
+    ok(result.score > 0, 'a three-paragraph draft should score above zero')
+  })
+
+  it('zeroes every component when it declines, so no partial number leaks out', () => {
+    const { components } = scoreDraft(outline('thesis'), NO_SIGNALS)
+    for (const [name, value] of Object.entries(components)) {
+      strictEqual(value, 0, `${name} should be 0 when the rubric does not apply`)
+    }
+  })
+
+  it('is not applicable for an empty draft either', () => {
+    strictEqual(scoreDraft(outline(), NO_SIGNALS).applicable, false)
   })
 })

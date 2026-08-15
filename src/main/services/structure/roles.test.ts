@@ -208,3 +208,68 @@ describe('heuristicRoles — output shape', () => {
     deepStrictEqual(result.warranted, [])
   })
 })
+
+describe('heuristicRoles — citation detection is injected, not duplicated', () => {
+  // The local fallback pattern requires a bare parenthesised year, so it found
+  // 0 of the 5 citations in a real MUN position paper: (Tyche Hendricks, 2024)
+  // has the author inside the bracket, and ("Background to the Convention") has
+  // no year at all. With the count stuck at 0 the 'evidence' role was
+  // unreachable, which made warrant unearnable and evidence-stacking dead code.
+  const MLA = [
+    'Migration policy is contested.',
+    'Migrants fear deportation and discrimination (Tyche Hendricks, 2024). ' +
+      'The convention guarantees fair pay and fair trial ("Background to the Convention"). ' +
+      'Objective 17 works to eliminate hate speech ("International Migration.").',
+    'The gap between norms and daily life remains wide.'
+  ]
+
+  it('cannot see real citation styles with the fallback pattern', () => {
+    const roles = heuristicRoles({
+      paragraphs: paras(...MLA),
+      claimsByParagraph: new Map()
+    }).roles
+    strictEqual(roles[1], 'unknown')
+  })
+
+  it('labels the same paragraph evidence when given a real detector', () => {
+    const roles = heuristicRoles({
+      paragraphs: paras(...MLA),
+      claimsByParagraph: new Map(),
+      hasCitation: (sentence) => /\(["“]?[A-Z]/.test(sentence)
+    }).roles
+    strictEqual(roles[1], 'evidence')
+  })
+
+  it('counts sentences, not matches, so one sentence citing twice is not a run', () => {
+    const roles = heuristicRoles({
+      paragraphs: paras(
+        'Opening.',
+        'One sentence citing two papers (Smith, 2020; Jones, 2021).',
+        'Closing.'
+      ),
+      claimsByParagraph: new Map(),
+      hasCitation: (sentence) => /\(["“]?[A-Z]/.test(sentence)
+    }).roles
+    strictEqual(roles[1], 'unknown')
+  })
+})
+
+describe('hasWarrantMarker — causal connectives, not just signposts', () => {
+  // A nine-sentence position paper reasoning causally throughout scored 0 of 20
+  // for warrant because it never wrote the word "therefore".
+  const warranting = [
+    'Migrants avoid care. They fear speaking out due to risks to their livelihood.',
+    'Costs rose. The increase stems from a shortage of housing near transit.',
+    'Turnout fell. The drop is driven by the new registration deadline.',
+    'Emissions dropped. The change results in cleaner air downwind.'
+  ]
+  for (const text of warranting) {
+    it(`accepts: ${text.slice(text.indexOf('. ') + 2, text.indexOf('. ') + 44)}…`, () => {
+      strictEqual(hasWarrantMarker(text), true)
+    })
+  }
+
+  it('still rejects a bare temporal "as", which is not causal', () => {
+    strictEqual(hasWarrantMarker('Costs rose. As many as 20% of tenants moved away.'), false)
+  })
+})

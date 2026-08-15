@@ -95,6 +95,17 @@ export function computeWatchOutline({
     analyzedAt
   })
 
+  // Same failure direction as `fit` above, for a reason `structureFit` cannot
+  // see: it judges whether the EXTRACTED TEXT is trustworthy, while this asks
+  // whether the rubric can measure a draft this short at all. A one- or
+  // two-paragraph draft has an empty body slice, so four of six components are
+  // unreachable and the ceiling is 20/100 — an F for a paragraph that may be
+  // excellent. No chip is the honest output; see MIN_PARAGRAPHS_FOR_RUBRIC.
+  if (!outline.applicable) {
+    logScreenWatch(`structure: no reading — draft too short to score (${spans.length} paragraph(s))`)
+    return null
+  }
+
   return {
     score: outline.score,
     complete: outline.complete,

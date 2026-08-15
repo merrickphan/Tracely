@@ -48,7 +48,36 @@ export interface DraftScore {
   score: number
   components: StructureComponents
   complete: boolean
+  /**
+   * Whether this rubric can measure this text at all — see MIN_PARAGRAPHS_FOR_RUBRIC.
+   * False means the number is not a grade and must not be shown as one.
+   */
+  applicable: boolean
 }
+
+/**
+ * Below this, the rubric is measuring an essay that isn't there.
+ *
+ * Four of the six components can only be earned by a paragraph OTHER than the
+ * first or last: `governingClaims` reads `roles.slice(1, -1)`, `warrant` reads
+ * the claim and evidence paragraphs inside it, and counterargument and
+ * significance need somewhere to live. Hand this rubric a single paragraph and
+ * that slice is empty, so 80 of the 100 points are unreachable no matter how
+ * good the writing is — a ceiling of 20/100, which the modal renders as an F.
+ *
+ * Found on a genuinely strong single-paragraph MUN position paper: nine
+ * sentences, five citations, a thesis and a close, scored 20 and told the
+ * writer it had no argument in it. The paragraph was fine. The rubric was
+ * answering a question nobody asked of it.
+ *
+ * Three is the smallest draft where the body slice is non-empty, which is the
+ * exact condition the unreachable components need. Rather than invent a second
+ * rubric for excerpts, this reports `applicable: false` and lets the panel say
+ * what it actually knows — the same stance `roles.ts` takes with 'unknown',
+ * and `analyzeStructure` with `complete`. A confident F is much worse than no
+ * letter at all.
+ */
+export const MIN_PARAGRAPHS_FOR_RUBRIC = 3
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -69,7 +98,14 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   }
 
   if (paragraphs.length === 0) {
-    return { score: 0, components: zero, complete: false }
+    return { score: 0, components: zero, complete: false, applicable: false }
+  }
+
+  // Scored components are deliberately left at zero rather than part-computed.
+  // A partial number invites the panel to render "20/100" beside the caveat,
+  // and the number is the thing people read.
+  if (paragraphs.length < MIN_PARAGRAPHS_FOR_RUBRIC) {
+    return { score: 0, components: zero, complete: false, applicable: false }
   }
 
   const roles = paragraphs.map((p) => p.role)
@@ -146,5 +182,5 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
     thesis + governingClaims + warrant + counterargument + significance + conclusion
   )
 
-  return { score, components, complete }
+  return { score, components, complete, applicable: true }
 }
