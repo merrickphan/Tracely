@@ -221,6 +221,12 @@ export interface ShellOpenExternalResponse {
   ok: true
 }
 
+export interface AppGetBuildInfoResponse {
+  version: string
+  /** True only in builds published by `npm run ship:preview` — never in a real release. */
+  isPreview: boolean
+}
+
 export interface FloatingClipboardCapturedEvent {
   text: string
 }

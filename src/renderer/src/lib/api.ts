@@ -65,6 +65,8 @@ export const tracelyApi = {
 
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
 
+  getBuildInfo: () => call(window.tracely.app.getBuildInfo()),
+
   onClipboardCaptured: (cb: (payload: { text: string }) => void) =>
     window.tracely.onClipboardCaptured(cb),
 

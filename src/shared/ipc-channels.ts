@@ -43,6 +43,8 @@ export const IPC = {
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
+  APP_GET_BUILD_INFO: 'app:getBuildInfo',
+
   SCREENWATCH_SET_ENABLED: 'screenWatch:setEnabled',
   SCREENWATCH_GET_STATUS: 'screenWatch:getStatus',
   SCREENWATCH_SET_WIDGET_EXPANDED: 'screenWatch:setWidgetExpanded',

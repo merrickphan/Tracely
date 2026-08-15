@@ -1,7 +1,12 @@
-import { ipcMain, shell } from 'electron'
+import { app, ipcMain, shell } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
-import type { ShellOpenExternalResponse, WindowTargetResponse } from '@shared/ipc-contract'
+import type {
+  AppGetBuildInfoResponse,
+  ShellOpenExternalResponse,
+  WindowTargetResponse
+} from '@shared/ipc-contract'
+import { isPreviewBuild } from '../appIdentity'
 import { getFloatingWindow, showFloatingWindow } from '../windows/floatingWindow'
 import { getMainWindow, showMainWindow } from '../windows/mainWindow'
 
@@ -34,4 +39,9 @@ export function registerWindowHandlers(): void {
     shell.openExternal(url)
     return { ok: true }
   })
+
+  ipcMain.handle(IPC.APP_GET_BUILD_INFO, (): AppGetBuildInfoResponse => ({
+    version: app.getVersion(),
+    isPreview: isPreviewBuild()
+  }))
 }
