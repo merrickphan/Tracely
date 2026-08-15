@@ -7,6 +7,8 @@ import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import StructurePanel from '../components/StructurePanel'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
+import ToolbarMenu from '../components/ToolbarMenu'
+import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
 import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
@@ -94,10 +96,22 @@ function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
   )
 }
 
-const FONT_FAMILIES = ['Arial', 'Georgia', 'Times New Roman', 'Courier New', 'Verdana']
-const FONT_SIZES = [10, 11, 12, 14, 16, 18, 24, 32]
+// Figma 226:95 and 234:46 — the design's own lists, not a superset of them.
+// The families were Georgia/Times/Courier/Verdana, which appear in no frame;
+// Inter and Instrument Sans are the two the app actually ships and renders in.
+const FONT_FAMILIES = ['Arial', 'Inter', 'Instrument Sans', 'Roboto']
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24]
+
+// Figma 226:104. Justify is the design's fourth row and was missing; the
+// browser has execCommand('justifyFull'), so it works like the other three.
+const ALIGN_ITEMS: Array<[Align, string, string]> = [
+  ['left', 'Align Left', 'justifyLeft'],
+  ['center', 'Align Center', 'justifyCenter'],
+  ['right', 'Align Right', 'justifyRight'],
+  ['justify', 'Justify', 'justifyFull']
+]
 const TEXT_COLORS = ['#212121', '#d93025', '#e37400', '#188038', '#1967d2', '#8430ce']
-type Align = 'left' | 'center' | 'right'
+type Align = 'left' | 'center' | 'right' | 'justify'
 
 // Matches the Figma "Untitled Doc" frame: a real writing surface (name +
 // body actually persist and are what gets analyzed), with "AI Insights"
@@ -210,6 +224,18 @@ function DocumentEditor({
   const [format, setFormat] = useState({ bold: false, italic: false, underline: false })
   const [align, setAlign] = useState<Align>('left')
   const [alignMenuOpen, setAlignMenuOpen] = useState(false)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [wordMenuOpen, setWordMenuOpen] = useState(false)
+  const [fontMenuOpen, setFontMenuOpen] = useState(false)
+  const [sizeMenuOpen, setSizeMenuOpen] = useState(false)
+  const fontMenuRef = useRef<HTMLDivElement>(null)
+  const sizeMenuRef = useRef<HTMLDivElement>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const shareMenuRef = useRef<HTMLDivElement>(null)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+  const wordMenuRef = useRef<HTMLDivElement>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // Pull the toolbar's lit/unlit state from the browser's own command state,
   // which is the only thing that actually knows it — execCommand('bold') with
@@ -463,6 +489,44 @@ function DocumentEditor({
   // ---- Structure ---------------------------------------------------------
 
   /**
+   * Saves a copy of the open document under a new id.
+   *
+   * `saveDocument` with no id inserts rather than updates, so this is a real
+   * duplicate rather than a rename — the original keeps its own row and its own
+   * analyses. The copy is not opened; the frame's menu item says Duplicate, not
+   * "Duplicate and switch to it".
+   */
+  async function duplicateDocument(): Promise<void> {
+    const body = editorRef.current
+    if (!body) return
+    try {
+      const copy = await tracelyApi.saveDocument({
+        title: `${docName || 'Untitled'} (copy)`,
+        bodyHtml: body.innerHTML
+      })
+      onSaved(copy.document)
+    } catch (err) {
+      setOutlineError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /** Deletes the open document and leaves the editor. */
+  async function deleteDocument(): Promise<void> {
+    const id = docIdRef.current
+    setConfirmingDelete(false)
+    if (!id) {
+      onBack()
+      return
+    }
+    try {
+      await tracelyApi.removeDocument(id)
+      onBack()
+    } catch (err) {
+      setOutlineError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
    * Re-measures the underlines.
    *
    * useLayoutEffect, not useEffect: these are absolute positions over live
@@ -696,6 +760,7 @@ function DocumentEditor({
         <div className="docedit-divider" />
         <DocumentIcon size={16} className="docedit-icon" />
         <input
+          ref={nameInputRef}
           className="docedit-name"
           placeholder="Doc name"
           value={docName}
@@ -706,31 +771,53 @@ function DocumentEditor({
           }}
         />
         <div className="docedit-divider" />
-        <select
-          className="docedit-fontname"
-          value={fontFamily}
-          onChange={(e) => {
-            setFontFamily(e.target.value)
-            exec('fontName', e.target.value)
-          }}
-        >
-          {FONT_FAMILIES.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-        <select
-          className="docedit-fontsize"
-          value={fontSize}
-          onChange={(e) => applyFontSize(Number(e.target.value))}
-        >
-          {FONT_SIZES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        {/* Custom menus, not <select>. The frames draw both as the same
+            bordered dropdown every other toolbar menu uses (226:95, 234:46);
+            a native select renders the OS's own popup, which cannot be styled
+            to match and looks nothing like the design on Windows. */}
+        <div className="docedit-menu-wrap" ref={fontMenuRef}>
+          <button
+            className="docedit-fontname"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setFontMenuOpen((o) => !o)}
+          >
+            {fontFamily}
+          </button>
+          {fontMenuOpen ? (
+            <ToolbarMenu
+              width={132}
+              onClose={() => setFontMenuOpen(false)}
+              items={FONT_FAMILIES.map((f) => ({
+                label: f,
+                active: fontFamily === f,
+                onSelect: () => {
+                  setFontFamily(f)
+                  exec('fontName', f)
+                }
+              }))}
+            />
+          ) : null}
+        </div>
+        <div className="docedit-menu-wrap" ref={sizeMenuRef}>
+          <button
+            className="docedit-fontsize"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setSizeMenuOpen((o) => !o)}
+          >
+            {fontSize}
+          </button>
+          {sizeMenuOpen ? (
+            <ToolbarMenu
+              width={48}
+              onClose={() => setSizeMenuOpen(false)}
+              items={FONT_SIZES.map((sz) => ({
+                label: String(sz),
+                active: fontSize === sz,
+                onSelect: () => applyFontSize(sz)
+              }))}
+            />
+          ) : null}
+        </div>
         <button
           className={`docedit-toolbtn bold ${format.bold ? 'active' : ''}`}
           aria-pressed={format.bold}
@@ -778,7 +865,7 @@ function DocumentEditor({
             <option key={c} value={c} />
           ))}
         </datalist>
-        <div className="docedit-align-wrap" ref={alignMenuRef}>
+        <div className="docedit-menu-wrap" ref={alignMenuRef}>
           <button
             className="docedit-toolbtn"
             onMouseDown={(e) => e.preventDefault()}
@@ -788,43 +875,75 @@ function DocumentEditor({
             ≡
           </button>
           {alignMenuOpen ? (
-            <div className="docedit-align-menu">
-              <button
-                className={align === 'left' ? 'active' : ''}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  exec('justifyLeft')
-                  setAlign('left')
-                  setAlignMenuOpen(false)
-                }}
-              >
-                Left
-              </button>
-              <button
-                className={align === 'center' ? 'active' : ''}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  exec('justifyCenter')
-                  setAlign('center')
-                  setAlignMenuOpen(false)
-                }}
-              >
-                Center
-              </button>
-              <button
-                className={align === 'right' ? 'active' : ''}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  exec('justifyRight')
-                  setAlign('right')
-                  setAlignMenuOpen(false)
-                }}
-              >
-                Right
-              </button>
-            </div>
+            <ToolbarMenu
+              width={109}
+              onClose={() => setAlignMenuOpen(false)}
+              items={ALIGN_ITEMS.map(([value, label, command]) => ({
+                label,
+                active: align === value,
+                onSelect: () => {
+                  exec(command)
+                  setAlign(value)
+                }
+              }))}
+            />
           ) : null}
         </div>
+
+        {/* Share — 234:67. Every row is dead, and says why on hover. Tracely is
+            local-first: the document exists in one SQLite file on this machine,
+            there is no server copy to link to and no second account to invite.
+            The frame draws the menu, so it is drawn. */}
+        <div className="docedit-menu-wrap" ref={shareMenuRef}>
+          <button
+            className="docedit-toolbtn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setShareMenuOpen((o) => !o)}
+            title="Share"
+          >
+            Share
+          </button>
+          {shareMenuOpen ? (
+            <ToolbarMenu
+              width={125}
+              align="right"
+              onClose={() => setShareMenuOpen(false)}
+              items={[
+                { label: 'Copy link', disabled: true, title: 'This document only exists on this machine — there is no link to copy.' },
+                { label: 'Invite people', disabled: true, title: 'Tracely has no shared documents or second accounts.' },
+                { label: 'Manage access', disabled: true, title: 'Nothing has access but you — the file never leaves this machine.' }
+              ]}
+            />
+          ) : null}
+        </div>
+
+        {/* More — 234:74. Rename, Duplicate and Delete are real; folders and
+            version history do not exist. */}
+        <div className="docedit-menu-wrap" ref={moreMenuRef}>
+          <button
+            className="docedit-toolbtn"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setMoreMenuOpen((o) => !o)}
+            title="More"
+          >
+            •••
+          </button>
+          {moreMenuOpen ? (
+            <ToolbarMenu
+              width={123}
+              align="right"
+              onClose={() => setMoreMenuOpen(false)}
+              items={[
+                { label: 'Duplicate', onSelect: () => void duplicateDocument() },
+                { label: 'Rename', onSelect: () => nameInputRef.current?.select() },
+                { label: 'Move to folder', disabled: true, title: 'Documents are a flat list — there are no folders.' },
+                { label: 'Version history', disabled: true, title: 'Only the current version of a document is stored.' },
+                { label: 'Delete', onSelect: () => setConfirmingDelete(true) }
+              ]}
+            />
+          ) : null}
+        </div>
+
         <div className="docedit-spacer" />
         <span className="docedit-savestate">
           {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
@@ -925,8 +1044,23 @@ function DocumentEditor({
         />
       </div>
 
-      <div className="docedit-wordcount">
-        <b>{wordCount}</b> words
+      {/* 234:85. Every row here is computable from the document already open,
+          so unlike Share and More this menu has nothing disabled in it. */}
+      <div className="docedit-wordcount docedit-menu-wrap" ref={wordMenuRef}>
+        <button className="docedit-wordcount-trigger" onClick={() => setWordMenuOpen((o) => !o)}>
+          <b>{wordCount}</b> words
+        </button>
+        {wordMenuOpen ? (
+          <ToolbarMenu
+            width={131}
+            onClose={() => setWordMenuOpen(false)}
+            items={[
+              { label: `Word count · ${wordCount.toLocaleString()}` },
+              { label: `Character count · ${bodyText().length.toLocaleString()}` },
+              { label: `Reading time · ~${Math.max(1, Math.round(wordCount / 238))} min` }
+            ]}
+          />
+        ) : null}
       </div>
 
       {error ? <p className="error-text docedit-error">{error}</p> : null}
@@ -947,6 +1081,17 @@ function DocumentEditor({
         opinions about the draft.
       */}
       </div>
+
+      {confirmingDelete ? (
+        <ConfirmDialog
+          title="Delete this document?"
+          message="The document, and every analysis run against it, are deleted from this machine. There is no other copy."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => void deleteDocument()}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      ) : null}
 
       {scoreOpen ? (
         <ArgumentScoreModal
