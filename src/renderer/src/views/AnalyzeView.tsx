@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import type { Claim, DocumentOutline, DocumentRecord } from '@shared/types'
+import type { CitationStyle, Claim, DocumentOutline, DocumentRecord, Source } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
+import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import StructurePanel from '../components/StructurePanel'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
-import { markAt, measureMarks } from '../components/documentMarks'
+import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
@@ -190,6 +191,18 @@ function DocumentEditor({
   // The pointer is inside the popover, so leaving the underline must not close
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
+
+  // The style the Find Evidence view formats and labels its pill with. Read
+  // once: it is a preference, not something that changes while a document is
+  // open, and defaulting to MLA on a failed read is better than blocking the
+  // citation flow on a settings call.
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>('MLA')
+  useEffect(() => {
+    void tracelyApi
+      .getSettings()
+      .then((s) => setCitationStyle(s.defaultCitationStyle))
+      .catch(() => {})
+  }, [])
 
   const [wordCount, setWordCount] = useState(0)
   const [fontFamily, setFontFamily] = useState('Arial')
@@ -508,6 +521,33 @@ function DocumentEditor({
     }
     if (activeMark?.mark.claim.id === hit.mark.claim.id) return
     setActiveMark(hit)
+  }
+
+  /**
+   * Writes the chosen source's in-text citation into the sentence, then
+   * re-reads the claims so the mark over it updates.
+   *
+   * The re-read is the point. `hasInlineCitation` now decides both the mark's
+   * colour and whether one is drawn at all, so a citation the user just
+   * inserted has to reach the next measure — otherwise the underline that
+   * prompted the insertion is still sitting there, still saying the sentence is
+   * unattributed, over a sentence that now carries a citation.
+   */
+  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<void> {
+    const body = editorRef.current
+    if (!body) throw new Error('The editor is not open.')
+    // Formatted here rather than through an IPC round-trip: formatInTextCitation
+    // is a pure function of a Source the renderer already holds (it came back
+    // with the evidence), so a channel for it would be a channel that reads
+    // nothing main knows and the renderer does not.
+    if (!insertCitationForClaim(body, claim, formatInTextCitation(source, style))) {
+      throw new Error(
+        'Could not find that sentence in the document any more — it may have been edited since the search.'
+      )
+    }
+    handleInput()
+    const analysisId = analysisIdRef.current
+    if (analysisId) await onRefreshClaims(analysisId)
   }
 
   /**
@@ -915,6 +955,8 @@ function DocumentEditor({
           paragraphTexts={paragraphTexts}
           loading={insightsLoading || outlineLoading}
           error={outlineError}
+          citationStyle={citationStyle}
+          onInsertCitation={insertCitation}
           onReanalyze={() => void runStructure()}
           onClose={() => setScoreOpen(false)}
         />

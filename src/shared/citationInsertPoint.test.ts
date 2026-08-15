@@ -3,7 +3,7 @@
 import { strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { findCitationInsertPoint } from './insertPoint.ts'
+import { findCitationInsertPoint } from './citationInsertPoint.ts'
 
 const CITE = '(Smith, 2020)'
 
