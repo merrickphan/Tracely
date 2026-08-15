@@ -4,6 +4,7 @@ import { splitParagraphs } from '@shared/paragraphSplit'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
 import StructurePanel from '../components/StructurePanel'
+import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
@@ -142,6 +143,10 @@ function DocumentEditor({
 
   // ---- Structure rail ----------------------------------------------------
   const [structureOpen, setStructureOpen] = useState(false)
+  // What "AI Insights" opens — the Essay Grade modal from Figma 370:135/404:129.
+  // Separate state from the rail: the rail is a persistent side panel you work
+  // beside, the modal is a report you open, read and dismiss.
+  const [scoreOpen, setScoreOpen] = useState(false)
   const [outline, setOutline] = useState<DocumentOutline | null>(null)
   // handleInput is a plain function re-created every render and called from an
   // uncontrolled contentEditable, so it must not close over `outline` — it
@@ -695,12 +700,27 @@ function DocumentEditor({
         <span className="docedit-savestate">
           {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
         </span>
+        {/*
+          Opens the Argument Score report, which is what the design has this
+          button do — see ArgumentScoreModal's header for why it lives on this
+          surface. It used to call onRunInsights directly and append ClaimCards
+          under the document, so pressing the one button the design puts in this
+          toolbar produced none of what the design draws.
+
+          runStructure() rather than onRunInsights(): it already detects claims
+          first when the text has moved on, then analyses structure and fills
+          paragraphTexts. The claim list under the document still appears, since
+          that detection is the same call — nothing was taken away.
+        */}
         <button
           className="docedit-insights"
-          onClick={() => void onRunInsights(bodyText())}
-          disabled={insightsLoading || !bodyText().trim()}
+          onClick={() => {
+            setScoreOpen(true)
+            void runStructure()
+          }}
+          disabled={insightsLoading || outlineLoading || !bodyText().trim()}
         >
-          {insightsLoading ? 'Analyzing…' : 'AI Insights'}
+          {insightsLoading || outlineLoading ? 'Analyzing…' : 'AI Insights'}
         </button>
         {/*
           Separate from AI Insights rather than replacing it: the two answer
@@ -752,6 +772,18 @@ function DocumentEditor({
           </section>
         ) : null}
       </div>
+
+      {scoreOpen ? (
+        <ArgumentScoreModal
+          outline={outline}
+          claims={claims ?? []}
+          paragraphTexts={paragraphTexts}
+          loading={insightsLoading || outlineLoading}
+          error={outlineError}
+          onReanalyze={() => void runStructure()}
+          onClose={() => setScoreOpen(false)}
+        />
+      ) : null}
 
       {structureOpen ? (
         <StructurePanel
