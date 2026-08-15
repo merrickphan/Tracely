@@ -4474,3 +4474,20 @@ textarea:disabled {
 .home-popover-btn:hover {
   filter: brightness(0.97);
 }
+
+/* The one line that says why a Figma-accurate settings page cannot be used. */
+.settings-unavailable-note {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
+
+.settings-static-value.is-unavailable {
+  color: var(--muted);
+  font-style: italic;
+}
