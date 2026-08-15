@@ -16,6 +16,30 @@
  * more often than a reference.
  */
 
+/**
+ * A surname as it appears at the start of a citation.
+ *
+ * `\p{Lu}` rather than `[A-Z]`, and an optional lowercase particle in front,
+ * because the parenthetical pattern anchored on an ASCII capital immediately
+ * inside the bracket and therefore missed (van Dijk, 2019), (de Beauvoir, 1949)
+ * and (Ángel, 2020). Narrative form escaped this by accident — it matches on
+ * the capitalised surname, so `van Dijk (2019)` was found via `Dijk`.
+ */
+const PARTICLE = '(?:(?:van|von|de|del|della|da|di|du|dos|das|la|le|el|al|bin|ibn|ter|ten|den)\\s+)?'
+const SURNAME = `${PARTICLE}\\p{Lu}[\\p{L}'’-]+`
+
+/**
+ * Words that make "(Word 12)" a pointer rather than a citation.
+ *
+ * MLA author-page has no year to anchor on — a capitalised word beside a bare
+ * number is the whole signature — so it is the one pattern here that needs a
+ * stoplist instead of a shape. These are the structural and legislative
+ * pointers that would otherwise read as an author: (Table 3), (Chapter 11),
+ * (Proposition 13), (Title 42).
+ */
+const NOT_AN_AUTHOR =
+  'Table|Fig|Figure|Chart|Graph|Chapter|Ch|Section|Sec|Part|Page|Pages|Volume|Vol|Appendix|Equation|Eq|Step|Item|Note|Line|Row|Column|Level|Grade|Round|Phase|Class|Type|Version|Model|Form|Room|Box|Panel|Article|Clause|Rule|Title|Proposition|Prop|Measure|Bill|Amendment|Act'
+
 const PATTERNS: Array<[string, RegExp]> = [
   // Parenthetical: (Smith, 2020) · (Mueller & Oppenheimer, 2014) · (IEA, 2024)
   // · ("Corruption Perceptions Index", 2024) · (Margarian, 2022: 23)
@@ -31,7 +55,10 @@ const PATTERNS: Array<[string, RegExp]> = [
   //    required the year to be the last thing before the bracket.
   [
     'parenthetical',
-    /\(["“'‘]?[A-Z][^)]{0,140}?(?:1[6-9]|20)\d{2}[a-z]?(?:\s*[:,]\s*(?:pp?\.\s*)?\d+(?:\s*[–—-]\s*\d+)?)?["”'’]?\s*\)/
+    new RegExp(
+      `\\(["“'‘]?${PARTICLE}\\p{Lu}[^)]{0,140}?(?:1[6-9]|20)\\d{2}[a-z]?(?:\\s*[:,]\\s*(?:pp?\\.\\s*)?\\d+(?:\\s*[–—-]\\s*\\d+)?)?["”'’]?\\s*\\)`,
+      'u'
+    )
   ],
   // A quoted title in brackets, with no year at all — the MLA short form for a
   // source with no dated author: ("Background to the Convention"). This is the
@@ -54,11 +81,43 @@ const PATTERNS: Array<[string, RegExp]> = [
     'narrative',
     /\b[A-Z][A-Za-z'’-]+(?:\s+(?:et al\.?|and\s+[A-Z][A-Za-z'’-]+|&\s*[A-Z][A-Za-z'’-]+))?\s*\((?:1[6-9]|20)\d{2}[a-z]?\)/
   ],
+  // MLA 9 author-page: (Shoup 45) · (Shoup 45-47) · (Mueller and Oppenheimer 1163)
+  //
+  // The whole author-date family above is anchored on a year, and MLA has no
+  // year in the text at all — it lives only in the Works Cited. So none of the
+  // patterns above could ever match an MLA essay, and the detector reported
+  // every cited line in one as uncited. That is the MUN position paper failure
+  // again with a different style: MLA is the default in US high-school English,
+  // which is most of who writes the drafts this runs on.
+  //
+  // Without a year there is no shape to key on — a capitalised word beside a
+  // bare number IS the citation — so this is the one pattern that needs
+  // NOT_AN_AUTHOR to hold back (Table 3) and (Proposition 13).
+  //
+  // Two MLA forms are deliberately left undetected, because neither has
+  // anything distinguishing left once the author or the number is gone:
+  //  - bare page after a narrative mention — "Shoup argues it is a tax (45)"
+  //  - whole-work with no locator — "(Shoup)", indistinguishable from "(Congress)"
+  // Both fail toward the safe side for a reader but the noisy side for a writer;
+  // catching them needs the surrounding sentence, not this regex.
+  [
+    'author-page',
+    new RegExp(
+      `\\((?!(?:${NOT_AN_AUTHOR})\\b)${SURNAME}(?:\\s+(?:et al\\.?|and\\s+${SURNAME}|&\\s*${SURNAME}))?\\s+(?:pp?\\.\\s*)?\\d{1,4}(?:\\s*[–—-]\\s*\\d{1,4})?\\s*\\)`,
+      'u'
+    )
+  ],
   // Numeric: [1] · [12] · [1,2] · [1-3]
   ['numeric', /\[\s*\d{1,3}(?:\s*[–—,-]\s*\d{1,3})*\s*\]/],
+  // Chicago notes shorthand for "the source I just cited": (ibid.) · (Ibid., 47)
+  // · (op. cit.). Unambiguous — these strings do not occur in ordinary prose.
+  ['ibid', /\((?:ibid|id|op\.\s*cit|loc\.\s*cit)\b\.?[^)]{0,24}\)/i],
   // A DOI or a URL in the sentence is an explicit source, whatever its shape.
   ['doi', /\bdoi:\s*10\.\d{4,}/i],
   ['url', /\bhttps?:\/\/\S+/i],
+  // Screen Watch reads rendered text, where a linked source usually loses its
+  // scheme: what is on screen is www.oecd.org/education/report.pdf.
+  ['url', /\bwww\.\S+\.\S+/i],
   // Superscript reference marks, as Word produces for footnotes.
   ['superscript', /[¹²³⁰-⁹]/]
 ]
