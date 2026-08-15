@@ -1,0 +1,50 @@
+{
+  "essay": "07-antibiotic-resistance.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+  },
+  "note": "Added to close two structural gaps at once. (1) PubMed has never been the RIGHT provider for a whole essay. domainRouter.ts carries a full 'biomedical' branch and three anchors for it, and the only claim in the set that exercises it is one sleep sentence inside a school-policy essay — so the router's biomedical path has been measured on n=1. Every claim here is clinical, which means this essay can tell a biomedical routing win from a biomedical routing loss. (2) 'contradicted' appeared zero times across the previous six essays, despite problemKind.ts ranking contradicted-claim above every other kind and CRITIQUE_SYSTEM_PROMPT reserving a whole verdict for it. The highest-priority problem kind in the product had no test case. Claim 2 is one. Also carries the set's first clean compound sentence (claim 3), for the rule RUBRIC.md leaves provisional. Secondary value: 'resistance' is heavily polysemous — insulin resistance, electrical resistance, resistance training — so this essay is a natural probe for the lexical-collision demotion the rubric already describes.",
+  "claims": [
+    {
+      "text": "A 2019 global analysis attributed 1.27 million deaths directly to bacterial antimicrobial resistance, more than either HIV or malaria caused that year.",
+      "paragraph": 1,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The GRAM study (Murray et al., Lancet 2022, estimating 2019 burden). A single, specific, heavily-cited paper states exactly this figure, so retrieval failing here is a retrieval failure and not an ambiguity about what counts as evidence — which makes it the cleanest positive control in the whole set. Expect the failure mode to be near-misses: the same consortium published several companion papers with different denominators (deaths 'associated with' resistance, 4.95 million, rather than 'attributable to'). A companion paper is marg, not rel — it evidences a different number than the sentence asserts."
+    },
+    {
+      "text": "The mechanism is simple enough: every time a person takes an antibiotic their body adapts to the drug, so it works less well the next time they need it.",
+      "paragraph": 2,
+      "verdict": "contradicted",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The set's first contradicted claim. Resistance is a property of bacterial populations under selection, not of the patient — the human body does not become resistant to an antibiotic. This is one of the misconceptions WHO and CDC public-health material explicitly corrects, so the literature does not merely fail to support it, it argues against it. Included because it is the sentence a real student writes: confident, mechanistic-sounding, and wrong in a way that a citation-count heuristic cannot see. A tool that returns eight papers about antibiotic resistance and calls this 'well supported' is failing in the most damaging direction available to it."
+    },
+    {
+      "text": "Roughly 30 percent of antibiotic prescriptions written in American outpatient settings are unnecessary, and that overprescription is the main reason resistant infections have risen inside hospitals.",
+      "paragraph": 2,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "COMPOUND — the case RUBRIC.md says it does not settle, chosen deliberately as a clean instance. First half is a real and specific finding (Fleming-Dutra et al., JAMA 2016, ~30% of US outpatient antibiotic prescriptions unnecessary). Second half is an unevidenced causal leap: hospital-acquired resistant infection is driven substantially by inpatient prescribing and in-facility transmission, and no source attributes it primarily to outpatient overprescription. Verdict is 'unsupported' because the README says to label the sentence AS PHRASED, and as phrased it asserts the causal claim. Under the provisional compound rule the SOURCE labels go against the outpatient-prescribing half, since that is what any query built from this sentence will retrieve — so expect a claim that scores well on sources while its actual assertion is unevidenced. That gap is the point of including it."
+    },
+    {
+      "text": "Resistance genes have been recovered from permafrost sediment tens of thousands of years older than any human medicine, which suggests resistance is an ordinary feature of bacterial life rather than something modern prescribing invented.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "D'Costa et al., Nature 2011 — 30,000-year-old permafrost resistome. The factual half is squarely supported; the 'which suggests' half is the student's inference and is flagged as inference by its own grammar, which is the correct thing for a claim detector to notice. Second reason for including it: it is a paleogenomics paper reached from a clinical essay, so it tests whether the biomedical route can still surface a source that is not itself clinical."
+    },
+    {
+      "text": "If nothing changes, routine surgery will become impossible within a decade, because the procedures we treat as safe are only safe on the assumption that an infection afterward can be cleared.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "borderline",
+      "sources": [],
+      "note": "A prediction, so nothing can settle it — but unlike the interpretive sentences in 06-frankenstein, this one has a real literature standing near it (the O'Neill AMR review and similar make comparable projections). Borderline rather than no: a marker would accept a citation here and would also accept its absence. Included as the set's first case where the right answer is 'a source exists, and it still cannot make this sentence true'."
+    }
+  ]
+}

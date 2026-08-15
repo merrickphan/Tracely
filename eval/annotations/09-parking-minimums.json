@@ -1,0 +1,42 @@
+{
+  "essay": "09-parking-minimums.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+  },
+  "note": "06-frankenstein is the set's only essay where retrieval should mostly stay quiet, and it earns that by being interpretive. This one is the opposite kind of quiet: every claim is a hard, checkable fact, and half of them live only in city council minutes, a municipal housing report and rental listings — records no academic index contains. The failure it is built to catch is substitution: answering a claim about THIS city with a national study about cities. That is the most plausible-looking wrong answer the tool can give, because the source is genuinely good and genuinely on topic. The contrast is inside one draft on purpose — claim 3 is squarely served by the urban-economics literature, so the essay measures whether the tool can tell the two situations apart rather than measuring one behaviour across a whole file. The city is unnamed: naming one would put unverified assertions about a real place into a public repository, and the annotation is about what the providers can reach, not about which town it is.",
+  "claims": [
+    {
+      "text": "The council voted last year to remove parking minimums for new downtown apartments, and rents have not moved since.",
+      "paragraph": 1,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "Two facts, both settled by municipal records and neither indexed academically. Also compound, and the halves fail differently: the vote is a matter of public record that the four providers simply do not hold, while 'rents have not moved since' is a measurement nobody has published and is too soon to make anyway. Any source returned here is marg at best under question 2 — a study of parking reform in other cities is squarely on topic and evidences a different proposition than 'our council did this'. Labelling such a source rel is the specific error this essay exists to catch."
+    },
+    {
+      "text": "A two-bedroom apartment within walking distance of downtown now lists for more than $2,400 a month, and the vacancy rate downtown has been under two percent for three straight years.",
+      "paragraph": 2,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "A statistical claim that the statistical route cannot serve. domainRouter.ts should send this to the statistical anchors, and worldBank.ts publishes country-level development indicators — the correct behaviour is for the router to be right about the KIND of claim and for every provider to still have nothing, because the number exists at city scale in listings and a municipal report. Worth watching for a specific bad outcome: a World Bank series on national urban housing returned against a downtown vacancy rate would look authoritative and be irrelevant. Under the ladder that is irr, not marg — the entity is right and the scale is a different subject, the same shape as the 'visibility'/'remote' collisions the rubric already lists."
+    },
+    {
+      "text": "Cities that removed parking requirements have seen developers build smaller and cheaper units, and researchers estimate that each structured parking space adds tens of thousands of dollars to the cost of the apartment above it.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The control. A real and well-developed literature in urban economics and planning says both halves of this, cost-per-space estimates included, and it should retrieve well from the scholarly providers. If this claim scores no better than claims 1 and 2 in the same essay, the problem is retrieval and not the topic — which is the comparison the rest of the set cannot make, because no earlier essay mixes reachable and unreachable claims about the same subject."
+    },
+    {
+      "text": "A city that makes room for cars before it makes room for people has already decided who it is for.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Rhetoric. False-positive control, and a harder one than 06's interpretive sentences because it sits in a paragraph of otherwise checkable argument rather than in an essay that is interpretive throughout."
+    }
+  ]
+}

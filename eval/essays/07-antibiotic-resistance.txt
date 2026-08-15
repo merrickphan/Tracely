@@ -1,0 +1,7 @@
+Antibiotic resistance is usually written about as a future crisis, which makes it easy to file under problems belonging to someone else. It is already here. A 2019 global analysis attributed 1.27 million deaths directly to bacterial antimicrobial resistance, more than either HIV or malaria caused that year.
+
+The mechanism is simple enough: every time a person takes an antibiotic their body adapts to the drug, so it works less well the next time they need it. Prescribing habits make this worse. Roughly 30 percent of antibiotic prescriptions written in American outpatient settings are unnecessary, and that overprescription is the main reason resistant infections have risen inside hospitals.
+
+Not everyone accepts that framing. Resistance genes have been recovered from permafrost sediment tens of thousands of years older than any human medicine, which suggests resistance is an ordinary feature of bacterial life rather than something modern prescribing invented. The honest version of the argument is that medicine did not create resistance; it created the selection pressure that made resistance common.
+
+The trajectory is what should frighten people. If nothing changes, routine surgery will become impossible within a decade, because the procedures we treat as safe are only safe on the assumption that an infection afterward can be cleared.
