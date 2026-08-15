@@ -277,6 +277,7 @@ export const documentOutline: DocumentOutline = {
     conclusion: 10
   },
   complete: false,
+  applicable: true,
   rolesFrom: 'heuristic',
   // Matches the `claims` fixture: c1 and c2 searched and sourced, c3 never
   // searched. Kept consistent deliberately — an outline claiming 2 detected
@@ -321,6 +322,7 @@ export const documentOutlineClassified: DocumentOutline = {
     conclusion: 10
   },
   complete: true,
+  applicable: true,
   rolesFrom: 'model',
   weaknesses: [
     {
@@ -395,6 +397,8 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     },
     critique: null,
     critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
     citation: null
   },
   {
@@ -412,6 +416,37 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     },
     critique: null,
     critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
+    citation: null
+  },
+  // The only fixture with a critique already on it, and the only one that
+  // exercises CritiqueFixRow. Both fix fields are populated together because
+  // the two blocks stack, and stacked is the layout most likely to overflow the
+  // fixed-height panel — the state worth being able to look at.
+  //
+  // A deliberately mild overstatement: "100%" is the textbook case and would
+  // make the feature look easier than it is. The interesting claim is one where
+  // the substance is right and a single quantifier is doing the damage.
+  {
+    id: 'c4',
+    text: 'Studies prove that later school start times always improve student outcomes (Wahlstrom 2014).',
+    claimType: 'causal',
+    confidence: 0.81,
+    hasInlineCitation: true,
+    problemKinds: ['overstated-claim'],
+    evidence: {
+      score: 68,
+      count: 6,
+      breakdown: { sourceCount: 0.9, quality: 0.81, recency: 0.6, relevance: 0.74, support: 0.66 },
+      articles: []
+    },
+    critique:
+      '**Overstated, not wrong.** Evidence 2 and 4 report improved attendance and sleep duration, but neither supports "always" — both note effects varying by district and grade level. **Citation format.** The reference is MLA author-page with the year in the page slot; in MLA it takes a page number, not 2014.',
+    critiqueVerdict: 'overstated',
+    suggestedRevision:
+      'Studies indicate that later school start times generally improve student outcomes (Wahlstrom 2014).',
+    citationFix: 'Wahlstrom, Kyla. "Later Start Time for Teens Improves Grades, Mood, and Safety." Phi Delta Kappan, 2014, p. 12.',
     citation: null
   },
   {
@@ -426,6 +461,8 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     evidence: null,
     critique: null,
     critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
     citation: null
   }
 ]

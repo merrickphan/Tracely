@@ -190,3 +190,74 @@ describe('problemSeverity', () => {
     for (const kind of kinds) ok(problemSeverity(kind) >= 0, `${kind} is unranked`)
   })
 })
+
+describe('fabricated-citation — a source that does not exist', () => {
+  it('outranks a contradicted fact, the previous worst', () => {
+    ok(
+      problemSeverity('fabricated-citation') < problemSeverity('contradicted-claim'),
+      'an invented source must sort above a wrong fact'
+    )
+  })
+
+  it('is the sole reasoning kind, never doubled with weak-reasoning', () => {
+    const kinds = problemKindsFor({ ...base, critiqueVerdict: 'fabricated' })
+    strictEqual(kinds.filter((k) => k === 'weak-reasoning').length, 0)
+    strictEqual(kinds[0], 'fabricated-citation')
+  })
+
+  it('fires for a cited sentence, which is the only way it can happen', () => {
+    // The writer attributed it. That is what makes the verdict possible and
+    // what makes it serious — before this verdict existed the sentence landed
+    // in 'unsupported', which reads back as "may still be true".
+    strictEqual(
+      problemKindFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: { score: 0, count: 0 },
+        critiqueVerdict: 'fabricated'
+      }),
+      'fabricated-citation'
+    )
+  })
+
+  it('is not suppressed by a strong evidence score elsewhere in the sentence', () => {
+    strictEqual(
+      problemKindFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: { score: 95, count: 8 },
+        critiqueVerdict: 'fabricated'
+      }),
+      'fabricated-citation'
+    )
+  })
+})
+
+describe('overstated-claim — defensible substance, indefensible quantifier', () => {
+  it('is not folded in with weak reasoning', () => {
+    const kinds = problemKindsFor({ ...base, critiqueVerdict: 'overstated' })
+    strictEqual(kinds.includes('weak-reasoning'), false)
+    strictEqual(kinds[0], 'overstated-claim')
+  })
+
+  it('outranks every evidence finding, since no source can fix a quantifier', () => {
+    for (const kind of ['unverified-statistic', 'no-sources', 'weak-evidence', 'partial-evidence'] as const) {
+      ok(
+        problemSeverity('overstated-claim') < problemSeverity(kind),
+        `overstated-claim should outrank ${kind}`
+      )
+    }
+  })
+
+  it('still ranks below the two findings about truth', () => {
+    ok(problemSeverity('overstated-claim') > problemSeverity('contradicted-claim'))
+    ok(problemSeverity('overstated-claim') > problemSeverity('fabricated-citation'))
+  })
+
+  it('survives a zero evidence score — the problem is the wording, not the sourcing', () => {
+    strictEqual(
+      problemKindFor({ ...base, evidence: { score: 0, count: 0 }, critiqueVerdict: 'overstated' }),
+      'overstated-claim'
+    )
+  })
+})

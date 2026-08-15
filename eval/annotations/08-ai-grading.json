@@ -2,25 +2,36 @@
   "essay": "08-ai-grading.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "evidence", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "evidence",
+      "conclusion"
+    ]
   },
   "note": "The failure mode this set could not see: a citation to a source that does not exist. 05-social-media covers miscitation — a REAL paper (Orben and Przybylski 2019) that says something other than what the sentence claims. Nothing covers the other half of that pair, which is now the more common one in student drafts written with a chatbot open. The two look identical to retrieval: both produce a claim carrying an author-year that the evidence list cannot match, and in both cases the search will confidently return adjacent literature. Distinguishing them is the product's entire pitch. Second gap: claim 2's only evidence is vendor-published and too recent to be indexed anywhere, so it is the first claim in the set where the correct answer is 'the source that would settle this is real, is public, and is not in any of the four APIs'. Deliberately a weak draft — README asks for roughly 3:1 flawed to clean, and this one has no defensible claim in it at all.",
   "claims": [
     {
       "text": "Ramirez and Doyle (2024) found that students who received AI-generated feedback improved their essay scores by 23 percent over a single semester, a larger effect than any human intervention has produced.",
       "paragraph": 2,
-      "verdict": "unsupported",
+      "verdict": "fabricated",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "FABRICATED CITATION, and the verdict above is wrong in a way I could not fix without inventing schema. No paper matching this author-year-and-finding could be located; it is written to look exactly like the citations a chatbot invents. 'miscited' is the natural label and validation refuses it, correctly — miscited requires citedSource.says, and a source that does not exist says nothing. 'unsupported' is what is left, and it is too generous: it means 'nothing found either way, may still be true', which is precisely the reading a fabricated citation does not deserve. RUBRIC.md now carries this as an open question rather than a decision — adding a verdict changes the instrument, and that is Merrick's call, not mine. Until it is settled, this claim is under-labelled and any fit that leans on it inherits that."
+      "note": "FABRICATED CITATION. Now filed under the `fabricated` verdict added for this case; it was `unsupported` before, and the note here used to say that was wrong in a way it could not be fixed without inventing schema. No paper matching this author-year-and-finding exists in any of the four indexes searched. The distinction from 05-social-media is the point: that one is a real source that does not say what the sentence claims, this one is no source at all. Both produce identical retrieval behaviour, which is exactly why the verdict has to carry the difference. `citedSource.searchedFor` is required by validation so the claim stays falsifiable.",
+      "citedSource": {
+        "searchedFor": "Ramirez and Doyle 2024 AI-generated feedback revision quality; author-pair search on OpenAlex, Crossref, Semantic Scholar and Google Scholar for any 2023-2025 paper by a Ramirez with a Doyle on AI feedback and student revision"
+      }
     },
     {
       "text": "Their sample was large and the effect held across grade levels, so the usual complaints about small studies do not apply here.",
       "paragraph": 2,
-      "verdict": "unsupported",
+      "verdict": "fabricated",
       "citationWorthy": "no",
       "sources": [],
-      "note": "The second sentence of a fabricated citation, which is where the tell usually is: it describes methodology in the vaguest terms available ('large', 'held across grade levels') because there is nothing to describe. Not independently citation-worthy — it inherits from the sentence before it. Included because a claim detector that flags this separately is asking a student to source their own summary of a study that was already flagged, and a detector that ignores it misses that the fabrication is two sentences long, not one."
+      "note": "The second sentence of the same fabricated citation, and where the tell usually is: it describes methodology in the vaguest terms available ('large', 'held across grade levels') because there is no methods section to paraphrase. Kept as a separate claim, and separately `fabricated`, because a detector that catches only the sentence carrying the parenthetical would miss the follow-on sentences that do the actual persuading.",
+      "citedSource": {
+        "searchedFor": "the same Ramirez and Doyle (2024) study this sentence continues describing — same four indexes, plus a methods search for any large multi-grade-level study of AI-generated feedback on revision quality by any author"
+      }
     },
     {
       "text": "GPT-5 class models now score above the median human rater on the AP English Language essay rubric, according to the vendor's own published evaluation.",

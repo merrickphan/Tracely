@@ -351,6 +351,22 @@ export interface ScreenWatchClaimSummary {
   // screenWatchService.ts).
   critique: string | null
   critiqueVerdict: CritiqueVerdict | null
+  /**
+   * The claim's own sentence with only its quantifier or hedge narrowed, set
+   * when the verdict is `overstated`. Null in every other case, and never
+   * manufactured — see CritiqueResult and the relay's Pass 3.
+   *
+   * Its own field rather than a line inside `critique` so the card can offer it
+   * as an edit the writer takes or leaves. Buried in the prose it is advice.
+   */
+  suggestedRevision: string | null
+  /**
+   * The corrected reference, when the writer cited a real source in a malformed
+   * way. Always null alongside a `fabricated` verdict — normalizeCritique
+   * enforces that, because reformatting a reference Tracely has just called
+   * invented is incoherent.
+   */
+  citationFix: string | null
   citation: ScreenWatchClaimCitation | null
 }
 
@@ -414,6 +430,17 @@ export interface ScreenWatchCritiqueClaimRequest {
 export interface ScreenWatchCritiqueClaimResponse {
   critique: string
   verdict: CritiqueVerdict
+  /**
+   * The claim's sentence with only its quantifier or hedge changed, when the
+   * verdict is `overstated`. Null otherwise — see CritiqueResult.
+   *
+   * Carried as its own field rather than left inside the critique prose so the
+   * overlay can offer it as a replacement the writer accepts or ignores. Buried
+   * in a paragraph it is advice; as a field it is an edit.
+   */
+  suggestedRevision: string | null
+  /** The corrected reference when a real source is cited in a malformed way. */
+  citationFix: string | null
 }
 
 /**

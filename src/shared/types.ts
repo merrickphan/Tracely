@@ -25,6 +25,34 @@ export type CitationStyle = 'APA' | 'MLA' | 'Chicago'
 
 export type CritiqueVerdict =
   | 'contradicted'
+  /**
+   * The sentence attributes a claim to a source that does not appear to exist.
+   *
+   * Distinct from `contradicted` (a real fact, asserted wrongly) and from
+   * `unsupported` (nothing found either way, may still be true). Filing a
+   * fabricated reference as `unsupported` puts the most serious thing a draft
+   * can do in the same bucket as a claim nobody has studied yet, and reads back
+   * to the writer as "may still be true" — see eval/RUBRIC.md.
+   *
+   * Carries an obligation, the mirror of `miscited`'s `citedSource.says`: a
+   * verdict of `fabricated` must record what was searched for and not found, or
+   * it is an accusation rather than a finding.
+   */
+  | 'fabricated'
+  /**
+   * The substance is defensible; the phrasing is not.
+   *
+   * "People are 100% dangerous to the environment" is not false so much as
+   * unarguable as written — no evidence could support the quantifier. Folding
+   * this into `weak` told students to find better sources for a sentence whose
+   * problem was one word, and sending them looking for evidence that cannot
+   * exist is worse advice than saying nothing.
+   *
+   * Paired with `CritiqueResult.suggestedRevision`, which carries the same
+   * sentence with only its quantifier changed. The verdict without the
+   * revision is a complaint; the pair is a fix.
+   */
+  | 'overstated'
   | 'well-supported'
   | 'partially-supported'
   | 'weak'
@@ -314,6 +342,12 @@ export interface DocumentOutline {
   components: StructureComponents
   /** False when any paragraph is 'unknown'. The UI must say "provisional". */
   complete: boolean
+  /**
+   * False when the draft is too short for the document rubric to measure — see
+   * MIN_PARAGRAPHS_FOR_RUBRIC. `score` is 0 and meaningless; the UI must NOT
+   * render a number or a letter grade.
+   */
+  applicable: boolean
   rolesFrom: 'heuristic' | 'model'
   coverage: EvidenceCoverage
   weaknesses: StructureWeakness[]

@@ -386,6 +386,38 @@ function ScoreReport({
       <ModalHead title="Essay Grade" onClose={onClose} />
 
       <div className="argscore-summary">
+        {/*
+          No ring, no letter, no number when the rubric does not apply.
+
+          `applicable` is false for a draft under MIN_PARAGRAPHS_FOR_RUBRIC
+          paragraphs, where four of the six components are unreachable because
+          the body slice is empty — the ceiling is 20/100 and every such draft
+          renders as "F — Not yet arguing anything the rubric can find". That
+          sentence was shown to a strong nine-sentence position paper with five
+          citations in it. It was not a wrong grade so much as an answer to a
+          question the writer never asked, and the F is the part they remember.
+
+          Deliberately not a low-confidence grade or a greyed-out ring: this
+          panel's whole stance is that a number computed from nothing is worse
+          than no number, which is what `complete`/"Provisional" already says
+          one notch down. The paragraph-level marks are unaffected and still
+          carry everything Tracely actually knows about this text.
+        */}
+        {!outline.applicable ? (
+          <div className="argscore-summary-text">
+            <span className="argscore-eyebrow">Not enough draft to grade</span>
+            <p className="argscore-grade-line">
+              This rubric scores how an argument is built across paragraphs — its thesis, its body
+              claims, whether it meets an objection, how it closes. There is not enough draft here
+              to read any of that yet, so there is no grade to give.
+            </p>
+            <p className="argscore-grade-line">
+              Everything below still applies: the claims in this text, their sources, and anything
+              that needs a citation.
+            </p>
+          </div>
+        ) : (
+          <>
         <ScoreRing score={outline.score} size={compact ? 132 : 96} />
         <div className="argscore-summary-text">
           <span className="argscore-eyebrow">Overall score</span>
@@ -445,6 +477,8 @@ function ScoreReport({
             </p>
           ) : null}
         </div>
+          </>
+        )}
       </div>
 
       {!compact ? (
@@ -497,10 +531,19 @@ function ScoreReport({
                 ) : null}
               </div>
               <p className="argscore-para-preview">{paragraphTexts[paragraph.index - 1] ?? ''}</p>
-              {keys.map((key) => {
-                const meta = COMPONENT_LABEL.find(([k]) => k === key)!
-                return <ComponentBar key={key} value={outline.components[key]} max={meta[2]} label={meta[1]} />
-              })}
+              {/* Suppressed with the grade, not just alongside it. These read
+                  `outline.components`, which scoreDraft zeroes when the rubric
+                  does not apply — so leaving them in prints a column of 0%
+                  bars, which says "you scored nothing" more emphatically than
+                  the letter it replaced. */}
+              {outline.applicable
+                ? keys.map((key) => {
+                    const meta = COMPONENT_LABEL.find(([k]) => k === key)!
+                    return (
+                      <ComponentBar key={key} value={outline.components[key]} max={meta[2]} label={meta[1]} />
+                    )
+                  })
+                : null}
               {weaknesses.map((weakness, i) => (
                 <span className="argscore-weakness" key={`${weakness.kind}-${i}`}>
                   {weakness.message}

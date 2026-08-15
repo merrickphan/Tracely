@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import type { Claim, CritiqueVerdict, EvidenceItem } from '@shared/types'
 import { getCached, setCached } from '../storage/cacheRepo'
 import { callRelay } from './client'
+import { normalizeCritique } from './normalizeCritique'
 import {
   MAX_CRITIQUE_ABSTRACT_CHARS,
   MAX_CRITIQUE_EVIDENCE_ITEMS,
@@ -12,6 +13,27 @@ import {
 export interface CritiqueResult {
   critique: string
   verdict: CritiqueVerdict
+  /**
+   * The claim's own sentence with ONLY its quantifier, scope or hedge changed,
+   * when it is defensible but overstated. Null in every other case.
+   *
+   * Deliberately narrow. Tracer's prompt forbids writing sentences for the
+   * student and that rule is not being relaxed here: narrowing "100%" to
+   * "generally" is a correction of accuracy, not composition — it changes what
+   * the sentence claims, not how it reads. Anything that adds a fact, a clause
+   * or a citation is out of scope, and the relay prompt says so explicitly.
+   */
+  suggestedRevision: string | null
+  /**
+   * The corrected reference when a real source is cited in a malformed way.
+   *
+   * The counterweight to `fabricated`. A student who reversed the author order
+   * or mixed MLA with APA has made a formatting mistake, and the single worst
+   * thing this product could do is call that an invented source — so the relay
+   * is instructed to prefer this outcome whenever it is unsure, and this field
+   * is always null when the verdict is `fabricated`.
+   */
+  citationFix: string | null
 }
 
 // A hard slice(0, N) can land mid-word or mid-fact ("...reduced mortality
@@ -79,9 +101,13 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
   // strengthScore is in the key because it is in the request body. It usually
   // moves with the evidence set, but not always: the same sources rescored (ML
   // on vs off) is a different question with the same evidenceIds.
+  // v7: the response gained `suggestedRevision` and `citationFix`. Every v6
+  // entry was written by a relay that could not produce either, so reusing them
+  // would silently withhold the new output from exactly the claims a user has
+  // already looked at — the ones most likely to be looked at again.
   const normalizedText = claim.text.trim().replace(/\s+/g, ' ').toLowerCase()
   return createHash('sha256')
-    .update(`ai:critique::v6::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}`)
+    .update(`ai:critique::v7::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}`)
     .digest('hex')
 }
 
@@ -101,12 +127,13 @@ export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): 
         .join('\n')
     : 'No supporting evidence was found.'
 
-  const result = await callRelay<CritiqueResult>('critique', {
+  const raw = await callRelay<CritiqueResult>('critique', {
     claimText: claim.text,
     strengthScore: claim.strengthScore,
     evidenceSummary
   })
 
+  const result = normalizeCritique(raw)
   setCached(key, 'ai:critique', result)
   return result
 }

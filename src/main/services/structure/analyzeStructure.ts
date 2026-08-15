@@ -8,6 +8,7 @@ import type {
   ParagraphRole
 } from '@shared/types'
 import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
+import { hasInlineCitation } from '@shared/inlineCitation'
 import { hasSignificanceMarker, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
@@ -81,8 +82,13 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // model returned 'unknown' for — would produce a role vector from two
   // sources with different standards for what justifies a label, and
   // `rolesFrom` could no longer describe it truthfully.
+  // `hasCitation` is injected because roles.ts must stay a leaf module that
+  // `npm test` can load — it cannot value-import the shared detector itself,
+  // and its own fallback pattern finds none of the MLA or author-and-year
+  // forms a real paper uses.
   const { roles, warranted } =
-    input.classified ?? heuristicRoles({ paragraphs: spans, claimsByParagraph })
+    input.classified ??
+    heuristicRoles({ paragraphs: spans, claimsByParagraph, hasCitation: hasInlineCitation })
 
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
@@ -98,7 +104,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   const closing = spans.find((span) => paragraphs[span.index - 1]?.role === 'conclusion') ?? spans.at(-1)
   const soWhatInConclusion = closing ? hasSignificanceMarker(closing.text) : false
 
-  const { score, components, complete } = scoreDraft(paragraphs, { soWhatInConclusion })
+  const { score, components, complete, applicable } = scoreDraft(paragraphs, { soWhatInConclusion })
 
   return {
     documentId: input.documentId,
@@ -109,6 +115,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     score,
     components,
     complete,
+    applicable,
     rolesFrom: input.classified ? 'model' : 'heuristic',
     coverage: input.coverage,
     weaknesses: findWeaknesses({

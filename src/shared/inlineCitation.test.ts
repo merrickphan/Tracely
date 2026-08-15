@@ -51,6 +51,54 @@ describe('hasInlineCitation — MLA title citations, from a real position paper'
   }
 })
 
+describe('hasInlineCitation — MLA author-page, which has no year to anchor on', () => {
+  // MLA keeps the year in the Works Cited only, so every author-date pattern in
+  // this module missed the style outright — an MLA essay was told to add a
+  // citation on each line that already had one.
+  const cited = [
+    'Parking minimums act as a hidden tax on housing (Shoup 45).',
+    'The argument runs across three chapters (Shoup 45-47).',
+    'Laptop users score lower on conceptual questions (Mueller and Oppenheimer 1163).',
+    'Attendance improved in every cohort studied (Wahlstrom et al. 12).',
+    'The reform stalled twice before passing (van Dijk 88).',
+    'The survey covers eighty countries (Ólafsson 231).',
+    'The chapter opens with the same objection (Shoup p. 45).'
+  ]
+  for (const sentence of cited) {
+    it(`treats as cited: ${sentence.slice(0, 52)}…`, () => {
+      strictEqual(hasInlineCitation(sentence), true)
+    })
+  }
+})
+
+describe('hasInlineCitation — names the ASCII-capital anchor used to miss', () => {
+  const cited = [
+    'Trust in institutions declined over the period (van Dijk, 2019).',
+    'The concept originates in this work (de Beauvoir, 1949).',
+    'The survey found the opposite (Ángel, 2020).',
+    'Attendance rose after the change (Ólafsson, 2019).'
+  ]
+  for (const sentence of cited) {
+    it(`treats as cited: ${sentence.slice(0, 52)}…`, () => {
+      strictEqual(hasInlineCitation(sentence), true)
+    })
+  }
+})
+
+describe('hasInlineCitation — notes shorthand and bare-scheme URLs', () => {
+  const cited = [
+    'The same source makes the point again (ibid.).',
+    'The figure is repeated later in the chapter (Ibid., 47).',
+    'The earlier objection still stands (op. cit.).',
+    'The full series is at www.oecd.org/education/report.pdf.'
+  ]
+  for (const sentence of cited) {
+    it(`treats as cited: ${sentence.slice(0, 52)}…`, () => {
+      strictEqual(hasInlineCitation(sentence), true)
+    })
+  }
+})
+
 describe('hasInlineCitation — does not fire on ordinary prose', () => {
   const uncited = [
     'Screen time causes depression in teenagers.',
@@ -66,7 +114,15 @@ describe('hasInlineCitation — does not fire on ordinary prose', () => {
     'Handwriting is the oldest form of note-taking.',
     // The 6-character floor inside the quotes is what keeps short quoted
     // speech out of the `titled` pattern.
-    'He shrugged ("no") and walked out.'
+    'He shrugged ("no") and walked out.',
+    // A capitalised word beside a bare number is the entire MLA author-page
+    // signature, so these pointers need NOT_AN_AUTHOR to hold them back.
+    'The breakdown by year is in Table 3 (Table 3).',
+    'The argument is developed further (Chapter 11).',
+    'Assessed values were frozen (Proposition 13).',
+    'Enforcement continued under the rule (Title 42).',
+    'The trend is clearest here (Figure 2).',
+    'The committee met twice (Planning Committee).'
   ]
   for (const sentence of uncited) {
     it(`treats as uncited: ${sentence.slice(0, 52)}…`, () => {
@@ -80,6 +136,8 @@ describe('inlineCitationKind', () => {
     strictEqual(inlineCitationKind('Laptops lower grades (Smith, 2020).'), 'parenthetical')
     strictEqual(inlineCitationKind('Smith (2020) found the effect.'), 'narrative')
     strictEqual(inlineCitationKind('The effect replicates [3].'), 'numeric')
+    strictEqual(inlineCitationKind('It is a hidden tax (Shoup 45).'), 'author-page')
+    strictEqual(inlineCitationKind('The point recurs (ibid.).'), 'ibid')
     strictEqual(inlineCitationKind('Nothing here.'), null)
   })
 

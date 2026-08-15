@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { critiqueIssues } from './critiqueIssues'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import type {
   CitationStyle,
@@ -668,10 +669,22 @@ const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
   'partially-supported': 'Partially Supported',
   weak: 'Weak',
   unsupported: 'Unsupported',
-  contradicted: 'Contradicted — False'
+  contradicted: 'Contradicted — False',
+  fabricated: 'Source Not Found — May Be Fabricated',
+  overstated: 'Overstated — Narrow the Claim'
 }
 
-const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted']
+// Drives the score row's copy: findings listed here read as "N issues found",
+// everything else as "Reviewed · <verdict>". `fabricated` and `overstated`
+// belong with the findings — "Reviewed · Source Not Found" reads as a clean
+// bill of health for the most serious thing this product can say.
+const WEAK_VERDICTS: CritiqueVerdict[] = [
+  'weak',
+  'unsupported',
+  'contradicted',
+  'fabricated',
+  'overstated'
+]
 
 // -- The widget panel: Figma "Overlay Mockup - Widget over Document" ---------
 //
@@ -762,47 +775,6 @@ const AMBER_BG = '#fef3c7'
 const AMBER_FG = '#d97706'
 const FRESH_BG = '#dcfce7'
 
-/**
- * Reads a critique back as the design's issue rows.
- *
- * The "Critique Argument Result" frame draws three rows, each a short title
- * over a sentence of detail. The relay returns ONE prose paragraph under 120
- * words (see CRITIQUE_SYSTEM_PROMPT), so that shape is something the data
- * sometimes has and sometimes doesn't. This reads whatever structure the model
- * actually produced — markdown bullets, numbered points, or blank-line
- * separated paragraphs — and otherwise returns a single row with the prose
- * intact. Chopping a paragraph into sentences to reach three rows would be
- * inventing issues the critique never claimed to have found.
- *
- * A row with no detected title returns an empty one; the card fills it with
- * the verdict, so the prose always renders as body text rather than being
- * ellipsised into a heading.
- */
-export function critiqueIssues(critique: string): Array<{ title: string; detail: string }> {
-  const text = critique.trim()
-  if (!text) return []
-
-  const blocks = text
-    .split(/\n\s*\n|\n(?=[ \t]*(?:[-*•]|\d+[.)])[ \t])/)
-    .map((block) => block.replace(/^[ \t]*(?:[-*•]|\d+[.)])[ \t]*/, '').trim())
-    .filter(Boolean)
-
-  return (blocks.length ? blocks : [text]).map((block) => {
-    const bold = /^\*\*(.+?)\*\*\s*[:.—-]?\s*/.exec(block)
-    if (bold && block.length > bold[0].length) {
-      return { title: bold[1].trim(), detail: block.slice(bold[0].length).trim() }
-    }
-    const sentenceEnd = /[.?!]\s/.exec(block)
-    if (sentenceEnd && sentenceEnd.index < 80 && block.length > sentenceEnd.index + 2) {
-      return {
-        title: block.slice(0, sentenceEnd.index + 1).trim(),
-        detail: block.slice(sentenceEnd.index + 2).trim()
-      }
-    }
-    return { title: '', detail: block }
-  })
-}
-
 /** A source row at the panel's scale — the popover's ArticleRow is smaller. */
 /** Stable enough to diff two searches: title + year, which is what a source
  *  row shows. DOIs are not carried on ScreenWatchEvidenceArticle. */
@@ -857,6 +829,96 @@ function PanelSourceRow({
     >
       {content}
     </a>
+  )
+}
+
+/**
+ * A proposed replacement — the narrowed sentence, or the corrected reference.
+ *
+ * Deliberately NOT a CritiqueIssueRow. Those rows say what is wrong; this one
+ * carries text the writer is meant to put in their document, and the two should
+ * not look alike. The amber "!" tile is dropped, the text sits in a bordered
+ * block so it reads as a quotation of something proposed rather than as more
+ * commentary, and Copy is the only action.
+ *
+ * Copy rather than "Apply": the overlay watches an arbitrary window over UIA
+ * and has no write access to the document underneath it, so a button that
+ * appeared to edit the sentence would be lying about what it can reach. It also
+ * keeps the last word with the writer, which is the point — Tracer's prompt
+ * refuses to compose sentences for students, and the only reason this is
+ * allowed to exist at all is that narrowing a quantifier corrects accuracy
+ * rather than writing prose.
+ */
+function CritiqueFixRow({
+  label,
+  text,
+  monospace
+}: {
+  label: string
+  text: string
+  /** Citations only: a reference is read character by character. */
+  monospace?: boolean
+}): JSX.Element {
+  const [copied, setCopied] = useState(false)
+
+  // Cleared on a timer, so the button does not sit on "Copied" forever if the
+  // panel stays open — and cleaned up on unmount, because the panel is
+  // remounted every time the hovered claim changes.
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1600)
+    return () => clearTimeout(timer)
+  }, [copied])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: W_BODY, letterSpacing: 0.2 }}>{label}</div>
+        <button
+          className="tracely-btn-secondary"
+          onClick={() => {
+            // No catch that surfaces anything: a clipboard write can be refused
+            // and there is nothing useful to tell the user about it here. The
+            // text is selectable, which is the fallback.
+            void navigator.clipboard?.writeText(text).then(
+              () => setCopied(true),
+              () => undefined
+            )
+          }}
+          style={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            padding: '3px 10px',
+            borderRadius: 999,
+            border: `1px solid ${W_DIVIDER}`,
+            background: '#fff',
+            color: W_BODY,
+            cursor: 'pointer',
+            flexShrink: 0
+          }}
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <div
+        style={{
+          fontSize: monospace ? 12.5 : 13.5,
+          fontFamily: monospace ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
+          lineHeight: 1.45,
+          color: W_INK,
+          background: W_TRACK,
+          border: `1px solid ${W_DIVIDER}`,
+          borderRadius: 8,
+          padding: '8px 10px',
+          // Selectable, so Copy failing is inconvenient rather than a dead end.
+          userSelect: 'text',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word'
+        }}
+      >
+        {text}
+      </div>
+    </div>
   )
 }
 
@@ -1018,6 +1080,14 @@ function WidgetClaimCard({
       )}
 
       {showCritique ? (
+        // Deliberately NOT its own scroll region. A critique carrying issue
+        // rows plus a revision plus a citation fix is the tallest thing this
+        // card renders, and the first instinct is to make this block scroll —
+        // but the panel that wraps it already does, for exactly this reason
+        // (see the `overflowY` on the 'single' container near the end of this
+        // file). Adding one here nests a second scrollbar inside the first.
+        // Long source lists have always overflowed the same way; the critique
+        // should behave like them.
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
           {issues.map((issue, i) => (
             <CritiqueIssueRow
@@ -1030,6 +1100,16 @@ function WidgetClaimCard({
               detail={issue.detail}
             />
           ))}
+          {/* After the issues, never instead of them. The critique explains WHY
+              the sentence overreaches; this is the sentence to replace it with,
+              and showing the replacement without the reasoning would train the
+              writer to accept edits they do not understand. */}
+          {claim.suggestedRevision ? (
+            <CritiqueFixRow label="Suggested revision" text={claim.suggestedRevision} />
+          ) : null}
+          {claim.citationFix ? (
+            <CritiqueFixRow label="Citation, corrected" text={claim.citationFix} monospace />
+          ) : null}
         </div>
       ) : evidence && evidence.articles.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
@@ -2658,6 +2738,8 @@ export default function OverlayApp(): JSX.Element {
         evidence: null,
         critique: null,
         critiqueVerdict: null,
+        suggestedRevision: null,
+        citationFix: null,
         citation: null
       })
     : null
