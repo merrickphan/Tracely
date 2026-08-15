@@ -393,7 +393,13 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       critiqueClaim: async (req) => {
         const result = await relay('screenWatch.critiqueClaim', {
           critique: fx.screenWatchCritique,
-          verdict: 'weak' as const
+          verdict: 'weak' as const,
+          // Null on the default preview claim: a suggested revision on every
+          // critique is precisely the failure mode the relay prompt guards
+          // against, and a fixture that always returns one would make the
+          // preview a bad reference for what the feature should look like.
+          suggestedRevision: null,
+          citationFix: null
         })
         patchWatchClaim(req.claimId, { critique: fx.screenWatchCritique, critiqueVerdict: 'weak' })
         return result

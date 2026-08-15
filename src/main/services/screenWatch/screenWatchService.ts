@@ -21,7 +21,7 @@ import type {
 import { computeClaimSpans } from '@shared/claimSpans'
 import { detectClaims } from '../ai/claimDetection'
 import { isAuthError } from '../ai/client'
-import { generateCritique } from '../ai/critique'
+import { generateCritique, type CritiqueResult } from '../ai/critique'
 import { formatCitation } from '../citations'
 import { formatInTextCitation } from '@shared/citationInText'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
@@ -162,7 +162,10 @@ let watchStructure: { key: string; structure: ScreenWatchStructure | null } | nu
 // Critique is never run automatically here (unlike evidence search) — it's
 // the paid relay, so it only runs when the user explicitly clicks "Critique
 // Argument" in the overlay (see critiqueClaim).
-let critiqueByClaimId = new Map<string, { critique: string; verdict: CritiqueVerdict }>()
+// The whole CritiqueResult, not the two fields the card used to need. It now
+// also carries `suggestedRevision` and `citationFix`, and narrowing the stored
+// shape by hand is how those silently stopped reaching the overlay.
+let critiqueByClaimId = new Map<string, CritiqueResult>()
 // Results of the focused "Find a source" search (findSourceForClaim) — kept
 // separate from evidenceResultByClaimId (the broader background auto-search)
 // since it's a distinct, user-triggered search that can use a different
@@ -1038,7 +1041,7 @@ function withEvidenceScores(claim: Claim): Claim {
 // User-initiated only (the overlay's "Check Claim" button) — unlike
 // evidence search this hits the paid relay, so it never runs automatically
 // for passive background reading.
-export async function critiqueClaim(claimId: string): Promise<{ critique: string; verdict: CritiqueVerdict }> {
+export async function critiqueClaim(claimId: string): Promise<CritiqueResult> {
   const claim = currentClaims.find((c) => c.id === claimId)
   if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
   const evidence = evidenceResultByClaimId.get(claimId)
@@ -1434,6 +1437,8 @@ function updateOverlayAndWidget(
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,
         critiqueVerdict: critique?.verdict ?? null,
+        suggestedRevision: critique?.suggestedRevision ?? null,
+        citationFix: critique?.citationFix ?? null,
         citation: citation ? { inTextCitation: citation.inTextCitation, worksCitedEntry: citation.worksCitedEntry } : null
       }
     })
