@@ -786,7 +786,12 @@ textarea:disabled {
   max-width: 620px;
 }
 
-.analyze-cta {
+/* `.btn.analyze-cta`, not `.analyze-cta`. The button carries `btn btn-primary
+   analyze-cta`, and `.btn-primary { font-size: 14px }` is declared later in
+   this file at the same specificity — so it won, and the 16px the design asks
+   for (58:226) never applied. The extra class breaks the tie by weight rather
+   than by moving rules around and changing what else the order affects. */
+.btn.analyze-cta {
   width: 200px;
   height: 56px;
   font-size: 16px;
@@ -877,26 +882,33 @@ textarea:disabled {
 }
 
 .analyze-heading {
+  /* Figma 58:184: Inter Medium, 32px, 44px line box, 4px gap under. Was 26px. */
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 32px;
+  line-height: 44px;
   font-weight: 500;
   color: #000;
   margin: 0 0 4px;
 }
 
 .analyze-subheading {
-  font-size: 13px;
-  color: var(--muted);
+  /* Figma 58:187: 15px / 19.5px, rgba(0,0,0,0.45). Was 13px. */
+  font-size: 15px;
+  line-height: 19.5px;
+  color: rgba(0, 0, 0, 0.45);
   margin: 0 0 32px;
 }
 
 .source-tile-row {
+  /* Figma 58:189: 620x104, two 304px tiles, 12px gap. This asked for THREE
+     columns and only ever had two tiles, so each rendered at a third of the
+     width — visibly narrower than the frame, which is what "not as big" was. */
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, 304px);
   gap: 12px;
   margin-bottom: 32px;
-  width: 100%;
-  max-width: 620px;
+  width: 620px;
+  max-width: 100%;
 }
 
 .source-tile {
@@ -907,7 +919,8 @@ textarea:disabled {
   gap: 8px;
   width: 100%;
   height: 104px;
-  padding: 20px 8px;
+  /* Figma 58:199: py-20 and no horizontal padding. */
+  padding: 20px 0;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(0, 0, 0, 0.02);
@@ -1416,12 +1429,16 @@ textarea:disabled {
 }
 
 .docmark-card {
+  /* Figma 288:309, read off get_design_context — not estimated. 2px here,
+     unlike the home sample (361:329) which the design draws at 1px. */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   background: #fff;
   border: 2px solid #000;
-  border-radius: 14px;
-  /* 16, from Figma 288:309 — header, body and actions all inset by it. */
+  border-radius: 16px;
   padding: 16px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .docmark-head {
@@ -1438,9 +1455,10 @@ textarea:disabled {
 }
 
 .docmark-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #17171b;
+  color: #1c1c1c;
+  white-space: nowrap;
 }
 
 .docmark-count {
@@ -1457,11 +1475,10 @@ textarea:disabled {
 }
 
 .docmark-body {
-  /* Body sits 12px under the header, actions 8px under the body (288:309). */
-  margin: 12px 0 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #55555c;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #737373;
 }
 
 .docmark-actions {
@@ -1469,20 +1486,21 @@ textarea:disabled {
   gap: 8px;
 }
 
+/* No width, no height — the frame's buttons hug their text. */
 .docmark-btn-primary,
 .docmark-btn-secondary {
-  height: 32px;
-  padding: 0 14px;
+  padding: 8px 14px;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .docmark-btn-primary {
-  background: #17171b;
-  border: 1px solid #17171b;
+  background: #1c1c1c;
+  border: 1px solid #1c1c1c;
   color: #fff;
+  font-weight: 600;
 }
 
 .docmark-btn-primary:hover {
@@ -1491,8 +1509,9 @@ textarea:disabled {
 
 .docmark-btn-secondary {
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  color: #17171b;
+  border: 1px solid #d9d9d9;
+  color: #1c1c1c;
+  font-weight: 400;
 }
 
 .docmark-btn-secondary:hover {
@@ -4393,29 +4412,33 @@ textarea:disabled {
   cursor: default;
 }
 
-/* ---- Home sample popover (Figma 361:329, inside Frame Main Page) --------
-   Literal frame coordinates, like every other .home-el: 43,380, 372x174.
-   Bigger than the real hover popover (320x159) because the frame draws it
-   scaled up as an illustration — matched to the frame rather than to the
-   working popover, since this one is on the home screen to be looked at. */
+/* ---- Home sample popover — Figma 361:329, read off get_design_context ----
+   Every value here is the frame's, not an approximation of it. The previous
+   pass eyeballed five of them wrong: a 2px border where the design has 1px, a
+   14px radius where it has 16, a 15px/700 title where it is 14px semibold, the
+   wrong body grey, and fixed widths on the buttons — which is what forced
+   "Find a source" onto two lines. The design gives the buttons no width at all;
+   they hug their text at 14px/8px padding and never wrap. */
 .home-popover {
   left: 43px;
   top: 380px;
   width: 372px;
   height: 174px;
-  padding: 16px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
   background: #fff;
-  border: 2px solid #000;
-  border-radius: 14px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+  border: 1px solid #000;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .home-popover-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 25px;
 }
 
 .home-popover-dot {
@@ -4427,48 +4450,42 @@ textarea:disabled {
 }
 
 .home-popover-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #17171b;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1c1c1c;
 }
 
-/* y=53 in the frame, against a header ending at 41. */
 .home-popover-body {
-  margin: 12px 0 0;
+  margin: 0;
   width: 340px;
-  font-size: 13.5px;
-  line-height: 1.45;
-  color: #55555c;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #737373;
 }
 
-/* Actions at y=118; the body block above ends at ~106. */
 .home-popover-actions {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
 }
 
+/* No width. The frame's buttons hug their text — see 361:335/361:337. */
 .home-popover-btn {
-  height: 32px;
-  padding: 0 14px;
+  padding: 8px 14px;
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid #d9d9d9;
   background: #fff;
-  color: #17171b;
+  color: #1c1c1c;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .home-popover-btn.primary {
-  width: 110px;
-  border-color: #17171b;
-  background: #17171b;
+  border-color: #1c1c1c;
+  background: #1c1c1c;
   color: #fff;
-}
-
-.home-popover-btn:not(.primary) {
-  width: 75px;
+  font-weight: 600;
 }
 
 .home-popover-btn:hover {
