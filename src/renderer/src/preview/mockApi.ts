@@ -357,6 +357,10 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       // suppressing outright — reviewing the UI shouldn't spray tabs.
       openExternal: () => ok('shell.openExternal (suppressed)', { ok: true as const })
     },
+    app: {
+      getBuildInfo: () =>
+        ok('app.getBuildInfo', { version: '0.0.0-harness', isPreview: true })
+    },
     screenWatch: {
       setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),
       getStatus: () => ok('screenWatch.getStatus', fx.screenWatchStatus),
