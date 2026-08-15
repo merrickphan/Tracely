@@ -10,7 +10,7 @@
  * the only build that shows the integrated whole.
  *
  * Branch previews used to be allowed and are now refused — see the gate below.
- * Everything published here lands on the same beta channel, so an install
+ * Everything published here lands on the same preview channel, so an install
  * follows whichever build was published last, and a branch preview would take
  * that channel away from everyone until the next merge.
  *
@@ -21,10 +21,26 @@
  *
  * Two mechanisms keep it away from production users:
  *
- *  - The version carries a `-beta` tag, so electron-builder writes `beta.yml`
- *    instead of `latest.yml`. Installed production builds poll `latest.yml`
- *    and never learn this exists. (A preview build's own app-update.yml says
- *    channel: beta, so reviewers keep getting previews.)
+ *  - The version carries a `-preview` tag, so electron-builder writes
+ *    `preview.yml` instead of `latest.yml`. Installed production builds poll
+ *    `latest.yml` and never learn this exists. (A preview build's own
+ *    app-update.yml says channel: preview, so reviewers keep getting previews.)
+ *
+ *    The channel is `preview` and deliberately NOT `beta`. Do not tidy it back.
+ *    electron-updater treats `alpha` and `beta` as ranked channels of ONE app,
+ *    so a beta client is offered any newer STABLE release: in
+ *    GitHubProvider.getLatestVersion, a stable tag has a null prerelease
+ *    component which makes `isCustomChannel` false, and a `beta` currentChannel
+ *    makes `shouldFetchVersion` true — nothing in that condition excludes it.
+ *    Right for one app with two channels; wrong here, because Preview is a
+ *    separate application and "graduating to stable" hands a reviewer the
+ *    production installer. That is not hypothetical: on 2026-08-14 a Preview on
+ *    0.3.83-beta.2 downloaded Tracely-Setup-0.3.84.exe, which upgrades nothing
+ *    about Preview, so it sat three builds stale while APPROVALS rows claimed
+ *    the work was "in Preview". Any channel name outside ["alpha","beta"] takes
+ *    the `isCustomChannel` path, which only ever matches its own releases. That
+ *    match compares the channel name against the TAG's prerelease id, which is
+ *    why the version below must be `-preview.N` and not `-beta.N`.
  *  - It ships under a different appId and productName, so it installs
  *    ALONGSIDE Tracely rather than upgrading over it, and keeps its own
  *    database under %APPDATA%\Tracely Preview. A broken preview cannot damage
@@ -76,7 +92,7 @@ if (branch === 'HEAD') die('Detached HEAD — check out a branch first.')
 if (branch !== 'main') {
   die(
     `On '${branch}'. Previews are published from main only.\n\n` +
-      'Both branch and main previews go to the same beta channel, so publishing\n' +
+      'Both branch and main previews go to the same preview channel, so publishing\n' +
       "from here would replace everyone's Tracely Preview with your unmerged\n" +
       'branch until the next merge to main overwrote it.\n\n' +
       'Merge it instead — .github/workflows/preview.yml builds and publishes\n' +
@@ -133,11 +149,11 @@ const CI = !!process.env.GITHUB_ACTIONS
 let version
 if (CI) {
   const base = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version.split('-')[0]
-  version = `${base}-beta.${process.env.GITHUB_RUN_NUMBER}`
+  version = `${base}-preview.${process.env.GITHUB_RUN_NUMBER}`
   run(`npm version ${version} --no-git-tag-version --allow-same-version`)
   console.log(`     v${version}  (from run number; not committed)`)
 } else {
-  run('npm version prerelease --preid=beta --no-git-tag-version')
+  run('npm version prerelease --preid=preview --no-git-tag-version')
   version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
   run(`git commit -am "Preview v${version}"`)
   run(`git push origin ${branch}`)

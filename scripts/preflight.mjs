@@ -217,8 +217,8 @@ if (process.env.PREFLIGHT_SKIP_VERSION === '1') {
   const o = owner ?? yml.match(/owner:\s*(\S+)/)?.[1]
   const r = repo ?? yml.match(/repo:\s*(\S+)/)?.[1]
   // /releases/latest deliberately excludes prereleases. That's exactly right
-  // for a production release — betas must never raise the bar main has to
-  // clear — but wrong for a preview, which has to outrank the previous beta
+  // for a production release — previews must never raise the bar main has to
+  // clear — but wrong for a preview, which has to outrank the previous preview
   // or electron-updater will never offer it to reviewers. So preview mode
   // reads the full list and takes the highest version of any kind.
   let latest
