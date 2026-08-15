@@ -9,7 +9,12 @@ import type {
   FontSize,
   Theme
 } from '@shared/types'
-import type { ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
+import type {
+  AppGetBuildInfoResponse,
+  ProfileInfo,
+  ScannedApp,
+  ScreenWatchStatus
+} from '@shared/ipc-contract'
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -120,6 +125,15 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       .getSettings()
       .then(setSettings)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+  }, [])
+
+  // Preview-only: the app has no OS title bar (windows are frameless), so
+  // without this a beta build and a real release look identical while you're
+  // actually using them. Never shown in a real release — a version number
+  // isn't something a user needs to see.
+  const [buildInfo, setBuildInfo] = useState<AppGetBuildInfoResponse | null>(null)
+  useEffect(() => {
+    tracelyApi.getBuildInfo().then(setBuildInfo).catch(() => {})
   }, [])
 
   async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
@@ -381,11 +395,16 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               </Fragment>
             ))}
           </nav>
-          {authUser ? (
+          {authUser || buildInfo?.isPreview ? (
             <div className="settings-sidebar-footer">
-              <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
-                <SignOutIcon size={15} /> Sign out
-              </button>
+              {authUser ? (
+                <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
+                  <SignOutIcon size={15} /> Sign out
+                </button>
+              ) : null}
+              {buildInfo?.isPreview ? (
+                <span className="settings-build-version">Preview v{buildInfo.version}</span>
+              ) : null}
             </div>
           ) : null}
         </aside>
