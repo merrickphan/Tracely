@@ -4579,3 +4579,76 @@ textarea:disabled {
   color: inherit;
   cursor: pointer;
 }
+
+/* ---- Analyzing steps list (Figma 127:40) ------------------------------
+   620px block under the progress bar. Three states, all the design's: done is
+   a filled accent disc with a white check, active an accent ring with accent
+   text, pending a grey ring with grey text. */
+.analyzing-steps {
+  width: 100%;
+  max-width: 620px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.analyzing-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 23px;
+}
+
+.analyzing-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.analyzing-step.is-done {
+  color: var(--text);
+}
+
+.analyzing-step.is-done .analyzing-step-mark {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.analyzing-step.is-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.analyzing-step.is-active .analyzing-step-mark {
+  border-color: var(--accent);
+}
+
+.analyzing-step.is-pending {
+  color: var(--muted);
+}
+
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

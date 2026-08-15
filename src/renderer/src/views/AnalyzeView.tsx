@@ -74,23 +74,49 @@ function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
       </button>
       <div className="analyzing-panel">
         <div className="analyzing-spinner-ring" />
-        <h3>Detecting claims</h3>
+        <h3>Analyzing your source</h3>
         {/*
-          Says what this stage actually does. It was "Analyzing your source" over
-          a four-item checklist reading "Reading source content",
-          "Cross-referencing credible sources" and "Generating citations" — none
-          of which happen here. This is one relay call that finds claims;
-          evidence search and citations run later, on demand. In an app whose
-          product promise is not overstating what the evidence says, a progress
-          bar narrating work it is not doing is the worst possible place to fake
-          it. The percentage stays: it tracks real elapsed time on an asymptotic
-          curve and only disappears when the response actually lands.
+          The design's sentence is "Tracely is scanning claims and gathering
+          credible evidence." The first half is true here and the second is not:
+          this stage is one relay call that finds claims. Evidence search and
+          citations run later and on demand, so under a live progress bar that
+          clause describes work that is not happening. Same position, same
+          length, second half dropped.
         */}
-        <p>Tracely is reading your text for checkable claims.</p>
+        <p>Tracely is scanning your text for checkable claims.</p>
         <div className="analyzing-progress-track">
           <div className="analyzing-progress-fill" style={{ width: `${percent}%` }} />
         </div>
-        <p className="analyzing-progress-label">{percent}%</p>
+        <p className="analyzing-progress-label">{percent}% complete</p>
+
+        {/*
+          The four-step list from 127:40, in the design's own three states:
+          done is a filled orange check, active an orange ring with orange text,
+          pending a grey ring with grey text.
+
+          The last two NEVER leave pending, and that is the point. This screen
+          previously had this exact checklist and it was deleted, because
+          "Cross-referencing credible sources" and "Generating citations"
+          describe work this stage does not do — ticking them would be the app
+          narrating a search it has not run, on the one screen where a student
+          is watching to see what it found. Drawing them greyed is the design's
+          own way of saying "not yet", so the frame is matched and nothing is
+          claimed. They light up in the flows that really do them.
+        */}
+        <ul className="analyzing-steps">
+          {ANALYZING_STEPS.map((step) => {
+            const state = !step.runsHere ? 'pending' : percent >= step.doneAt ? 'done' : 'active'
+            return (
+              <li key={step.label} className={`analyzing-step is-${state}`}>
+                <span className="analyzing-step-mark" aria-hidden="true">
+                  {state === 'done' ? '✓' : ''}
+                </span>
+                {step.label}
+                {!step.runsHere ? <span className="sr-only"> — runs later, on demand</span> : null}
+              </li>
+            )
+          })}
+        </ul>
       </div>
     </>
   )
@@ -99,6 +125,23 @@ function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
 // Figma 226:95 and 234:46 — the design's own lists, not a superset of them.
 // The families were Georgia/Times/Courier/Verdana, which appear in no frame;
 // Inter and Instrument Sans are the two the app actually ships and renders in.
+/**
+ * Figma 127:40. `runsHere` is what keeps this honest: only the first two
+ * happen during claim detection, so the other two are drawn in the design's
+ * pending state and never advance out of it.
+ *
+ * `doneAt` are points on the same asymptotic elapsed-time curve the bar uses —
+ * they are not milestones the backend reports, because it reports none. A step
+ * ticking is therefore "enough time has passed that this is finished", which is
+ * true of reading and extracting in a single round trip.
+ */
+const ANALYZING_STEPS: Array<{ label: string; runsHere: boolean; doneAt: number }> = [
+  { label: 'Reading source content', runsHere: true, doneAt: 25 },
+  { label: 'Extracting key claims', runsHere: true, doneAt: 96 },
+  { label: 'Cross-referencing credible sources', runsHere: false, doneAt: 0 },
+  { label: 'Generating citations', runsHere: false, doneAt: 0 }
+]
+
 const FONT_FAMILIES = ['Arial', 'Inter', 'Instrument Sans', 'Roboto']
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24]
 
