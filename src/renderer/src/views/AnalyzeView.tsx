@@ -912,7 +912,11 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
           placeholder={SOURCE_PLACEHOLDER[sourceType]}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={6}
+          rows={sourceType === 'document' ? 1 : 6}
+          // Naming a document is a title, not a paragraph — without this the
+          // shared textarea with the paste-text box renders 6 lines tall for
+          // a few words.
+          style={sourceType === 'document' ? { maxWidth: 320, resize: 'none', textAlign: 'center' } : undefined}
         />
 
         <div className="analyze-input-actions">
