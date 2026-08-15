@@ -479,6 +479,11 @@ export const screenWatchStructure: ScreenWatchStructure = {
   // and found nothing — which is what makes it an 'unsupported-claim' rather
   // than an unchecked one.
   coverage: { detected: 3, withRelevantSource: 2, meanStrength: 42, unchecked: 0 },
+  // A believable school essay rather than round numbers: 1,240 words over 71
+  // sentences is ~17.5 words per sentence and ~5 minutes to read, which is what
+  // the stats row should show. Round figures here would hide an arithmetic
+  // mistake in the panel by making every cell look plausible.
+  stats: { words: 1240, sentences: 71, uniqueWords: 521 },
   weaknesses: [
     {
       kind: 'unsupported-claim',
