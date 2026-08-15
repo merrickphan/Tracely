@@ -857,8 +857,14 @@ textarea:disabled {
   /* The scroller, and the opt-out that makes the wheel work over it. Was
      `min-height: 100%` inside a scrolling card; now it IS the scrolling box, so
      the back button above it stays put instead of scrolling out of the card
-     when focusing the textarea scrolls it into view. */
-  height: 100%;
+     when focusing the textarea scrolls it into view.
+     `margin-top` + the matching height reduction leave a 12px strip of
+     `.analyze-view` exposed above this no-drag box — otherwise this element
+     covers the card edge-to-edge and the whole "Start a new session" screen
+     has no draggable area left at all (unlike `.home-canvas`, whose children
+     are small absolutely-positioned icons that don't blanket the card). */
+  height: calc(100% - 12px);
+  margin-top: 12px;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-app-region: no-drag;
@@ -2522,6 +2528,12 @@ textarea:disabled {
   flex-direction: column;
   overflow-y: auto;
   -webkit-app-region: no-drag;
+  /* Same reason as `.settings-panel`'s margin-top below: this and the panel
+     together cover `.settings-shell` edge-to-edge, leaving no exposed drag
+     region for the window at all. Flex stretch (the default align-items)
+     shrinks the cross-size to account for the margin on its own, so this
+     doesn't need a matching height change the way `.analyze-input` did. */
+  margin-top: 12px;
 }
 
 .settings-sidebar-header {
@@ -2642,8 +2654,12 @@ textarea:disabled {
      subtree as a drag region; Electron/Chromium blocks wheel scroll inside
      a drag region unless it's explicitly opted back out, same as the
      input/button/etc. opt-outs above — without this, overflow-y: auto has
-     no effect and the panel just can't be scrolled at all. */
+     no effect and the panel just can't be scrolled at all.
+     margin-top leaves a strip of the shell's own drag region exposed above
+     both this and the sidebar — without it, the two of them together cover
+     the whole card and Settings has nowhere left to drag the window from. */
   -webkit-app-region: no-drag;
+  margin-top: 12px;
 }
 
 .auth-panel {
