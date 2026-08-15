@@ -1,4 +1,5 @@
 import { computeClaimSpans } from '@shared/claimSpans'
+import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { problemKindsFor } from '@shared/problemKind'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
@@ -221,6 +222,47 @@ export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim
   }
 
   return marks
+}
+
+/**
+ * Writes an in-text citation into the sentence a claim occupies.
+ *
+ * Through `execCommand('insertText')` rather than by mutating text nodes, for
+ * the same reason the rest of this editor is execCommand-based: it goes on the
+ * browser's own undo stack, so Ctrl+Z takes the citation back out. A direct DOM
+ * edit is invisible to undo and would silently break the one thing a writer
+ * reaches for when an edit surprises them.
+ *
+ * Placement is `findCitationInsertPoint`'s, which moves back inside the
+ * sentence's terminal punctuation — "(Smith, 2020)." rather than ".(Smith,
+ * 2020)" — and refuses to move when it cannot tell where the sentence ends.
+ *
+ * Returns false when the claim can no longer be located, which happens when the
+ * draft moved on after the search. Inserting at a guessed offset would drop a
+ * citation into the middle of an unrelated sentence.
+ */
+export function insertCitationForClaim(body: HTMLElement, claim: Claim, inTextCitation: string): boolean {
+  const { text, nodes } = buildTextMap(body)
+  const span = computeClaimSpans(text, [claim])[0]
+  if (!span) return false
+
+  const { offset, prefix } = findCitationInsertPoint(text, span.end)
+  const at = locate(nodes, offset)
+  if (!at) return false
+
+  const selection = window.getSelection()
+  if (!selection) return false
+  const range = document.createRange()
+  try {
+    range.setStart(at.node, at.offset)
+    range.collapse(true)
+  } catch {
+    return false
+  }
+  selection.removeAllRanges()
+  selection.addRange(range)
+  body.focus()
+  return document.execCommand('insertText', false, `${prefix}${inTextCitation}`)
 }
 
 /** The mark under a point in `wrap`'s coordinate space, if any. */

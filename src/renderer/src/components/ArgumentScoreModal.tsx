@@ -1,5 +1,14 @@
-import { useState } from 'react'
-import type { Claim, DocumentOutline, ParagraphRole, StructureComponents } from '@shared/types'
+import { useEffect, useState } from 'react'
+import type {
+  CitationStyle,
+  Claim,
+  DocumentOutline,
+  EvidenceItem,
+  ParagraphRole,
+  Source,
+  StructureComponents
+} from '@shared/types'
+import { tracelyApi } from '../lib/api'
 import Spinner from './Spinner'
 
 /**
@@ -143,8 +152,18 @@ function ComponentBar({ value, max, label }: { value: number; max: number; label
   )
 }
 
-/** Which view is showing. `paragraph` carries the 1-based index it is showing. */
-type View = { name: 'summary' } | { name: 'full' } | { name: 'paragraph'; index: number } | { name: 'argument' }
+/**
+ * Which view is showing. `paragraph` carries the 1-based index it is showing;
+ * `evidence` the claim whose sources it is listing, and the paragraph to go
+ * back to — the design reaches Find Evidence from a paragraph detail, so Back
+ * has to return there rather than to the report.
+ */
+type View =
+  | { name: 'summary' }
+  | { name: 'full' }
+  | { name: 'paragraph'; index: number }
+  | { name: 'argument' }
+  | { name: 'evidence'; claimId: string; fromParagraph: number }
 
 export default function ArgumentScoreModal({
   outline,
@@ -152,6 +171,8 @@ export default function ArgumentScoreModal({
   paragraphTexts,
   loading,
   error,
+  citationStyle,
+  onInsertCitation,
   onReanalyze,
   onClose
 }: {
@@ -160,6 +181,17 @@ export default function ArgumentScoreModal({
   paragraphTexts: string[]
   loading: boolean
   error: string | null
+  /** The user's configured style — shown on the pill and used to format. */
+  citationStyle: CitationStyle
+  /**
+   * Writes a citation into the document at the end of the claim's sentence.
+   *
+   * Passed in rather than done here because only the editor owns the
+   * contentEditable, and null on surfaces that have no document to write to
+   * (the paste-text flow) — where the button is not offered at all rather than
+   * offered and inert.
+   */
+  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
@@ -195,12 +227,23 @@ export default function ArgumentScoreModal({
               Check again
             </button>
           </div>
+        ) : view.name === 'evidence' ? (
+          <FindEvidenceResult
+            claim={claims.find((c) => c.id === view.claimId) ?? null}
+            citationStyle={citationStyle}
+            onInsertCitation={onInsertCitation}
+            onBack={() => setView({ name: 'paragraph', index: view.fromParagraph })}
+            onClose={onClose}
+          />
         ) : view.name === 'paragraph' ? (
           <ParagraphDetail
             outline={outline}
             claims={claims}
             paragraphTexts={paragraphTexts}
             index={view.index}
+            onFindEvidence={(claimId) =>
+              setView({ name: 'evidence', claimId, fromParagraph: view.index })
+            }
             onBack={() => setView({ name: 'summary' })}
             onClose={onClose}
           />
@@ -451,6 +494,7 @@ function ParagraphDetail({
   claims,
   paragraphTexts,
   index,
+  onFindEvidence,
   onBack,
   onClose
 }: {
@@ -458,6 +502,7 @@ function ParagraphDetail({
   claims: Claim[]
   paragraphTexts: string[]
   index: number
+  onFindEvidence: (claimId: string) => void
   onBack: () => void
   onClose: () => void
 }): JSX.Element {
@@ -516,6 +561,9 @@ function ParagraphDetail({
           <div className="argscore-uncited" key={claim.id}>
             <span className="argscore-uncited-label">Uncited claim</span>
             <p className="argscore-uncited-text">“{claim.text}”</p>
+            <button className="argscore-link" onClick={() => onFindEvidence(claim.id)}>
+              Find evidence →
+            </button>
           </div>
         ))}
 
@@ -528,6 +576,12 @@ function ParagraphDetail({
                   {claim.strengthScore}
                 </span>
                 <p>{claim.text}</p>
+                {/* On the checked claims too, not just the uncited ones: the
+                    view lists the sources already found, so this is "show me
+                    what that score is made of" as much as it is a search. */}
+                <button className="argscore-link" onClick={() => onFindEvidence(claim.id)}>
+                  Find evidence →
+                </button>
               </div>
             ))}
           </>
@@ -535,6 +589,176 @@ function ParagraphDetail({
       </div>
     </>
   )
+}
+
+/**
+ * 409:141 — the sources found for one claim, reached by "Find evidence" on a
+ * claim in the paragraph detail.
+ *
+ * Ranked by relevance, which is what the design's "% match" is: `relevanceScore`
+ * as a percentage, the same number the strength breakdown is built from. It is
+ * NOT a probability the source proves the claim, and the copy says "supports"
+ * rather than "proves" for that reason.
+ */
+function FindEvidenceResult({
+  claim,
+  citationStyle,
+  onInsertCitation,
+  onBack,
+  onClose
+}: {
+  claim: Claim | null
+  citationStyle: CitationStyle
+  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
+  onBack: () => void
+  onClose: () => void
+}): JSX.Element {
+  const [evidence, setEvidence] = useState<EvidenceItem[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [inserted, setInserted] = useState(false)
+
+  // Read what is already stored before searching anything. A claim reached from
+  // the report has usually been checked already, and re-running the four
+  // academic APIs to redraw a list we hold would make opening this view cost a
+  // 15-45 second wait for nothing.
+  useEffect(() => {
+    if (!claim) return
+    let cancelled = false
+    void tracelyApi
+      .getEvidenceForClaim(claim.id)
+      .then((res) => {
+        if (cancelled) return
+        setEvidence(res.evidence)
+        setSelected(res.evidence[0]?.source.id ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setEvidence([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [claim])
+
+  async function search(): Promise<void> {
+    if (!claim) return
+    setSearching(true)
+    setFailure(null)
+    try {
+      const res = await tracelyApi.findEvidence(claim.id)
+      setEvidence(res.evidence)
+      setSelected(res.evidence[0]?.source.id ?? null)
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function insert(): Promise<void> {
+    const source = evidence?.find((item) => item.source.id === selected)?.source
+    if (!claim || !source || !onInsertCitation) return
+    setFailure(null)
+    try {
+      await onInsertCitation(claim, source, citationStyle)
+      setInserted(true)
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const found = evidence?.length ?? 0
+  const previewUrl = evidence?.find((item) => item.source.id === selected)?.source.url ?? null
+
+  return (
+    <>
+      <ModalHead title="" onBack={onBack} onClose={onClose} />
+      <div className="argscore-scroll argscore-detail">
+        {!claim ? (
+          <p className="muted">That claim is no longer part of this analysis.</p>
+        ) : (
+          <>
+            <div className="argev-head">
+              <span className={`argev-dot${found > 0 ? ' found' : ''}`} />
+              <h2 className="argev-title">
+                {evidence === null ? 'Looking…' : `${found} source${found === 1 ? '' : 's'} found`}
+              </h2>
+              <span className="argev-style">{citationStyle}</span>
+            </div>
+            <p className="argev-sub">
+              Ranked by how directly each source supports “{claim.text}”
+            </p>
+
+            {failure ? <p className="error-text">{failure}</p> : null}
+
+            {evidence !== null && found === 0 ? (
+              <p className="muted argev-empty">
+                Nothing in the open-access databases came back for this claim. They index journal
+                articles — not news, government pages or statistics offices — so this is often a gap
+                in the corpus rather than a problem with the sentence.
+              </p>
+            ) : null}
+
+            {(evidence ?? []).map((item) => (
+              <button
+                type="button"
+                key={item.source.id}
+                className={`argev-row${selected === item.source.id ? ' selected' : ''}`}
+                onClick={() => setSelected(item.source.id)}
+              >
+                <span className="argev-badge">{initialsFor(item.source)}</span>
+                <span className="argev-meta">
+                  <span className="argev-source-title">{item.source.title}</span>
+                  <span className="argev-source-sub">
+                    {item.source.venue ?? 'Unknown venue'}
+                    {item.source.year ? ` · ${item.source.year}` : ''}
+                    <span className="argev-match"> {Math.round(item.relevanceScore * 100)}% match</span>
+                  </span>
+                </span>
+                <span className={`argev-radio${selected === item.source.id ? ' on' : ''}`} aria-hidden="true" />
+              </button>
+            ))}
+
+            <div className="argev-actions">
+              {onInsertCitation ? (
+                <button
+                  className="argscore-btn primary argev-insert"
+                  onClick={() => void insert()}
+                  disabled={!selected || inserted}
+                >
+                  {inserted ? 'Citation inserted' : 'Insert citation'}
+                </button>
+              ) : null}
+              <button
+                className="argscore-btn secondary"
+                onClick={() => previewUrl && window.open(previewUrl, '_blank', 'noopener')}
+                disabled={!previewUrl}
+              >
+                Preview
+              </button>
+            </div>
+            <button className="argscore-btn secondary argev-again" onClick={() => void search()} disabled={searching}>
+              {searching ? 'Searching…' : 'Search again'}
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
+/** The badge monogram: an acronym for a multi-word venue, else its first two letters. */
+function initialsFor(source: Source): string {
+  const name = source.venue ?? source.title
+  const words = name.split(/\s+/).filter((w) => /[A-Za-z]/.test(w))
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('')
+  }
+  return (words[0] ?? name).slice(0, 2).toUpperCase()
 }
 
 /**
