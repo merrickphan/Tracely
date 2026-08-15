@@ -4286,3 +4286,106 @@ textarea:disabled {
 /* "not checked yet" is dimmer than the ratio beside it — it is a caveat on that
    number, not a second number competing with it. */
 .argscore-unchecked { color: var(--muted); }
+
+/* ---- Save changes dialog (Figma 212:65) --------------------------------
+   Cancel is the gradient pill and Confirm is grey. That is inverted from
+   every other confirm in the app, and it is the design's own choice for a
+   non-destructive action — see SaveChangesDialog.tsx for why it did not
+   become a ConfirmDialog variant. */
+.savechanges-card {
+  width: 360px;
+  padding: 20px;
+  border-radius: 18px;
+}
+
+.savechanges-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.savechanges-message {
+  margin: 8px 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.savechanges-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* The native input stays in the DOM for keyboard and screen readers; the
+   painted square is the design's. */
+.savechanges-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.savechanges-box {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.savechanges-check input:checked + .savechanges-box {
+  border-color: transparent;
+  background: var(--accent) center / 13px 13px no-repeat
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+}
+
+.savechanges-check input:focus-visible + .savechanges-box {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.savechanges-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.savechanges-btn {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.savechanges-btn.cancel {
+  background: linear-gradient(90deg, #f97316 0%, #ea3a0c 100%);
+  color: #fff;
+}
+
+.savechanges-btn.cancel:hover {
+  filter: brightness(1.06);
+}
+
+.savechanges-btn.confirm {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.savechanges-btn.confirm:hover {
+  background: var(--border);
+}
+
+.savechanges-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

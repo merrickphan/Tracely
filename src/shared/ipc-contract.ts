@@ -148,6 +148,7 @@ export interface SettingsSetRequest {
   claimSensitivity?: number
   screenWatchHotkeyAccelerator?: string
   screenWatchAllowedApps?: string
+  suppressSaveConfirm?: boolean
 }
 export type SettingsSetResponse = AppSettings
 

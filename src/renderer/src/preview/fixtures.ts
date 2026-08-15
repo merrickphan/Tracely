@@ -53,7 +53,9 @@ export const settings: AppSettings = {
   fontSize: 'medium',
   claimSensitivity: 0.5,
   screenWatchHotkeyAccelerator: 'Control+Shift+W',
-  screenWatchAllowedApps: 'WINWORD.EXE\nchrome.exe'
+  screenWatchAllowedApps: 'WINWORD.EXE\nchrome.exe',
+  // Off, so the harness shows the Save changes dialog rather than skipping it.
+  suppressSaveConfirm: false
 }
 
 export const sources: Source[] = [

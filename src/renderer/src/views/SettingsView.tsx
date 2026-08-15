@@ -18,6 +18,7 @@ import type {
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
+import SaveChangesDialog from '../components/SaveChangesDialog'
 import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
 import {
@@ -233,6 +234,16 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
   }, [])
 
+  /**
+   * The Save changes confirm (Figma 212:65) sits in front of this.
+   *
+   * Only in front of the EXPLICIT saves — the ones with a button. The theme,
+   * accent, density and font-size controls apply on change and have no Save
+   * button by design (see the note further down), and putting a modal in front
+   * of a live preview would make choosing a colour a three-click operation.
+   */
+  const [confirmingSave, setConfirmingSave] = useState(false)
+
   async function saveProfile(): Promise<void> {
     if (!profile) return
     setProfileSaving(true)
@@ -249,6 +260,21 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
     } finally {
       setProfileSaving(false)
     }
+  }
+
+  /** Confirm first, unless the user ticked "Do not show anymore". */
+  function requestSaveProfile(): void {
+    if (settings?.suppressSaveConfirm) {
+      void saveProfile()
+      return
+    }
+    setConfirmingSave(true)
+  }
+
+  async function confirmSaveProfile(suppress: boolean): Promise<void> {
+    setConfirmingSave(false)
+    if (suppress) void save({ suppressSaveConfirm: true })
+    await saveProfile()
   }
 
   function handleAvatarFile(file: File): void {
@@ -409,6 +435,14 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
           ) : null}
         </aside>
 
+        {confirmingSave ? (
+          <SaveChangesDialog
+            busy={profileSaving}
+            onConfirm={(suppress) => void confirmSaveProfile(suppress)}
+            onCancel={() => setConfirmingSave(false)}
+          />
+        ) : null}
+
         {confirmingSignOut ? (
           <ConfirmDialog
             title="Sign out?"
@@ -502,7 +536,7 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 */}
               </div>
               {profileError ? <p className="error-text">{profileError}</p> : null}
-              <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
+              <Button variant="dark" onClick={requestSaveProfile} disabled={profileSaving}>
                 {profileSaving ? 'Saving…' : 'Save changes'}
               </Button>
               {authUser ? <DangerZone user={authUser} /> : null}
