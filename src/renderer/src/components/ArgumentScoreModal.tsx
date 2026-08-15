@@ -9,6 +9,7 @@ import type {
   StructureComponents
 } from '@shared/types'
 import { tracelyApi } from '../lib/api'
+import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 
 /**
@@ -17,19 +18,23 @@ import Spinner from './Spinner'
  * Figma "Real Tracely UI" (k7R5x1M9alKktaMLlZFSJn), four frames and the routing
  * between them — Merrick's spec, 2026-08-15:
  *
- *   370:135  Essay Grade Widget           — the compact card
- *   404:129  Full Report — Expanded       — WHAT OPENS FIRST
+ *   353:129  Argument check ("SA Grid")   — WHAT AI INSIGHTS OPENS
+ *   370:135  Essay Grade Widget           — the compact card, via Back
+ *   404:129  Full Report — Expanded       — via "View Full Report"
  *   407:143  Paragraph Detail             — clicking any paragraph
- *   353:129  Argument Score Card          — ONLY via "Open argument check"
+ *   409:141  Find Evidence Result         — via "Find evidence" on a claim
  *
- * Opening straight into the full report is deliberate and reverses PR #46,
- * which opened compact-first on my own reading of 370:135. His: the full report
- * is the thing you asked for, the compact card is where you land coming *back*.
+ * The landing view has moved three times and the history is the point: #46
+ * opened the compact widget, #47 opened the full report on his instruction,
+ * #48 went back to compact when he sent the frame, and on 2026-08-15 he asked
+ * for "the OverlayMockup SAGrid widget". No frame carries that name — 353:129
+ * is the only one in the file with a BREAKDOWN metrics grid (Support /
+ * Relevance / Quality / Recency), and it was previously reachable ONLY via
+ * "Open Argument Check", which matches "it's not doing that right now".
  *
- * "Back to summary" goes to the COMPACT widget from anywhere, including from a
- * paragraph detail you reached via the full report. That skips a step you might
- * expect to return through — his call, and it matches the design putting the
- * identical label in both places.
+ * Back from there lands on the Essay Grade widget rather than the full report,
+ * because there is no screen you came from any more; the widget is the hub the
+ * other views hang off.
  *
  * THE LABELS ARE THE DESIGN'S. This is the correction to the mistake that ran
  * through PRs #46-#50 and is worth writing down, because it was invisible from
@@ -245,12 +250,20 @@ export default function ArgumentScoreModal({
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
-  // Opens on the compact widget — 370:135 — and everything else is reached from
-  // there. This has now been both ways: PR #46 opened compact, #47 opened the
-  // full report on his instruction, and he corrected it back with the frame
-  // attached. Compact is the landing view; do not flip it again without him
-  // saying so in as many words.
-  const [view, setView] = useState<View>({ name: 'summary' })
+  // Opens on the Argument check card — 353:129, the frame with the BREAKDOWN
+  // metrics grid (Support / Relevance / Quality / Recency).
+  //
+  // This landing view has now moved three times, so the history matters: #46
+  // opened the compact Essay Grade widget, #47 opened the full report on his
+  // instruction, #48 went back to compact when he sent the frame, and on
+  // 2026-08-15 he asked for "the OverlayMockup SAGrid widget" instead. No frame
+  // carries that name; 353:129 is the only one in the file with a metrics grid,
+  // and it was previously reachable ONLY through "Open Argument Check", which
+  // fits "it's not doing that right now" exactly.
+  //
+  // Everything else is still reached from here, and the Essay Grade widget is
+  // still one click away. Do not move this again without him naming the frame.
+  const [view, setView] = useState<View>({ name: 'argument' })
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Argument score">
@@ -298,7 +311,11 @@ export default function ArgumentScoreModal({
             onClose={onClose}
           />
         ) : view.name === 'argument' ? (
-          <ArgumentCheck claims={claims} onBack={() => setView({ name: 'full' })} onClose={onClose} />
+          /* Back lands on the Essay Grade widget, not the full report. This is
+             the view AI Insights opens now, so "back" cannot mean "the screen
+             you came from" — there isn't one. The widget is the hub every
+             other view hangs off, so that is where it leads. */
+          <ArgumentCheck claims={claims} onBack={() => setView({ name: 'summary' })} onClose={onClose} />
         ) : (
           <ScoreReport
             outline={outline}
@@ -889,7 +906,7 @@ function ArgumentCheck({
     <>
       <header className="argscore-head">
         <button className="argscore-back" onClick={onBack}>
-          ← Back to report
+          ← Essay Grade
         </button>
         <button className="argscore-close" onClick={onClose} aria-label="Close">
           ×
@@ -922,7 +939,13 @@ function ArgumentCheck({
             {weakest.critique ? (
               <>
                 <h3 className="argscore-section">Critique</h3>
-                <p className="argscore-weakness-block">{weakest.critique}</p>
+                {/* Through MarkdownText, like every other surface that shows a
+                    critique. The relay's prompts neither request nor forbid
+                    markdown and the model emits it freely, so rendering the raw
+                    string printed literal ** around the emphasis. */}
+                <div className="argscore-weakness-block">
+                  <MarkdownText>{weakest.critique}</MarkdownText>
+                </div>
               </>
             ) : null}
             {checked.length > 1 ? (
