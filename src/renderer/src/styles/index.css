@@ -2512,6 +2512,13 @@ textarea:disabled {
   background: var(--score-low-wash);
 }
 
+.settings-build-version {
+  display: block;
+  padding: 8px 12px 0;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
 .settings-panel {
   flex: 1;
   min-width: 0;
