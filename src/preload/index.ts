@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, IPC_EVENTS } from '@shared/ipc-channels'
 import type {
+  AppGetBuildInfoResponse,
   AnalyzeDetectClaimsRequest,
   AnalyzeDetectClaimsResponse,
   AnalyzeGetResultRequest,
@@ -189,6 +190,9 @@ const api = {
   shell: {
     openExternal: (req: ShellOpenExternalRequest): Promise<ShellOpenExternalResponse> =>
       ipcRenderer.invoke(IPC.SHELL_OPEN_EXTERNAL, req)
+  },
+  app: {
+    getBuildInfo: (): Promise<AppGetBuildInfoResponse> => ipcRenderer.invoke(IPC.APP_GET_BUILD_INFO, {})
   },
   screenWatch: {
     setEnabled: (req: ScreenWatchSetEnabledRequest): Promise<ScreenWatchSetEnabledResponse> =>
