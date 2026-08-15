@@ -22,6 +22,20 @@ import type {
 } from '@shared/ipc-contract'
 import figmaLogo from './assets/figma-logo.png'
 import MarkdownText from './components/MarkdownText'
+// Shared with the document editor, which draws the same marks over Tracely's
+// own writing surface. See components/problemCopy.ts for why the two surfaces
+// share the wording and the colours but not the markup.
+import {
+  DESIGN_AMBER,
+  DESIGN_ORANGE,
+  DESIGN_RED,
+  PROBLEM_COLOR,
+  PROBLEM_LABEL,
+  bucketFor,
+  isReasoningProblem,
+  popoverCopyFor
+} from './components/problemCopy'
+import type { Bucket } from './components/problemCopy'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
@@ -53,17 +67,10 @@ function LogoBg({ size }: { size: number }): JSX.Element {
   )
 }
 
-// Per-claim-type color used for the underline and the type dot — matches
-// the Figma "Overlay Mockup" frames' 4-color legend (factual/statistic/
-// reasoning/other), not the prior pastel-badge palette.
-type Bucket = 'statistic' | 'factual' | 'causal' | 'other'
-
-function bucketFor(claimType: ClaimType): Bucket {
-  if (claimType === 'statistic') return 'statistic'
-  if (claimType === 'factual') return 'factual'
-  if (claimType === 'causal') return 'causal'
-  return 'other'
-}
+// Per-claim-type color used for the type dot — matches the Figma "Overlay
+// Mockup" frames' 4-color legend (factual/statistic/reasoning/other), not the
+// prior pastel-badge palette. `Bucket` and `bucketFor` are imported from
+// problemCopy.ts, which the document editor shares.
 
 // -- Design tokens, taken from Figma ----------------------------------
 //
@@ -385,40 +392,9 @@ function TypeDot({ claimType, size = 9 }: { claimType: ClaimType; size?: number 
  * not import. Kept deliberately to the two shapes that carry the copy
  * difference; main's fuller set decides what is actually flagged.
  */
-/**
- * The design's three underline colours, read off the Figma frames rather than
- * chosen here: `#ff5900` on the "Inline Detection (Statistic)" marks, `#ffb800`
- * on "(Citation)", `#d93636` on "(Reasoning)". The popover's dot is the same
- * colour as the mark that opened it, in all three.
- *
- * Three, for eight problem kinds — so the mapping below is a grouping, not a
- * palette of its own. What the design is saying with the colour is which of
- * three KINDS of trouble a sentence is in: is the reasoning wrong (red), is the
- * evidence missing or thin (orange), or is the attribution missing (amber).
- * Inventing a fourth and fifth hue for our extra kinds is exactly the drift
- * that produced a purple statistic underline and an orange "missing citation"
- * one — the two the design has, with their colours swapped.
- */
-const DESIGN_ORANGE = '#ff5900'
-const DESIGN_AMBER = '#ffb800'
-const DESIGN_RED = '#d93636'
-
-const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
-  // Reasoning: the sentence does not follow, or asserts something false.
-  'contradicted-claim': DESIGN_RED,
-  'weak-reasoning': DESIGN_RED,
-  // Evidence: nothing found, or what was found does not carry it.
-  'unverified-statistic': DESIGN_ORANGE,
-  'no-sources': DESIGN_ORANGE,
-  'weak-evidence': DESIGN_ORANGE,
-  'partial-evidence': DESIGN_ORANGE,
-  // Attribution: the sentence needs a citation, or the one it has is suspect.
-  'missing-citation': DESIGN_AMBER,
-  'cited-unverified': DESIGN_AMBER,
-  // Nothing known yet — deliberately the quietest thing on screen, since it
-  // resolves on its own within a few seconds. Not a state the design draws.
-  searching: '#9a9ba1'
-}
+// DESIGN_ORANGE/AMBER/RED and PROBLEM_COLOR are imported from
+// components/problemCopy.ts — the document editor draws the same marks and the
+// two surfaces must not diverge on which colour means what.
 
 /**
  * The popover's two text styles, shared by every card in it.
@@ -466,19 +442,6 @@ function PopoverTail({ left, pointing }: { left: number; pointing: 'up' | 'down'
       <path d="M11.5708 6.5H2.28562L6.9282 1.47363L11.5708 6.5Z" fill="white" stroke="black" strokeWidth="2" />
     </svg>
   )
-}
-
-/** Plain-language name for the mark, used as the underline's tooltip. */
-const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
-  'contradicted-claim': 'Contradicted — check this fact',
-  'weak-reasoning': 'Weak reasoning',
-  'unverified-statistic': 'Unverified statistic',
-  'no-sources': 'No supporting sources',
-  'weak-evidence': 'Evidence is weak',
-  'cited-unverified': 'Citation may not support this',
-  'partial-evidence': 'Partially supported',
-  'missing-citation': 'Missing citation',
-  searching: 'Checking…'
 }
 
 const HIGHLIGHT_HOLD_MS = 2500
@@ -1733,121 +1696,10 @@ function NoReadingView(): JSX.Element {
 // Thresholds are the same 70/40 bands as evidenceScoreColor and the main app's
 // ClaimCard, so "weak" means the same number everywhere in the product.
 
-type SupportLevel = 'none' | 'weak' | 'mixed' | 'strong'
-
-function supportLevelFor(evidence: ScreenWatchClaimEvidence): SupportLevel {
-  if (evidence.count === 0) return 'none'
-  if (evidence.score >= 70) return 'strong'
-  if (evidence.score >= 40) return 'mixed'
-  return 'weak'
-}
-
-const KIND_NOUN: Record<Bucket, string> = {
-  statistic: 'figure',
-  factual: 'claim',
-  causal: 'cause-and-effect claim',
-  other: 'statement'
-}
-
-/**
- * Title, description AND the primary button's label for a claim whose evidence
- * search has resolved.
- *
- * The action belongs here, with the diagnosis, because it kept drifting from
- * it. The label used to be computed separately as `evidence.count > 0 ? 'Add
- * citation' : 'Find a source'` — binary on whether anything came back at all —
- * so a card correctly titled "Evidence is weak … they are related rather than
- * confirming" still offered "Add citation" underneath, telling the student to
- * cite the very sources it had just told them not to lean on. That is the same
- * flattening of two axes this function was written to fix for the title; the
- * button was left behind. One return value now, so they cannot disagree again.
- */
-function problemCopyFor(
-  claim: ScreenWatchClaimSummary,
-  evidence: ScreenWatchClaimEvidence,
-  kind: ScreenWatchProblemKind
-): {
-  title: string
-  description: string
-  action: string
-} {
-  const bucket = bucketFor(claim.claimType)
-  const level = supportLevelFor(evidence)
-  const noun = KIND_NOUN[bucket]
-  const n = evidence.count
-  const sources = `${n} source${n === 1 ? '' : 's'}`
-
-  if (kind === 'cited-unverified') {
-    return {
-      title: 'Citation may not support this',
-      description:
-        evidence.count === 0
-          ? `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. Either the source is not indexed — or it does not say this.`
-          : `You have cited this ${noun}, but the ${sources} found score ${evidence.score}/100 for supporting it. Check the source says what you have attributed to it.`,
-      action: 'Compare sources'
-    }
-  }
-
-  if (level === 'none') {
-    // "Unverified statistic" is the design's wording, and it is the better one:
-    // "figure" reads as a chart as easily as a number.
-    if (claim.hasInlineCitation) {
-      return {
-        title: bucket === 'statistic' ? 'Unverified statistic' : 'Source not found',
-        description: `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. That can mean the source is not indexed — or that it does not say this.`,
-        action: 'Find a source'
-      }
-    }
-    return {
-      title: bucket === 'statistic' ? 'Unverified statistic' : 'No supporting sources',
-      description:
-        bucket === 'statistic'
-          ? 'A search of the academic databases turned up nothing carrying this statistic. Check the number against its original source before citing it.'
-          : `A search of the academic databases turned up nothing supporting this ${noun}. It may still be true — but you have nothing to cite for it yet.`,
-      action: 'Find a source'
-    }
-  }
-
-  if (level === 'weak') {
-    return {
-      title: bucket === 'causal' ? 'Cause and effect not established' : 'Evidence is weak',
-      description:
-        bucket === 'causal'
-          ? `${sources} touch on this, but score ${evidence.score}/100 for supporting a causal link specifically. Correlation in the literature is not the same as the cause you have asserted here.`
-          : `${sources} came back, but they score ${evidence.score}/100 for actually supporting this ${noun} — they are related rather than confirming. Read them before leaning on them.`,
-      // Not "Add citation". The card just said these do not confirm the claim;
-      // the honest next step is to look at them, which is what the picker shows.
-      action: 'Review the sources'
-    }
-  }
-
-  if (level === 'mixed') {
-    return {
-      title: 'Partially supported',
-      description: `${sources} score ${evidence.score}/100 for this ${noun} — enough to cite, but they qualify it rather than confirm it outright. Consider softening how strongly it is stated.`,
-      action: 'Add citation'
-    }
-  }
-
-  // strong — the claim holds up. What is left depends entirely on whether the
-  // writer has already attributed it, and telling someone who cited properly
-  // that they are "Missing citation" is the single least credible thing this
-  // card can do. A claim that is BOTH cited and strong is not shown at all
-  // (see `settled` in screenWatchService), so this branch is the case where a
-  // cited claim is still worth a look.
-  if (claim.hasInlineCitation) {
-    return {
-      title: 'Cited — worth checking',
-      description: `${sources} agree with this ${noun} (${evidence.score}/100). Tracely cannot read the source you cited, so check it says what you have attributed to it.`,
-      action: 'Compare sources'
-    }
-  }
-  return {
-    title: 'Missing citation',
-    description: `${sources} support this ${noun} (${evidence.score}/100). It reads as unattributed, though — add a citation so the reader can follow it.`,
-    action: 'Add citation'
-  }
-}
+// supportLevelFor, KIND_NOUN and problemCopyFor moved to
+// components/problemCopy.ts so the document editor's popovers say exactly
+// what these say. The wording above is the reasoning behind them and stays
+// here with the card that shows it.
 
 function ProblemCard({
   claim,
@@ -1890,31 +1742,14 @@ function ProblemCard({
   // The dot is the underline's own colour, which is the design's: amber for a
   // citation problem, orange for an unverified figure, red for reasoning.
   const dotColor = PROBLEM_COLOR[kind]
-  const copy =
-    kind === 'contradicted-claim'
-      ? {
-          // The fact-check verdict, not the rigor one. The critique text is
-          // instructed to state the correct fact plainly when it fires, so it
-          // is the description rather than a generic line about reasoning.
-          title: 'Contradicted — check this fact',
-          description:
-            claim.critique ??
-            'A specific fact asserted here appears to be wrong. Check it against the original source before this goes any further.',
-          action: 'Suggest fix'
-        }
-      : kind === 'weak-reasoning'
-        ? {
-            title: 'Weak reasoning',
-            description:
-              claim.critique ??
-              "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
-            action: 'Suggest fix'
-          }
-        : // `kind` is only 'searching' when evidence is null, and that case
-          // returned above — so evidence is non-null here.
-          problemCopyFor(claim, claim.evidence as ScreenWatchClaimEvidence, kind)
-  const { title, description, action: primaryLabel } = copy
-  const onPrimary = kind === 'weak-reasoning' || kind === 'contradicted-claim' ? onSuggestFix : onStartCitationFlow
+  // `kind` is only 'searching' when evidence is null, and that case returned
+  // above — so evidence is non-null here.
+  const { title, description, action: primaryLabel } = popoverCopyFor(
+    claim,
+    claim.evidence as ScreenWatchClaimEvidence,
+    kind
+  )
+  const onPrimary = isReasoningProblem(kind) ? onSuggestFix : onStartCitationFlow
 
   return (
     <>
