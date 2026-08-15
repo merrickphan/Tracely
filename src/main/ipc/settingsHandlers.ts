@@ -1,9 +1,10 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
-import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
+import type { AppGetInfoResponse, SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
 import type { AccentColor, AppSettings, CitationStyle, Density, FontSize, Theme } from '@shared/types'
 import { scanInstalledApps } from '../services/appScan'
+import { isPreviewBuild } from '../appIdentity'
 import { registerGlobalHotkey, registerScreenWatchHotkey } from '../hotkey'
 import { getAllSettingsRaw, setSetting } from '../services/storage/settingsRepo'
 import { applyMainWindowFontSize } from '../windows/mainWindow'
@@ -91,4 +92,9 @@ export function registerSettingsHandlers(): void {
     const found = await scanInstalledApps()
     return { found }
   })
+
+  ipcMain.handle(IPC.APP_GET_INFO, (): AppGetInfoResponse => ({
+    version: app.getVersion(),
+    isPreview: isPreviewBuild()
+  }))
 }

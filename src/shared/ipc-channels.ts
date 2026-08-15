@@ -20,6 +20,8 @@ export const IPC = {
   SETTINGS_SET: 'settings:set',
   SETTINGS_SCAN_INSTALLED_APPS: 'settings:scanInstalledApps',
 
+  APP_GET_INFO: 'app:getInfo',
+
   PROFILE_GET: 'profile:get',
   PROFILE_SET: 'profile:set',
 
@@ -42,8 +44,6 @@ export const IPC = {
   WINDOW_CLOSE: 'window:close',
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
-
-  APP_GET_BUILD_INFO: 'app:getBuildInfo',
 
   SCREENWATCH_SET_ENABLED: 'screenWatch:setEnabled',
   SCREENWATCH_GET_STATUS: 'screenWatch:getStatus',

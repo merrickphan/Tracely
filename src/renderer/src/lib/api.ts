@@ -50,6 +50,7 @@ export const tracelyApi = {
   setSettings: (patch: Parameters<typeof window.tracely.settings.set>[0]) =>
     call(window.tracely.settings.set(patch)),
   scanInstalledApps: () => call(window.tracely.settings.scanInstalledApps()),
+  getAppInfo: () => call(window.tracely.app.getInfo()),
 
   getProfile: () => call(window.tracely.profile.get()),
   setProfile: (patch: Parameters<typeof window.tracely.profile.set>[0]) =>
@@ -64,8 +65,6 @@ export const tracelyApi = {
   hideWindow: (target: 'main' | 'floating') => call(window.tracely.window.hide({ target })),
 
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
-
-  getBuildInfo: () => call(window.tracely.app.getBuildInfo()),
 
   onClipboardCaptured: (cb: (payload: { text: string }) => void) =>
     window.tracely.onClipboardCaptured(cb),
