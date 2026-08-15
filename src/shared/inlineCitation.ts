@@ -122,6 +122,70 @@ const PATTERNS: Array<[string, RegExp]> = [
   ['superscript', /[¹²³⁰-⁹]/]
 ]
 
+/**
+ * The sentence containing `[start, end)`, so a citation can be found where
+ * writers actually put one.
+ *
+ * Every caller used to test `claim.text` on its own, and a detected claim is a
+ * SUB-SPAN of a sentence, not the sentence. The relay returns the assertion —
+ * "Increased xenophobia has caused migrants to fear speaking out ... and
+ * anti-migrant sentiment" — and stops at the assertion, so the "(Tyche
+ * Hendricks, 2024)" that follows it was never part of the string being tested.
+ * The detector below matches that sentence perfectly; it was simply never shown
+ * it. The result was the failure this module exists to prevent, on the one shape
+ * it handles best: a properly cited sentence told it had no citation.
+ *
+ * Bracket-aware in both directions, because the terminator that ends a sentence
+ * is the one OUTSIDE the brackets — "(Smith et al., 2024)." has a full stop
+ * inside it that would otherwise cut the sentence off before its own citation.
+ *
+ * Widening stops at the sentence and never crosses into the next one, so a
+ * neighbouring sentence's citation cannot be borrowed. Where the boundary is
+ * misjudged (an abbreviation like "Dr." at bracket depth zero) the window only
+ * ever gets SMALLER, which degrades to exactly the old behaviour rather than to
+ * a false positive.
+ */
+export function sentenceAround(text: string, start: number, end: number): string {
+  const isTerminator = (ch: string): boolean => ch === '.' || ch === '!' || ch === '?' || ch === '\n'
+
+  let stop = Math.max(0, Math.min(end, text.length))
+  let depth = 0
+  while (stop < text.length) {
+    const ch = text[stop]
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+    else if (depth === 0 && isTerminator(ch)) {
+      stop++
+      break
+    }
+    stop++
+  }
+
+  let from = Math.max(0, Math.min(start, text.length))
+  depth = 0
+  while (from > 0) {
+    const ch = text[from - 1]
+    if (ch === ')' || ch === ']') depth++
+    else if (ch === '(' || ch === '[') depth = Math.max(0, depth - 1)
+    else if (depth === 0 && isTerminator(ch)) break
+    from--
+  }
+
+  return text.slice(from, stop)
+}
+
+/**
+ * `hasInlineCitation` for a claim located in its document.
+ *
+ * Prefer this wherever the surrounding text is in hand. `hasInlineCitation` on
+ * a bare claim string is still correct when it is all there is — Screen Watch's
+ * own claim list, a stored claim with no snapshot — it just cannot see a
+ * citation that sits outside the claim's own span.
+ */
+export function hasInlineCitationNear(text: string, start: number, end: number): boolean {
+  return hasInlineCitation(sentenceAround(text, start, end))
+}
+
 /** Which pattern matched, or null. Exported for the debug log — knowing WHY a
  *  claim was treated as cited is the difference between a bug report and a
  *  guess. */

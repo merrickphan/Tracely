@@ -84,7 +84,7 @@ export function computeWatchOutline({
     return null
   }
 
-  const coverage = computeEvidenceCoverage(claims)
+  const coverage = computeEvidenceCoverage(claims, text)
   const outline: DocumentOutline = analyzeStructure({
     documentId: null,
     analysisId: null,

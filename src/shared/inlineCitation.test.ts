@@ -1,6 +1,6 @@
 import { strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { hasInlineCitation, inlineCitationKind } from './inlineCitation.ts'
+import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind, sentenceAround } from './inlineCitation.ts'
 
 describe('hasInlineCitation — finds what a writer actually types', () => {
   const cited = [
@@ -147,5 +147,63 @@ describe('inlineCitationKind', () => {
     const s = 'Laptops lower grades (Smith, 2020).'
     strictEqual(hasInlineCitation(s), true)
     strictEqual(hasInlineCitation(s), true)
+  })
+})
+
+describe('sentenceAround — a claim is a sub-span, not a sentence', () => {
+  // The reported failure, verbatim. The relay returns the assertion and stops
+  // before the citation, so testing the claim string alone found nothing while
+  // the sentence it came from matches on the first pattern in the file.
+  const doc =
+    'Migration is rising across the region. Increased xenophobia has caused migrants to fear speaking out for their fundamental rights due to risks to their livelihood such as the risk of being deported, cultural barriers, and anti-migrant sentiment (Tyche Hendricks, 2024). Policy has not kept pace.'
+  const claim =
+    'Increased xenophobia has caused migrants to fear speaking out for their fundamental rights due to risks to their livelihood such as the risk of being deported, cultural barriers, and anti-migrant sentiment'
+  const start = doc.indexOf(claim)
+  const end = start + claim.length
+
+  it('does not find the citation in the claim span alone', () => {
+    strictEqual(hasInlineCitation(claim), false)
+  })
+
+  it('finds it once the claim is read in its sentence', () => {
+    strictEqual(hasInlineCitationNear(doc, start, end), true)
+  })
+
+  it('widens forward to the citation and no further', () => {
+    const s = sentenceAround(doc, start, end)
+    strictEqual(s.includes('(Tyche Hendricks, 2024)'), true)
+    strictEqual(s.includes('Policy has not kept pace'), false)
+    strictEqual(s.includes('Migration is rising'), false)
+  })
+
+  it('does not borrow the NEXT sentence’s citation', () => {
+    const d = 'Renewables are growing fast. Solar costs fell again (IEA, 2024).'
+    const c = 'Renewables are growing fast'
+    strictEqual(hasInlineCitationNear(d, d.indexOf(c), d.indexOf(c) + c.length), false)
+  })
+
+  it('does not borrow the PREVIOUS sentence’s citation', () => {
+    const d = 'Solar costs fell again (IEA, 2024). Renewables are growing fast.'
+    const c = 'Renewables are growing fast'
+    strictEqual(hasInlineCitationNear(d, d.indexOf(c), d.indexOf(c) + c.length), false)
+  })
+
+  it('is not cut short by a full stop INSIDE the citation brackets', () => {
+    // "et al." ends in a period; at bracket depth zero that would terminate the
+    // sentence before the year and lose the match.
+    const d = 'Screen time tracks lower wellbeing (Twenge et al., 2018).'
+    const c = 'Screen time tracks lower wellbeing'
+    strictEqual(hasInlineCitationNear(d, d.indexOf(c), d.indexOf(c) + c.length), true)
+  })
+
+  it('stops at a paragraph break', () => {
+    const d = 'Costs are falling\nOther work disagrees (Smith, 2020).'
+    const c = 'Costs are falling'
+    strictEqual(hasInlineCitationNear(d, 0, c.length), false)
+  })
+
+  it('is unchanged when the claim already spans its whole sentence', () => {
+    const d = 'Laptop users score lower (Mueller & Oppenheimer, 2014).'
+    strictEqual(hasInlineCitationNear(d, 0, d.length), true)
   })
 })

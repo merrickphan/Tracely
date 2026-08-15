@@ -42,7 +42,7 @@ export function registerStructureHandlers(): void {
       text: input.text,
       claims,
       claimsWithoutEvidence: claimsWithoutEvidence(claims),
-      coverage: computeEvidenceCoverage(claims),
+      coverage: computeEvidenceCoverage(claims, input.text),
       analyzedAt: new Date().toISOString()
     })
 

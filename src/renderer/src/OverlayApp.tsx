@@ -1354,6 +1354,173 @@ function gradeRingColor(score: number): string {
   return '#d6301a'
 }
 
+/** The header both frames draw: 19px title left, 30px close circle right. */
+function GradeHeader({ title, onClose }: { title: string; onClose: () => void }): JSX.Element {
+  return (
+    <div style={{ height: 30, position: 'relative', flexShrink: 0, width: '100%' }}>
+      <div style={{ position: 'absolute', left: 0, top: 3.5, fontSize: 19, fontWeight: 600, color: '#1a1a1f' }}>
+        {title}
+      </div>
+      <button
+        className="tracely-btn-text"
+        onClick={onClose}
+        title="Close"
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          width: 30,
+          height: 30,
+          borderRadius: 999,
+          border: 'none',
+          background: '#eaf2ec',
+          color: '#376049',
+          fontFamily: 'inherit',
+          fontSize: 17,
+          lineHeight: 1,
+          cursor: 'pointer',
+          padding: 0
+        }}
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
+function GradeDivider(): JSX.Element {
+  return <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
+}
+
+/** The ring + band block, byte-identical between 370:191 and 404:185. */
+function GradeScoreSection({ structure }: { structure: ScreenWatchStructure | null }): JSX.Element {
+  const score = structure?.score ?? 0
+  const { letter, line } = gradeFor(score)
+  // 116px box, 10px stroke => r 53. The arc starts at 12 o'clock (the rotation
+  // below) and runs clockwise, as the frame's does.
+  const R = 53
+  const CIRC = 2 * Math.PI * R
+
+  return (
+    <div style={{ height: 116, position: 'relative', flexShrink: 0, width: '100%' }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, width: 116, height: 116 }}>
+        <svg width={116} height={116} viewBox="0 0 116 116" aria-hidden="true">
+          <circle cx={58} cy={58} r={R} fill="none" stroke={GRADE_RING_TRACK} strokeWidth={10} />
+          <circle
+            cx={58}
+            cy={58}
+            r={R}
+            fill="none"
+            stroke={gradeRingColor(score)}
+            strokeWidth={10}
+            strokeLinecap="round"
+            strokeDasharray={`${(CIRC * Math.max(0, Math.min(100, score))) / 100} ${CIRC}`}
+            transform="rotate(-90 58 58)"
+          />
+        </svg>
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 38,
+            textAlign: 'center',
+            fontSize: 30,
+            fontWeight: 600,
+            color: '#1a1a1f',
+            lineHeight: 1
+          }}
+        >
+          {structure ? score : '—'}
+        </div>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 74, textAlign: 'center', fontSize: 12, color: DIM }}>
+          / 100
+        </div>
+      </div>
+
+      <div style={{ position: 'absolute', left: 144, top: 22.5, width: 241, height: 71 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>OVERALL SCORE</div>
+        <div
+          style={{
+            position: 'absolute',
+            top: 22,
+            left: 0,
+            height: 24,
+            borderRadius: 999,
+            background: GRADE_PILL_BG,
+            color: GRADE_GREEN,
+            fontSize: 13,
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0 10px'
+          }}
+        >
+          {structure ? letter : '—'}
+        </div>
+        {/* The frame says "Above average for this assignment type" here. There
+            is no cohort and no assignment type, so the slot keeps its place
+            and says what the band means — see essayGrade.ts. */}
+        <div style={{ position: 'absolute', top: 55, left: 0, fontSize: 13, fontWeight: 600, color: W_BODY }}>
+          {structure ? line : 'No reading of this draft yet'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The two-pill row at the foot of both frames. Only the primary label differs.
+ *
+ * "Re-grade Essay" is drawn as the frame draws it and disabled: the structural
+ * read is recomputed on every poll (see refreshWatchOutline), so the number
+ * above is already live and a re-grade would do nothing but redraw it.
+ */
+function GradeButtonRow({ primaryLabel, onPrimary }: { primaryLabel: string; onPrimary: () => void }): JSX.Element {
+  return (
+    <div style={{ height: 41, display: 'flex', gap: 10, flexShrink: 0, width: '100%' }}>
+      <button
+        className="tracely-btn-primary"
+        onClick={onPrimary}
+        style={{
+          width: 251,
+          height: 41,
+          border: 'none',
+          borderRadius: 999,
+          background: 'linear-gradient(to right, #f97316, #dc2626)',
+          color: '#fff',
+          fontFamily: 'inherit',
+          fontSize: 14,
+          fontWeight: 500,
+          cursor: 'pointer'
+        }}
+      >
+        {primaryLabel}
+      </button>
+      <button
+        className="tracely-btn-secondary"
+        disabled
+        title="The score updates on its own as you write"
+        style={{
+          width: 251,
+          height: 41,
+          border: '1.5px solid #d3d8d4',
+          borderRadius: 999,
+          background: '#fff',
+          color: '#2d362f',
+          fontFamily: 'inherit',
+          fontSize: 14,
+          fontWeight: 500,
+          cursor: 'default',
+          opacity: 0.6
+        }}
+      >
+        Re-grade Essay
+      </button>
+    </div>
+  )
+}
+
 function EssayGradePanel({
   structure,
   onClose,
@@ -1363,160 +1530,339 @@ function EssayGradePanel({
   onClose: () => void
   onFullReport: () => void
 }): JSX.Element {
-  const score = structure?.score ?? 0
-  const { letter, line } = gradeFor(score)
-  const ring = gradeRingColor(score)
+  return (
+    <>
+      <GradeHeader title="Essay Grade" onClose={onClose} />
+      <GradeDivider />
+      <GradeScoreSection structure={structure} />
+      <GradeDivider />
+      <GradeButtonRow primaryLabel="View Full Report" onPrimary={onFullReport} />
+    </>
+  )
+}
 
-  // 116px box, 10px stroke => r 53. The arc starts at 12 o'clock (the rotation
-  // below) and runs clockwise, as the frame's does.
-  const R = 53
-  const CIRC = 2 * Math.PI * R
+/** 238 wpm — Brysbaert 2019, silent reading of English prose. Same figure the
+ *  in-app report uses, so the two cannot disagree about a draft's read time. */
+const OVERLAY_READING_WPM = 238
+
+/** One stat chip from 404:203 — 18px figure over a 10px tracked caption. */
+function StatChip({ value, label }: { value: string; label: string }): JSX.Element {
+  return (
+    <div style={{ height: 37, position: 'relative', flexShrink: 0 }}>
+      <div style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1f', whiteSpace: 'nowrap' }}>{value}</div>
+      <div
+        style={{
+          position: 'absolute',
+          top: 25,
+          left: 0,
+          fontSize: 10,
+          fontWeight: 600,
+          color: DIM,
+          letterSpacing: 0.4,
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  )
+}
+
+/** The 4px rounded meter the frame draws under every metric label. */
+function MiniBar({ label, percent, color }: { label: string; percent: number; color: string }): JSX.Element {
+  const pct = Math.max(0, Math.min(100, percent))
+  return (
+    <div style={{ position: 'relative', height: 22, flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, whiteSpace: 'nowrap' }}>
+        <span style={{ fontWeight: 500, color: W_BODY }}>{label}</span>
+        <span style={{ fontWeight: 600, color: '#1a1a1f' }}>{Math.round(pct)}%</span>
+      </div>
+      <div
+        style={{ position: 'absolute', top: 18, left: 0, right: 0, height: 4, borderRadius: 999, background: '#eaeaea' }}
+      >
+        <div style={{ width: `${pct}%`, height: 4, borderRadius: 999, background: color }} />
+      </div>
+    </div>
+  )
+}
+
+/** The frame's three meter colours, by band. */
+function miniBarColor(percent: number): string {
+  if (percent >= 85) return GRADE_GREEN
+  if (percent >= 70) return '#c79216'
+  return '#d3514b'
+}
+
+/**
+ * The Screen Watch panel in 'report' mode — Figma "Essay Grade Widget (Full
+ * Report)" (404:185).
+ *
+ * The frame's structure verbatim: header, score section, a four-chip stats row,
+ * a paragraph card per paragraph, a Summary block, then the two pills. Where it
+ * differs from the frame it is because the frame's content is not something
+ * Tracely measures, and every one of those is called out below rather than
+ * filled with a plausible number.
+ *
+ * The largest of them: the frame gives EVERY paragraph card its own metric bars
+ * (Thesis Clarity, Evidence & Support, Grammar & Mechanics, Vocabulary & Word
+ * Choice). Tracely scores the draft on a six-part rubric and does not score
+ * paragraphs individually, so per-paragraph bars would be a draft-level number
+ * printed four times under four labels that never produced it. The bars are
+ * drawn once instead, in the design's own style, over the rubric they actually
+ * come from.
+ */
+function EssayGradeReportPanel({
+  structure,
+  claims,
+  onClose,
+  onBackToSummary,
+  onArgumentCheck,
+  onFindForClaim
+}: {
+  structure: ScreenWatchStructure | null
+  claims: ScreenWatchClaimSummary[]
+  onClose: () => void
+  onBackToSummary: () => void
+  onArgumentCheck: () => void
+  onFindForClaim: (claimId: string) => void
+}): JSX.Element {
+  const stats = structure?.stats ?? null
+  const readMinutes = stats ? Math.max(1, Math.round(stats.words / OVERLAY_READING_WPM)) : 0
+  const perSentence = stats ? (stats.words / Math.max(1, stats.sentences)).toFixed(1) : '—'
+  const vocab = stats && stats.words > 0 ? Math.round((stats.uniqueWords / stats.words) * 100) : 0
+
+  const claimById = new Map(claims.map((c) => [c.id, c] as const))
+  // Whole-draft weaknesses have no paragraph, and they are what the frame's
+  // "Summary" block is: the things to say about the essay rather than about one
+  // of its paragraphs.
+  const draftWeaknesses = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === null)
 
   return (
     <>
-      <div style={{ height: 30, position: 'relative', flexShrink: 0, width: '100%' }}>
-        <div style={{ position: 'absolute', left: 0, top: 3.5, fontSize: 19, fontWeight: 600, color: '#1a1a1f' }}>
-          Essay Grade
-        </div>
-        <button
-          className="tracely-btn-text"
-          onClick={onClose}
-          title="Close"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 0,
-            width: 30,
-            height: 30,
-            borderRadius: 999,
-            border: 'none',
-            background: '#eaf2ec',
-            color: '#376049',
-            fontFamily: 'inherit',
-            fontSize: 17,
-            lineHeight: 1,
-            cursor: 'pointer',
-            padding: 0
-          }}
-        >
-          ×
-        </button>
+      <GradeHeader title="Essay Grade — Full Report" onClose={onClose} />
+      <GradeDivider />
+      <GradeScoreSection structure={structure} />
+
+      <div style={{ display: 'flex', gap: 66, flexShrink: 0, width: '100%' }}>
+        <StatChip value={stats ? stats.words.toLocaleString() : '—'} label="WORDS" />
+        <StatChip value={stats ? `~${readMinutes} min` : '—'} label="READ TIME" />
+        <StatChip value={perSentence} label="WORDS / SENTENCE" />
+        <StatChip value={stats ? `${vocab}%` : '—'} label="VOCAB DIVERSITY" />
       </div>
 
-      <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
-
-      <div style={{ height: 116, position: 'relative', flexShrink: 0, width: '100%' }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, width: 116, height: 116 }}>
-          <svg width={116} height={116} viewBox="0 0 116 116" aria-hidden="true">
-            <circle cx={58} cy={58} r={R} fill="none" stroke={GRADE_RING_TRACK} strokeWidth={10} />
-            <circle
-              cx={58}
-              cy={58}
-              r={R}
-              fill="none"
-              stroke={ring}
-              strokeWidth={10}
-              strokeLinecap="round"
-              strokeDasharray={`${(CIRC * Math.max(0, Math.min(100, score))) / 100} ${CIRC}`}
-              transform="rotate(-90 58 58)"
-            />
-          </svg>
-          <div
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>BREAKDOWN BY PARAGRAPH</div>
+          {/* The frame's link. There is no separate Argument Check panel in the
+              overlay, and the claim list IS where a claim is checked one at a
+              time, so it goes there rather than nowhere. */}
+          <button
+            className="tracely-btn-text"
+            onClick={onArgumentCheck}
             style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: 38,
-              textAlign: 'center',
-              fontSize: 30,
+              border: 'none',
+              background: 'none',
+              padding: 0,
+              fontFamily: 'inherit',
+              fontSize: 12,
               fontWeight: 600,
-              color: '#1a1a1f',
-              lineHeight: 1
+              color: '#2563eb',
+              cursor: 'pointer'
             }}
           >
-            {structure ? score : '—'}
-          </div>
-          <div
-            style={{ position: 'absolute', left: 0, right: 0, top: 74, textAlign: 'center', fontSize: 12, color: DIM }}
-          >
-            / 100
-          </div>
+            Open Argument Check →
+          </button>
         </div>
 
-        <div style={{ position: 'absolute', left: 144, top: 22.5, width: 241, height: 71 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>OVERALL SCORE</div>
-          <div
-            style={{
-              position: 'absolute',
-              top: 22,
-              left: 0,
-              height: 24,
-              borderRadius: 999,
-              background: GRADE_PILL_BG,
-              color: GRADE_GREEN,
-              fontSize: 13,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0 10px'
-            }}
-          >
-            {structure ? letter : '—'}
-          </div>
-          {/* The frame says "Above average for this assignment type" here. There
-              is no cohort and no assignment type, so the slot keeps its place
-              and says what the band means — see essayGrade.ts. */}
-          <div style={{ position: 'absolute', top: 55, left: 0, fontSize: 13, fontWeight: 600, color: W_BODY }}>
-            {structure ? line : 'No reading of this draft yet'}
-          </div>
+        {/* The rubric, once. See the note on this component for why these bars
+            are not repeated inside every paragraph card as the frame draws. */}
+        <div
+          style={{
+            background: '#f8f9f8',
+            borderRadius: 12,
+            padding: 14,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px 20px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}
+        >
+          {COMPONENT_ROWS.map(([key, label, max]) => {
+            const pct = structure ? ((structure.components[key] ?? 0) / max) * 100 : 0
+            return (
+              <div key={key} style={{ flex: '1 1 232px', minWidth: 0, display: 'flex' }}>
+                <MiniBar label={label} percent={pct} color={miniBarColor(pct)} />
+              </div>
+            )
+          })}
+        </div>
+
+        {(structure?.paragraphs ?? []).map((paragraph) => {
+          const issues = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === paragraph.index)
+          const strong = issues.length === 0
+          const preview = structure?.previews[paragraph.index - 1] ?? ''
+          const cited = paragraph.claimIds.filter((id) => claimById.get(id)?.hasInlineCitation).length
+
+          return (
+            <div
+              key={paragraph.index}
+              style={{
+                background: '#f8f9f8',
+                borderRadius: 12,
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                width: '100%',
+                boxSizing: 'border-box'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                <span
+                  style={{
+                    background: '#e8e9ec',
+                    borderRadius: 6,
+                    height: 19,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: W_BODY,
+                    flexShrink: 0
+                  }}
+                >
+                  P{paragraph.index}
+                </span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a1f' }}>{ROLE_LABEL[paragraph.role]}</span>
+                <span style={{ flex: 1 }} />
+                <span
+                  style={{
+                    background: strong ? '#e0f2e5' : '#fff1e5',
+                    color: strong ? GRADE_GREEN : '#cb5c19',
+                    borderRadius: 999,
+                    height: 23,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '0 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    flexShrink: 0
+                  }}
+                >
+                  {strong ? 'Strong' : 'Needs Work'}
+                </span>
+              </div>
+
+              {/* The frame's line here is an assessment of the paragraph. Where
+                  there is a weakness that IS the assessment; otherwise the
+                  paragraph's own opening line says which paragraph this is,
+                  which a role label alone does not. */}
+              <div style={{ fontSize: 12.5, color: W_BODY, lineHeight: 1.35 }}>
+                {issues[0]?.message ?? preview}
+              </div>
+
+              {paragraph.claimIds.length > 0 ? (
+                <div style={{ fontSize: 12, fontWeight: 500, color: W_BODY }}>
+                  {cited} of {paragraph.claimIds.length} claim{paragraph.claimIds.length === 1 ? '' : 's'} cited in this
+                  paragraph
+                </div>
+              ) : null}
+
+              {issues
+                .filter((issue) => issue.claimId !== null)
+                .map((issue, i) => {
+                  const claim = issue.claimId ? claimById.get(issue.claimId) : null
+                  return (
+                    <div
+                      key={`${issue.kind}-${i}`}
+                      style={{
+                        background: '#fff7f0',
+                        borderRadius: 10,
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        width: '100%',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span
+                            style={{
+                              background: '#d95319',
+                              color: '#fff',
+                              borderRadius: 999,
+                              width: 18,
+                              height: 18,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              flexShrink: 0
+                            }}
+                          >
+                            !
+                          </span>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#b35116' }}>
+                            {claim
+                              ? `${PROBLEM_LABEL[claim.problemKinds[0]]} · ${Math.round(claim.confidence * 100)}% confidence`
+                              : 'Needs attention'}
+                          </span>
+                        </div>
+                        {issue.claimId ? (
+                          <button
+                            className="tracely-btn-text"
+                            onClick={() => onFindForClaim(issue.claimId as string)}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              padding: 0,
+                              fontFamily: 'inherit',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: '#2563eb',
+                              cursor: 'pointer',
+                              flexShrink: 0
+                            }}
+                          >
+                            Find →
+                          </button>
+                        ) : null}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#5a3e1b', lineHeight: 1.35 }}>{issue.message}</div>
+                    </div>
+                  )
+                })}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ width: '100%', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 13, height: 17 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1f' }}>Summary</span>
+        </div>
+        {/* The frame's summary is written prose ("You're in great shape!").
+            Nothing here writes prose about a draft — weaknesses come from local
+            templates, never a model (see structure/weaknesses.ts) — so the block
+            carries the whole-draft findings, which is what it would be
+            summarising, and the band line when there are none. */}
+        <div style={{ marginTop: 6, fontSize: 13.5, lineHeight: 1.4, color: W_BODY }}>
+          {draftWeaknesses.length > 0
+            ? draftWeaknesses.map((w) => w.message).join(' ')
+            : structure
+              ? `${gradeFor(structure.score).line}. Nothing outstanding across the draft as a whole.`
+              : 'No reading of this draft yet.'}
         </div>
       </div>
 
-      <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
-
-      <div style={{ height: 41, display: 'flex', gap: 10, flexShrink: 0, width: '100%' }}>
-        <button
-          className="tracely-btn-primary"
-          onClick={onFullReport}
-          style={{
-            width: 251,
-            height: 41,
-            border: 'none',
-            borderRadius: 999,
-            background: 'linear-gradient(to right, #f97316, #dc2626)',
-            color: '#fff',
-            fontFamily: 'inherit',
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: 'pointer'
-          }}
-        >
-          View Full Report
-        </button>
-        <button
-          className="tracely-btn-secondary"
-          disabled
-          // Not a missing feature. The structural read is recomputed locally on
-          // every poll (see refreshWatchOutline) — the score on this card is
-          // already live, so a re-grade button would do nothing but redraw it.
-          title="The score updates on its own as you write"
-          style={{
-            width: 251,
-            height: 41,
-            border: '1.5px solid #d3d8d4',
-            borderRadius: 999,
-            background: '#fff',
-            color: '#2d362f',
-            fontFamily: 'inherit',
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: 'default',
-            opacity: 0.6
-          }}
-        >
-          Re-grade Essay
-        </button>
-      </div>
+      <GradeDivider />
+      <GradeButtonRow primaryLabel="Back to Summary" onPrimary={onBackToSummary} />
     </>
   )
 }
@@ -2630,6 +2976,13 @@ export default function OverlayApp(): JSX.Element {
     setHover(null)
   }
 
+  /** "View Full Report" — Figma 404:185, the same card expanded. */
+  function showReport(): void {
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'report' })
+    setHover(null)
+  }
+
   /**
    * Light up the claim underlines belonging to one paragraph, so a weakness in
    * the panel points at something on the actual screen.
@@ -3185,11 +3538,12 @@ export default function OverlayApp(): JSX.Element {
             const liveClaimIds = new Set(visibleClaims.map((c) => c.id))
             const topClaim = visibleClaims.find((c) => c.id === selectedClaimId) ?? visibleClaims[0] ?? null
 
-            // 'grade' brings its own box. The frame gives it a 28px radius, its
-            // own header with a close button and no drag title, so wrapping it
-            // in the shared panel chrome below would double the border and the
-            // header. Everything else still shares that chrome.
-            if (widget.viewMode === 'grade') {
+            // 'grade' and 'report' bring their own box. The frames give them a
+            // 28px radius, their own header with a close button and no drag
+            // title, so wrapping them in the shared panel chrome below would
+            // double the border and the header. Everything else shares it.
+            if (widget.viewMode === 'grade' || widget.viewMode === 'report') {
+              const isReport = widget.viewMode === 'report'
               return (
                 <div
                   style={{
@@ -3210,7 +3564,11 @@ export default function OverlayApp(): JSX.Element {
                     outlineOffset: -1,
                     borderRadius: 28,
                     boxShadow: '0px 10px 28px -4px rgba(15, 26, 20, 0.14)',
-                    overflow: 'hidden',
+                    // The report asks for the frame's full 1210px; main clamps
+                    // that to the watched window, so on anything shorter the
+                    // card scrolls rather than losing its foot.
+                    overflowX: 'hidden',
+                    overflowY: isReport ? 'auto' : 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-start',
@@ -3219,11 +3577,25 @@ export default function OverlayApp(): JSX.Element {
                     pointerEvents: 'auto'
                   }}
                 >
-                  <EssayGradePanel
-                    structure={widget.structure}
-                    onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
-                    onFullReport={showStructure}
-                  />
+                  {isReport ? (
+                    <EssayGradeReportPanel
+                      structure={widget.structure}
+                      claims={widget.claims}
+                      onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
+                      onBackToSummary={showGrade}
+                      onArgumentCheck={showAll}
+                      onFindForClaim={(claimId) => {
+                        setSelectedClaimId(claimId)
+                        showSingle()
+                      }}
+                    />
+                  ) : (
+                    <EssayGradePanel
+                      structure={widget.structure}
+                      onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
+                      onFullReport={showReport}
+                    />
+                  )}
                 </div>
               )
             }
