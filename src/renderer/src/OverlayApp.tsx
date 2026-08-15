@@ -1406,7 +1406,7 @@ function ArgumentScoreView({
   liveClaimIds: Set<string>
   onHighlightParagraph: (index: number, claimId: string | null) => void
 }): JSX.Element {
-  const { detected, withRelevantSource, meanStrength, unchecked } = structure.coverage
+  const { detected, withRelevantSource, withOwnCitation, meanStrength, unchecked } = structure.coverage
   const { words, sentences, uniqueWords } = structure.stats
 
   // Assigned as the list is built, so a component shown against ¶2 is not shown
@@ -1449,18 +1449,35 @@ function ArgumentScoreView({
             ) : null}
           </div>
           <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
+            {/* Three facts, never merged — the same rule as the main app's
+                panel. The ratio here used to be withRelevantSource, read out as
+                "N of M claims have sources", which says Tracely's search
+                results are the only citations that exist and reports "0 of 7"
+                over a draft citing something on every line. What the writer
+                cited leads, because it is a fact about their document and needs
+                no search to know. */}
             {detected === 0 ? (
               'No checkable claims in this draft.'
             ) : (
               <>
                 <b>
-                  {withRelevantSource} of {detected}
+                  {withOwnCitation} of {detected}
                 </b>{' '}
-                {detected === 1 ? 'claim has' : 'claims have'} sources
-                {meanStrength !== null ? <> · mean {meanStrength}</> : null}
-                {/* Stated apart from the ratio: an unchecked claim is not an
-                    unsupported one, and the number must not imply a search has
-                    run when it has not. */}
+                {detected === 1 ? 'claim carries' : 'claims carry'} your citation
+                {/* What retrieval found, said as retrieval and never as "has a
+                    source" — and only once something has actually been
+                    searched, since an unchecked claim is not an unsupported one
+                    and the number must not imply a search has run when it has
+                    not. */}
+                {detected > unchecked ? (
+                  <>
+                    {' · '}
+                    <span style={{ color: MUTED }}>
+                      Tracely backs {withRelevantSource} of {detected - unchecked}
+                      {meanStrength !== null ? <> (mean {meanStrength})</> : null}
+                    </span>
+                  </>
+                ) : null}
                 {unchecked > 0 ? <span style={{ color: DIM }}> · {unchecked} unchecked</span> : null}
               </>
             )}
