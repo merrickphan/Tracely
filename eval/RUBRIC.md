@@ -106,9 +106,25 @@ flat — visible in the re-run, where marginal rose 11 points as strict fell 7.
 
 ## The cases this rubric does not settle
 
-**A citation to a source that does not exist.** `08-ai-grading` cites *Ramirez
-and Doyle (2024)*, which is invented — written to look exactly like what a
-chatbot produces. There is no verdict for it.
+**A citation to a source that does not exist. — SETTLED 2026-08-15.** A
+`fabricated` verdict now exists and `08-ai-grading` uses it. Merrick's call,
+made after reviewing 30 labelled candidate sentences; the reasoning and the
+alternative that was rejected are both below, because a decision recorded
+without its alternative is indistinguishable from a default.
+
+Validation requires `citedSource.searchedFor` — the mirror of `miscited`'s
+`citedSource.says`. Whichever half of the pair carries the finding has to be
+written down, or the label is an accusation rather than a finding. In the
+product this maps to the `fabricated-citation` problem kind, which sorts above
+`contradicted-claim` and is deliberately phrased "Source not found — may be
+fabricated": four academic indexes do not hold every real source, so the
+defensible claim is that Tracely could not find it.
+
+What follows is the argument as it stood before the decision, kept because it
+is the case against.
+
+`08-ai-grading` cites *Ramirez and Doyle (2024)*, which is invented — written
+to look exactly like what a chatbot produces. There was no verdict for it.
 
 `miscited` is the natural label and validation rejects it, correctly: it
 requires `citedSource.says`, and a source that does not exist says nothing. What
@@ -121,10 +137,13 @@ This is a decision, not a derivation: a new verdict changes what every
 downstream fit is measuring, and `05-social-media` versus `08-ai-grading` is now
 the pair that shows why the distinction matters — real-source-wrong-claim and
 no-source-at-all produce identical retrieval behaviour and are not the same
-mistake. **Merrick's call.** If a `fabricated` verdict is wanted, it goes in
-`CLAIM_VERDICTS` in `eval/scripts/annotations.mjs` and probably wants the
-mirror-image validation rule to `miscited`: it must record what was searched for
-and not found, or it is an accusation rather than a label.
+mistake.
+
+**Two claims moved from `unsupported` to `fabricated`, so any fit computed
+before 2026-08-15 is measuring a different label set.** Both are in
+`08-ai-grading`; nothing else in the corpus changed. Re-run rather than compare
+across the boundary — this is precisely the relabelling drift this file was
+written to prevent, and it is only safe because it is written down here.
 
 **Compound sentences.** Several claims in the set assert two things at once —
 04-energy-access C3 carries both a transmission-loss statistic and an

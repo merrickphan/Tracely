@@ -43,9 +43,14 @@ export const DESIGN_RED = '#d93636'
  * read — carried no information about the problem. See problemKind.ts.
  */
 export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
+  // Attribution, and the worst of it: a source that does not appear to exist.
+  'fabricated-citation': DESIGN_RED,
   // Reasoning: the sentence does not follow, or asserts something false.
   'contradicted-claim': DESIGN_RED,
   'weak-reasoning': DESIGN_RED,
+  // Neither reasoning nor evidence: the claim is defensible and the
+  // quantifier is not. Amber because nothing here is wrong.
+  'overstated-claim': DESIGN_AMBER,
   // Evidence: nothing found, or what was found does not carry it.
   'unverified-statistic': DESIGN_ORANGE,
   'no-sources': DESIGN_ORANGE,
@@ -61,8 +66,14 @@ export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
 
 /** Plain-language name for the mark, used as the underline's tooltip. */
 export const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
+  // Hedged on purpose. The search covers four academic indexes, which do not
+  // hold every real source — so the honest claim is that Tracely could not
+  // find it, not that the student invented it. The verdict is serious enough
+  // that overstating it once would cost the whole feature its credibility.
+  'fabricated-citation': 'Source not found — may be fabricated',
   'contradicted-claim': 'Contradicted — check this fact',
   'weak-reasoning': 'Weak reasoning',
+  'overstated-claim': 'Overstated — narrow this',
   'unverified-statistic': 'Unverified statistic',
   'no-sources': 'No supporting sources',
   'weak-evidence': 'Evidence is weak',

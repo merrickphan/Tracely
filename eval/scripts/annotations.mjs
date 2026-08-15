@@ -35,6 +35,19 @@ export const CLAIM_VERDICTS = [
   'unsupported',
   'contradicted',
   'miscited',
+  // The mirror image of `miscited`: miscited is a real source that does not say
+  // what the sentence claims, `fabricated` is a source that does not exist at
+  // all. Added because 08-ai-grading cites an invented "Ramirez and Doyle
+  // (2024)" and had to be filed as `unsupported` — a verdict that reads back as
+  // "nothing found either way; may still be true", which is far too generous
+  // for a reference nobody wrote, and which put it in the same bucket as a
+  // claim the literature simply has not studied.
+  //
+  // 05-social-media (real source, wrong claim) and 08-ai-grading (no source at
+  // all) produce identical retrieval behaviour and are not the same mistake.
+  // Keeping one verdict for both meant no downstream fit could ever tell them
+  // apart. See eval/RUBRIC.md, "The cases this rubric does not settle".
+  'fabricated',
   'unverifiable'
 ]
 
@@ -179,6 +192,22 @@ export function loadAnnotations() {
       // would be missing.
       if (claim.verdict === 'miscited' && !claim.citedSource?.says) {
         fail(problems, file, `${at}: verdict "miscited" requires citedSource.says (what the source actually claims)`)
+      }
+
+      // The mirror-image rule, and the reason `fabricated` is safe to add.
+      // Saying a student invented a source is the most serious thing this
+      // project can assert about a draft, and it is unfalsifiable unless the
+      // search behind it is on the record. Without `citedSource.searchedFor`
+      // the annotation is an accusation; with it, a later reader can re-run the
+      // search and overturn the label. `miscited` requires the source's words
+      // for the same reason: whichever half of the pair carries the finding has
+      // to be written down.
+      if (claim.verdict === 'fabricated' && !claim.citedSource?.searchedFor) {
+        fail(
+          problems,
+          file,
+          `${at}: verdict "fabricated" requires citedSource.searchedFor (what was searched for and not found)`
+        )
       }
 
       if (claim.sources !== undefined) {

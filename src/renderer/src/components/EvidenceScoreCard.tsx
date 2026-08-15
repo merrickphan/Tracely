@@ -7,7 +7,15 @@ const VERDICT_LABEL: Record<CritiqueVerdict, string> = {
   'partially-supported': 'Partially Supported',
   weak: 'Weak',
   unsupported: 'Unsupported',
-  contradicted: 'Contradicted — False'
+  contradicted: 'Contradicted — False',
+  // Named, not softened. This is the one verdict that is about the citation
+  // rather than the claim, and a student who cannot tell it apart from
+  // 'Unsupported' will read it as 'may still be true'.
+  fabricated: 'Source Not Found — May Be Fabricated',
+  // Not 'Weak'. The sentence is nearly right, and the label should say so
+  // — a student who reads 'Weak' goes looking for better sources, which is
+  // the one repair that cannot help an overstated quantifier.
+  overstated: 'Overstated — Narrow the Claim'
 }
 
 // Reuses the same good/mid/low/danger palette ScoreBadge/claim-type chips
@@ -18,7 +26,10 @@ const VERDICT_CLASS: Record<CritiqueVerdict, string> = {
   'partially-supported': 'evidence-verdict-mid',
   weak: 'evidence-verdict-mid',
   unsupported: 'evidence-verdict-low',
-  contradicted: 'evidence-verdict-danger'
+  contradicted: 'evidence-verdict-danger',
+  // Amber, not red: nothing here is false. See VERDICT_LABEL.
+  fabricated: 'evidence-verdict-danger',
+  overstated: 'evidence-verdict-mid'
 }
 
 // Support leads because it is the only factor that answers the question a

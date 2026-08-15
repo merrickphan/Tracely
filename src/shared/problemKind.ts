@@ -19,6 +19,17 @@ import type { ClaimType, CritiqueVerdict } from '@shared/types'
 export type ScreenWatchProblemKind =
   /** Evidence search has not come back yet. Nothing is known. */
   | 'searching'
+  /**
+   * The sentence names a source that does not appear to exist.
+   *
+   * Ranked above 'contradicted-claim' because it is the only kind here that is
+   * a finding about the WRITER rather than about the literature. A contradicted
+   * claim is a mistake; an invented citation is the failure mode that ends
+   * academic careers, and it is what a chatbot produces by default — which is
+   * precisely why a tool students point at chatbot-assisted drafts has to name
+   * it rather than fold it into 'nothing found'.
+   */
+  | 'fabricated-citation'
   /** The critique found the reasoning does not follow from the evidence. */
   | 'weak-reasoning'
   /**
@@ -33,6 +44,15 @@ export type ScreenWatchProblemKind =
    * thing this product can say below a citation problem.
    */
   | 'contradicted-claim'
+  /**
+   * The claim is defensible; the quantifier is not.
+   *
+   * Ranked below the two truth findings and above every support finding,
+   * because it is not a question of evidence at all — no amount of retrieval
+   * fixes "100%", and telling the writer their sources are thin points them at
+   * the wrong repair entirely.
+   */
+  | 'overstated-claim'
   /** A number nothing in the literature carries. */
   | 'unverified-statistic'
   /** Searched, and nothing relevant came back at all. */
@@ -91,7 +111,12 @@ export function problemKindsFor({
   const kinds: ScreenWatchProblemKind[] = []
   const nothingFound = evidence.count === 0
 
-  if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
+  // Checked before 'contradicted' and outside the cited/uncited branches below,
+  // because a fabricated reference is a fact about the citation itself: the
+  // evidence bands have nothing to say about a source that was never written.
+  if (critiqueVerdict === 'fabricated') kinds.push('fabricated-citation')
+  else if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
+  else if (critiqueVerdict === 'overstated') kinds.push('overstated-claim')
   else if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
 
   // Cited, and the literature we DID find does not back what was attributed.
@@ -146,13 +171,23 @@ export function problemKindFor(input: ProblemKindInput): ScreenWatchProblemKind 
  * merely wants a citation.
  */
 const SEVERITY: ScreenWatchProblemKind[] = [
-  // Nothing outranks "a fact in this sentence is wrong". Every other kind here
-  // is a statement about support; this one is a statement about truth.
+  // Above everything, including a wrong fact: a wrong fact is an error, an
+  // invented source is a fabrication, and the reader of the finished essay has
+  // no way at all to catch the second.
+  'fabricated-citation',
+  // Nothing else outranks "a fact in this sentence is wrong". Every other kind
+  // here is a statement about support; this one is a statement about truth.
   'contradicted-claim',
   // Above weak reasoning: a claim whose own citation does not support it is
   // the one error a reader has no prompt to go and check.
   'cited-unverified',
   'weak-reasoning',
+  // Above the evidence findings on purpose. An overstated claim looks exactly
+  // like a badly-sourced one from the retrieval side — the sources will not
+  // support "100%" — and ranking it below them means the writer is told to go
+  // and find evidence that cannot exist for a sentence one word away from being
+  // fine.
+  'overstated-claim',
   'unverified-statistic',
   'no-sources',
   'weak-evidence',
