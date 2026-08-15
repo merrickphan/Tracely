@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, IPC_EVENTS } from '@shared/ipc-channels'
 import type {
-  AppGetBuildInfoResponse,
   AnalyzeDetectClaimsRequest,
   AnalyzeDetectClaimsResponse,
   AnalyzeGetResultRequest,
   AnalyzeGetResultResponse,
+  AppGetInfoResponse,
   AuthDeleteAccountResponse,
   AuthGetUserResponse,
   AuthSignInRequest,
@@ -151,6 +151,9 @@ const api = {
     scanInstalledApps: (): Promise<SettingsScanInstalledAppsResponse> =>
       ipcRenderer.invoke(IPC.SETTINGS_SCAN_INSTALLED_APPS, {})
   },
+  app: {
+    getInfo: (): Promise<AppGetInfoResponse> => ipcRenderer.invoke(IPC.APP_GET_INFO, {})
+  },
   profile: {
     get: (): Promise<ProfileGetResponse> => ipcRenderer.invoke(IPC.PROFILE_GET, {}),
     set: (req: ProfileSetRequest): Promise<ProfileSetResponse> => ipcRenderer.invoke(IPC.PROFILE_SET, req)
@@ -190,9 +193,6 @@ const api = {
   shell: {
     openExternal: (req: ShellOpenExternalRequest): Promise<ShellOpenExternalResponse> =>
       ipcRenderer.invoke(IPC.SHELL_OPEN_EXTERNAL, req)
-  },
-  app: {
-    getBuildInfo: (): Promise<AppGetBuildInfoResponse> => ipcRenderer.invoke(IPC.APP_GET_BUILD_INFO, {})
   },
   screenWatch: {
     setEnabled: (req: ScreenWatchSetEnabledRequest): Promise<ScreenWatchSetEnabledResponse> =>
