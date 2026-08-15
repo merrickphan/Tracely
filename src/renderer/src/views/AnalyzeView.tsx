@@ -764,13 +764,19 @@ function DocumentEditor({
 
       {claims && claims.length === 0 ? <p className="muted docedit-error">No checkable claims detected.</p> : null}
 
-      {claims && claims.length > 0 ? (
-          <section className="docedit-results">
-            {claims.map((claim) => (
-              <ClaimCard key={claim.id} claim={claim} />
-            ))}
-          </section>
-        ) : null}
+      {/*
+        The ClaimCard list that used to sit under the document is gone.
+        Detection still runs — the report reads `claims` — but the cards are not
+        drawn here any more.
+
+        They predate the Argument Score report and say the same things worse: a
+        flat list below the prose, outside any paragraph, with Find Evidence and
+        Critique Argument buttons duplicated per card. The report now shows each
+        claim inside the paragraph it belongs to, which is the whole reason the
+        paragraph detail exists. Two views of the same claims, one of them
+        context-free, is what made the editor feel like it had two disagreeing
+        opinions about the draft.
+      */}
       </div>
 
       {scoreOpen ? (

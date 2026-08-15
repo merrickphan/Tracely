@@ -3979,3 +3979,7 @@ textarea:disabled {
 .argscore-strength-score.tone-low  { color: var(--score-low); }
 
 .argscore-breakdown { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+
+/* "not checked yet" is dimmer than the ratio beside it — it is a caveat on that
+   number, not a second number competing with it. */
+.argscore-unchecked { color: var(--muted); }
