@@ -1,6 +1,7 @@
 import type { Claim, DocumentOutline } from '@shared/types'
 import type { ScreenWatchStructure } from '@shared/ipc-contract'
 import { splitParagraphs } from '@shared/paragraphSplit'
+import { draftStats } from './draftStats'
 import { analyzeStructure } from '../structure/analyzeStructure'
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../structure/evidenceCoverage'
 import { describeFit, structureFit } from './structureFit'
@@ -101,6 +102,10 @@ export function computeWatchOutline({
     coverage: outline.coverage,
     weaknesses: outline.weaknesses,
     paragraphs: outline.paragraphs,
-    previews: paragraphPreviews(spans.map((s) => s.text))
+    previews: paragraphPreviews(spans.map((s) => s.text)),
+    // Over `text`, not `analyzedText`: the truncated copy is what every other
+    // figure here was computed from, and a word count that disagreed with the
+    // paragraphs beside it would be the more confusing kind of wrong.
+    stats: draftStats(text)
   }
 }

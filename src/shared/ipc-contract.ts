@@ -450,11 +450,38 @@ export interface ScreenWatchStructure {
    * `DocumentOutline` deliberately carries no prose, and the in-app panel joins
    * roles onto the live editor text instead. The overlay has no copy of the
    * watched document, and shipping one would mean the whole UIA read in every
-   * payload — so main truncates here. Not a new exposure: `ScreenWatchHoverEvent`
-   * already carries the full document text to this renderer on every widget
-   * hover.
+   * payload — so main truncates here.
+   *
+   * This used to claim `ScreenWatchHoverEvent` already sends the whole document
+   * to the overlay. It does not, and never did: that event's `text` is the
+   * hovered CLAIM's text. The correction matters because the comment was read as
+   * licence to compute document-wide figures renderer-side, which is exactly
+   * what `stats` below exists to avoid.
    */
   previews: string[]
+  /** Reading figures for the panel's stats row. See `DraftStats`. */
+  stats: DraftStats
+}
+
+/**
+ * Plain reading figures for the watched draft.
+ *
+ * Computed in main, where the document text already is. The overlay is never
+ * sent that text — only `previews`, one truncated line per paragraph — so these
+ * cannot be derived in the renderer, and a panel that tried would be counting
+ * first lines and calling them a word count.
+ *
+ * Raw counts rather than finished numbers. Reading time depends on an assumed
+ * words-per-minute and vocabulary diversity on how it is expressed as a
+ * percentage; both are presentation, and presentation belongs to whichever view
+ * is drawing them, not to main.
+ */
+export interface DraftStats {
+  words: number
+  /** At least 1, so words-per-sentence cannot divide by zero. */
+  sentences: number
+  /** Distinct case-folded words — the numerator of vocabulary diversity. */
+  uniqueWords: number
 }
 
 export interface ScreenWatchWidget {

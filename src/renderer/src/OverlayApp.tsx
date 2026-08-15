@@ -1236,17 +1236,27 @@ function ScoreChip({
   active,
   onOpen
 }: {
-  structure: ScreenWatchStructure
+  /**
+   * Null when there is no trustworthy reading yet — the chip still renders.
+   *
+   * It used to be hidden in that case, which read as tidy and was the actual
+   * bug: a draft that never produced a reading left the panel with no entry
+   * point, so there was nothing to click and no way to find out why. An empty
+   * chip that opens an explanation beats a control that isn't there.
+   */
+  structure: ScreenWatchStructure | null
   active: boolean
   onOpen: () => void
 }): JSX.Element {
-  const color = evidenceScoreColor(structure.score)
+  const color = structure ? evidenceScoreColor(structure.score) : DIM
   return (
     <button
       onClick={onOpen}
       title={
-        `Structure score ${structure.score} of 100` +
-        (structure.complete ? '' : ' — provisional, some paragraphs could not be labelled')
+        structure
+          ? `Argument score ${structure.score} of 100` +
+            (structure.complete ? '' : ' — provisional, some paragraphs could not be labelled')
+          : 'No structural reading of this draft yet — open for why'
       }
       style={{
         display: 'flex',
@@ -1261,41 +1271,169 @@ function ScoreChip({
         font: 'inherit'
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1 }}>{structure.score}</span>
-      <span style={{ fontSize: 10.5, color: DIM, lineHeight: 1 }}>structure</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1 }}>
+        {structure ? structure.score : '—'}
+      </span>
+      <span style={{ fontSize: 10.5, color: DIM, lineHeight: 1 }}>argument</span>
       {/* A dot rather than the word "provisional" — the header has room for one
           of them, and the tooltip carries the sentence. */}
-      {!structure.complete ? (
+      {structure && !structure.complete ? (
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#b3690a', flexShrink: 0 }} />
       ) : null}
     </button>
   )
 }
 
+// -- Argument Score: the Figma "Essay Grade" frames, labelled honestly -------
+//
+// Layout from "Real Tracely UI" (k7R5x1M9alKktaMLlZFSJn) frames 370:135 (widget),
+// 391:342 (analyzing) and 404:129 (full report): ring, stats row, then a card per
+// paragraph. The layout is the design's. The words are not, and that is the whole
+// point of this block.
+//
+// Those frames grade an essay — Thesis Clarity, Grammar & Mechanics, Vocabulary &
+// Word Choice, a B+ chip, "above average for this assignment type". Tracely
+// measures none of that. It scores how an argument is built, on a different
+// six-part rubric. Shipping the design's labels over this data would print
+// numbers next to words they do not measure, so the labels here are the rubric's
+// own (Merrick's call, 2026-08-14: score the argument, rewrite the labels).
+//
+// Two things from the design are deliberately absent rather than forgotten:
+// the letter grade, because there is no grade band and inventing one implies a
+// marking scheme; and "above average for this assignment type", because there is
+// no cohort to be above the average of.
+
+/**
+ * One rubric component. Percent on the right because the design reads in
+ * percentages, `x/20` in the tooltip because the rubric is out of its own maxima
+ * and the raw number is what `scoreDraft.ts` actually produced.
+ */
 function ComponentBar({ value, max, label }: { value: number; max: number; label: string }): JSX.Element {
   const pct = Math.max(0, Math.min(100, (value / max) * 100))
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 22 }}>
-      <span style={{ width: 110, flexShrink: 0, fontSize: 11.5, color: MUTED }}>{label}</span>
-      <span style={{ flex: 1, height: 5, borderRadius: 3, background: '#f0f0f3', overflow: 'hidden' }}>
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+      title={`${label}: ${Math.round(value)} of ${max}`}
+    >
+      <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: MUTED, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>
+        {Math.round(pct)}%
+      </span>
+      <span
+        style={{
+          width: '100%',
+          flexBasis: '100%',
+          height: 4,
+          borderRadius: 2,
+          background: '#eeeef1',
+          overflow: 'hidden'
+        }}
+      >
         <span
           style={{
             display: 'block',
             width: `${pct}%`,
             height: '100%',
-            borderRadius: 3,
+            borderRadius: 2,
             background: evidenceScoreColor(pct)
           }}
         />
-      </span>
-      <span style={{ width: 40, flexShrink: 0, textAlign: 'right', fontSize: 11, color: DIM }}>
-        {Math.round(value)}/{max}
       </span>
     </div>
   )
 }
 
-function StructureView({
+/**
+ * The design's score ring. Drawn rather than approximated with a rounded box,
+ * because the ring is the one piece of this panel a user recognises at a glance.
+ *
+ * `strokeDasharray` on a circle rotated -90° fills clockwise from twelve o'clock,
+ * which is the direction the frames draw.
+ */
+function ScoreRing({ score }: { score: number }): JSX.Element {
+  const color = evidenceScoreColor(score)
+  const radius = 29
+  const circumference = 2 * Math.PI * radius
+  const filled = (Math.max(0, Math.min(100, score)) / 100) * circumference
+  return (
+    <svg width={74} height={74} viewBox="0 0 74 74" role="img" aria-label={`Argument score ${score} of 100`}>
+      <circle cx="37" cy="37" r={radius} fill="none" stroke="#eeeef1" strokeWidth="6" />
+      <circle
+        cx="37"
+        cy="37"
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeDasharray={`${filled} ${circumference}`}
+        transform="rotate(-90 37 37)"
+      />
+      <text x="37" y="35" textAnchor="middle" dominantBaseline="middle" fontSize="21" fontWeight="700" fill={color}>
+        {score}
+      </text>
+      <text x="37" y="51" textAnchor="middle" fontSize="9" fill={DIM}>
+        / 100
+      </text>
+    </svg>
+  )
+}
+
+function StatCell({ value, label }: { value: string; label: string }): JSX.Element {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: INK, lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 9, color: DIM, letterSpacing: 0.4, marginTop: 2, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 238 words per minute — Brysbaert's 2019 meta-analysis of silent reading of
+ * English prose. Named rather than inlined so the number is arguable instead of
+ * looking like it fell out of the sky.
+ */
+const READING_WPM = 238
+
+/**
+ * Which rubric components belong beside which paragraph role.
+ *
+ * The design puts one or two metric bars inside each paragraph card, and this is
+ * what fills that slot honestly. A component appears beside the role it is a
+ * reading of — thesis with the thesis paragraph, counterargument with the
+ * counterargument — so the number sits next to the prose it was computed from.
+ *
+ * IMPORTANT: these are DOCUMENT-level components. `scoreDraft.ts` scores the
+ * draft, not each paragraph. Showing one inside a card is context, and nothing in
+ * the copy may suggest that paragraph was scored on its own — which is why each
+ * component renders exactly once, against the FIRST paragraph carrying its role,
+ * rather than repeating down every evidence paragraph as if each had earned its
+ * own reading.
+ */
+const ROLE_COMPONENTS: Partial<Record<ParagraphRole, Array<keyof StructureComponents>>> = {
+  thesis: ['thesis'],
+  claim: ['governingClaims'],
+  evidence: ['governingClaims', 'warrant'],
+  reasoning: ['warrant'],
+  counterargument: ['counterargument'],
+  significance: ['significance'],
+  conclusion: ['conclusion', 'significance']
+}
+
+const COMPONENT_LABEL = new Map(COMPONENT_ROWS.map(([key, label, max]) => [key, { label, max }]))
+
+/** Strong / Developing / Needs work, on the same 70/40 bands as every other score. */
+function verdictFor(pct: number): { text: string; color: string } {
+  if (pct >= 70) return { text: 'Strong', color: POSITIVE }
+  if (pct >= 40) return { text: 'Developing', color: '#b3690a' }
+  return { text: 'Needs work', color: '#c2410c' }
+}
+
+function ArgumentScoreView({
   structure,
   liveClaimIds,
   onHighlightParagraph
@@ -1305,37 +1443,46 @@ function StructureView({
   liveClaimIds: Set<string>
   onHighlightParagraph: (index: number, claimId: string | null) => void
 }): JSX.Element {
-  const color = evidenceScoreColor(structure.score)
   const { detected, withRelevantSource, meanStrength, unchecked } = structure.coverage
+  const { words, sentences, uniqueWords } = structure.stats
+
+  // Assigned as the list is built, so a component shown against ¶2 is not shown
+  // again against ¶5. What is left over at the end is the genuinely useful
+  // signal: a rubric component whose role never appears in the draft at all.
+  const claimed = new Set<keyof StructureComponents>()
+  const rows = structure.paragraphs.map((paragraph) => {
+    const keys = (ROLE_COMPONENTS[paragraph.role] ?? []).filter((key) => !claimed.has(key))
+    keys.forEach((key) => claimed.add(key))
+    const pcts = keys.map((key) => {
+      const meta = COMPONENT_LABEL.get(key)!
+      return (structure.components[key] / meta.max) * 100
+    })
+    return {
+      paragraph,
+      keys,
+      verdict: pcts.length > 0 ? verdictFor(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
+      weaknesses: structure.weaknesses.filter((w) => w.paragraphIndex === paragraph.index)
+    }
+  })
+  const missing = COMPONENT_ROWS.filter(([key]) => !claimed.has(key))
+  const draftWeaknesses = structure.weaknesses.filter((w) => w.paragraphIndex === null)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 54,
-            flexShrink: 0,
-            borderRadius: 12,
-            border: `1px solid ${color}33`,
-            background: `${color}0f`,
-            padding: '7px 0',
-            textAlign: 'center'
-          }}
-        >
-          <div style={{ fontSize: 21, fontWeight: 700, color, lineHeight: 1.1 }}>{structure.score}</div>
-          <div style={{ fontSize: 9.5, color: DIM }}>/ 100</div>
-        </div>
+        <ScoreRing score={structure.score} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>
-            Structure score
-            {/* Not decoration. A draft with unlabelled paragraphs was scored on
-                an incomplete reading, and the components it could not assess
-                were counted as absent rather than skipped — presenting that as
-                settled is the failure this prevents. */}
+          <div style={{ fontSize: 9.5, color: DIM, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Argument score
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginTop: 2 }}>
+            How this draft is built
+            {/* Not decoration. A draft with unlabelled paragraphs was scored on an
+                incomplete reading, and the components it could not assess were
+                counted as absent rather than skipped — presenting that as settled
+                is the failure this prevents. */}
             {!structure.complete ? (
-              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: '#b3690a' }}>
-                Provisional
-              </span>
+              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: '#b3690a' }}>Provisional</span>
             ) : null}
           </div>
           <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
@@ -1358,93 +1505,160 @@ function StructureView({
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {COMPONENT_ROWS.map(([key, label, max]) => (
-          <ComponentBar key={key} value={structure.components[key]} max={max} label={label} />
-        ))}
+      {/* Reading figures, not quality judgements — they describe the draft
+          without claiming anything about it, which is why they survived the
+          relabel when the design's grade chip did not. */}
+      <div style={{ display: 'flex', gap: 10, paddingBottom: 12, borderBottom: '1px solid #ececf0' }}>
+        <StatCell value={words.toLocaleString()} label="Words" />
+        <StatCell value={`~${Math.max(1, Math.round(words / READING_WPM))} min`} label="Read time" />
+        <StatCell value={(words / sentences).toFixed(1)} label="Words / sentence" />
+        <StatCell
+          value={`${Math.round((uniqueWords / Math.max(1, words)) * 100)}%`}
+          label="Vocab diversity"
+        />
       </div>
 
-      {structure.weaknesses.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: DIM, letterSpacing: 0.3 }}>
-            WHAT TO FIX ({structure.weaknesses.length})
-          </div>
-          {structure.weaknesses.map((weakness, i) => {
-            // Only some weaknesses can point at anything on screen. The
-            // whole-draft ones (no thesis, no counterargument, no significance)
-            // carry paragraphIndex null by construction, and warrant gaps
-            // usually fire on paragraphs with no detected claim in them — so a
-            // chip that always looked like a button would mostly do nothing.
-            const paragraph =
-              weakness.paragraphIndex === null
-                ? null
-                : structure.paragraphs.find((p) => p.index === weakness.paragraphIndex) ?? null
-            const jumpable = (paragraph?.claimIds ?? []).some((id) => liveClaimIds.has(id))
-            return (
-              <div
-                key={`${weakness.kind}-${weakness.paragraphIndex ?? 'draft'}-${i}`}
-                style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}
-              >
-                {jumpable && paragraph ? (
-                  <button
-                    className="tracely-btn-text"
-                    onClick={() => onHighlightParagraph(paragraph.index, weakness.claimId)}
-                    title="Show this paragraph's claims on screen"
-                    style={{ ...TEXT_BTN_STYLE, flexShrink: 0, padding: 0, fontSize: 11 }}
-                  >
-                    ¶{paragraph.index}
-                  </button>
-                ) : (
-                  <span style={{ flexShrink: 0, fontSize: 11, color: DIM }}>
-                    {weakness.paragraphIndex === null ? 'Draft' : `¶${weakness.paragraphIndex}`}
-                  </span>
-                )}
-                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: MUTED }}>{weakness.message}</span>
-              </div>
-            )
-          })}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: DIM, letterSpacing: 0.4 }}>
+          BREAKDOWN BY PARAGRAPH
         </div>
-      ) : null}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: DIM, letterSpacing: 0.3 }}>PARAGRAPHS</div>
-        {structure.paragraphs.map((paragraph) => (
+        {rows.map(({ paragraph, keys, verdict, weaknesses }) => (
           <div
             key={paragraph.index}
-            style={{ display: 'flex', alignItems: 'baseline', gap: 7, height: 30 }}
             data-paragraph={paragraph.index}
             data-role={paragraph.role}
+            style={{
+              border: '1px solid #ececf0',
+              borderRadius: 10,
+              padding: '9px 11px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 7
+            }}
           >
-            <span style={{ width: 14, flexShrink: 0, fontSize: 10.5, color: DIM }}>
-              {paragraph.index}
-            </span>
-            <span
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+              <span style={{ fontSize: 10.5, color: DIM, flexShrink: 0 }}>¶{paragraph.index}</span>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: paragraph.role === 'unknown' ? DIM : INK
+                }}
+              >
+                {ROLE_LABEL[paragraph.role]}
+              </span>
+              {verdict ? (
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: verdict.color,
+                    background: `${verdict.color}14`,
+                    borderRadius: 20,
+                    padding: '2px 8px'
+                  }}
+                >
+                  {verdict.text}
+                </span>
+              ) : null}
+            </div>
+
+            <div
               style={{
-                width: 92,
-                flexShrink: 0,
-                fontSize: 11,
-                fontWeight: 600,
-                color: paragraph.role === 'unknown' ? DIM : INK
-              }}
-            >
-              {ROLE_LABEL[paragraph.role]}
-            </span>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
                 fontSize: 11,
                 color: DIM,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                lineHeight: 1.4,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
               }}
             >
               {structure.previews[paragraph.index - 1] ?? ''}
-            </span>
+            </div>
+
+            {keys.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+                {keys.map((key) => {
+                  const meta = COMPONENT_LABEL.get(key)!
+                  return (
+                    <div key={key} style={{ flex: '1 1 44%', minWidth: 120 }}>
+                      <ComponentBar value={structure.components[key]} max={meta.max} label={meta.label} />
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+
+            {weaknesses.map((weakness, i) => {
+              // Only some weaknesses can point at anything on screen — warrant
+              // gaps usually fire on paragraphs with no detected claim in them,
+              // so a chip that always looked like a button would mostly do
+              // nothing.
+              const jumpable = (paragraph.claimIds ?? []).some((id) => liveClaimIds.has(id))
+              return (
+                <div
+                  key={`${weakness.kind}-${i}`}
+                  style={{
+                    display: 'flex',
+                    gap: 7,
+                    alignItems: 'flex-start',
+                    background: '#fff7ed',
+                    border: '1px solid #fed7aa',
+                    borderRadius: 7,
+                    padding: '6px 8px'
+                  }}
+                >
+                  <span style={{ flexShrink: 0, fontSize: 11, color: '#b3690a' }}>!</span>
+                  <span style={{ flex: 1, fontSize: 11, lineHeight: 1.45, color: MUTED }}>{weakness.message}</span>
+                  {jumpable ? (
+                    <button
+                      className="tracely-btn-text"
+                      onClick={() => onHighlightParagraph(paragraph.index, weakness.claimId)}
+                      title="Show this paragraph's claims on screen"
+                      style={{ ...TEXT_BTN_STYLE, flexShrink: 0, padding: 0, fontSize: 11 }}
+                    >
+                      Show
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>
+
+      {/* The most useful thing on the panel, and it only exists because
+          components are assigned to roles above: a component with no paragraph
+          to sit beside is one the draft never attempts. */}
+      {missing.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: DIM, letterSpacing: 0.4 }}>
+            NOT FOUND IN THIS DRAFT
+          </div>
+          <div style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>
+            {missing.map(([, label]) => label).join(' · ')}
+          </div>
+        </div>
+      ) : null}
+
+      {draftWeaknesses.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: DIM, letterSpacing: 0.4 }}>SUMMARY</div>
+          {/* The design writes a paragraph of prose here. These are the rubric's
+              own sentences instead: nothing on this path generates text, and a
+              summary invented to fill a slot would be the one part of the panel
+              that was not a reading of the draft. */}
+          {draftWeaknesses.map((weakness, i) => (
+            <div key={`${weakness.kind}-${i}`} style={{ fontSize: 11.5, lineHeight: 1.45, color: MUTED }}>
+              {weakness.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Hardcoded rather than driven by a `rolesFrom` field, because this path
           has no model classifier wired to it — the sentence has one value. It
@@ -1452,6 +1666,32 @@ function StructureView({
           ask for a better reading with. */}
       <div style={{ fontSize: 10.5, color: DIM, lineHeight: 1.4 }}>
         Labelled by local rules, which leave anything they cannot justify unlabelled.
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the panel shows when there is no trustworthy structural read.
+ *
+ * The score chip is now always present, so this state is reachable in a way it
+ * never used to be — previously the chip was hidden whenever `structure` was
+ * null, which meant a user whose draft never produced a reading had no way in at
+ * all and nothing to click. That was the original complaint.
+ *
+ * It says why rather than spinning. `computeWatchOutline` returns null when
+ * `structureFit` judges the text unfit — too short, or no real paragraph
+ * boundaries — and that is a fact about the draft the user can act on, not a
+ * loading state that will resolve on its own.
+ */
+function NoReadingView(): JSX.Element {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, padding: '26px 16px' }}>
+      <ScoreRing score={0} />
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: INK }}>No reading yet</div>
+      <div style={{ fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.45, maxWidth: 260 }}>
+        The rubric needs a few paragraphs of prose before it has an opinion worth showing. Keep writing and this
+        fills in on its own.
       </div>
     </div>
   )
@@ -2852,13 +3092,11 @@ export default function OverlayApp(): JSX.Element {
                   {/* Sibling of the drag region, never a child of it — that div
                       owns onMouseDown for startWidgetDrag and would swallow
                       this click through the drag-threshold path. */}
-                  {widget.structure ? (
-                    <ScoreChip
-                      structure={widget.structure}
-                      active={widget.viewMode === 'structure'}
-                      onOpen={showStructure}
-                    />
-                  ) : null}
+                  <ScoreChip
+                    structure={widget.structure}
+                    active={widget.viewMode === 'structure'}
+                    onOpen={showStructure}
+                  />
                   <div
                     onMouseDown={(e) =>
                       startWidgetDrag(e, { width: widget.rect.width, height: widget.rect.height })
@@ -2958,12 +3196,21 @@ export default function OverlayApp(): JSX.Element {
                       what a well-sourced draft looks like), and opening the
                       score chip only to be told "no claims flagged" would be
                       answering a question nobody asked. */}
-                  {widget.viewMode === 'structure' && widget.structure ? (
-                    <StructureView
-                      structure={widget.structure}
-                      liveClaimIds={liveClaimIds}
-                      onHighlightParagraph={highlightParagraph}
-                    />
+                  {widget.viewMode === 'structure' ? (
+                    // No `&& widget.structure` guard any more. Falling through to
+                    // the claims list when there was no reading is how opening the
+                    // score chip could land you somewhere unrelated to what you
+                    // clicked; the panel now answers the question you asked, even
+                    // when the answer is "there isn't a reading yet".
+                    widget.structure ? (
+                      <ArgumentScoreView
+                        structure={widget.structure}
+                        liveClaimIds={liveClaimIds}
+                        onHighlightParagraph={highlightParagraph}
+                      />
+                    ) : (
+                      <NoReadingView />
+                    )
                   ) : visibleClaims.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 24 }}>
                       <div style={{ fontSize: 12.5, color: DIM, textAlign: 'center' }}>No claims flagged yet.</div>
