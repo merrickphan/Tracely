@@ -4,7 +4,11 @@
 // `import type` only. The alias form fails at require() time with
 // MODULE_NOT_FOUND. (analyzeStructure.ts value-imports '@shared/claimSpans'
 // with the alias and pays for it by having no test of its own.)
-import { hasInlineCitation } from '../../../shared/inlineCitation.ts'
+import { hasInlineCitation, hasInlineCitationNear } from '../../../shared/inlineCitation.ts'
+// Relative + `.ts` for the same reason as the line above — a RUNTIME import in
+// a module `node --test` loads directly. claimSpans.ts itself only type-imports,
+// so it is safe to pull in here.
+import { computeClaimSpans } from '../../../shared/claimSpans.ts'
 import type { Claim, EvidenceCoverage } from '@shared/types'
 
 /**
@@ -37,16 +41,35 @@ function hasRelevantSource(claim: Claim): boolean {
   return (claim.scoreBreakdown?.sourceCount ?? 0) > 0
 }
 
-export function computeEvidenceCoverage(claims: Claim[]): EvidenceCoverage {
+/**
+ * `documentText` is optional but should be passed wherever it exists.
+ *
+ * A detected claim is a sub-span of a sentence, so `hasInlineCitation` on the
+ * claim alone cannot see an "(Author, Year)" that follows the assertion — the
+ * count then disagreed with the underlines drawn over the very same draft.
+ * Without the text this falls back to the claim-only test, which is the old
+ * behaviour and still right for a stored claim with no snapshot to read.
+ */
+export function computeEvidenceCoverage(claims: Claim[], documentText?: string): EvidenceCoverage {
   const resolved = claims.filter(isResolved)
   const strengths = resolved
     .map((claim) => claim.strengthScore)
     .filter((score): score is number => score !== null)
 
+  const citedById = documentText
+    ? new Map(
+        computeClaimSpans(documentText, claims).map(
+          (span) => [span.claim.id, hasInlineCitationNear(documentText, span.start, span.end)] as const
+        )
+      )
+    : null
+  const isCited = (claim: Claim): boolean =>
+    citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
+
   return {
     detected: claims.length,
     withRelevantSource: claims.filter(hasRelevantSource).length,
-    withOwnCitation: claims.filter((claim) => hasInlineCitation(claim.text)).length,
+    withOwnCitation: claims.filter(isCited).length,
     meanStrength:
       strengths.length === 0
         ? null

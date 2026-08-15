@@ -1,6 +1,6 @@
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
-import { hasInlineCitation } from '@shared/inlineCitation'
+import { hasInlineCitationNear } from '@shared/inlineCitation'
 import { problemKindsFor } from '@shared/problemKind'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
 import type { Claim } from '@shared/types'
@@ -164,7 +164,12 @@ export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim
   const marks: DocumentMark[] = []
 
   for (const span of computeClaimSpans(text, claims)) {
-    const cited = hasInlineCitation(span.claim.text)
+    // Read in its sentence, not on its own. A detected claim is a sub-span —
+    // the relay returns the assertion and stops before the "(Author, Year)"
+    // that follows it — so testing `span.claim.text` reported a properly cited
+    // sentence as uncited. `span` already carries offsets into `text`, so the
+    // sentence is right there.
+    const cited = hasInlineCitationNear(text, span.start, span.end)
     const evidence = evidenceOf(span.claim)
 
     // A claim nothing has been searched for yet gets no mark at all.

@@ -5,7 +5,6 @@ import { splitParagraphs } from '@shared/paragraphSplit'
 import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
-import StructurePanel from '../components/StructurePanel'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -204,8 +203,9 @@ function DocumentEditor({
   const savedRangeRef = useRef<Range | null>(null)
   const alignMenuRef = useRef<HTMLDivElement>(null)
 
-  // ---- Structure rail ----------------------------------------------------
-  const [structureOpen, setStructureOpen] = useState(false)
+  // ---- Structure ---------------------------------------------------------
+  // No `structureOpen` any more: the rail and its toggle are gone, and the
+  // outline is now read only by the AI Insights report.
   // What "AI Insights" opens — the Essay Grade modal from Figma 370:135/404:129.
   // Separate state from the rail: the rail is a persistent side panel you work
   // beside, the modal is a report you open, read and dismiss.
@@ -591,10 +591,13 @@ function DocumentEditor({
       setWrapWidth(wrap.clientWidth)
     })
     return () => cancelAnimationFrame(frame)
-  }, [claims, dismissed, measureTick, structureOpen, fontFamily, fontSize, align])
+    // `structureOpen` was a dependency here: opening the rail narrowed the
+    // editor, so every mark had to be re-measured. With the rail gone the
+    // editor's width no longer changes from inside this component.
+  }, [claims, dismissed, measureTick, fontFamily, fontSize, align])
 
-  // The editor reflows on window resize and when the Structure rail opens, and
-  // neither goes through handleInput.
+  // The editor reflows on window resize, which does not go through
+  // handleInput.
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
@@ -695,11 +698,15 @@ function DocumentEditor({
     }
   }
 
-  // Load a stored outline when the rail is opened on a saved document. Reading
-  // it is free; re-analyzing is not, so this never triggers one — a stale
-  // result is shown with its banner and the user decides.
+  // Load a stored outline when AI Insights is opened on a saved document.
+  // Reading it is free; re-analyzing is not, so this never triggers one — a
+  // stale result is shown with its banner and the user decides.
+  //
+  // Gated on `scoreOpen` since the Structure rail was removed; that rail's
+  // toggle used to be what opened this, and without the re-gate a saved
+  // document showed an empty report until runStructure came back.
   useEffect(() => {
-    if (!structureOpen || outline || !docIdRef.current) return
+    if (!scoreOpen || outline || !docIdRef.current) return
     let cancelled = false
     void tracelyApi
       .getStructure(docIdRef.current, bodyText())
@@ -723,7 +730,7 @@ function DocumentEditor({
     return () => {
       cancelled = true
     }
-  }, [structureOpen, outline, onRefreshClaims])
+  }, [scoreOpen, outline, onRefreshClaims])
 
   /**
    * Runs the evidence search for claims that have not been checked.
@@ -793,7 +800,7 @@ function DocumentEditor({
     // direct child — critically including `.docedit-wordcount` and
     // `.docedit-error`, which are positioned against it. Left as siblings of
     // the rail they would become flex items of the row and land beside it.
-    <div className={`docedit-view${structureOpen ? ' with-structure' : ''}`}>
+    <div className="docedit-view">
       <div className="docedit-main">
       <div className="docedit-toolbar">
         <button className="docedit-back" onClick={onBack}>
@@ -1014,20 +1021,12 @@ function DocumentEditor({
           {insightsLoading || outlineLoading ? 'Analyzing…' : 'AI Insights'}
         </button>
         {/*
-          Separate from AI Insights rather than replacing it: the two answer
-          different questions. AI Insights asks whether the sentences are true;
-          this asks whether the essay works. Opening the rail does not analyze
-          — a stored outline loads, and anything costing a relay call waits for
-          an explicit press inside the panel.
+          The "Structure" toggle stood here, opening a side rail with the same
+          rubric, weaknesses and paragraph list that AI Insights now shows under
+          "View Full Report". Two buttons in a toolbar the design gives one, both
+          leading to the same reading of the draft. Removed on Merrick's call
+          (2026-08-15); the rail went with it, since this was the only way in.
         */}
-        <button
-          className={`docedit-insights docedit-structure-toggle${structureOpen ? ' active' : ''}`}
-          onClick={() => setStructureOpen((open) => !open)}
-          aria-pressed={structureOpen}
-          title="Read this draft as an argument"
-        >
-          Structure
-        </button>
         {/*
           "Share" and "•••" were here, permanently disabled with "isn't
           available yet". Local-first, no account, no permalink, nothing to
@@ -1150,22 +1149,6 @@ function DocumentEditor({
         />
       ) : null}
 
-      {structureOpen ? (
-        <StructurePanel
-          outline={outline}
-          claims={claims ?? []}
-          paragraphTexts={paragraphTexts}
-          stale={outlineStale}
-          loading={outlineLoading}
-          error={outlineError}
-          activeParagraph={activeParagraph}
-          checking={checking}
-          onAnalyze={() => void runStructure()}
-          onCheckClaims={(ids) => void checkClaims(ids)}
-          onSelectParagraph={selectParagraph}
-          onClose={() => setStructureOpen(false)}
-        />
-      ) : null}
     </div>
   )
 }

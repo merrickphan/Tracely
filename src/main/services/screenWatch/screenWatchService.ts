@@ -49,7 +49,7 @@ import {
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
 } from './panelSize'
-import { hasInlineCitation, inlineCitationKind } from '@shared/inlineCitation'
+import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind } from '@shared/inlineCitation'
 import { problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
@@ -1224,6 +1224,26 @@ function updateOverlayAndWidget(
   // open a popover. controlRect is preferred because the window includes the
   // app's own toolbars, and text scrolled under a sticky header still reports a
   // valid rect that was then drawn on top of the header.
+  /**
+   * Is this claim's SENTENCE cited? Decided once, against the document.
+   *
+   * Was `hasInlineCitation(c.text)` at both call sites. A detected claim is a
+   * sub-span of a sentence — the relay returns the assertion and stops before
+   * the "(Author, Year)" that follows — so a properly cited sentence was
+   * reported as uncited. `fullText` is already a parameter here, so the
+   * surrounding sentence costs one span lookup.
+   *
+   * The fallback matters: computeClaimSpans drops claims it cannot locate (the
+   * text moved on between the snapshot and now), and those keep the old
+   * claim-only test rather than silently becoming uncited.
+   */
+  const citedById = new Map(
+    computeClaimSpans(fullText, claims).map(
+      (span) => [span.claim.id, hasInlineCitationNear(fullText, span.start, span.end)] as const
+    )
+  )
+  const isCited = (claim: Claim): boolean => citedById.get(claim.id) ?? hasInlineCitation(claim.text)
+
   /** Decided once here, so the underline and the card cannot disagree. */
   const problemKindById = new Map(
     claims.map((c) => {
@@ -1232,7 +1252,7 @@ function updateOverlayAndWidget(
         c.id,
         problemKindsFor({
           claimType: c.claimType,
-          hasInlineCitation: hasInlineCitation(c.text),
+          hasInlineCitation: isCited(c),
           evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
           critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
         })
@@ -1449,7 +1469,7 @@ function updateOverlayAndWidget(
         text: c.text,
         claimType: c.claimType,
         confidence: c.confidence,
-        hasInlineCitation: hasInlineCitation(c.text),
+        hasInlineCitation: isCited(c),
         problemKinds: problemKindById.get(c.id) ?? ['searching'],
         evidence: leanEvidence(c.id),
         critique: critique?.critique ?? null,

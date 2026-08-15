@@ -239,20 +239,20 @@ export default function ArgumentScoreModal({
   onReanalyze: () => void
   onClose: () => void
 }): JSX.Element {
-  // Opens on the Argument check card — 353:129, the frame with the BREAKDOWN
-  // metrics grid (Support / Relevance / Quality / Recency).
+  // Opens on the Essay Grade widget — 370:135, the compact card with the ring
+  // and the band.
   //
-  // This landing view has now moved three times, so the history matters: #46
-  // opened the compact Essay Grade widget, #47 opened the full report on his
-  // instruction, #48 went back to compact when he sent the frame, and on
-  // 2026-08-15 he asked for "the OverlayMockup SAGrid widget" instead. No frame
-  // carries that name; 353:129 is the only one in the file with a metrics grid,
-  // and it was previously reachable ONLY through "Open Argument Check", which
-  // fits "it's not doing that right now" exactly.
+  // The history matters, because this has moved: #46 opened this card, #47 the
+  // full report, #48 back to this card, then on 2026-08-15 it went to the
+  // Argument check (353:129) reading "the OverlayMockup SAGrid widget" as the
+  // only frame in the file with a metrics grid. That reading was wrong — later
+  // the same day: "when I click AI insights it starts with argument check. No.
+  // I want it to start with essay grade."
   //
-  // Everything else is still reached from here, and the Essay Grade widget is
-  // still one click away. Do not move this again without him naming the frame.
-  const [view, setView] = useState<View>({ name: 'argument' })
+  // So it is named now, and this is settled: Essay Grade first, everything else
+  // reached from it. Argument check is one click away under "Open Argument
+  // Check", which is where the design puts it.
+  const [view, setView] = useState<View>({ name: 'summary' })
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Argument score">
