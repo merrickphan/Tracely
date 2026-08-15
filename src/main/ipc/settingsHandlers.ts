@@ -18,7 +18,8 @@ const setSchema = z.object({
   fontSize: z.enum(['small', 'medium', 'large']).optional(),
   claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
-  screenWatchAllowedApps: z.string().optional()
+  screenWatchAllowedApps: z.string().optional(),
+  suppressSaveConfirm: z.boolean().optional()
 })
 
 function buildSettings(): AppSettings {
@@ -33,7 +34,8 @@ function buildSettings(): AppSettings {
     fontSize: raw.fontSize as FontSize,
     claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
-    screenWatchAllowedApps: raw.screenWatchAllowedApps
+    screenWatchAllowedApps: raw.screenWatchAllowedApps,
+    suppressSaveConfirm: raw.suppressSaveConfirm === 'true'
   }
 }
 
@@ -58,6 +60,9 @@ export function registerSettingsHandlers(): void {
       applyMainWindowFontSize(patch.fontSize)
     }
     if (patch.claimSensitivity !== undefined) setSetting('claimSensitivity', String(patch.claimSensitivity))
+    if (patch.suppressSaveConfirm !== undefined) {
+      setSetting('suppressSaveConfirm', String(patch.suppressSaveConfirm))
+    }
     // Persist only if the OS actually gave us the shortcut. globalShortcut
     // .register returns false when the accelerator is malformed or already
     // claimed by another app — and the return value was previously ignored, so

@@ -5,6 +5,7 @@ import type {
   ScreenWatchOverlayUpdateEvent
 } from '@shared/ipc-contract'
 import type {
+  AppSettings,
   AuthUser,
   Claim,
   DocumentOutline,
@@ -116,6 +117,7 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // state, because the mock is constructed once per bridge.
   let previewClaims: Claim[] = [...fx.claims]
   let previewDocs: DocumentRecord[] = [...fx.documents]
+  let previewSettings: AppSettings = { ...fx.settings }
   // Screen Watch's claims are pushed, not fetched: the real service folds a
   // refresh or a critique into its in-memory claim and redraws the overlay, so
   // the panel's two result states are only reachable here if the mock does the
@@ -194,9 +196,7 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     analyze: {
       detectClaims: () => relay('analyze.detectClaims', { analysisId: fx.analysis.id, claims: fx.claims }),
       getResult: () =>
-        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} }),
-      listSessions: () =>
-        ok('analyze.listSessions', { sessions: [{ analysis: fx.analysis, claims: previewClaims }] })
+        ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} })
     },
     evidence: {
       // Records the result against the claim, so the Structure rail's
@@ -320,8 +320,17 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       }
     },
     settings: {
-      get: () => ok('settings.get', fx.settings),
-      set: () => ok('settings.set', fx.settings),
+      get: () => ok('settings.get', previewSettings),
+      // Merges the patch and keeps it, rather than returning the fixture
+      // unchanged. It used to do the latter, which made every settings control
+      // in the harness look broken in the same way a real persistence bug
+      // would: toggle it, watch it snap back. Worse, it made the harness
+      // useless for exactly the round-trips it should be proving — the Save
+      // changes dialog's "Do not show anymore" could never take effect here.
+      set: (patch) => {
+        previewSettings = { ...previewSettings, ...patch }
+        return ok('settings.set', previewSettings)
+      },
       scanInstalledApps: () =>
         ok('settings.scanInstalledApps', {
           found: [

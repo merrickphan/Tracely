@@ -26,7 +26,12 @@ const DEFAULTS: Record<string, string> = {
   // works anywhere until the user explicitly picks apps in Settings >
   // Preferences. Comma-separated, case-insensitive. Empty means nothing is
   // enabled yet.
-  screenWatchAllowedApps: ''
+  screenWatchAllowedApps: '',
+  // The "Do not show anymore" checkbox on the Save changes dialog (Figma
+  // 212:65). Off by default so the dialog appears until the user opts out of
+  // it — a confirm nobody can turn off is one they learn to click through
+  // without reading, which is worse than not having it.
+  suppressSaveConfirm: 'false'
 }
 
 export function getSetting(key: string): string {

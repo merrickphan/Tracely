@@ -18,6 +18,7 @@ import type {
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
+import SaveChangesDialog from '../components/SaveChangesDialog'
 import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
 import {
@@ -115,18 +116,7 @@ const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX
   { id: 'privacy', label: 'Privacy', icon: ShieldIcon }
 ]
 
-export default function SettingsView({
-  onNavigate,
-  embedded = false
-}: {
-  onNavigate: (tab: Tab) => void
-  /**
-   * Rendered inside the dashboard shell, which already draws the window frame
-   * and the nav rail. Suppresses this view's own Back link and outer chrome so
-   * there are not two ways out of the same screen.
-   */
-  embedded?: boolean
-}): JSX.Element {
+export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
   const [section, setSection] = useState<Section>('profile')
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -244,6 +234,16 @@ export default function SettingsView({
       .catch((err) => setProfileError(err instanceof Error ? err.message : String(err)))
   }, [])
 
+  /**
+   * The Save changes confirm (Figma 212:65) sits in front of this.
+   *
+   * Only in front of the EXPLICIT saves — the ones with a button. The theme,
+   * accent, density and font-size controls apply on change and have no Save
+   * button by design (see the note further down), and putting a modal in front
+   * of a live preview would make choosing a colour a three-click operation.
+   */
+  const [confirmingSave, setConfirmingSave] = useState(false)
+
   async function saveProfile(): Promise<void> {
     if (!profile) return
     setProfileSaving(true)
@@ -260,6 +260,21 @@ export default function SettingsView({
     } finally {
       setProfileSaving(false)
     }
+  }
+
+  /** Confirm first, unless the user ticked "Do not show anymore". */
+  function requestSaveProfile(): void {
+    if (settings?.suppressSaveConfirm) {
+      void saveProfile()
+      return
+    }
+    setConfirmingSave(true)
+  }
+
+  async function confirmSaveProfile(suppress: boolean): Promise<void> {
+    setConfirmingSave(false)
+    if (suppress) void save({ suppressSaveConfirm: true })
+    await saveProfile()
   }
 
   function handleAvatarFile(file: File): void {
@@ -384,39 +399,8 @@ export default function SettingsView({
   }
 
   return (
-    <div className={`settings-view${embedded ? ' is-embedded' : ''}`}>
-      {/*
-        Two layouts, one set of panels.
-
-        Standalone keeps the left rail with its own Back link. Embedded in the
-        dashboard shell there is already a nav rail two inches to the left, so a
-        second vertical nav beside it reads as two apps in one window — the
-        design puts these across the top as tabs instead. Only the chrome
-        differs; every panel below is shared, which is the point. Porting the
-        dashboard branch's own Settings file would have been the easy way to get
-        this layout and would have silently dropped the build-version row and
-        everything else Settings gained after that branch was cut.
-      */}
-      {embedded ? (
-        <header className="settings-embedded-head">
-          <h1>Settings</h1>
-          <p>Manage your Tracely profile, appearance, privacy, and preferences.</p>
-          <nav className="settings-tabs">
-            {NAV.map((n) => (
-              <button
-                key={n.id}
-                className={`settings-tab${section === n.id ? ' active' : ''}`}
-                aria-current={section === n.id ? 'page' : undefined}
-                onClick={() => setSection(n.id)}
-              >
-                {n.label}
-              </button>
-            ))}
-          </nav>
-        </header>
-      ) : null}
+    <div className="settings-view">
       <div className="settings-shell">
-        {!embedded ? (
         <aside className="settings-sidebar">
           <div className="settings-sidebar-header">
             <button className="settings-back-link" onClick={() => onNavigate('home')}>
@@ -450,6 +434,13 @@ export default function SettingsView({
             </div>
           ) : null}
         </aside>
+
+        {confirmingSave ? (
+          <SaveChangesDialog
+            busy={profileSaving}
+            onConfirm={(suppress) => void confirmSaveProfile(suppress)}
+            onCancel={() => setConfirmingSave(false)}
+          />
         ) : null}
 
         {confirmingSignOut ? (
@@ -545,7 +536,7 @@ export default function SettingsView({
                 */}
               </div>
               {profileError ? <p className="error-text">{profileError}</p> : null}
-              <Button variant="dark" onClick={saveProfile} disabled={profileSaving}>
+              <Button variant="dark" onClick={requestSaveProfile} disabled={profileSaving}>
                 {profileSaving ? 'Saving…' : 'Save changes'}
               </Button>
               {authUser ? <DangerZone user={authUser} /> : null}

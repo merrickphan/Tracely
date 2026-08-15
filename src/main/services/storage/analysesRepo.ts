@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { Analysis } from '@shared/types'
-import { queryAll, queryOne, run } from './db'
+import { queryOne, run } from './db'
 
 interface AnalysisRow {
   id: string
@@ -33,18 +33,4 @@ export function createAnalysis(sourceText: string, origin: 'main' | 'floating'):
 export function getAnalysis(id: string): Analysis | null {
   const row = queryOne<AnalysisRow>('SELECT * FROM analyses WHERE id = $id', { $id: id })
   return row ? toDomain(row) : null
-}
-
-/**
- * Saved sessions, newest first, for the dashboard's Sessions list.
- *
- * `origin = 'main'` only. Floating-popup captures are throwaway clipboard
- * checks, and listing them would bury the passages someone actually worked on.
- */
-export function listAnalyses(limit = 100): Analysis[] {
-  const rows = queryAll<AnalysisRow>(
-    'SELECT * FROM analyses WHERE origin = $origin ORDER BY created_at DESC LIMIT $limit',
-    { $origin: 'main', $limit: limit }
-  )
-  return rows.map(toDomain)
 }

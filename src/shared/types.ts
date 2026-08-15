@@ -216,6 +216,8 @@ export interface AppSettings {
   // Opt-in: apps this exe list contains are the ONLY ones Screen Watch
   // reads text from. Empty means nothing is enabled anywhere yet.
   screenWatchAllowedApps: string
+  /** The Save changes dialog's "Do not show anymore" has been ticked. */
+  suppressSaveConfirm: boolean
 }
 
 // The document editor's saved work. Rich text rather than plain: the editor is

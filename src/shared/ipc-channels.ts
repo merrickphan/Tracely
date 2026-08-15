@@ -1,7 +1,6 @@
 export const IPC = {
   ANALYZE_DETECT_CLAIMS: 'analyze:detectClaims',
   ANALYZE_GET_RESULT: 'analyze:getResult',
-  ANALYZE_LIST_SESSIONS: 'analyze:listSessions',
 
   EVIDENCE_FIND: 'evidence:find',
   EVIDENCE_GET_FOR_CLAIM: 'evidence:getForClaim',
