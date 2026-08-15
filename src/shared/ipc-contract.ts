@@ -48,23 +48,6 @@ export interface AnalyzeGetResultResponse {
   claims: Claim[]
 }
 
-/**
- * One saved analysis with its claims — a row in the dashboard's Sessions list.
- *
- * The claims ride along because every cell in that row is derived from them
- * (the title, the evidence-status pill), and fetching them per row would mean
- * one IPC round trip per session on every render of the list.
- */
-export interface AnalysisSessionSummary {
-  analysis: Analysis
-  claims: Claim[]
-}
-
-export type AnalyzeListSessionsRequest = Record<string, never>
-export interface AnalyzeListSessionsResponse {
-  sessions: AnalysisSessionSummary[]
-}
-
 export interface EvidenceFindRequest {
   claimId: string
 }
