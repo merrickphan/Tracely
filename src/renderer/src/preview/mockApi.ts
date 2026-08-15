@@ -315,6 +315,9 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
         })
       }
     },
+    app: {
+      getInfo: () => ok('app.getInfo', { version: '0.3.83-beta.0', isPreview: true })
+    },
     settings: {
       get: () => ok('settings.get', fx.settings),
       set: () => ok('settings.set', fx.settings),
@@ -356,10 +359,6 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       // Opening a real browser from a preview is the one side effect worth
       // suppressing outright — reviewing the UI shouldn't spray tabs.
       openExternal: () => ok('shell.openExternal (suppressed)', { ok: true as const })
-    },
-    app: {
-      getBuildInfo: () =>
-        ok('app.getBuildInfo', { version: '0.0.0-harness', isPreview: true })
     },
     screenWatch: {
       setEnabled: () => ok('screenWatch.setEnabled', fx.screenWatchStatus),

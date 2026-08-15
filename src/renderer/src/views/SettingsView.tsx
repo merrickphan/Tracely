@@ -9,12 +9,7 @@ import type {
   FontSize,
   Theme
 } from '@shared/types'
-import type {
-  AppGetBuildInfoResponse,
-  ProfileInfo,
-  ScannedApp,
-  ScreenWatchStatus
-} from '@shared/ipc-contract'
+import type { AppGetInfoResponse, ProfileInfo, ScannedApp, ScreenWatchStatus } from '@shared/ipc-contract'
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -127,13 +122,13 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
 
-  // Preview-only: the app has no OS title bar (windows are frameless), so
-  // without this a beta build and a real release look identical while you're
-  // actually using them. Never shown in a real release — a version number
-  // isn't something a user needs to see.
-  const [buildInfo, setBuildInfo] = useState<AppGetBuildInfoResponse | null>(null)
+  // Preview-only: which build you're looking at. Real releases don't show
+  // this — a version number means nothing to a user who never sees a second
+  // one, but it's the only way to tell two open Previews apart.
+  const [appInfo, setAppInfo] = useState<AppGetInfoResponse | null>(null)
+
   useEffect(() => {
-    tracelyApi.getBuildInfo().then(setBuildInfo).catch(() => {})
+    tracelyApi.getAppInfo().then(setAppInfo).catch(() => setAppInfo(null))
   }, [])
 
   async function save(patch: Parameters<typeof tracelyApi.setSettings>[0]): Promise<void> {
@@ -395,16 +390,16 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
               </Fragment>
             ))}
           </nav>
-          {authUser || buildInfo?.isPreview ? (
+          {authUser ? (
             <div className="settings-sidebar-footer">
-              {authUser ? (
-                <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
-                  <SignOutIcon size={15} /> Sign out
-                </button>
-              ) : null}
-              {buildInfo?.isPreview ? (
-                <span className="settings-build-version">Preview v{buildInfo.version}</span>
-              ) : null}
+              <button className="settings-signout" onClick={() => setConfirmingSignOut(true)}>
+                <SignOutIcon size={15} /> Sign out
+              </button>
+            </div>
+          ) : null}
+          {appInfo?.isPreview ? (
+            <div style={{ padding: '10px 16px 14px', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+              Preview v{appInfo.version}
             </div>
           ) : null}
         </aside>
