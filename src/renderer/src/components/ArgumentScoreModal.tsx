@@ -11,6 +11,7 @@ import type {
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
+import { gradeFor } from './essayGrade'
 
 /**
  * What the document editor's "AI Insights" button opens.
@@ -123,22 +124,10 @@ function verdictFor(pct: number): string {
  * these frames that cannot be made true by rendering it, so the slot keeps the
  * design's position, size and weight and says what the band actually means.
  */
-const GRADE_BANDS: Array<[number, string, string]> = [
-  [90, 'A', 'Built the way the rubric asks for'],
-  [85, 'A-', 'Strong throughout, with small gaps'],
-  [80, 'B+', 'Well built — a few gaps to close'],
-  [75, 'B', 'Solid, with parts left implied'],
-  [70, 'B-', 'The shape is there; the support is thin'],
-  [65, 'C+', 'Half the argument is doing the work'],
-  [60, 'C', 'Key moves are missing or unstated'],
-  [50, 'D', 'Reads as notes rather than an argument'],
-  [0, 'F', 'Not yet arguing anything the rubric can find']
-]
+// Moved to ./essayGrade so the Screen Watch overlay's 'grade' panel can draw
+// the same band against the same score. That window loads no stylesheet and so
+// cannot import this component; a pure module is the only thing both can share.
 
-function gradeFor(score: number): { letter: string; line: string } {
-  const band = GRADE_BANDS.find(([floor]) => score >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
-  return { letter: band[1], line: band[2] }
-}
 
 /** 238 wpm — Brysbaert 2019, silent reading of English prose. */
 const READING_WPM = 238

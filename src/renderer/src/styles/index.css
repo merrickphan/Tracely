@@ -795,6 +795,20 @@ textarea:disabled {
   width: 200px;
   height: 56px;
   font-size: 16px;
+  /* Figma 58:226 sets "Create Document" on ONE line: a 135px label centred in
+     the 200px button. `.btn-primary` pads 32px a side, so the content box is
+     200 - 64 - 2 = 134px — one pixel narrower than the label, which is why it
+     wrapped. The design's own label is `whitespace-nowrap` and simply sits
+     across its padding, so this does the same rather than trimming the padding
+     and losing the design's 200x56 box. */
+  white-space: nowrap;
+  /* The wrap also exposed that this never centred its content explicitly: a
+     button's default centring stops once the content is taller than a fixed
+     height, so the two lines overflowed 56px and sat low. Explicit centring
+     means a label that ever does outgrow the box stays centred instead. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* New Session source-type picker (Analyze tab, pre-analysis state) */
@@ -876,9 +890,26 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  /* Figma 58:182 centres the block vertically (`justify-center`, `pb-16`), and
+     the frame bears that out: the heading starts 108px down and the button ends
+     124px up. This was 88px of top padding against 48px of bottom with
+     `flex-start`, which is the "margins are not equal, it's shifted down"
+     report — 40px of the difference was literally in the padding.
+     `safe center` rather than plain `center`: this box scrolls, and a centred
+     flex column whose content is taller than the box pushes the first item off
+     the TOP edge, where overflow is unreachable. `safe` falls back to
+     flex-start exactly in that case, which is when the results list is long. */
+  justify-content: safe center;
   text-align: center;
-  padding: 88px 64px 48px;
+  /* The extra 16px at the bottom is the frame's own `pb-16`: it leaves the
+     block sitting a touch high, which is how body copy is normally set —
+     optically centred rather than measured. */
+  padding: 16px 64px 32px;
+  /* Reserve the scrollbar in both gutters. Without it, everything centred here
+     jumps sideways by the scrollbar's width the moment a claims list makes the
+     box overflow — the other half of "kind of off-center", and the half that
+     only appears after you've run something. */
+  scrollbar-gutter: stable both-edges;
 }
 
 .analyze-heading {

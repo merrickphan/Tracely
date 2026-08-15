@@ -1,6 +1,7 @@
 import { hasInlineCitation } from '@shared/inlineCitation'
 import type {
   ScreenWatchClaimSummary,
+  ScreenWatchWidget,
   ScreenWatchHoverEvent,
   ScreenWatchOverlayUpdateEvent
 } from '@shared/ipc-contract'
@@ -124,7 +125,10 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // same. Without this, "Critique Argument" logged an IPC call and the card
   // never changed.
   let watchClaims: ScreenWatchClaimSummary[] = [...fx.screenWatchClaims]
-  let lastWidget: { expanded: boolean; viewMode: 'single' | 'all' | 'structure' } = {
+  // The contract's own union, not a copy of it. This was spelled out by hand
+  // and so silently stopped covering the panel's modes the moment one was
+  // added — which is exactly the drift this harness exists to catch.
+  let lastWidget: { expanded: boolean; viewMode: ScreenWatchWidget['viewMode'] } = {
     expanded: fx.overlayUpdate.widget?.expanded ?? false,
     viewMode: fx.overlayUpdate.widget?.viewMode ?? 'single'
   }
@@ -161,7 +165,7 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // about how much room the content has.
   function emitWidget(patch: {
     expanded?: boolean
-    viewMode?: 'single' | 'all' | 'structure'
+    viewMode?: ScreenWatchWidget['viewMode']
   }): void {
     const w = window as Window & {
       __previewEmitOverlay?: (e: ScreenWatchOverlayUpdateEvent) => void
@@ -178,13 +182,19 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     // 568. Guessing these makes the preview claim more or less room than the
     // real panel has, which is the one thing it must not do — re-read them from
     // that module whenever its constants change rather than adjusting by eye.
+    // 'grade' is the one mode with its own width and its own anchor:
+    // GRADE_PANEL_WIDTH/HEIGHT = 560x321, centred rather than cornered. Sized
+    // wrong here it still *renders*, but its two 251px pills flex down to fit a
+    // 480px box and the harness quietly shows a card the product never draws.
     const rect = expanded
-      ? {
-          x: 90,
-          y: 20,
-          width: 480,
-          height: viewMode === 'single' ? 532 : viewMode === 'all' ? 313 : 568
-        }
+      ? viewMode === 'grade'
+        ? { x: 100, y: 80, width: 560, height: 321 }
+        : {
+            x: 90,
+            y: 20,
+            width: 480,
+            height: viewMode === 'single' ? 532 : viewMode === 'all' ? 313 : 568
+          }
       : { x: 520, y: 300, width: 56, height: 56 }
     w.__previewEmitOverlay({
       ...fx.overlayUpdate,

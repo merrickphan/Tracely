@@ -43,6 +43,8 @@ import { getMainWindow } from '../../windows/mainWindow'
 import {
   computeAllPanelSize,
   computeStructurePanelSize,
+  GRADE_PANEL_HEIGHT,
+  GRADE_PANEL_WIDTH,
   SINGLE_PANEL_HEIGHT,
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
@@ -250,7 +252,7 @@ let widgetManualPos: { x: number; y: number } | null = null
 // scrolling — the panel's actual pixel size (see updateOverlayAndWidget)
 // depends on this, so it has to be known server-side rather than left as a
 // renderer-only toggle the way the hover popover's own single/all switch is.
-export type WidgetViewMode = 'single' | 'all' | 'structure'
+export type WidgetViewMode = 'single' | 'all' | 'structure' | 'grade'
 let widgetViewMode: WidgetViewMode = 'single'
 
 export function setWidgetExpanded(expanded: boolean): void {
@@ -1364,7 +1366,9 @@ function updateOverlayAndWidget(
             weaknessCount: structure?.weaknesses.length ?? 0,
             paragraphCount: structure?.paragraphs.length ?? 0
           })
-        : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
+        : widgetViewMode === 'grade'
+          ? { width: GRADE_PANEL_WIDTH, height: GRADE_PANEL_HEIGHT }
+          : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
   // Some watched windows are narrower/shorter than the ideal 400px card. The
   // overlay itself is clipped to that window, so an unclamped panel makes its
   // right/bottom actions unreachable. Keep a small inset and let the renderer
@@ -1374,12 +1378,25 @@ function updateOverlayAndWidget(
     width: Math.min(desiredPanelSize.width, Math.max(1, winBounds.width - panelInset * 2)),
     height: Math.min(desiredPanelSize.height, Math.max(1, winBounds.height - panelInset * 2))
   }
-  const panelLocalAnchored: ScreenRect = {
-    x: Math.max(panelInset, winBounds.width - panelSize.width - EDGE_MARGIN),
-    y: Math.max(panelInset, winBounds.height - panelSize.height - EDGE_MARGIN),
-    width: panelSize.width,
-    height: panelSize.height
-  }
+  // 'grade' is centred over the watched window; every other mode hangs off the
+  // bottom-right corner beside the launcher. That split is the design's, not a
+  // preference: 370:191 is drawn at x=155 of an 870-wide document (dead centre),
+  // because it is a verdict on the whole draft rather than a note about the one
+  // sentence the cursor is on.
+  const panelLocalAnchored: ScreenRect =
+    widgetViewMode === 'grade'
+      ? {
+          x: Math.max(panelInset, Math.round((winBounds.width - panelSize.width) / 2)),
+          y: Math.max(panelInset, Math.round((winBounds.height - panelSize.height) / 2)),
+          width: panelSize.width,
+          height: panelSize.height
+        }
+      : {
+          x: Math.max(panelInset, winBounds.width - panelSize.width - EDGE_MARGIN),
+          y: Math.max(panelInset, winBounds.height - panelSize.height - EDGE_MARGIN),
+          width: panelSize.width,
+          height: panelSize.height
+        }
 
   const anchoredLocal = widgetExpanded ? panelLocalAnchored : widgetLocalAnchored
   // A user-dragged position overrides the anchor until the widget collapses
