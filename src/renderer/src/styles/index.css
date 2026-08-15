@@ -1419,7 +1419,8 @@ textarea:disabled {
   background: #fff;
   border: 2px solid #000;
   border-radius: 14px;
-  padding: 14px;
+  /* 16, from Figma 288:309 — header, body and actions all inset by it. */
+  padding: 16px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
@@ -1456,7 +1457,8 @@ textarea:disabled {
 }
 
 .docmark-body {
-  margin: 8px 0 12px;
+  /* Body sits 12px under the header, actions 8px under the body (288:309). */
+  margin: 12px 0 8px;
   font-size: 12px;
   line-height: 1.5;
   color: #55555c;
@@ -1469,9 +1471,10 @@ textarea:disabled {
 
 .docmark-btn-primary,
 .docmark-btn-secondary {
-  padding: 8px 14px;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -4388,4 +4391,103 @@ textarea:disabled {
 .savechanges-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* ---- Home sample popover (Figma 361:329, inside Frame Main Page) --------
+   Literal frame coordinates, like every other .home-el: 43,380, 372x174.
+   Bigger than the real hover popover (320x159) because the frame draws it
+   scaled up as an illustration — matched to the frame rather than to the
+   working popover, since this one is on the home screen to be looked at. */
+.home-popover {
+  left: 43px;
+  top: 380px;
+  width: 372px;
+  height: 174px;
+  padding: 16px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid #000;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+.home-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 25px;
+}
+
+.home-popover-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff5900;
+  flex-shrink: 0;
+}
+
+.home-popover-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #17171b;
+}
+
+/* y=53 in the frame, against a header ending at 41. */
+.home-popover-body {
+  margin: 12px 0 0;
+  width: 340px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #55555c;
+}
+
+/* Actions at y=118; the body block above ends at ~106. */
+.home-popover-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.home-popover-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #fff;
+  color: #17171b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.home-popover-btn.primary {
+  width: 110px;
+  border-color: #17171b;
+  background: #17171b;
+  color: #fff;
+}
+
+.home-popover-btn:not(.primary) {
+  width: 75px;
+}
+
+.home-popover-btn:hover {
+  filter: brightness(0.97);
+}
+
+/* The one line that says why a Figma-accurate settings page cannot be used. */
+.settings-unavailable-note {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
+
+.settings-static-value.is-unavailable {
+  color: var(--muted);
+  font-style: italic;
 }

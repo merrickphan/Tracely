@@ -21,6 +21,9 @@ export default function HomeView({
   firstName: string | null
 }): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
+  // The frame's sample popover. Dismissible, because a card with a Dismiss
+  // button that does not dismiss is worse than no button.
+  const [sampleOpen, setSampleOpen] = useState(true)
 
   useEffect(() => {
     tracelyApi.getScreenWatchStatus().then(setScreenWatch)
@@ -87,31 +90,41 @@ export default function HomeView({
       </button>
 
       {/*
-        A "flagged claim" card sat here showing a hardcoded quote — an invented
-        statistic about 60% of jobs — above a decorative checkbox and two
-        buttons with no onClick at all. A fabricated figure presented as a real
-        flagged claim is the last thing that belongs on the home screen of a
-        tool whose entire job is checking whether figures are real.
+        The sample Hover Popover from the frame — 361:329, at 43,380, 372x174.
+        It shows a new user what Tracely does before they have anything to look
+        at, which is why the design puts it on an otherwise empty home screen.
 
-        Making it genuine needs a "most recent flagged claim" query, and there
-        is no API for it: analyses and claims are persisted, but `analyze.get`
-        needs an id and nothing lists them. That belongs with the history
-        surface, not with a placeholder.
+        NOT a reinstatement of what used to be here. That was a "flagged claim"
+        card quoting an invented statistic about 60% of jobs, presented as a
+        real finding, above a decorative checkbox and two buttons with no
+        onClick. This card is the product's own popover with the design's own
+        generic copy — it asserts nothing about any document and invents no
+        figure, which is the whole difference.
+
+        Both buttons do something real rather than being drawn on. Dismiss
+        hides the card; Find a source opens New Session, which is where you
+        would go looking for one. Neither needs data that does not exist.
       */}
-
-      {/* The way into the saved sources. Until now nothing in the app could
-          reach them — "Save to Library" wrote rows no screen displayed. */}
-      <svg className="home-el home-libraryicon" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M6 4h12a1 1 0 011 1v15l-7-3.5L5 20V5a1 1 0 011-1z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <button className="home-el home-link home-link-library" onClick={() => onNavigate('library')}>
-        Library
-      </button>
+      {sampleOpen ? (
+        <div className="home-el home-popover">
+          <div className="home-popover-head">
+            <span className="home-popover-dot" />
+            <span className="home-popover-title">Unverified statistic</span>
+          </div>
+          <p className="home-popover-body">
+            This figure doesn&rsquo;t appear in any of your uploaded sources yet. Add a citation or
+            double-check the number.
+          </p>
+          <div className="home-popover-actions">
+            <button className="home-popover-btn primary" onClick={() => onNavigate('analyze')}>
+              Find a source
+            </button>
+            <button className="home-popover-btn" onClick={() => setSampleOpen(false)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <span className="home-el home-worktext">You choose where Tracely works</span>
       <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">

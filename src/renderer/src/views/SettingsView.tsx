@@ -21,6 +21,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import SaveChangesDialog from '../components/SaveChangesDialog'
 import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
+import SettingsUnavailable from '../components/SettingsUnavailable'
+import { Bell, CreditCard, Link2, ShieldCheck } from 'lucide-react'
 import {
   UserIcon,
   SunIcon,
@@ -107,12 +109,28 @@ function HotkeyField({
 // finished, because none of them had anything behind them: no notification
 // code, no OAuth provider, no payments. If any of that is ever built, add the
 // section back with the feature, not before it.
-type Section = 'profile' | 'appearance' | 'preferences' | 'privacy'
+type Section =
+  | 'profile'
+  | 'appearance'
+  | 'preferences'
+  | 'notifications'
+  | 'security'
+  | 'integrations'
+  | 'billing'
+  | 'privacy'
 
 const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
   { id: 'profile', label: 'Profile', icon: UserIcon },
   { id: 'appearance', label: 'Appearance', icon: SunIcon },
   { id: 'preferences', label: 'Preferences', icon: SlidersIcon },
+  { id: 'notifications', label: 'Notifications', icon: (p) => <Bell size={p.size ?? 15} /> },
+  { id: 'security', label: 'Security', icon: (p) => <ShieldCheck size={p.size ?? 15} /> },
+  { id: 'integrations', label: 'Integrations', icon: (p) => <Link2 size={p.size ?? 15} /> },
+  { id: 'billing', label: 'Billing', icon: (p) => <CreditCard size={p.size ?? 15} /> },
+  // NOT in the Figma frames, which list seven sections and no Privacy. Kept
+  // anyway: it is the only way to reach "clear history" and "delete all local
+  // data", both of which work. Deleting a real, reachable feature to match a
+  // mockup is a different thing from making the app look like the mockup.
   { id: 'privacy', label: 'Privacy', icon: ShieldIcon }
 ]
 
@@ -704,6 +722,71 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 in a session you started yourself.
               </p>
             </div>
+          ) : null}
+
+          {/* The four sections the Figma file draws and the product does not
+              have. Labels and order are each frame's own; the values are not —
+              see SettingsUnavailable for why. */}
+          {section === 'notifications' ? (
+            <SettingsUnavailable
+              key="notifications"
+              title="Notifications"
+              description="Choose what Tracely tells you about."
+              note="Tracely does not send notifications yet — there is no notification code behind this screen, so nothing here can be switched on."
+              fields={[
+                { label: 'Email notifications' },
+                { label: 'Push notifications' },
+                { label: 'SMS alerts' },
+                { label: 'Notification schedule', full: true },
+                { label: 'Time zone', full: true }
+              ]}
+            />
+          ) : null}
+
+          {section === 'security' ? (
+            <SettingsUnavailable
+              key="security"
+              title="Security"
+              description="Keep your account protected."
+              note="Sign-in is handled by Supabase and these controls are not wired to it. Two-factor, recovery email and session management are not built."
+              fields={[
+                { label: 'Two-factor authentication' },
+                { label: 'Recovery email' },
+                { label: 'Password', full: true },
+                { label: 'Active sessions', full: true },
+                { label: 'Recent login activity', full: true }
+              ]}
+            />
+          ) : null}
+
+          {section === 'integrations' ? (
+            <SettingsUnavailable
+              key="integrations"
+              title="Integrations"
+              description="Connect the tools you use every day."
+              note="Nothing is connected, and nothing can be — there is no OAuth provider behind this screen. The frame shows Google Calendar, Nextdoor and Gmail as connected; none of those integrations exist."
+              fields={[
+                { label: 'Google Calendar' },
+                { label: 'Nextdoor' },
+                { label: 'Gmail', full: true },
+                { label: 'Available integrations', full: true }
+              ]}
+            />
+          ) : null}
+
+          {section === 'billing' ? (
+            <SettingsUnavailable
+              key="billing"
+              title="Billing"
+              description="Manage your plan and payment method."
+              note="Tracely has no plans, no payments and no invoices. Nothing on this screen is charged for and no card is stored anywhere."
+              fields={[
+                { label: 'Plan' },
+                { label: 'Next invoice' },
+                { label: 'Payment method', full: true },
+                { label: 'Billing history', full: true }
+              ]}
+            />
           ) : null}
 
           {section === 'privacy' ? (
