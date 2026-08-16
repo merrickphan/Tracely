@@ -1,0 +1,56 @@
+{
+  "note": "Expected critique verdicts, WRITTEN BEFORE THE RUN THAT IS SCORED AGAINST THEM. That order is the point: a grading standard written after seeing the output grades the output against itself. Committed in the same change as the result, so the git history shows which came first only by this note — take it on trust or check that the reasoning below could not have been written from the answers.\n\nDefinitions are the relay's own (CRITIQUE_SYSTEM_PROMPT in ../Tracely-relay/lib/prompts.ts), not invented here.\n\nThese two essays were chosen because they contain planted failures aimed at the three verdicts that have NEVER been observed firing in any recorded eval run: `contradicted`, `fabricated` and `overstated`. `fabricated` and `overstated` were added to the type on 2026-08-15, one day after the last critique-bearing report, so no run has ever exercised them at all.",
+  "verdictsNeverObserved": ["contradicted", "fabricated", "overstated"],
+  "claims": [
+    {
+      "claim": "Orben and Przybylski (2019) analyzed data from over 350,000 adolescents",
+      "expected": "contradicted",
+      "acceptable": ["contradicted", "overstated"],
+      "why": "The citation is REAL and correctly formatted, so this is not a fabrication — Pass 2(a). What is wrong is the attribution: Orben & Przybylski 2019 concluded the association is trivially small (famously, on the order of eating potatoes), and the sentence says they found social media to be a PRIMARY DRIVER. That is a specific, checkable fact about a well-known paper, asserted backwards, which is Pass 1's definition of contradicted. This is the single best test of whether the fact-check pass does anything: the model needs no retrieval to know this one.",
+      "failureIfWrong": "Reporting this as well-supported or partially-supported would confirm a misattribution of a paper's conclusion — the product actively endorsing an error a reader could not catch without reading the source."
+    },
+    {
+      "claim": "Since smartphones became widespread around 2012",
+      "expected": "overstated",
+      "acceptable": ["overstated", "weak"],
+      "why": "'no other explanation fits' is exactly the absolutism Pass 3 describes — the substance (rates rose after 2012) is defensible, the exclusivity is not. If `overstated` fires it must carry a suggestedRevision that changes only the hedge; normalizeCritique downgrades it to `weak` otherwise, so a bare `overstated` cannot reach here anyway."
+    },
+    {
+      "claim": "Some researchers argue the effect is small",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported"],
+      "why": "Accurate and properly hedged — it is true that some researchers argue this. A control: the critique must not manufacture a problem where none exists. Anything in the weak/unsupported band here is a false positive on a correct sentence."
+    },
+    {
+      "claim": "But small average effects can hide large effects in vulnerable subgroups",
+      "expected": "partially-supported",
+      "acceptable": ["partially-supported", "weak"],
+      "why": "The first half is a real and supported point about heterogeneity; the second half ('anyone who has watched a fourteen-year-old scroll for four hours') is anecdote standing in for evidence. Partial support is the honest read."
+    },
+    {
+      "claim": "Ramirez and Doyle (2024) found that students who received AI-generated feedback",
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "THE HEADLINE TEST. This study does not exist. It carries every mark the prompt names: a plausible author pair, a round recent year, a title that restates the claim it is attached to, and an exact-sounding figure (23 percent) with no methodology behind it. Retrieval returned eight real on-topic papers and none of them is this one — which is the second half of Pass 2(c)'s condition, and it is satisfied.",
+      "failureIfWrong": "This is the failure mode the product exists to catch, and the one a chatbot-assisted draft produces by default. problemKind ranks fabricated-citation above every other kind including a wrong fact. If it does not fire here it very likely never fires, and that entire severity tier is dead code."
+    },
+    {
+      "claim": "Their sample was large and the effect held across grade levels",
+      "expected": "unsupported",
+      "acceptable": ["unsupported", "weak", "fabricated"],
+      "why": "A claim about the methodology of the fabricated study in the previous sentence. Nothing retrieved is even on topic (0 rel, 0 marg — the only claim in the label set where that is true). `fabricated` is acceptable if the critique connects it back to the invented source."
+    },
+    {
+      "claim": "GPT-5 class models now score above the median human rater",
+      "expected": "unsupported",
+      "acceptable": ["unsupported", "weak"],
+      "why": "A vendor's own published claim about a model too recent for the academic literature. Not fabricated — no author-year source is named — and not contradicted, since the honest answer is that it cannot be independently verified. Pass 1 explicitly instructs falling through to Pass 2/3 in this case rather than guessing, so this doubles as a test that the model does NOT overreach into a false contradiction."
+    },
+    {
+      "claim": "Every English teacher I know is quietly worried",
+      "expected": "overstated",
+      "acceptable": ["overstated", "weak", "partially-supported"],
+      "why": "'Every ... I know' plus 'the research says they are right' — anecdote generalised, and an appeal to research that is genuinely mixed. Retrieval found two relevant papers comparing AI and human graders, so there is something to reason over."
+    }
+  ]
+}
