@@ -1,4 +1,5 @@
 import {
+  absenceIsInformative,
   corroborate,
   crossrefReferenceQueries,
   isCheckable,
@@ -34,7 +35,10 @@ export interface ReferenceCheck {
   /** As the writer typed it. */
   raw: string
   surnames: string[]
-  year: number
+  /** Null for the yearless shapes — "Reinhart and Rogoff found that …". */
+  year: number | null
+  /** The work the sentence named, when it named one. */
+  title: string | null
   /**
    * Did an index return a work carrying every cited surname in that year?
    *
@@ -154,7 +158,8 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
   const hit = (title: string | null, index: ReferenceCheck['index']): ReferenceCheck => ({
     raw: ref.raw,
     surnames: ref.surnames,
-    year: ref.year!,
+    year: ref.year,
+    title: ref.title,
     corroborated: true,
     matchedTitle: title,
     candidatesConsidered: considered,
@@ -186,10 +191,21 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
   }
 
   if (!answered) return null
+
+  // Nothing found — and for a yearless reference that is not something the
+  // critique may be told. See absenceIsInformative: the pattern that produced
+  // it cannot be sure the names were a citation at all ("Romeo and Juliet
+  // describes a feud"), and reporting an empty lookup for one would put a
+  // fabrication accusation on a sentence that cited nothing. Returning null
+  // here drops the reference from the section entirely, which is exactly the
+  // difference between "we looked and found nothing" and "no lookup happened".
+  if (!absenceIsInformative(ref)) return null
+
   return {
     raw: ref.raw,
     surnames: ref.surnames,
-    year: ref.year!,
+    year: ref.year,
+    title: ref.title,
     corroborated: false,
     matchedTitle: null,
     candidatesConsidered: considered,
@@ -235,7 +251,12 @@ export function describeReferenceChecks(checks: ReferenceCheck[]): string | null
   if (checks.length === 0) return null
   return checks
     .map((check) => {
-      const who = `${check.surnames.join(' and ')} ${check.year}`
+      // "Reinhart and Rogoff 2010" when the sentence gave a year, "Reinhart and
+      // Rogoff" when it did not — never "Reinhart and Rogoff null", and never a
+      // year the writer did not actually claim.
+      const who = [check.surnames.join(' and '), check.year, check.title && `"${check.title}"`]
+        .filter(Boolean)
+        .join(' ')
       if (check.corroborated) {
         const where =
           check.index === 'openlibrary'

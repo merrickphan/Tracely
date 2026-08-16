@@ -11747,5 +11747,940 @@
    "year": 2024
   }
  ],
- "https://openlibrary.org/search.json?author=Thackeray+Nwosu&fields=title%2Cauthor_name%2Cfirst_publish_year%2Cpublish_year&limit=40": []
+ "https://openlibrary.org/search.json?author=Thackeray+Nwosu&fields=title%2Cauthor_name%2Cfirst_publish_year%2Cpublish_year&limit=40": [],
+ "https://api.crossref.org/works?query.bibliographic=Reinhart+Rogoff+found+that+when+country+public+debt+passes+ninety+percent+average+growth+falls+sharply&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Growth in a Time of Debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "Debt Overhangs: Past and Present",
+   "authorSurnames": [
+    "Reinhart",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2012
+  },
+  {
+   "title": "Dealing with Debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Debt Intolerance",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff",
+    "Savastano"
+   ],
+   "year": 2003
+  },
+  {
+   "title": "A Decade of Debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "The Forgotten History of Domestic Debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "The Debt Pandemic",
+   "authorSurnames": [
+    "Bulow",
+    "Reinhart",
+    "Rogoff",
+    "Trebesch"
+   ],
+   "year": null
+  },
+  {
+   "title": "From Financial Crash to Debt Crisis",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "The ‘other half’ of the public debt–economic growth relationship: a note on Reinhart and Rogoff",
+   "authorSurnames": [
+    "Dafermos"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Does Excessive Sovereign Debt Really Hurt Growth? A Critique of 'This Time is Different', by Reinhart and Rogoff",
+   "authorSurnames": [
+    "Nersisyan",
+    "Wray"
+   ],
+   "year": 2013
+  },
+  {
+   "title": "Public Debt Overhangs: Advanced-Economy Episodes Since 1800",
+   "authorSurnames": [
+    "Reinhart",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2012
+  },
+  {
+   "title": "A contribution to the Reinhart and Rogoff debate: not 90 percent but maybe 30 percent",
+   "authorSurnames": [
+    "Lee",
+    "Park",
+    "Seo",
+    "Shin"
+   ],
+   "year": 2025
+  },
+  {
+   "title": "The Aftermath of Debt Surges",
+   "authorSurnames": [
+    "Kose",
+    "Ohnsorge",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2021
+  },
+  {
+   "title": "Financial and Sovereign Debt Crises: Some Lessons Learned and Those Forgotten1",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": null
+  },
+  {
+   "title": "The Aftermath of Debt Surges",
+   "authorSurnames": [
+    "Reinhart",
+    "Kose",
+    "Rogoff",
+    "Ohnsorge"
+   ],
+   "year": 2021
+  },
+  {
+   "title": "Growth in a Time of Debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "Does high public debt consistently stifle economic growth? A critique of Reinhart and Rogoff",
+   "authorSurnames": [
+    "Herndon",
+    "Ash",
+    "Pollin"
+   ],
+   "year": 2013
+  },
+  {
+   "title": "The Aftermath of Debt Surges",
+   "authorSurnames": [
+    "Kose",
+    "Ohnsorge",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2021
+  },
+  {
+   "title": "Dealing with debt",
+   "authorSurnames": [
+    "Reinhart",
+    "Reinhart",
+    "Rogoff"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Fiche de synthèse n° 2. C. Reinhart et K. Rogoff, Growth in a time of debt, 2010",
+   "authorSurnames": [
+    "Ambialet",
+    "Lepetit"
+   ],
+   "year": 2019
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hoffman+Schooling+in+the+Workplace+argues+that+American+high+school+treats+vocational+training+what+happens+students+could+manage+academic+track+that+this+&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Racial Identity Attitudes, School Achievement, and Academic Self-Efficacy among African American High School Students",
+   "authorSurnames": [],
+   "year": 2008
+  },
+  {
+   "title": "The Determinants of Academic Achievement of Korean Vocational High School Students",
+   "authorSurnames": [
+    "In-Seog Seo"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Factors Affecting Vocational Goal Setting: A Study on Vocational High School Students",
+   "authorSurnames": [
+    "DEMİR",
+    "AYANOĞLU",
+    "VURAL"
+   ],
+   "year": 2022
+  },
+  {
+   "title": "A Structural Equation Model of Academic Performance in Research of Senior High School Academic Track Students",
+   "authorSurnames": [
+    "Dagohoy"
+   ],
+   "year": 2021
+  },
+  {
+   "title": "The effectiveness of apprenticeship training: A within-track comparison of workplace-based and school-based vocational training in Hungary",
+   "authorSurnames": [
+    "Horn"
+   ],
+   "year": 2016
+  },
+  {
+   "title": "A Comparative Study of Foreign Language Anxiety and Motivation of Academic- and Vocational-Track High School Students",
+   "authorSurnames": [
+    "Liu",
+    "Chen"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Immigrant Generational Differences in Academic Achievement",
+   "authorSurnames": [
+    "Zhang"
+   ],
+   "year": 2000
+  },
+  {
+   "title": "Academic and vocational preferences of nigerian secondary school students: a challenge to policy makers",
+   "authorSurnames": [
+    "Nwagwu"
+   ],
+   "year": 1998
+  },
+  {
+   "title": "Figure 2.14. Students in upper secondary vocational education and training, by workplace orientation",
+   "authorSurnames": [],
+   "year": null
+  },
+  {
+   "title": "The Schooling of Vietnamese-American High School Students in Oregon: Their Perspectives",
+   "authorSurnames": [
+    "Tran"
+   ],
+   "year": 2000
+  },
+  {
+   "title": "\"Positive Learning Attitude\" Training to Improve Vocational High School Students' Understanding of Academic Cyberslacking",
+   "authorSurnames": [
+    "Simanjuntak",
+    "Apsari",
+    "Engry"
+   ],
+   "year": 2022
+  },
+  {
+   "title": "The (Re)Construction of Second-Generation Ethnic Networks",
+   "authorSurnames": [
+    "Lew"
+   ],
+   "year": 2000
+  },
+  {
+   "title": "Academic Supervision Mechanism by Vocational High School Supervisor",
+   "authorSurnames": [
+    "Tasrif"
+   ],
+   "year": 2019
+  },
+  {
+   "title": "Vocational educators' perspectives of workplace learning: a case study on senior schooling",
+   "authorSurnames": [
+    "Velde",
+    "Cooper",
+    "Harrington",
+    "Mailler"
+   ],
+   "year": 1999
+  },
+  {
+   "title": "<i>Tell Prospective Students</i> WHAT HAPPENS TO GRADUATES",
+   "authorSurnames": [
+    "McLAUGHLIN"
+   ],
+   "year": 1957
+  },
+  {
+   "title": "What happens to creative medical students?",
+   "authorSurnames": [
+    "Gough"
+   ],
+   "year": 1976
+  },
+  {
+   "title": "What happens when high school students publish books? Cultural sustainability in a university–community partnership",
+   "authorSurnames": [
+    "Henningsgaard"
+   ],
+   "year": null
+  },
+  {
+   "title": "Academic Flow in Vocational High School Students in Relatin to Self-Efficacy and Self-Regulated Learning",
+   "authorSurnames": [
+    "I Rheny Arum Permitasari",
+    "Anjelina",
+    "Siska Adinda Prabowo Putri"
+   ],
+   "year": 2025
+  },
+  {
+   "title": "A Study on the Types of Career Development of Vocational High School Students",
+   "authorSurnames": [
+    "김성남"
+   ],
+   "year": 2013
+  },
+  {
+   "title": "What is integrated and what is excluded? Exploring vocational–academic integration in civics education in Swedish VET",
+   "authorSurnames": [
+    "Ekström"
+   ],
+   "year": 2026
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hoffman+Schooling+in+the+Workplace&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "A Review of “Schooling in the Workplace”",
+   "authorSurnames": [
+    "Woolway"
+   ],
+   "year": 2013
+  },
+  {
+   "title": "Schooling and literacy",
+   "authorSurnames": [
+    "Hoffman"
+   ],
+   "year": null
+  },
+  {
+   "title": "Schooling beyond the school: workplace learning in Nepal",
+   "authorSurnames": [
+    "Paudel",
+    "Parajuli"
+   ],
+   "year": 2023
+  },
+  {
+   "title": "Vocational Education as Symbolic Action: Connecting Schooling with the Workplace",
+   "authorSurnames": [
+    "Kliebard"
+   ],
+   "year": 2021
+  },
+  {
+   "title": "Schooling for Democracy or for the Workplace?",
+   "authorSurnames": [
+    "Meier"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "The Computer Workplace",
+   "authorSurnames": [
+    "Kroemer Elbert",
+    "Kroemer",
+    "Kroemer Hoffman"
+   ],
+   "year": 2018
+  },
+  {
+   "title": "Educating Discerning Jobseekers and Empowered Employees",
+   "authorSurnames": [
+    "Hoffman"
+   ],
+   "year": 2023
+  },
+  {
+   "title": "Vocational Education as Symbolic Action: Connecting Schooling with the Workplace",
+   "authorSurnames": [
+    "Kliebard"
+   ],
+   "year": 2018
+  },
+  {
+   "title": "Vocational Education as Symbolic Action: Connecting Schooling with the Workplace",
+   "authorSurnames": [
+    "Kliebard"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Managing Language Use in the Workplace",
+   "authorSurnames": [
+    "Krahnke",
+    "Hoffman",
+    "Krahnke"
+   ],
+   "year": 2016
+  },
+  {
+   "title": "Workplace Functional Impairment Due to Mental Disorders",
+   "authorSurnames": [
+    "Els",
+    "Kunyk",
+    "Hoffman",
+    "Wargo"
+   ],
+   "year": 2012
+  },
+  {
+   "title": "Is This Really Kneaded? Identifying and Eliminating Potentially Harmful Forms of Workplace Control",
+   "authorSurnames": [
+    "Friebel",
+    "Heinz",
+    "Hoffman",
+    "Kretschmer",
+    "Zubanov"
+   ],
+   "year": 2025
+  },
+  {
+   "title": "Responding to Deaths of Faculty, Staff and Students at UC, Berkeley— An Integrated Approach",
+   "authorSurnames": [
+    "Hoffman",
+    "Goya"
+   ],
+   "year": 2007
+  },
+  {
+   "title": "Chapter 8: Responding to Deaths of Faculty, Staff and Students at UC, Berkeley",
+   "authorSurnames": [
+    "Hoffman",
+    "Goya"
+   ],
+   "year": 2005
+  },
+  {
+   "title": "Vocational Education as Symbolic Action: Connecting Schooling With the Workplace",
+   "authorSurnames": [
+    "Kliebard"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Rethinking metrics: Measuring the value of workplace and corporate real estate",
+   "authorSurnames": [
+    "Hoffman",
+    "Rothe"
+   ],
+   "year": 2025
+  },
+  {
+   "title": "Evaluating Data for Assessing Postsecondary Schooling and Career Outcomes of Generation A",
+   "authorSurnames": [
+    "Bjelland",
+    "Bruyère"
+   ],
+   "year": 2022
+  },
+  {
+   "title": "“I'm not here to crack, I'm here to do the job”",
+   "authorSurnames": [],
+   "year": 2021
+  },
+  {
+   "title": "Workplace Incivility: Promoting Zero Tolerance in Nursing",
+   "authorSurnames": [
+    "Hoffman",
+    "Chunta"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "The Rise of Religion and Spirituality in the Workplace: Employees’ Rights and Employers’ Accommodations",
+   "authorSurnames": [
+    "Krahnke",
+    "Hoffman"
+   ],
+   "year": 2016
+  }
+ ],
+ "https://openlibrary.org/search.json?author=Hoffman&title=Schooling+in+the+Workplace&fields=title%2Cauthor_name%2Cfirst_publish_year%2Cpublish_year&limit=40": [
+  {
+   "title": "Schooling in the Workplace",
+   "authorSurnames": [
+    "Nancy Hoffman"
+   ],
+   "year": 2012,
+   "years": [
+    2012
+   ]
+  },
+  {
+   "title": "Schooling in the Workplace How Six of the World’s Best Vocational Education Systems Prepare Young People for Jobs and Life",
+   "authorSurnames": [
+    "Nancy Hoffman"
+   ],
+   "year": 2011,
+   "years": [
+    2011
+   ]
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Luther+Ninety-Five+Theses+were+reprinted+across+German-speaking+lands+within+weeks+being+posted&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Martin Luther: Ninety-five Theses",
+   "authorSurnames": [],
+   "year": 2024
+  },
+  {
+   "title": "Martin Luther: Ninety-five Theses\t1517",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Young Luther and His Ninety-five Theses Part 2",
+   "authorSurnames": [],
+   "year": 2019
+  },
+  {
+   "title": "The Big Bang (The Ninety-Five Theses)",
+   "authorSurnames": [],
+   "year": 2017
+  },
+  {
+   "title": "Young Luther and His Ninety-five Theses. Part 1",
+   "authorSurnames": [
+    "Soloviev"
+   ],
+   "year": 2018
+  },
+  {
+   "title": "The Ninety-Five Theses",
+   "authorSurnames": [],
+   "year": 2015
+  },
+  {
+   "title": "The Ninety-Five Theses of Martin Luther: 1517–1967",
+   "authorSurnames": [
+    "McNally"
+   ],
+   "year": 1967
+  },
+  {
+   "title": "Theses, The Ninety-Five",
+   "authorSurnames": [],
+   "year": null
+  },
+  {
+   "title": "The cult of Luther in music 1",
+   "authorSurnames": [
+    "McDonald"
+   ],
+   "year": 2018
+  },
+  {
+   "title": "Martin Luther’s Ninety-Five Theses—Reconstructing a Disputation Which Never Took Place",
+   "authorSurnames": [
+    "Dieter"
+   ],
+   "year": 2019
+  },
+  {
+   "title": "Luther and the Book: The Iconography of the Ninety-Five Theses",
+   "authorSurnames": [
+    "Cummings"
+   ],
+   "year": 2004
+  },
+  {
+   "title": "Ninety-Five Theses.",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "The Theses Were Not Posted: Luther Between Reform and Reformation. By Erwin Iserloh. Boston: Beacon Press, 1968. xx + 116 pp. $5.95.",
+   "authorSurnames": [
+    "Ozment"
+   ],
+   "year": 1969
+  },
+  {
+   "title": "German Reformers:",
+   "authorSurnames": [],
+   "year": 2018
+  },
+  {
+   "title": "Ninety‐Five Theses",
+   "authorSurnames": [
+    "Schmidt"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "PART I: Ninety-Five Theses on Philology",
+   "authorSurnames": [
+    "Diehl"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "CHAPTER FIVE “All That Glitters Is Not Gold, But . . .” German Responses to the Financial Bubbles of 1720",
+   "authorSurnames": [
+    "Rosenhaft"
+   ],
+   "year": 2022
+  },
+  {
+   "title": "Perfecting the State:",
+   "authorSurnames": [
+    "KELLER"
+   ],
+   "year": 2017
+  },
+  {
+   "title": "Abbreviations",
+   "authorSurnames": [],
+   "year": 2015
+  },
+  {
+   "title": "CHAPTER TWO Perfecting the State Alchemy and Oeconomy as Academic Forms of Knowledge in Early Modern German-Speaking Lands",
+   "authorSurnames": [
+    "Keller"
+   ],
+   "year": 2022
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Luther+Ninety-Five+Theses&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Martin Luther: Ninety-five Theses",
+   "authorSurnames": [],
+   "year": 2024
+  },
+  {
+   "title": "Martin Luther: Ninety-five Theses\t1517",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Young Luther and His Ninety-five Theses Part 2",
+   "authorSurnames": [],
+   "year": 2019
+  },
+  {
+   "title": "The Big Bang (The Ninety-Five Theses)",
+   "authorSurnames": [],
+   "year": 2017
+  },
+  {
+   "title": "Young Luther and His Ninety-five Theses. Part 1",
+   "authorSurnames": [
+    "Soloviev"
+   ],
+   "year": 2018
+  },
+  {
+   "title": "The Ninety-Five Theses",
+   "authorSurnames": [],
+   "year": 2015
+  },
+  {
+   "title": "The Ninety-Five Theses of Martin Luther: 1517–1967",
+   "authorSurnames": [
+    "McNally"
+   ],
+   "year": 1967
+  },
+  {
+   "title": "Theses, The Ninety-Five",
+   "authorSurnames": [],
+   "year": null
+  },
+  {
+   "title": "Martin Luther’s Ninety-Five Theses—Reconstructing a Disputation Which Never Took Place",
+   "authorSurnames": [
+    "Dieter"
+   ],
+   "year": 2019
+  },
+  {
+   "title": "Luther and the Book: The Iconography of the Ninety-Five Theses",
+   "authorSurnames": [
+    "Cummings"
+   ],
+   "year": 2004
+  },
+  {
+   "title": "Ninety-Five Theses.",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Ninety‐Five Theses",
+   "authorSurnames": [
+    "Schmidt"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "PART I: Ninety-Five Theses on Philology",
+   "authorSurnames": [
+    "Diehl"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Abbreviations",
+   "authorSurnames": [],
+   "year": 2015
+  },
+  {
+   "title": "The Ninety-Five Theses (1517)",
+   "authorSurnames": [],
+   "year": 2012
+  },
+  {
+   "title": "Martin Luther's Ninety-Five Theses",
+   "authorSurnames": [
+    "Wengert"
+   ],
+   "year": 2015
+  },
+  {
+   "title": "Ninety-five Theses for Reforming Program Evaluation",
+   "authorSurnames": [
+    "Cronbach"
+   ],
+   "year": 1983
+  },
+  {
+   "title": "PR and the subjugation of reason: Martin Luther (1483–1546), The Ninety-ﬁve Theses (1517)",
+   "authorSurnames": [],
+   "year": 2014
+  },
+  {
+   "title": "CODA Ninety-five Theses: On the Principles and Practice of Poetry",
+   "authorSurnames": [],
+   "year": 2022
+  },
+  {
+   "title": "Front Matter",
+   "authorSurnames": [],
+   "year": 2015
+  }
+ ],
+ "https://openlibrary.org/search.json?author=Luther&title=Ninety-Five+Theses&fields=title%2Cauthor_name%2Cfirst_publish_year%2Cpublish_year&limit=40": [
+  {
+   "title": "Luther's Ninety-Five Theses",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 1957,
+   "years": [
+    1957
+   ]
+  },
+  {
+   "title": "Luther's ninety-five theses",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 1957,
+   "years": [
+    1957
+   ]
+  },
+  {
+   "title": "The ninety-five theses and other writings",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 2017,
+   "years": [
+    2017
+   ]
+  },
+  {
+   "title": "Ninety-five theses",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 1957,
+   "years": [
+    1957
+   ]
+  },
+  {
+   "title": "First Principles of the Reformation: Or, the Ninety-five Theses and the ..",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 1883,
+   "years": [
+    1883
+   ]
+  },
+  {
+   "title": "Luther's ninety-five theses",
+   "authorSurnames": [
+    "Martin Luther",
+    "Ernest G. Schwiebert"
+   ],
+   "year": 1961,
+   "years": [
+    1961
+   ]
+  },
+  {
+   "title": "Luther's Ninety-Five Theses",
+   "authorSurnames": [
+    "Martin Martin Luther"
+   ],
+   "year": 2017,
+   "years": [
+    2017
+   ]
+  },
+  {
+   "title": "First Principles Of The Reformation Or, The Ninety-Five Theses And The Three Primary Works Of Dr. Martin Luther",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 2007,
+   "years": [
+    2007
+   ]
+  },
+  {
+   "title": "Luther's Ninety-Five Theses",
+   "authorSurnames": [
+    "M. Luther"
+   ],
+   "year": 1957,
+   "years": [
+    1957
+   ]
+  },
+  {
+   "title": "First principles of the Reformation, or, The ninety-five theses and the three primary works of Luther translated into English",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 1883,
+   "years": [
+    1883
+   ]
+  },
+  {
+   "title": "Martin Luther's Ninety-Five Theses and Selected Sermons",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 2018,
+   "years": [
+    2018
+   ]
+  },
+  {
+   "title": "Martin Luther's Ninety-Five Theses and Selected Sermons",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 2013,
+   "years": [
+    2013
+   ]
+  },
+  {
+   "title": "Martin Luther's Ninety-Five Theses and Selected Sermons",
+   "authorSurnames": [
+    "Martin Luther"
+   ],
+   "year": 2008,
+   "years": [
+    2008
+   ]
+  },
+  {
+   "title": "The Prince; Utopia; Ninety-Five Theses: Address to the German Nobility Concerning Christian Liberty",
+   "authorSurnames": [
+    "Niccolò Machiavelli",
+    "Thomas More",
+    "Martin Luther"
+   ],
+   "year": 2004,
+   "years": [
+    2004
+   ]
+  },
+  {
+   "title": "THE PRINCE, UTOPIA, NINETY - FIVE THESES",
+   "authorSurnames": [
+    "MacHiavelli, More, Luther, Charles W. Eliot"
+   ],
+   "year": 1963,
+   "years": [
+    1963
+   ]
+  },
+  {
+   "title": "HARVARD CLASSICS ALUMNI EDITION DE LUXE THE PRINCE, UTOPIA, NINETY-FIVE THESES",
+   "authorSurnames": [
+    "MACHIAVELLI MORE LUTHER"
+   ],
+   "year": 1910,
+   "years": [
+    1910
+   ]
+  },
+  {
+   "title": "Luther Contra Mundum : the Ninety-Five Theses and Other Major Treaties",
+   "authorSurnames": [
+    "Martin Luther",
+    "Tim Newcomb"
+   ],
+   "year": 2022,
+   "years": [
+    2022
+   ]
+  },
+  {
+   "title": "First Principles of the Reformation, Or, the Ninety-Five Theses and the Three Primary Works of Martin Luther, Translated Into English",
+   "authorSurnames": [
+    "Henry Wace",
+    "Martin Luther",
+    "C A. Buchheim"
+   ],
+   "year": 2018,
+   "years": [
+    2018
+   ]
+  }
+ ]
 }

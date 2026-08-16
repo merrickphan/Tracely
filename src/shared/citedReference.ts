@@ -58,6 +58,30 @@ export type CitedReferenceKind =
   | 'institutional'
   /** A quoted title and a year, with no author: ("Later School Start Times", 2018). */
   | 'title-year'
+  /**
+   * An author pair with no year at all: "Reinhart and Rogoff found that ...".
+   *
+   * Real, common in student prose, and recognisable only by what the sentence
+   * DOES with the names — hence the reporting verb in the pattern. Without that
+   * requirement "Simon and Garfunkel" is the identical shape.
+   *
+   * CORROBORATION ONLY. Measured 2026-08-16 over 19 essays: the pattern found
+   * the one real case and also matched "Romeo and Juliet describes a feud" and
+   * "Ben and Jerry report record sales" — a work title and a company. Finding a
+   * work by these names is still informative; NOT finding one cannot be, because
+   * the names may not be an author pair at all. See absenceIsInformative.
+   */
+  | 'author-noyear'
+  /**
+   * A possessive author and a named work: "Nancy Hoffman's Schooling in the
+   * Workplace", "Luther's Ninety-Five Theses".
+   *
+   * The only shape here that carries a TITLE, which is far more discriminating
+   * than a surname. Clean on the corpus — 2 of 2 real, no false positives — but
+   * corroboration only for the same reason: a title this cannot match is not
+   * evidence the work does not exist, only that the query missed.
+   */
+  | 'author-title'
 
 export interface CitedReference {
   /** Exactly as the writer typed it, for quoting back in a critique. */
@@ -150,6 +174,34 @@ const NARRATIVE = new RegExp(
 )
 
 /**
+ * Reporting verbs — what makes a bare pair of names a citation.
+ *
+ * "Reinhart and Rogoff found that ..." is a reference; "Simon and Garfunkel"
+ * is not, and nothing but the verb separates them. Deliberately a list of
+ * verbs of ASSERTION rather than of action: a paper finds, argues, shows and
+ * concludes; a band sings and a company sells.
+ */
+const REPORTS =
+  '(?:found|argued?|argues|showed?|shows|report(?:ed|s)?|conclude[ds]?|note[ds]?|observed?|observes|demonstrated?|demonstrates|estimated?|estimates|claim(?:ed|s)?|wrote|writes|describe[ds]?|suggest(?:ed|s)?|document(?:ed|s)?|examined?|examines|studied|studies|measured?|measures)'
+
+const NO_YEAR_PAIR = new RegExp(
+  `\\b(${SURNAME}(?:\\s+and\\s+|\\s*&\\s*)${SURNAME})\\s+${REPORTS}\\b`,
+  'gu'
+)
+
+/**
+ * A possessive author and the work they wrote.
+ *
+ * The title run allows lowercase function words ("of", "in", "the") between
+ * capitalised ones, because that is what a real title looks like — "Schooling
+ * in the Workplace", "The Origins of Political Order".
+ */
+const POSSESSIVE_TITLE = new RegExp(
+  `\\b((?:\\p{Lu}[\\p{L}'’-]+\\s+)?${SURNAME})['’]s\\s+((?:\\p{Lu}[\\p{L}'’-]+)(?:\\s+(?:of|in|the|and|for|to|a|on|at)\\s+\\p{Lu}?[\\p{L}'’-]+|\\s+\\p{Lu}[\\p{L}'’-]+)+)`,
+  'gu'
+)
+
+/**
  * Every work this sentence names, in the order it names them.
  *
  * Author-date shapes only. A numeric marker ([3], a superscript) points into a
@@ -185,6 +237,37 @@ export function parseReferences(sentence: string): CitedReference[] {
   }
   for (const m of sentence.matchAll(NARRATIVE)) {
     push(m[0], m[1], Number(m[2]), null)
+  }
+
+  // The two yearless shapes, last: a sentence carrying "Smith and Jones (2020)"
+  // has already been captured with its year, and re-matching the same names
+  // without one would double-count the reference.
+  for (const m of sentence.matchAll(NO_YEAR_PAIR)) {
+    const { surnames } = splitNames(m[1])
+    if (surnames.length < 2) continue
+    if (refs.some((r) => r.surnames.join('|') === surnames.join('|'))) continue
+    refs.push({
+      raw: m[1].trim(),
+      kind: classify(surnames) === 'author-year' ? 'author-noyear' : classify(surnames),
+      surnames,
+      year: null,
+      title: null,
+      etAl: false
+    })
+  }
+
+  for (const m of sentence.matchAll(POSSESSIVE_TITLE)) {
+    const { surnames } = splitNames(m[1])
+    if (surnames.length === 0) continue
+    if (refs.some((r) => r.title === m[2].trim())) continue
+    refs.push({
+      raw: m[0].trim(),
+      kind: 'author-title',
+      surnames,
+      year: null,
+      title: m[2].trim(),
+      etAl: false
+    })
   }
 
   return refs
@@ -277,9 +360,48 @@ export interface Corroboration {
  * what makes them read as real — and a work carrying both invented surnames in
  * the stated year is what does not exist.
  */
+/**
+ * Words too common to identify a work.
+ *
+ * Only structural ones. A title's content words are exactly what makes it
+ * discriminating, so the list stays short.
+ */
+const TITLE_STOPWORDS = new Set([
+  'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'is', 'are', 'was', 'were'
+])
+
+const titleTokens = (title: string): string[] =>
+  normalizeName(title)
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !TITLE_STOPWORDS.has(w))
+
+/**
+ * Does this candidate look like the work the sentence named?
+ *
+ * Required whenever the reference carries a title, because without it a single
+ * surname corroborates on any coincidence — measured 2026-08-16, "Nancy
+ * Hoffman's Schooling in the Workplace" was corroborated by a paper called "HIV
+ * Disease and Work" on the strength of the surname alone, which would have put
+ * a false statement in front of the critique.
+ *
+ * Two thirds rather than all: real titles are shortened, subtitled and
+ * paraphrased in prose, and the cost of missing a match here is only a lost
+ * corroboration — never an accusation, since a title-bearing reference's
+ * absence is not reported.
+ */
+const TITLE_MATCH_RATIO = 2 / 3
+
+function titleMatches(refTitle: string, workTitle: string): boolean {
+  const wanted = titleTokens(refTitle)
+  if (wanted.length === 0) return true
+  const have = new Set(titleTokens(workTitle))
+  const hits = wanted.filter((w) => have.has(w)).length
+  return hits / wanted.length >= TITLE_MATCH_RATIO
+}
+
 export function corroborate(ref: CitedReference, candidates: CandidateWork[]): Corroboration {
   const wanted = ref.surnames.map(normalizeName).filter(Boolean)
-  if (wanted.length === 0 || ref.year === null) {
+  if (wanted.length === 0) {
     return { found: false, match: null, candidatesConsidered: candidates.length }
   }
 
@@ -287,11 +409,20 @@ export function corroborate(ref: CitedReference, candidates: CandidateWork[]): C
     candidates.find((work) => {
       // Any edition within tolerance. An index that records no date at all does
       // not get to veto a match on that basis — absence of a year is not a
-      // wrong year.
+      // wrong year. A REFERENCE with no year skips the test entirely: the
+      // sentence never named one, so there is nothing to disagree with.
       const years = [work.year, ...(work.years ?? [])].filter((y): y is number => y !== null)
-      if (years.length > 0 && !years.some((y) => Math.abs(y - ref.year!) <= YEAR_TOLERANCE)) {
+      if (
+        ref.year !== null &&
+        years.length > 0 &&
+        !years.some((y) => Math.abs(y - ref.year!) <= YEAR_TOLERANCE)
+      ) {
         return false
       }
+      // A named work has to be THE named work. Without this the surname alone
+      // decides, which is the coincidence problem MIN_CHECKABLE_SURNAMES exists
+      // to prevent for author-year references.
+      if (ref.title && !titleMatches(ref.title, work.title)) return false
       const have = work.authorSurnames.map(normalizeName)
       // `endsWith` rather than equality: indexes carry compound and hyphenated
       // surnames a citation shortens, and a citation's "Dijk" should meet the
@@ -344,9 +475,50 @@ export const MIN_CHECKABLE_SURNAMES = 2
  * into a clean bill of health.
  */
 export function isCheckable(ref: CitedReference): boolean {
-  return (
-    ref.kind === 'author-year' && ref.surnames.length >= MIN_CHECKABLE_SURNAMES && ref.year !== null
-  )
+  if (ref.kind === 'author-year') {
+    return ref.surnames.length >= MIN_CHECKABLE_SURNAMES && ref.year !== null
+  }
+  // Yearless shapes are worth LOOKING UP even though their absence proves
+  // nothing — see absenceIsInformative. A pair needs two names for the same
+  // reason author-year does; a possessive reference needs only one, because the
+  // title carries the discrimination.
+  if (ref.kind === 'author-noyear') return ref.surnames.length >= MIN_CHECKABLE_SURNAMES
+  if (ref.kind === 'author-title') return ref.surnames.length > 0 && Boolean(ref.title)
+  return false
+}
+
+/**
+ * May a FAILED lookup be reported to the critique?
+ *
+ * Corroboration and absence are not symmetric, and this is the line between
+ * them. Finding a work is a fact regardless of how the reference was parsed:
+ * if a work by these names exists, it exists. Failing to find one only means
+ * something when the thing searched for was definitely a citation and the query
+ * was definitely capable of finding it.
+ *
+ * `author-year` clears that bar — it was measured at 0/36 false alarms across
+ * articles, pre-DOI articles, books and textbooks.
+ *
+ * The yearless shapes do not, for different reasons:
+ *
+ *   author-noyear   the pattern cannot be certain the names ARE a citation.
+ *                   Over 19 essays it found the one real case and also matched
+ *                   "Romeo and Juliet describes a feud" and "Ben and Jerry
+ *                   report record sales". Reporting "no work by Romeo and
+ *                   Juliet was found" would put a fabrication accusation on a
+ *                   sentence that cited nothing at all.
+ *
+ *   author-title    a title the query fails to match is a failure of the query,
+ *                   not evidence about the world. Titles are paraphrased,
+ *                   shortened, translated and subtitled; the surname alone
+ *                   cannot rescue that, and a book is exactly what a student
+ *                   cites this way.
+ *
+ * So these two can only ever REMOVE doubt, never create it — which also makes
+ * them free of the risk that dominates every other decision in this file.
+ */
+export function absenceIsInformative(ref: CitedReference): boolean {
+  return ref.kind === 'author-year'
 }
 
 /**
@@ -402,13 +574,18 @@ export function crossrefReferenceQueries(
   }: { context?: string; rows?: number; mailto?: string | null } = {}
 ): string[] {
   if (!isCheckable(ref)) return []
-  const from = ref.year! - YEAR_TOLERANCE
-  const until = ref.year! + YEAR_TOLERANCE
 
   const build = (bibliographic: string): string => {
     const params = new URLSearchParams({
       'query.bibliographic': bibliographic,
-      filter: `from-pub-date:${from}-01-01,until-pub-date:${until}-12-31`,
+      // No year in the reference, no year filter. Searching every year makes
+      // corroboration EASIER, which is the safe direction — and absence from
+      // such a search is not reported anyway (see absenceIsInformative).
+      ...(ref.year !== null
+        ? {
+            filter: `from-pub-date:${ref.year - YEAR_TOLERANCE}-01-01,until-pub-date:${ref.year + YEAR_TOLERANCE}-12-31`
+          }
+        : {}),
       select: 'title,author,issued,DOI',
       rows: String(rows),
       ...(mailto ? { mailto } : {})
@@ -416,7 +593,9 @@ export function crossrefReferenceQueries(
     return `https://api.crossref.org/works?${params.toString()}`
   }
 
-  const names = `${ref.surnames.join(' ')} ${ref.year}`
+  // The title is the strongest term available when there is one, and it stands
+  // in for the year this reference does not have.
+  const names = [ref.surnames.join(' '), ref.year ?? '', ref.title ?? ''].filter(Boolean).join(' ')
   const terms = contextTerms(context, ref)
 
   // Two queries, and a match on EITHER corroborates. They fail in opposite
@@ -473,6 +652,10 @@ export function openLibraryReferenceQuery(
   if (!isCheckable(ref)) return null
   const params = new URLSearchParams({
     author: ref.surnames.join(' '),
+    // A possessive reference names the work, and Open Library's title index is
+    // the one place that is worth more than the author name — this is the shape
+    // students use for books, which is what Open Library holds.
+    ...(ref.title ? { title: ref.title } : {}),
     // publish_year is the load-bearing field: it carries every edition, and a
     // book is cited by the edition in the student's hands. See CandidateWork.
     fields: 'title,author_name,first_publish_year,publish_year',

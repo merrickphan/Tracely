@@ -1,6 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+  absenceIsInformative,
   corroborate,
   crossrefReferenceQueries,
   isCheckable,
@@ -236,5 +237,74 @@ describe('index quirks that produced a false accusation', () => {
   it('does not let a suffix strip turn a one-word name into nothing', () => {
     const works = [{ title: 'A paper', authorSurnames: ['Jr'], year: 2020, years: [] }]
     strictEqual(corroborate(first('(Smith & Jones, 2020) report this.'), works).found, false)
+  })
+})
+
+describe('the yearless shapes — corroboration only', () => {
+  it('reads an author pair with no year, when the sentence reports a finding', () => {
+    const ref = first('Reinhart and Rogoff found that public debt above ninety percent lowers growth.')
+    strictEqual(ref.kind, 'author-noyear')
+    deepStrictEqual(ref.surnames, ['Reinhart', 'Rogoff'])
+    strictEqual(ref.year, null)
+    ok(isCheckable(ref))
+  })
+
+  it('reads a possessive author and the work they wrote', () => {
+    const ref = first("Nancy Hoffman's Schooling in the Workplace argues that vocational training is stigmatised.")
+    strictEqual(ref.kind, 'author-title')
+    deepStrictEqual(ref.surnames, ['Hoffman'])
+    strictEqual(ref.title, 'Schooling in the Workplace')
+    ok(isCheckable(ref))
+  })
+
+  it('needs a reporting verb, so a band is not an author pair', () => {
+    // The verb is the only thing separating the two. Without it "Simon and
+    // Garfunkel" has the identical shape to "Reinhart and Rogoff".
+    deepStrictEqual(parseReferences('Simon and Garfunkel sang about it for years.'), [])
+    deepStrictEqual(parseReferences('My uncle and my aunt argued about the cost.'), [])
+  })
+
+  it('NEVER reports the absence of a yearless reference', () => {
+    // The load-bearing rule. Measured over 19 essays, the pair pattern also
+    // matched "Romeo and Juliet describes a feud" and "Ben and Jerry report
+    // record sales" — a play and a company. Telling the critique "no work by
+    // Romeo and Juliet was found" would put a fabrication accusation on a
+    // sentence that cited nothing at all.
+    strictEqual(absenceIsInformative(first('Romeo and Juliet describes a feud.')), false)
+    strictEqual(absenceIsInformative(first("Luther's Ninety-Five Theses circulated widely.")), false)
+    // The shape that HAS been measured at 0/36 false alarms keeps its voice.
+    strictEqual(absenceIsInformative(first('Ramirez and Doyle (2024) found this.')), true)
+  })
+
+  it('does not double-count a reference that has a year', () => {
+    // "Smith and Jones (2020) found" matches both the narrative pattern and the
+    // yearless one. The dated reading is the better one and must win.
+    const refs = parseReferences('Smith and Jones (2020) found that it works.')
+    strictEqual(refs.length, 1)
+    strictEqual(refs[0].kind, 'author-year')
+  })
+
+  it('requires the title to match, not just the surname', () => {
+    // Measured: "Nancy Hoffman's Schooling in the Workplace" was corroborated
+    // by a paper called "HIV Disease and Work" on the surname alone, which puts
+    // a false statement in front of the critique. A named work must be THE
+    // named work.
+    const ref = first("Nancy Hoffman's Schooling in the Workplace argues this.")
+    const wrong = [{ title: 'HIV Disease and Work: Effect on the Workplace', authorSurnames: ['Hoffman'], year: 1997 }]
+    strictEqual(corroborate(ref, wrong).found, false)
+    const right = [{ title: 'Schooling in the Workplace', authorSurnames: ['Nancy Hoffman'], year: 2011 }]
+    strictEqual(corroborate(ref, right).found, true)
+  })
+
+  it('tolerates a subtitle or a shortened title', () => {
+    const ref = first("Luther's Ninety-Five Theses circulated widely.")
+    const works = [{ title: 'Ninety-Five Theses: On the Power of Indulgences', authorSurnames: ['Luther'], year: 1517 }]
+    strictEqual(corroborate(ref, works).found, true)
+  })
+
+  it('ignores the year test when the reference never named one', () => {
+    const ref = first('Reinhart and Rogoff found that debt lowers growth.')
+    const works = [{ title: 'Growth in a Time of Debt', authorSurnames: ['Reinhart', 'Rogoff'], year: 2010 }]
+    strictEqual(corroborate(ref, works).found, true)
   })
 })
