@@ -95,6 +95,19 @@ export const GRADE_PANEL_WIDTH = 560
 export const GRADE_PANEL_HEIGHT = 321
 
 /**
+ * 'grade' before there is a reading to show — Figma "Overlay Mockup - Essay
+ * Grade (Analyzing)" (391:342), whose Analyzing Card (391:540) is 340x204.
+ *
+ * Its own size rather than the grade card's, because the frame draws it as its
+ * own small card centred over the document rather than as a body inside the
+ * 560x321 one: a spinner and two lines floating in a 321px-tall box would read
+ * as a card that failed to load its contents. Same centred anchor as 'grade',
+ * so the panel does not jump when the reading lands and it swaps in.
+ */
+export const ANALYZING_PANEL_WIDTH = 340
+export const ANALYZING_PANEL_HEIGHT = 204
+
+/**
  * 'report' — the same card expanded, Figma 404:185: 560x1210.
  *
  * 1210 is taller than most windows this is drawn over, and that is fine: the

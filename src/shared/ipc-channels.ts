@@ -55,6 +55,7 @@ export const IPC = {
   SCREENWATCH_WIDGET_DRAG_END: 'screenWatch:widgetDragEnd',
   SCREENWATCH_SET_ACTIVE_POPOVER_RECT: 'screenWatch:setActivePopoverRect',
   SCREENWATCH_FIND_SOURCE: 'screenWatch:findSource',
+  SCREENWATCH_PREVIEW_CITATION: 'screenWatch:previewCitation',
   SCREENWATCH_INSERT_CITATION: 'screenWatch:insertCitation',
   SCREENWATCH_UNDO_CITATION: 'screenWatch:undoCitation',
 

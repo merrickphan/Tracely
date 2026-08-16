@@ -62,6 +62,8 @@ import type {
   ScreenWatchHoverEvent,
   ScreenWatchInsertCitationRequest,
   ScreenWatchInsertCitationResponse,
+  ScreenWatchPreviewCitationRequest,
+  ScreenWatchPreviewCitationResponse,
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchRefreshEvidenceRequest,
   ScreenWatchRefreshEvidenceResponse,
@@ -216,6 +218,8 @@ const api = {
       ipcRenderer.invoke(IPC.SCREENWATCH_CRITIQUE_CLAIM, req),
     findSource: (req: ScreenWatchFindSourceRequest): Promise<ScreenWatchFindSourceResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_FIND_SOURCE, req),
+    previewCitation: (req: ScreenWatchPreviewCitationRequest): Promise<ScreenWatchPreviewCitationResponse> =>
+      ipcRenderer.invoke(IPC.SCREENWATCH_PREVIEW_CITATION, req),
     insertCitation: (req: ScreenWatchInsertCitationRequest): Promise<ScreenWatchInsertCitationResponse> =>
       ipcRenderer.invoke(IPC.SCREENWATCH_INSERT_CITATION, req),
     undoCitation: (req: ScreenWatchUndoCitationRequest): Promise<ScreenWatchUndoCitationResponse> =>

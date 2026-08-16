@@ -201,6 +201,17 @@ export default function PreviewApp(): JSX.Element {
               <em>review error banners</em>
             </span>
           </label>
+          <label className="preview-check">
+            <input
+              type="checkbox"
+              checked={scenario.watchAnalyzing}
+              onChange={(e) => update('watchAnalyzing', e.target.checked)}
+            />
+            <span>
+              <strong>Screen Watch analyzing</strong>
+              <em>Essay Grade before its first reading</em>
+            </span>
+          </label>
         </Section>
 
         <Section title="Overlay hover">

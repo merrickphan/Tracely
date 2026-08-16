@@ -58,6 +58,17 @@ export type Scenario = {
    * the preview, since there is no relay behind the harness to produce it.
    */
   structure: 'heuristic' | 'classified' | 'stale' | 'none'
+  /**
+   * Screen Watch has text it has not produced a reading for yet — the overlay's
+   * Analyzing card (Figma 391:342).
+   *
+   * Its own switch rather than a value of `structure` above, which serves the
+   * main window's Structure rail: this one drops `widget.structure` AND sets
+   * `widget.analyzing`, and those two travel together in exactly one direction
+   * (see ScreenWatchWidget.analyzing). In the real product the state lasts as
+   * long as one detection pass, which is not long enough to review.
+   */
+  watchAnalyzing: boolean
 }
 
 /** What a claim's breakdown looks like once a search has found something. */
@@ -74,7 +85,8 @@ export const defaultScenario: Scenario = {
   relayConfigured: true,
   failRelay: false,
   latencyMs: 0,
-  structure: 'heuristic'
+  structure: 'heuristic',
+  watchAnalyzing: false
 }
 
 /** Names of every call the harness logs, so the UI can show what fired. */
@@ -186,9 +198,14 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     // GRADE_PANEL_WIDTH/HEIGHT = 560x321, centred rather than cornered. Sized
     // wrong here it still *renders*, but its two 251px pills flex down to fit a
     // 480px box and the harness quietly shows a card the product never draws.
+    // ANALYZING_PANEL_* is 340x204 — its own size, not the grade card's, and
+    // centred the same way. Reachable only through the rail's Screen Watch
+    // switch; see Scenario.watchAnalyzing.
     const rect = expanded
       ? viewMode === 'grade'
-        ? { x: 100, y: 80, width: 560, height: 321 }
+        ? scenario.watchAnalyzing
+          ? { x: 210, y: 138, width: 340, height: 204 }
+          : { x: 100, y: 80, width: 560, height: 321 }
         : viewMode === 'report'
           ? // REPORT_PANEL_* is 560x1210, which main clamps to the watched
             // window. 760x480 here is smaller than most, so this is the clamped
@@ -207,7 +224,18 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       : { x: 520, y: 300, width: 56, height: 56 }
     w.__previewEmitOverlay({
       ...fx.overlayUpdate,
-      widget: { ...base, claims: watchClaims, rect, expanded, viewMode }
+      widget: {
+        ...base,
+        claims: watchClaims,
+        rect,
+        expanded,
+        viewMode,
+        // Together, never apart: `analyzing` means "no reading YET", so leaving
+        // the fixture's structure in place would push a state main cannot
+        // produce and let the harness pass a card that never renders for real.
+        structure: scenario.watchAnalyzing ? null : base.structure,
+        analyzing: scenario.watchAnalyzing
+      }
     })
   }
 
@@ -447,6 +475,16 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
             matchPercent: [92, 74, 51][i],
             faviconDataUrl: null
           }))
+        }),
+      // Formatting is local and synchronous in main, so this returns the same
+      // pair insertCitation would — the preview block is only worth reviewing
+      // in the harness if it shows what the insert would actually write.
+      previewCitation: () =>
+        ok('screenWatch.previewCitation', {
+          citation: {
+            inTextCitation: '(Okonkwo et al., 2023)',
+            worksCitedEntry: fx.citations[0].formattedText
+          }
         }),
       insertCitation: () =>
         ok('screenWatch.insertCitation', {

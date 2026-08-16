@@ -6,6 +6,7 @@ import type {
   ScreenWatchFindSourceResponse,
   ScreenWatchGetStatusResponse,
   ScreenWatchInsertCitationResponse,
+  ScreenWatchPreviewCitationResponse,
   ScreenWatchRefreshEvidenceResponse,
   ScreenWatchSetActivePopoverRectResponse,
   ScreenWatchSetEnabledResponse,
@@ -20,6 +21,7 @@ import {
   findSourceForClaim,
   getScreenWatchStatus,
   insertCitationForClaim,
+  previewCitationForClaim,
   refreshEvidenceForClaim,
   setActivePopoverRect,
   setWidgetDragEnd,
@@ -99,6 +101,13 @@ export function registerScreenWatchHandlers(): void {
   ipcMain.handle(IPC.SCREENWATCH_FIND_SOURCE, async (_event, raw): Promise<ScreenWatchFindSourceResponse> => {
     const { claimId, query } = findSourceSchema.parse(raw)
     return { candidates: await findSourceForClaim(claimId, query) }
+  })
+
+  // Same shape as insert, and the same schema on purpose: previewing what would
+  // be written must validate exactly as strictly as writing it.
+  ipcMain.handle(IPC.SCREENWATCH_PREVIEW_CITATION, (_event, raw): ScreenWatchPreviewCitationResponse => {
+    const { claimId, sourceRef, style } = insertCitationSchema.parse(raw)
+    return { citation: previewCitationForClaim(claimId, sourceRef, style) }
   })
 
   ipcMain.handle(IPC.SCREENWATCH_INSERT_CITATION, async (_event, raw): Promise<ScreenWatchInsertCitationResponse> => {
