@@ -3,6 +3,7 @@ import type { Claim, CritiqueVerdict, EvidenceItem } from '@shared/types'
 import { getCached, setCached } from '../storage/cacheRepo'
 import { callRelay } from './client'
 import { normalizeCritique } from './normalizeCritique'
+import { checkReferences, describeReferenceChecks } from '../search/referenceCheck'
 import {
   MAX_CRITIQUE_ABSTRACT_CHARS,
   MAX_CRITIQUE_EVIDENCE_ITEMS,
@@ -79,7 +80,7 @@ function selectCritiqueEvidence(evidence: EvidenceItem[]): EvidenceItem[] {
   return [...relevant, ...padding].slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
 }
 
-function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
+function cacheKey(claim: Claim, evidence: EvidenceItem[], referenceCheck: string | null): string {
   // Keyed on the evidence actually sent, not the first N of the raw list —
   // otherwise two different evidence sets that happen to share their first
   // few entries would collide on one cached critique.
@@ -105,14 +106,40 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[]): string {
   // entry was written by a relay that could not produce either, so reusing them
   // would silently withhold the new output from exactly the claims a user has
   // already looked at — the ones most likely to be looked at again.
+  // v8: the request gained `referenceCheck`. It is IN the key rather than
+  // merely bumping the version, because it can differ between two runs of the
+  // same claim over the same evidence — Crossref is a live index and the
+  // check can time out — and a critique reasoned over "no work by these authors
+  // was found" must not be served for a request that says the opposite.
   const normalizedText = claim.text.trim().replace(/\s+/g, ' ').toLowerCase()
   return createHash('sha256')
-    .update(`ai:critique::v7::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}`)
+    .update(
+      `ai:critique::v8::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}::${referenceCheck ?? 'none'}`
+    )
     .digest('hex')
 }
 
-export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): Promise<CritiqueResult> {
-  const key = cacheKey(claim, evidence)
+/**
+ * @param sentence The claim's SURROUNDING sentence, when the caller has the
+ *   document. A detected claim is a sub-span that stops at the end of the
+ *   assertion, so a trailing "(Minges & Redeker, 2016)" is not inside
+ *   `claim.text` — the reference check would never see the citation it exists
+ *   to look up. Omitted, the check falls back to the claim text, which still
+ *   covers narrative citations ("Ramirez and Doyle (2024) found …") since those
+ *   sit at the front.
+ */
+export async function generateCritique(
+  claim: Claim,
+  evidence: EvidenceItem[],
+  sentence?: string
+): Promise<CritiqueResult> {
+  // Looked up before the cache key is built, because the answer is part of the
+  // question — the same claim and evidence with a corroborated reference and
+  // with an uncorroborated one are two different critiques.
+  const references = await checkReferences(sentence ?? claim.text)
+  const referenceCheck = describeReferenceChecks(references)
+
+  const key = cacheKey(claim, evidence, referenceCheck)
 
   const cached = getCached<CritiqueResult>(key)
   if (cached) return cached
@@ -130,7 +157,13 @@ export async function generateCritique(claim: Claim, evidence: EvidenceItem[]): 
   const raw = await callRelay<CritiqueResult>('critique', {
     claimText: claim.text,
     strengthScore: claim.strengthScore,
-    evidenceSummary
+    evidenceSummary,
+    // Omitted rather than sent empty when there was nothing to look up. The
+    // relay's Pass 2(c) keys on this line being PRESENT and negative; a line
+    // saying "no references checked" would read to the model as a result, and
+    // the references this cannot check (a single author, an institution, a
+    // quoted title) are exactly the ones where absence means nothing.
+    ...(referenceCheck ? { referenceCheck } : {})
   })
 
   const result = normalizeCritique(raw)

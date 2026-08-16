@@ -1,0 +1,123 @@
+# Making `fabricated` reachable — 2026-08-16
+
+`fabricated` is the top severity tier in `problemKind.ts`, ranked above a wrong
+fact, and it has **never fired once**. eval/critique/FINDINGS.md finding 1: shown
+a sentence crediting "Ramirez and Doyle (2024)" with an exact figure — a study
+that does not exist, carrying every marker the relay's own prompt lists — the
+critique returned `unsupported` and explained itself:
+
+> cannot be verified as real or fabricated without further information
+
+That is the correct answer to the question it was asked. Pass 2(c) required the
+model to be *"confident no work matching this author, year and title exists"*,
+and a model cannot be confident of a negative about the world. The verdict was
+unreachable by construction, so Tracely's answer to an AI-hallucinated citation
+was the same word it uses for thin sourcing — and the failure a chatbot-assisted
+draft produces by default is the one this product's positioning is built on.
+
+**The fix is not a firmer prompt. It is to stop asking the model and go and
+look.** A targeted query for the author and year the sentence names is a fact
+about the world rather than about the model's memory, and it is cheap: Crossref
+is free and unmetered.
+
+`node eval/fabrication/run.mjs`
+
+## It separates cleanly
+
+```
+  DETECTION   10/10  invented author pairs not corroborated
+  FALSE ALARM  2/24  real references not corroborated
+                 article  0/16
+                 book     2/8
+```
+
+Labels in `references.json` were written from knowledge of the literature, never
+from a Crossref result — labelling a reference "real" because Crossref returned
+it would be measuring the index against itself. The invented pairs are
+constructed, because there is no corpus of known-hallucinated citations to draw
+on; the real ones are works most people who took the undergraduate course could
+name, spread from 1974 to 2019.
+
+Three design decisions did the work, and each came from a failure in this run.
+
+## 1. Two authors, or no check at all
+
+A single surname corroborates on a coincidence. "Dunster 2018" returns a paper
+on blood coagulation; "Barrero 2023" a Spanish article on public procurement.
+Both cited references are real, and both were "corroborated" by works that have
+nothing to do with them — which means an *invented* single-author reference
+would be corroborated exactly as readily. The check has no power there.
+
+So `isCheckable` requires two named surnames. A work carrying **both** cited
+names in the cited year is not something a common surname produces by chance.
+
+The cost is stated rather than hidden: an invented single-author citation cannot
+be caught by this at all, and `et al.` names exactly one surname however many it
+hides. In the 16-essay corpus that leaves 5 of 12 references checkable. What is
+bought is that the check cannot manufacture an accusation out of a common name.
+
+## 2. Two queries, because they fail in opposite directions
+
+Corroboration is an existence proof, so looking twice can only reduce false
+accusations — it cannot manufacture one, since both queries still have to clear
+the same authors-and-year test.
+
+| query | rescues | fails |
+|---|---|---|
+| surnames + year + the sentence's words | `Wheaton Ferro 2016` alone returns twenty petroleum-engineering and lifestyle-sport papers, not the cited one | — |
+| surnames + year alone | — | the sentence "students **typed** them on laptops" turned a query for the most cited note-taking study in psychology into twenty papers on **typed lambda calculus** |
+
+Each alone produced a false alarm on a famous, real paper. Together: 0/16 on
+articles.
+
+## 3. The lookup may not reach a verdict on its own
+
+The article set came back 0/16 and looked conclusive. Books were added
+afterwards precisely because that set could not see the gap, and they found it:
+
+```
+  NOT FOUND  Levitt & Dubner 2005   (Freakonomics)
+  NOT FOUND  Strunk & White 2000    (The Elements of Style)
+```
+
+Crossref registers DOIs for the scholarly record. It does not carry most trade
+books, most government and NGO reports, or most non-English work — and a student
+citing any of those is doing nothing wrong. A quarter of real two-author books
+uncorroborated is not a rate anything may act on alone.
+
+So what ships is the **evidence**, handed to the one reader that can tell a
+missing book from a missing paper. `describeReferenceChecks` writes what was
+done and what came back, never a conclusion, and says so in the line itself:
+
+> a targeted search of Crossref for a work by Ramirez and Doyle 2024 returned 20
+> results and none of them lists all of these authors. Crossref does not index
+> most books, government and NGO reports, or non-English work, so this is not by
+> itself proof the source does not exist.
+
+Relay Pass 2(c) now reads: the lookup section is present, it found nothing, AND
+the reference carries the marks of generation. Absent the section, (c) is
+unavailable — no lookup happened, which the prompt is explicit is a different
+thing from a lookup that found nothing.
+
+## What this still cannot do
+
+- **Single-author and `et al.` references.** No check. See §1.
+- **Numeric and MLA author-page styles.** `[3]` and `(Shoup 45)` carry no year
+  and are not parsed at all, so an IEEE or MLA draft gets no fabrication check
+  whatsoever. That is a large fraction of real student writing.
+- **Institutions and quoted titles.** Excluded deliberately; a scholarly index
+  answers them badly and "not found" would carry no information.
+- **A real paper misdescribed.** Out of scope by design — `corroborate` is blind
+  to topic, so a reference that resolves to a real work saying something else
+  corroborates. That is a different problem with different verdicts, and
+  reporting it as an invented citation would be the more serious of the two
+  accusations and the wrong repair entirely.
+
+## Caveat
+
+24 real references and 10 invented ones, one index, one labeller who wrote both
+the invented set and the labels. Enough to establish that the separation exists
+and that books break it; not enough for a rate. The invented pairs were
+constructed by the same person who chose the query strategy, which is the
+weakest part of this: a fabrication that happens to share a surname pair with a
+real indexed work would be corroborated, and nothing here samples that.

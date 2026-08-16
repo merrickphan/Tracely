@@ -1,7 +1,10 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
+import { computeClaimSpans } from '@shared/claimSpans'
+import { sentenceAround } from '@shared/inlineCitation'
 import type { CritiqueGenerateResponse } from '@shared/ipc-contract'
+import { getAnalysis } from '../services/storage/analysesRepo'
 import { generateCorrection } from '../services/ai/correction'
 import { generateCritique } from '../services/ai/critique'
 import { getEvidenceForClaim } from '../services/storage/claimEvidenceRepo'
@@ -16,7 +19,15 @@ export function registerCritiqueHandlers(): void {
     if (!claim) throw new Error('Claim not found')
 
     const evidence = getEvidenceForClaim(claimId)
-    const result = await generateCritique(claim, evidence)
+    // The analyzed document, so the reference check sees the whole sentence
+    // rather than the claim span — which stops before a trailing "(Author,
+    // Year)". Null when the analysis row is gone; generateCritique then falls
+    // back to the claim text, which still carries a narrative citation.
+    const analysis = getAnalysis(claim.analysisId)
+    const span = analysis ? computeClaimSpans(analysis.sourceText, [claim])[0] : undefined
+    const sentence =
+      analysis && span ? sentenceAround(analysis.sourceText, span.start, span.end) : undefined
+    const result = await generateCritique(claim, evidence, sentence)
     updateClaimCritique(claimId, result.critique, result.verdict)
 
     // Only sources the local model flagged as contradicting, and only ones
