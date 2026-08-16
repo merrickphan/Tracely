@@ -25,6 +25,7 @@
     "eval:citations": "node eval/citations/run.mjs",
     "eval:rank": "node eval/retrieval/rank.mjs",
     "eval:robustness": "node eval/retrieval/robustness.mjs",
+    "eval:stance": "node eval/retrieval/stance.mjs",
     "eval:validate": "node eval/scripts/validate-annotations.mjs",
     "eval:import-baseline": "node eval/scripts/import-baseline.mjs",
     "eval:fit": "node eval/scripts/fit-weights.mjs",
