@@ -55,7 +55,12 @@ import {
   SINGLE_PANEL_WIDTH,
   WIDGET_SIZE
 } from './panelSize'
-import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind } from '@shared/inlineCitation'
+import {
+  hasInlineCitation,
+  hasInlineCitationNear,
+  inlineCitationKind,
+  sentenceAround
+} from '@shared/inlineCitation'
 import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
@@ -1077,7 +1082,23 @@ export async function critiqueClaim(claimId: string): Promise<CritiqueResult> {
   if (!claim) throw new Error('This claim is no longer being tracked (the watched text likely changed).')
   const evidence = evidenceResultByClaimId.get(claimId)
   const evidenceItems = evidence ? evidence.evidence.map((item, i) => synthesizeEvidenceItem(item, i)) : []
-  const result = await generateCritique(withEvidenceScores(claim), evidenceItems)
+  // The claim's SENTENCE, so the reference check can see a citation the claim
+  // span stops short of — the relay returns the assertion and ends before the
+  // "(Minges & Redeker, 2016)" that follows it. Same widening, and the same
+  // reason, as hasInlineCitationNear above. Falls back to the claim text when
+  // the span cannot be located, which is what generateCritique defaults to.
+  const span = computeClaimSpans(lastAnalyzedText, [claim])[0]
+  const sentence = span ? sentenceAround(lastAnalyzedText, span.start, span.end) : undefined
+  // The watched text entire, for a numbered or MLA citation whose reference
+  // list sits at the end of the document rather than near the claim. Screen
+  // Watch sees whatever is on screen, so the list may not be captured at all —
+  // in which case the marker simply goes unchecked, as it did before.
+  const result = await generateCritique(
+    withEvidenceScores(claim),
+    evidenceItems,
+    sentence,
+    lastAnalyzedText
+  )
   if (currentClaims.some((c) => c.id === claimId)) {
     critiqueByClaimId.set(claimId, result)
     redrawOverlay()

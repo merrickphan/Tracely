@@ -1,0 +1,15 @@
+Why Sequence Models Took So Long
+
+The architectures that now dominate machine translation and text generation were not obvious, and each one had to solve a problem the previous generation could not.
+
+Recurrent networks were held back for years by a training failure that had nothing to do with data. Hochreiter and Schmidhuber [1] showed that a gated memory cell keeps the error signal from vanishing across long sequences, which made it possible to train recurrent networks on dependencies hundreds of steps apart.
+
+The next shift abandoned recurrence altogether. Vaswani and Shazeer [3] found that an architecture built entirely from attention, with no recurrence and no convolution, reached higher translation quality than the recurrent models it replaced while training in a fraction of the time.
+
+Environmental exposure research has moved in the opposite direction, toward smaller effects measured more carefully. Castellanos and Prewitt [2] found that microplastic concentrations in drinking water were associated with a 27 percent increase in circulating inflammatory markers across a cohort of 4,200 adults.
+
+References
+
+[1] S. Hochreiter and J. Schmidhuber, "Long short-term memory," Neural Computation, vol. 9, no. 8, pp. 1735-1780, 1997.
+[2] J. Castellanos and D. Prewitt, "Microplastic concentrations in drinking water and inflammatory markers," Environmental Health Reports, vol. 15, no. 2, pp. 88-104, 2023.
+[3] A. Vaswani and N. Shazeer, "Attention is all you need," Advances in Neural Information Processing Systems, 2017.

@@ -1,0 +1,64 @@
+{
+  "note": "Labelled author-PAIR references, written before being run through the lookup. The essay corpus contains only four checkable pairs, which is not enough to put a number on the one thing that gates shipping this: how often a real citation is called uncorroborated. Every entry here is labelled from knowledge of the literature, NOT from a Crossref result — labelling `real` from a Crossref hit would be measuring the index against itself.",
+
+  "realSelection": "Chosen to be independently, famously real — works most people who have taken an undergraduate course in the field could name — and spread across decades and disciplines, because indexing coverage is the suspected failure mode and it is worst for older and non-STEM work. If one of these comes back uncorroborated that is a genuine false alarm and a finding about Crossref's coverage, not a labelling error.",
+
+  "bookSelection": "Added after the journal-article set came back 0/16, to test the coverage gap that set could not see. Every one is a two-author book most people could name. Crossref registers DOIs for the scholarly record; a trade or reference book is exactly what it does not carry, and a student citing one is not doing anything wrong. This is the class that decides whether the lookup may reach a verdict on its own.",
+
+  "unindexedSelection": "Added 2026-08-16, after the prompt was changed to reach `fabricated` when a sentence describes a study, the lookup is empty, and the model cannot name the work. That moved the risk: a REAL study Crossref does not index now lands closer to a fabrication verdict, and 0/16 on modern journal articles says nothing about that class. Two sub-classes are sampled because they are the two I can name works in with confidence and verify independently of any index: `pre-doi`, articles from before DOIs existed, where Crossref's coverage depends entirely on how well a publisher backfilled; and `textbook`, multi-author books cited as an author pair, which is the shape most likely to reach the check at all.\n\nNOT sampled, and this is a gap rather than a clean result: non-English and regional-society journals. Those are the class most likely to be both real and unindexed, and I cannot name specific two-author works in them with enough confidence to label honestly. Guessing at examples would produce a number that looks like a measurement and is not one.",
+
+  "fabricatedConstruction": "Invented for this set: a plausible surname pair, a round recent year, and a claim-shaped topic — the shape a chatbot produces. Constructed rather than collected because there is no corpus of known-hallucinated citations to draw on. Risk acknowledged: an invented pair could coincide with a real paper. If one corroborates, it is reported as a real finding about the check's precision rather than quietly relabelled.",
+
+  "references": [
+    { "label": "real", "surnames": ["Kahneman", "Tversky"], "year": 1979, "context": "prospect theory describes how people evaluate losses and gains under risk", "note": "Econometrica. About as findable as a paper gets." },
+    { "label": "real", "surnames": ["Mueller", "Oppenheimer"], "year": 2014, "context": "students who took lecture notes by hand outperformed those who typed them on laptops", "note": "The pen is mightier than the keyboard, Psychological Science." },
+    { "label": "real", "surnames": ["Card", "Krueger"], "year": 1994, "context": "the minimum wage increase in New Jersey did not reduce fast food employment", "note": "American Economic Review. Pre-2000, which is where indexing gets thinner." },
+    { "label": "real", "surnames": ["Reinhart", "Rogoff"], "year": 2010, "context": "public debt above ninety percent of GDP is associated with lower economic growth", "note": "Growth in a Time of Debt." },
+    { "label": "real", "surnames": ["Acemoglu", "Robinson"], "year": 2001, "context": "colonial settler mortality shaped the institutions that determine long run development", "note": "The Colonial Origins of Comparative Development." },
+    { "label": "real", "surnames": ["Deci", "Ryan"], "year": 2000, "context": "intrinsic motivation depends on autonomy competence and relatedness", "note": "Self-determination theory." },
+    { "label": "real", "surnames": ["Baumeister", "Leary"], "year": 1995, "context": "the need to belong is a fundamental human motivation shaping social attachment", "note": "Psychological Bulletin." },
+    { "label": "real", "surnames": ["Simons", "Chabris"], "year": 1999, "context": "observers counting basketball passes failed to notice a gorilla walking through the scene", "note": "Gorillas in our midst — inattentional blindness." },
+    { "label": "real", "surnames": ["Loftus", "Palmer"], "year": 1974, "context": "the wording of a question about a car crash changed witnesses estimates of speed", "note": "1974 — the oldest here, and the best test of coverage." },
+    { "label": "real", "surnames": ["Chetty", "Hendren"], "year": 2018, "context": "the neighbourhood a child grows up in affects their adult earnings and mobility", "note": "The Impacts of Neighborhoods on Intergenerational Mobility." },
+    { "label": "real", "surnames": ["Autor", "Dorn"], "year": 2013, "context": "computerization of routine tasks polarized the labor market into high and low skill work", "note": "The Growth of Low-Skill Service Jobs." },
+    { "label": "real", "surnames": ["Twenge", "Campbell"], "year": 2018, "context": "adolescent screen time is associated with lower psychological well-being", "note": "Preventive Medicine Reports." },
+    { "label": "real", "surnames": ["Dweck", "Leggett"], "year": 1988, "context": "students who see ability as fixed respond differently to failure than those who see it as malleable", "note": "A social-cognitive approach to motivation and personality." },
+    { "label": "real", "surnames": ["Nisbett", "Wilson"], "year": 1977, "context": "people confidently report reasons for their own behaviour that they cannot actually know", "note": "Telling more than we can know." },
+    { "label": "real", "surnames": ["Orben", "Przybylski"], "year": 2019, "context": "the association between adolescent well-being and digital technology use is small", "note": "Nature Human Behaviour. Also in the essay corpus." },
+    { "label": "real", "surnames": ["Bloom", "Liang"], "year": 2015, "context": "working from home raised call centre productivity in a randomized experiment", "note": "Does Working from Home Work? Quarterly Journal of Economics." },
+
+    { "label": "real", "form": "book", "surnames": ["Acemoglu", "Robinson"], "year": 2012, "context": "why nations fail the origins of power prosperity and poverty" },
+    { "label": "real", "form": "book", "surnames": ["Thaler", "Sunstein"], "year": 2008, "context": "nudge improving decisions about health wealth and happiness" },
+    { "label": "real", "form": "book", "surnames": ["Levitt", "Dubner"], "year": 2005, "context": "freakonomics a rogue economist explores the hidden side of everything" },
+    { "label": "real", "form": "book", "surnames": ["Wilkinson", "Pickett"], "year": 2009, "context": "the spirit level why more equal societies almost always do better" },
+    { "label": "real", "form": "book", "surnames": ["Oreskes", "Conway"], "year": 2010, "context": "merchants of doubt how a handful of scientists obscured the truth" },
+    { "label": "real", "form": "book", "surnames": ["Banerjee", "Duflo"], "year": 2011, "context": "poor economics rethinking the way to fight global poverty" },
+    { "label": "real", "form": "book", "surnames": ["Strunk", "White"], "year": 2000, "context": "the elements of style" },
+    { "label": "real", "form": "book", "surnames": ["Lakoff", "Johnson"], "year": 1980, "context": "metaphors we live by conceptual metaphor in everyday language" },
+
+    { "label": "real", "form": "pre-doi", "surnames": ["Watson", "Crick"], "year": 1953, "context": "molecular structure of nucleic acids a structure for deoxyribose nucleic acid" },
+    { "label": "real", "form": "pre-doi", "surnames": ["Hodgkin", "Huxley"], "year": 1952, "context": "a quantitative description of membrane current and its application to conduction and excitation in nerve" },
+    { "label": "real", "form": "pre-doi", "surnames": ["Hershey", "Chase"], "year": 1952, "context": "independent functions of viral protein and nucleic acid in growth of bacteriophage" },
+    { "label": "real", "form": "pre-doi", "surnames": ["Luria", "Delbruck"], "year": 1943, "context": "mutations of bacteria from virus sensitivity to virus resistance" },
+    { "label": "real", "form": "pre-doi", "surnames": ["Michelson", "Morley"], "year": 1887, "context": "on the relative motion of the earth and the luminiferous ether" },
+    { "label": "real", "form": "pre-doi", "surnames": ["Banting", "Best"], "year": 1922, "context": "the internal secretion of the pancreas insulin diabetes" },
+
+    { "label": "real", "form": "textbook", "surnames": ["Kernighan", "Ritchie"], "year": 1978, "context": "the c programming language" },
+    { "label": "real", "form": "textbook", "surnames": ["Hopcroft", "Ullman"], "year": 1979, "context": "introduction to automata theory languages and computation" },
+    { "label": "real", "form": "textbook", "surnames": ["Cormen", "Leiserson"], "year": 1990, "context": "introduction to algorithms" },
+    { "label": "real", "form": "textbook", "surnames": ["Press", "Teukolsky"], "year": 1986, "context": "numerical recipes the art of scientific computing" },
+    { "label": "real", "form": "textbook", "surnames": ["Sedgewick", "Wayne"], "year": 2011, "context": "algorithms fourth edition sorting searching graphs" },
+    { "label": "real", "form": "textbook", "surnames": ["Hastie", "Tibshirani"], "year": 2009, "context": "the elements of statistical learning data mining inference and prediction" },
+
+    { "label": "fabricated", "surnames": ["Ramirez", "Doyle"], "year": 2024, "context": "students who received AI-generated feedback improved their essay scores by twenty three percent", "note": "The original. Planted in eval/essays/08-ai-grading.txt and pre-registered as invented in eval/critique/expected.json before any of this existed." },
+    { "label": "fabricated", "surnames": ["Whitfield", "Nakamura"], "year": 2023, "context": "remote instruction reduced mathematics attainment by a third of a standard deviation" },
+    { "label": "fabricated", "surnames": ["Okonkwo", "Salvatore"], "year": 2022, "context": "urban tree canopy coverage lowered summer emergency room admissions by eighteen percent" },
+    { "label": "fabricated", "surnames": ["Bergstrom", "Ferreira"], "year": 2024, "context": "four day working weeks increased employee output while reducing reported burnout" },
+    { "label": "fabricated", "surnames": ["Halloway", "Sundqvist"], "year": 2021, "context": "handwriting instruction in early primary school predicted later reading fluency" },
+    { "label": "fabricated", "surnames": ["Castellanos", "Prewitt"], "year": 2023, "context": "microplastic concentrations in drinking water correlated with inflammatory markers" },
+    { "label": "fabricated", "surnames": ["Vandermeer", "Ashworth"], "year": 2024, "context": "large language model tutoring closed the attainment gap in secondary school algebra" },
+    { "label": "fabricated", "surnames": ["Quintero", "Bramwell"], "year": 2022, "context": "participation in school music programmes improved executive function in adolescents" },
+    { "label": "fabricated", "surnames": ["Lindqvist", "Oyelaran"], "year": 2023, "context": "congestion pricing reduced particulate exposure in low income neighbourhoods" },
+    { "label": "fabricated", "surnames": ["Thackeray", "Nwosu"], "year": 2024, "context": "smartphone bans in secondary schools raised standardized test scores across three districts" }
+  ]
+}

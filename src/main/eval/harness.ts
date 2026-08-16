@@ -16,6 +16,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
 import type { Claim, EvidenceItem, ScoreBreakdown, Source } from '@shared/types'
+import { sentenceAround } from '@shared/inlineCitation'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
 import { setAccessTokenProvider } from '../services/ai/identity'
@@ -75,6 +76,41 @@ interface EvaluatedEssay {
   claimCount: number
   claims: EvaluatedClaim[]
   elapsedMs: number
+  /**
+   * This run critiqued only a marked subset of claims.
+   *
+   * Stamped so that nothing downstream can mistake a cheap run for a full one.
+   * eval/critique/score.mjs picks the NEWEST critique-bearing report when it is
+   * not given one, and a five-claim smoke report would otherwise become "the"
+   * report and score 5/5 — a clean bill of health from a run that never looked
+   * at most of the set. That is the same shape of trap as the unnamespaced
+   * eval cache, which reported one environment's verdicts as another's, so it
+   * gets a marker in the data rather than a convention in someone's head.
+   */
+  smoke?: boolean
+}
+
+/**
+ * Smoke mode: critique only the claims a change can plausibly move.
+ *
+ * `EVAL_ONLY_CLAIMS` is a JSON array of claim-text PREFIXES, set by
+ * scripts/evaluate.mjs from the entries marked `"smoke": true` in
+ * eval/critique/expected.json. Unset means every claim is critiqued, which is
+ * the normal full run.
+ *
+ * Prefix matching, the same join eval/critique/score.mjs uses, because a
+ * detected claim is a sub-span of its sentence and its exact text moves between
+ * detection runs. A claim that matches nothing is simply not critiqued — it is
+ * never an error, since the smoke set deliberately spans essays that a given
+ * invocation may not include.
+ */
+const smokePrefixes: string[] | null = process.env.EVAL_ONLY_CLAIMS
+  ? (JSON.parse(process.env.EVAL_ONLY_CLAIMS) as string[])
+  : null
+
+function inSmokeSet(claimText: string): boolean {
+  if (!smokePrefixes) return true
+  return smokePrefixes.some((prefix) => claimText.startsWith(prefix))
 }
 
 function round(value: number, places = 3): number {
@@ -138,7 +174,12 @@ function asEvidence(results: RankedSourceResult[]): EvidenceItem[] {
   })
 }
 
-async function evaluateClaim(detected: DetectedClaim, index: number): Promise<EvaluatedClaim> {
+async function evaluateClaim(
+  detected: DetectedClaim,
+  index: number,
+  sentence?: string,
+  document?: string
+): Promise<EvaluatedClaim> {
   const base = {
     text: detected.text,
     claimType: detected.claimType,
@@ -154,9 +195,12 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
     let verdict: string | null = null
     let suggestedRevision: string | null = null
     let citationFix: string | null = null
-    if (!process.env.EVAL_SKIP_CRITIQUE) {
+    if (!process.env.EVAL_SKIP_CRITIQUE && inSmokeSet(detected.text)) {
       const claim = asClaim(detected, score, `eval-${index}-${detected.text.slice(0, 40)}`)
-      const result = await generateCritique(claim, evidenceItems)
+      // The whole sentence, for the reference check — see generateCritique.
+      // The harness has the essay text, so this is the one path that never has
+      // to fall back.
+      const result = await generateCritique(claim, evidenceItems, sentence, document)
       critique = result.critique
       verdict = result.verdict
       suggestedRevision = result.suggestedRevision
@@ -224,7 +268,11 @@ async function evaluateEssay(path: string): Promise<EvaluatedEssay> {
   const claims: EvaluatedClaim[] = []
   for (const [index, claim] of detected.entries()) {
     process.stdout.write(`    [${index + 1}/${detected.length}] ${claim.searchQuery}\n`)
-    claims.push(await evaluateClaim(claim, index))
+    // The claim's sentence in the essay, so the reference check sees a trailing
+    // "(Author, Year)" the detected span stops before.
+    const at = text.indexOf(claim.text)
+    const sentence = at === -1 ? undefined : sentenceAround(text, at, at + claim.text.length)
+    claims.push(await evaluateClaim(claim, index, sentence, text))
   }
 
   return {
@@ -232,7 +280,8 @@ async function evaluateEssay(path: string): Promise<EvaluatedEssay> {
     chars: text.length,
     claimCount: detected.length,
     claims,
-    elapsedMs: Date.now() - started
+    elapsedMs: Date.now() - started,
+    ...(smokePrefixes ? { smoke: true } : {})
   }
 }
 

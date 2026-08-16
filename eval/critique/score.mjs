@@ -8,6 +8,9 @@
 // expected.json holds one per claim, written before the run this scores.
 //
 //   node eval/critique/score.mjs [report.json]
+//
+// With no argument it scores the newest report that carries critiques and is
+// NOT a smoke run — see the selection below. To score a smoke run, name it.
 
 import { readdirSync, readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -15,7 +18,12 @@ import { fileURLToPath } from 'url'
 const HERE = fileURLToPath(new URL('.', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
 const REPO = fileURLToPath(new URL('../..', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
 
-const expected = JSON.parse(readFileSync(`${HERE}/expected.json`, 'utf8'))
+const expectedFile = JSON.parse(readFileSync(`${HERE}/expected.json`, 'utf8'))
+// The claims array also carries batch notes — entries with prose and no `claim`,
+// so a batch can explain itself next to the expectations it introduced rather
+// than in a file nobody opens. Filtered once here so nothing downstream has to
+// remember they exist.
+const expected = { ...expectedFile, claims: expectedFile.claims.filter((c) => c.claim) }
 
 // Newest report carrying critiques, unless one is named. Unlike the retrieval
 // labels this join needs no fixed report: the expectations are about the CLAIM,
@@ -30,10 +38,23 @@ const reportPath =
     .reverse()
     .find((f) => {
       const r = JSON.parse(readFileSync(`${REPO}/eval/reports/${f}`, 'utf8'))
+      // A smoke run critiques only a marked subset, so it is never what "the
+      // latest results" means. Auto-selection skips it; naming it explicitly
+      // still works. Without this a five-claim run becomes the newest
+      // critique-bearing report and scores 5/5 — a clean bill of health from a
+      // run that never looked at most of the set.
+      if (r.some((e) => e.smoke)) return false
       return r.flatMap((e) => e.claims).some((c) => c.critique)
     })}`
 
 const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+
+if (report.some((e) => e.smoke)) {
+  console.log('  ' + '='.repeat(66))
+  console.log('  SMOKE RUN — only the marked claims were critiqued.')
+  console.log('  Every fraction below is over that subset. Not a full result.')
+  console.log('  ' + '='.repeat(66))
+}
 const claims = report.flatMap((essay) => essay.claims.map((claim) => ({ essay: essay.file, claim })))
 
 console.log(`report: ${reportPath.split('/').pop()}\n`)
@@ -111,11 +132,52 @@ const CLEAN = ['well-supported', 'partially-supported']
 const controls = expected.claims.filter((s) => CLEAN.includes(s.expected))
 const accused = controls.filter((spec) => {
   const hit = claims.find((c) => c.claim.text.startsWith(spec.claim))
-  return hit?.claim.critique && !isRetrievalMiss(hit.claim) && !CLEAN.includes(hit.claim.verdict)
+  if (!hit?.claim.critique || isRetrievalMiss(hit.claim)) return false
+  // Against the claim's OWN pre-registered acceptable set, not against a fixed
+  // list of good verdicts. 05-C4 is half anecdote and its registration says so —
+  // `weak` was written down in advance as a defensible reading. Counting it as a
+  // false accusation would have this file overrule a judgement made before the
+  // run, which is the one thing pre-registration exists to prevent.
+  return !spec.acceptable.includes(hit.claim.verdict)
 })
 
 console.log(`\n  correct sentences accused of a problem: ${accused.length}/${controls.length}`)
 for (const spec of accused) console.log(`    · ${spec.claim.slice(0, 62)}`)
+
+// -- fabrication: the two error directions, which do not cost the same --------
+//
+// A fabricated citation reported as anything else is a MISS: the writer is
+// under-warned. A real citation reported as `fabricated` is a HARM: the writer
+// is told they invented a source they honestly cited. These are counted apart
+// because averaging them into one accuracy number would let a harm be paid for
+// with a catch, and they are not exchangeable at any rate.
+const invented = expected.claims.filter((s) => s.expected === 'fabricated')
+const genuine = expected.claims.filter((s) => s.acceptable && !s.acceptable.includes('fabricated'))
+const verdictOf = (spec) => claims.find((c) => c.claim.text.startsWith(spec.claim))?.claim
+
+const caught = invented.map(verdictOf).filter((c) => c?.verdict === 'fabricated').length
+const inventedSeen = invented.map(verdictOf).filter((c) => c?.critique).length
+const harmed = genuine.map(verdictOf).filter((c) => c?.verdict === 'fabricated')
+const genuineSeen = genuine.map(verdictOf).filter((c) => c?.critique).length
+
+if (inventedSeen + genuineSeen > 0) {
+  console.log(`\n  FABRICATION`)
+  console.log(`    caught   ${caught}/${inventedSeen} invented citations named as fabricated`)
+  console.log(`    HARM     ${harmed.length}/${genuineSeen} real citations wrongly called fabricated`)
+  for (const spec of genuine) {
+    const got = verdictOf(spec)
+    if (got?.verdict === 'fabricated') console.log(`      · ${spec.claim.slice(0, 60)}`)
+  }
+  // Says the denominator out loud. A claim can be absent because its essay was
+  // not in this run, or because the detector did not return it — and both look
+  // identical from here. Either way it is outside the fractions above, and a run
+  // that measured half the set should say so rather than report the flattering
+  // half as if it were the whole.
+  const missing = invented.length + genuine.length - inventedSeen - genuineSeen
+  if (missing > 0) {
+    console.log(`    ${missing} expectation(s) absent from this report — not counted either way`)
+  }
+}
 
 if (misses.length) {
   console.log('\n  MISSES\n')

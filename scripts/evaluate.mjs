@@ -20,10 +20,15 @@
 //   npm run evaluate                      # uses eval/essays/
 //   npm run evaluate -- --essays path     # a different folder
 //   EVAL_SKIP_CRITIQUE=1 npm run evaluate # retrieval + scoring only, no relay critique calls
+//   npm run evaluate:smoke                # critique ONLY the claims marked
+//                                         # "smoke": true in eval/critique/expected.json.
+//                                         # 6 relay calls instead of 20 for a prompt
+//                                         # change; the report is stamped so
+//                                         # eval:critique will not auto-select it.
 //   EVAL_REFRESH=1 npm run evaluate       # ignore recordings, fetch live again
 //   EVAL_NO_CASSETTE=1 npm run evaluate   # never record or replay
 
-import { existsSync, mkdirSync, readdirSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'fs'
 import { dirname, isAbsolute, join, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import * as esbuild from 'esbuild'
@@ -65,7 +70,18 @@ function argValue(flag) {
 const essayArg = argValue('--essays') ?? 'eval/essays'
 const essayDir = isAbsolute(essayArg) ? essayArg : join(repoRoot, essayArg)
 const outDir = join(repoRoot, 'eval', 'reports')
-const dataDir = join(repoRoot, 'out', 'eval', 'data')
+// Namespaced by environment for exactly the reason the cassette directory is,
+// and it was not — which cost a full run to discover on 2026-08-16.
+//
+// This scratch profile holds the SQLite `ai:critique` cache, and that cache is
+// keyed on the claim text, score, evidence ids and reference lookup: the
+// REQUEST. Not on the relay host, because a shipped build has RELAY_URL
+// compiled in and can never talk to a second relay. The eval can. So a run
+// against staging populated the cache, and the next run — against production,
+// deliberately, to test a newly deployed prompt — answered every claim out of
+// staging's cache, made zero relay calls, and reported the OLD build's verdicts
+// as production's. It looked like a clean free re-run.
+const dataDir = join(repoRoot, 'out', 'eval', 'data', ENV_NAME)
 const bundlePath = join(repoRoot, 'out', 'eval', 'harness.mjs')
 const workerPath = join(repoRoot, 'out', 'eval', 'mlWorker.cjs')
 
@@ -177,6 +193,38 @@ process.env.EVAL_REPO_ROOT = repoRoot
 process.env.EVAL_DATA_DIR = dataDir
 process.env.EVAL_ESSAY_DIR = essayDir
 process.env.EVAL_OUT_DIR = outDir
+
+// -- --smoke: critique only the claims a change can plausibly move -----------
+//
+// A full verification of both suites is 20 relay calls. Five sequential prompt
+// changes on 2026-08-16 therefore cost ~60, and every one of those runs was
+// justified — two caught regressions I had just introduced. But most of the
+// claims in each run could not have moved: they carry no citation, so the
+// fabrication rules cannot reach them.
+//
+// Smoke mode critiques only the claims marked `"smoke": true` in
+// eval/critique/expected.json, and skips the rest. Retrieval still runs for
+// everything (it is cassetted and free), so the reports stay comparable in
+// every respect except which claims carry a critique.
+//
+// The selection lives in expected.json rather than here on purpose: it is the
+// file that already says what each claim is FOR, so a claim's role and its
+// membership of the fast set cannot drift apart.
+if (process.argv.includes('--smoke')) {
+  const expectedPath = join(repoRoot, 'eval', 'critique', 'expected.json')
+  const { claims } = JSON.parse(readFileSync(expectedPath, 'utf8'))
+  const prefixes = claims.filter((c) => c.claim && c.smoke).map((c) => c.claim)
+  if (prefixes.length === 0) {
+    console.error(`--smoke: no claims marked "smoke": true in ${expectedPath}`)
+    process.exit(1)
+  }
+  process.env.EVAL_ONLY_CLAIMS = JSON.stringify(prefixes)
+  console.log(
+    `\n  SMOKE MODE — critiquing ${prefixes.length} marked claim(s); every other claim is\n` +
+      `  retrieved and scored but NOT critiqued. The report is stamped so eval:critique\n` +
+      `  will not mistake it for a full run.\n`
+  )
+}
 
 // Patched before the bundle is imported, so the harness and every provider
 // under src/ pick it up through the global without knowing it exists.

@@ -51,6 +51,151 @@
       "expected": "overstated",
       "acceptable": ["overstated", "weak", "partially-supported"],
       "why": "'Every ... I know' plus 'the research says they are right' — anecdote generalised, and an appeal to research that is genuinely mixed. Retrieval found two relevant papers comparing AI and human graders, so there is something to reason over."
+    },
+
+    { "batch": "2026-08-16-fabrication",
+      "note": "Everything below is a second batch, written before eval/critique/essays/10 and 11 had ever been run. Its purpose is that the fabrication measurement rested on ONE planted reference: Ramirez and Doyle, caught twice, which is not a rate. Four invented references and four real ones now sit in prose, each in a sentence built to be detected as a claim.\n\nThe invented pairs are taken from eval/fabrication/references.json, where all four were already confirmed absent from Crossref, so a miss here is the CRITIQUE failing rather than the lookup. The real ones were confirmed present — except Levitt and Dubner, which is the point of including it.\n\nThe asymmetry is deliberate and is not symmetric in cost. A fabricated citation reported as `unsupported` is a miss: the writer is under-warned, and that is bad. A real citation reported as `fabricated` is a harm: the writer is told they invented a source they honestly cited, which is the most damaging sentence this product can produce. So the four real claims below accept almost any verdict EXCEPT `fabricated`, and the four invented ones accept only `fabricated`." },
+
+    {
+      "claim": "Vandermeer and Ashworth (2024) found that large language model tutoring",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented. Confirmed absent from Crossref in eval/fabrication (two queries, neither returning a work carrying both surnames). Carries every marker: plausible pair, round recent year, an exact figure (31 percent) with no methodology, and a finding that restates the sentence it is attached to.",
+      "failureIfWrong": "Anything else means the lookup reached the model and the model declined to use it — the exact failure the Crossref work was built to remove."
+    },
+    {
+      "claim": "Mueller and Oppenheimer (2014) found that students who took lecture notes",
+      "smoke": true,
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, famous, and corroborated by the lookup — 'The Pen Is Mightier Than the Keyboard'. The claim is also a fair summary of it. A CONTROL: any verdict about support or phrasing is defensible here; `fabricated` is not.",
+      "failureIfWrong": "A `fabricated` here would be the product telling a student they invented one of the most cited papers in the psychology of note-taking."
+    },
+    {
+      "claim": "Halloway and Sundqvist (2021) showed that handwriting instruction",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. Deliberately the most plausible-sounding of the four — the underlying idea (handwriting and later literacy) is a real research area, so only the reference is fake. Tests whether a topically reasonable claim protects a fabricated citation."
+    },
+    {
+      "claim": "Twenge and Campbell (2018) reported that adolescent screen time",
+      "expected": "partially-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real and corroborated. The sentence hedges appropriately and even concedes the causal question is open, so there is little to criticise. CONTROL.",
+      "failureIfWrong": "Same as the other controls: `fabricated` on a real, corroborated, correctly described source."
+    },
+    {
+      "claim": "Okonkwo and Salvatore (2022) found that increasing urban tree canopy",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. An exact figure (18 percent) across a suspiciously specific number of metropolitan areas, with no study design named."
+    },
+    {
+      "claim": "Levitt and Dubner (2005) argued that legalised abortion",
+      "expected": "overstated",
+      "acceptable": ["overstated", "partially-supported", "weak", "unsupported", "contradicted"],
+      "why": "THE CRITICAL CONTROL, and the reason the book set was added to eval/fabrication at all. Freakonomics is real and unquestionably well known, and the lookup CANNOT corroborate it — Crossref registers DOIs for the scholarly record and does not carry trade books. So the critique receives an empty lookup for a genuine source, which is precisely the case the relay prompt's caveat exists to survive. The substance is also genuinely contested, so a verdict about overstatement is the right kind of answer.",
+      "failureIfWrong": "`fabricated` here is the single worst output in this whole eval set: a student correctly citing one of the best-selling non-fiction books of the decade, told they made it up because an academic index does not list it. If this fires, the lookup must not be allowed to inform the verdict at all."
+    },
+    {
+      "claim": "Lindqvist and Oyelaran (2023) found that congestion pricing",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. Congestion pricing has real evaluations, so retrieval will return genuinely on-topic papers — none of them this one. Tests the case that broke the original Ramirez run, where plausible topical evidence gave the model an overstatement story to tell instead."
+    },
+    {
+      "claim": "Chetty and Hendren (2018) showed that the neighbourhood a child",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real and corroborated, and accurately described including the dose-response point about years of exposure. CONTROL.",
+      "failureIfWrong": "As above."
+    },
+
+    { "batch": "2026-08-16-unindexed",
+      "note": "The harm direction, written before eval/critique/essays/12 had been run. The prompt was changed so that a sentence describing a STUDY, with an empty lookup and no work the model can name, reaches `fabricated`. That moved risk onto real works Crossref does not index, and the 0/16 on modern articles said nothing about them.\n\nThe lookup was labelled first (eval/fabrication/references.json). Result: 0/16 modern articles and 0/6 PRE-DOI articles uncorroborated — Crossref backfills the landmark literature well, so age is not the exposure — against 2/8 books and 2/6 textbooks. The exposure is work TYPE, and the four references below are exactly the four real works the lookup could not corroborate.\n\nThree are cited the way a student actually cites a textbook. The fourth is the boundary: Levitt and Dubner cited as if they were a study, with a percentage and a comparison, which is the shape the new rule keys on. If the rule over-fires anywhere, it fires there — and that is the case worth knowing about before it reaches anyone's draft.\n\nOne caveat carried over from the lookup labelling: for books, a corroboration is usually a DIFFERENT work by the same pair (Cormen & Leiserson matched a hyperconcentrator switch paper; Thaler & Sunstein matched 'Exploiting the Shame Meter'). So what corroborate() really tests is whether two surnames co-occur on anything in that window. That errs safe, and it means 'the book set only lost 2 of 8' is partly an accident of co-authorship rather than a property of the check." },
+
+    {
+      "claim": "Hopcroft and Ullman (1979) established the standard treatment of automata theory",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated by the lookup, and cited as what it is — a textbook. The subset construction attribution is accurate. The model should be able to name this work, which is what the prompt requires before placing a reference.",
+      "failureIfWrong": "`fabricated` here means the check now accuses a student citing the standard textbook of their field, purely because Crossref does not carry it."
+    },
+    {
+      "claim": "Sedgewick and Wayne (2011) present red-black trees",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated, cited as a textbook, and the description of the 2-3 tree correspondence is correct. Less famous than Hopcroft and Ullman, which is the point of including both: it tests whether the protection depends on the work being famous enough to recall."
+    },
+    {
+      "claim": "Strunk and White (2000) instruct writers to omit needless words",
+      "expected": "partially-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated, and correctly described — the sentence even concedes the linguistic criticism. A style guide is about as far from an indexed study as a cited work gets."
+    },
+    {
+      "claim": "Levitt and Dubner (2005) found that legalised abortion accounted for 43 percent",
+      "smoke": true,
+      "expected": "overstated",
+      "acceptable": ["overstated", "partially-supported", "weak", "unsupported", "contradicted"],
+      "why": "THE BOUNDARY CASE. A real, uncorroborated book cited as though it were a study: 'found that', an exact percentage, a comparison to policing reform. That is precisely the shape the new Pass 2 rule reads as generated — author pair, year, specific quantitative finding, empty lookup. The protection that should hold is the naming requirement: the model recognises Freakonomics and places the reference before the study-shape rule is reached. The 43 percent figure is also not theirs, so a verdict about overstatement or contradiction is the right kind of answer.",
+      "failureIfWrong": "A `fabricated` here is the rule over-firing on a real source, and it would mean the study-shape test cannot tell a mis-described real book from an invented paper. That would be grounds to weaken the rule, not to keep the catch rate."
+    },
+
+    { "batch": "2026-08-16-markers",
+      "note": "Numbered and MLA author-page citations, which until now got no fabrication check at all — not a weaker one, none. '[3]' and '(Shoup 45)' name nobody and no year; the reference is in a list at the end of the document, and parseReferences reads sentences. So whether a draft was covered was decided by its citation style rather than by anything about the citation.\n\nThe parse and the lookup are already measured offline and free (eval/bibliography: 0 invented authors over 184 parse cases, 0 real entries reported absent over 32 live lookups, 10/10 invented caught). What these six claims add is the only leg those cannot reach — whether the MODEL, handed a resolved marker and the entry behind it, reaches the right verdict.\n\nThe invented pairs are taken from eval/fabrication/references.json, where both were already confirmed absent from Crossref, so a miss here is the critique failing rather than the lookup. Same asymmetry as the batch above: the real ones accept any verdict EXCEPT `fabricated`." },
+
+    {
+      "claim": "Hochreiter and Schmidhuber [1] showed that",
+      "smoke": true,
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, corroborated, and correctly described. The reference list entry resolves to the 1997 Neural Computation paper and the entry query found it in Crossref (eval/bibliography/lookup.mjs). A CONTROL: this is the ordinary case the whole feature exists to serve — a numbered citation that turns out to be fine.",
+      "failureIfWrong": "A `fabricated` here would mean the resolution path can accuse on a corroborated reference, which is worse than the coverage gap it replaced."
+    },
+    {
+      "claim": "Vaswani and Shazeer [3] found that",
+      "smoke": true,
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "THE CONTROL FOR THE VENUE GUARD, and the reason it exists. 'Attention is all you need' is one of the most cited papers of the decade and is in NEITHER index — Crossref registers DOIs and Open Library holds books; NeurIPS proceedings fall between them. Measured absent in eval/bibliography/lookup.mjs. Because the entry names its venue, absenceIsInformative returns false and NO lookup line is emitted for this reference at all, so Pass 2(c) is unavailable and the model must fall back to (a) or (b).",
+      "failureIfWrong": "A `fabricated` here means the venue guard is not firing, and the product is telling a writer they invented the transformer paper. It also means the guard should be widened, not that this expectation is wrong."
+    },
+    {
+      "claim": "Castellanos and Prewitt [2] found that",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, and confirmed absent from both indexes in eval/bibliography/lookup.mjs. The entry carries every marker the prompt names: a plausible pair, a round recent year, a journal that sounds real, an exact figure (27 percent, n=4,200) with no methodology, and a title that restates the sentence it is attached to. The entry also reads unambiguously as a STUDY, which is the discriminator between `fabricated` and `unsupported`.",
+      "failureIfWrong": "Anything else means the resolved lookup reached the model and the model declined to use it — the same failure the inline check was built to remove, reappearing on the numbered path."
+    },
+    {
+      "claim": "Shoup argues that minimum parking requirements",
+      "smoke": true,
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, corroborated via Open Library, and a fair summary of the book's central argument. ONE surname, so by MIN_CHECKABLE_SURNAMES the reference is corroborate-only — a query for one name and a year returns a work by someone of that name essentially always. A corroboration here can only reassure; its absence would never have been reported.",
+      "failureIfWrong": "A `fabricated` on a single-author reference means absenceIsInformative is not being consulted on the resolved path, which would put every one-author MLA citation at risk of accusation."
+    },
+    {
+      "claim": "Manning and Schütze report that word frequencies",
+      "smoke": true,
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real and correctly described — Zipf's law is the textbook's own example. Crossref does not carry it and Open Library does, so this is the case the book index was added for, reached this time through an MLA author-page marker rather than an inline citation. Also the one claim here whose surname carries a diacritic (Schütze), which the entry, the marker and the index all have to agree on.",
+      "failureIfWrong": "A `fabricated` here means either the Open Library fallback is not running on the resolved path or the diacritic broke the surname match — the second would be a silent, style-specific accusation risk."
+    },
+    {
+      "claim": "Thackeray and Nwosu found that banning smartphones",
+      "smoke": true,
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from both indexes. Cited MLA, so the sentence names the pair narratively AND points at the Works Cited entry — the case where checkReferences must drop the yearless inline guess in favour of the resolved entry, which is the one carrying the year that lets absence be reported at all.",
+      "failureIfWrong": "An `unsupported` here would most likely mean the dedupe kept the yearless inline reference instead of the resolved one, which is corroborate-only — the check would have been silently disarmed rather than failing loudly."
     }
   ]
 }

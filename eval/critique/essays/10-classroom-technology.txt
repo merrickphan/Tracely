@@ -1,0 +1,11 @@
+Technology and the Classroom
+
+Schools have spent two decades buying devices faster than they can evaluate them, and the research base has never quite caught up with the purchase orders. That gap is where most of the confident claims live.
+
+The most recent enthusiasm is for language models as tutors. Vandermeer and Ashworth (2024) found that large language model tutoring closed the attainment gap in secondary school algebra by 31 percent within a single term, a larger effect than any human tutoring programme has reported. That figure has been repeated in district planning documents since.
+
+Older questions have better answers. Mueller and Oppenheimer (2014) found that students who took lecture notes by hand outperformed those who typed them on laptops, particularly on conceptual questions asked a week later. The mechanism they proposed was that slower writing forces summarising rather than transcription.
+
+The same logic has been extended further down the age range. Halloway and Sundqvist (2021) showed that handwriting instruction in early primary school predicted later reading fluency, accounting for 19 percent of the variance in second-grade outcomes. Districts that cut cursive from the curriculum may have traded away more than they realised.
+
+None of this settles the question of screens outside school. Twenge and Campbell (2018) reported that adolescent screen time is associated with lower psychological well-being, and the association strengthens past two hours a day. Whether that association reflects cause or selection remains genuinely open, and the honest position is that nobody has shown which.

@@ -159,6 +159,121 @@ when the search found nothing relevant.
 nulls `citationFix` on `fabricated`. The eval could not see the governing input
 of the thing it was measuring. Both are recorded now.
 
+## Four more fabrications — 2026-08-16
+
+The fabrication result rested on one planted reference caught twice, which is not
+a rate. `eval/critique/essays/` adds two essays carrying four invented
+author-pair citations and four real ones, each in a sentence written to be
+detected as a claim. Expectations pre-registered in `expected.json` under batch
+`2026-08-16-fabrication`; 10 live relay calls, production `3e14eb2`.
+
+```
+  7/8 within the acceptable set
+
+  FABRICATION
+    caught   3/4 invented citations named as fabricated
+    HARM     0/4 real citations wrongly called fabricated
+```
+
+The two directions are counted apart on purpose. A fabricated citation reported
+as something else under-warns the writer; a real citation reported as fabricated
+tells them they invented a source they honestly cited. They are not exchangeable
+at any rate, and averaging them would let a harm be paid for with a catch.
+
+**The book control passed, and passed for the right reason.** Freakonomics cannot
+be corroborated — Crossref does not carry trade books — so the critique received
+an empty lookup for a genuine source, the exact case the prompt's caveat exists
+to survive. It answered:
+
+> Levitt and Dubner are the authors of the well-known book 'Freakonomics' (2005),
+> which did argue that legalized abortion […] However, the claim that this
+> explanation 'displaced policing and economic explanations' is overstated.
+
+It named the work, which is what the naming requirement added a commit earlier
+demands, and then judged the claim on its merits. The other three controls came
+back `well-supported`. Zero harm across four.
+
+**The miss is instructive.** Lindqvist and Oyelaran (2023) — invented, absent from
+Crossref, in a sentence about congestion pricing where retrieval returns real
+on-topic evaluations — came back `unsupported`:
+
+> The reference lookup found no work by Lindqvist and Oyelaran (2023) in
+> Crossref, but this does not prove fabrication…
+
+The same hedge that produced the original Ramirez failure. But note where it
+landed: `unsupported`, **not** `overstated`, and with no suggested revision. The
+Pass 3 ban held, so the model under-warned instead of handing back a polished
+sentence still crediting an invented study. The remaining failure is the mild one.
+
+Standing at 4/5 caught and 0/8 harmed across both batches. Still small, and every
+invented reference in the set was written by the same person who chose the query
+strategy — the weakest joint in this measurement, and the one a genuinely
+adversarial set would attack.
+
+## The escape closed — 2026-08-16, production `42c18c8`
+
+The Lindqvist miss was not the model being careless. The rule said an unplaced
+reference is `fabricated` **or** `unsupported` and left the choice open, so
+`unsupported` was always available, and its justification —
+
+> the lookup found no work by these authors, but this does not prove fabrication
+
+— is true of every fabricated citation ever written. An escape that always applies
+is not a judgement.
+
+So the prompt now names what separates the two. Two personal surnames, a year and
+a specific quantitative finding describe a **study**, and studies are what Crossref
+indexes most completely — which is exactly why an empty lookup is informative here
+and not for a book or an agency report. Books are cited by title, reports by the
+body that published them; neither is cited as an author pair reporting a
+percentage. `unsupported` keeps the cases where it means something: a reference
+that does not read as a study, or one where a *specific* real candidate can be
+named but not confirmed. "It could be something not indexed" is not a candidate.
+
+Both batches, detection replayed from cassette so the claim sets are identical to
+the previous runs — a like-for-like comparison rather than a fresh draw:
+
+```
+  new batch (essays 10, 11)        original batch (essays 05, 08)
+  8/8 acceptable                   7/7 acceptable
+  caught 4/4   HARM 0/4            caught 1/1   HARM 0/5
+  accused 0/5                      accused 0/5
+```
+
+Every planted fabrication caught, no real citation harmed, and the original batch
+did not regress: Ramirez still `fabricated`, and GPT-5 back to `unsupported` with
+the false contradiction gone. **9/9 invented caught, 0/9 real harmed** across both.
+
+The book control held throughout: shown an uncorroborated Levitt & Dubner, the
+critique named Freakonomics by title and judged the claim on its merits. That path
+places the reference before the new rule is reached, which is why sharpening the
+rule did not endanger it.
+
+### Two corrections to the scoring, not the product
+
+`correct sentences accused` was measured against a fixed list of good verdicts
+rather than each claim's own pre-registered `acceptable` set. 05-C4 is half
+anecdote and its registration named `weak` in advance as defensible; the metric
+was calling that an accusation, which had the scorer overruling a judgement made
+before the run — the one thing pre-registration exists to prevent. It reads the
+registered set now, and both batches sit at 0/5.
+
+The other is procedural and was the fix from the previous run, applied for the
+first time here: clear only the **critique** cassettes between prompt changes.
+The relay cassettes record their own URL, so `detect-claims` can be kept while
+critique is re-recorded. That is what made these two runs comparable to the last
+two at all — without it detection redraws and the claim set moves underneath the
+comparison.
+
+### The residual risk, stated
+
+A real study Crossref does not index — a dissertation, a non-English journal
+outside its coverage — now lands closer to `fabricated` than before.
+`eval/fabrication` measured 0/16 uncorroborated on indexed articles, so the
+exposure is specifically **unindexed** ones, and nothing in the set samples them.
+That is the next thing to label, and it is the direction where a mistake costs a
+harm rather than a miss.
+
 ## Caveat
 
 8 claims, one run, one author of both the essays and the expectations. Enough to

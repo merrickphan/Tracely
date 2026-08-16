@@ -158,11 +158,75 @@ causal leap about hospital infections. It will score well on sources while its
 actual assertion goes unevidenced, which is the cost of the provisional rule
 made visible.
 
-The provisional rule used in the 04–09 annotations is: **label against the half
+The provisional rule used in the 04–12 annotations is: **label against the half
 the retrieval query was built from, and note the split.** It is provisional
 because it is a decision, not a derivation, and it should be settled
 deliberately rather than by whoever labels next. Until then it is at least
 recorded, which is more than the rel/marg boundary had.
+
+**A source that addresses the proposition and is wrong. — OPEN, raised
+2026-08-15 with essay 11.** The ladder has three rungs and none of them asks
+whether a source is still believed. Walk `11-debt-threshold` C1 — *Reinhart and
+Rogoff found that when a country's public debt passes ninety percent of GDP,
+average growth falls sharply* — down it, against the 2010 paper itself:
+
+1. On topic, at the claim's specificity. Not `irr`.
+2. Addresses the exact proposition the sentence asserts. Not `marg`.
+3. Therefore **`rel`**.
+
+That is the right answer to the question the ladder asks and the wrong answer to
+the question the product asks, because the result did not survive reanalysis
+(Herndon, Ash and Pollin, 2014). Worse, every factor `computeStrengthScore`
+reads points the same way: a top-venue paper with an enormous citation count
+ranks first and lifts the strength score, so the claim would be reported as
+*better* evidenced than the sentence next to it that describes the refutation.
+**A refuted source is the highest-scoring possible answer under the current
+rules.**
+
+Three things are tangled here and only the first is a labelling question:
+
+- **`rel` may be the honest label.** The label describes retrieval — this source
+  *is* what the claim is about — and overloading it with "and it is true" would
+  put the annotator's view of the literature into a column that measures
+  whether search found the right paper. Recording it somewhere else keeps the
+  two measurements separable.
+- **The claim verdict has no fit either.** `contradicted` is the nearest and is
+  what `11-debt-threshold` uses, with the reasoning on the row. But
+  `contradicted` reads as *the student picked up something the literature
+  disagrees with*, and here the student picked up a specific paper that agrees
+  with them. `miscited` is excluded by construction (it requires a gap between
+  sentence and source; there is none) and `unsupported` is wrong the same way it
+  was wrong for `08-ai-grading` before `fabricated` existed. Whether this needs
+  its own verdict is Merrick's call, exactly as `fabricated` was — **do not add
+  one on an agent's say-so.**
+- **It may not be a labelling problem at all.** Crossref publishes retraction
+  and correction relationships, and this is the shape of claim a citing-context
+  or stance signal would catch. Recording it here rather than fixing it is
+  deliberate; the instrument comes first.
+
+Adjacent and not the same: a source that is merely *old*. Recency is already a
+scoring factor. This is about a specific published disagreement, not about age.
+
+**Non-English sources, and the title-only demotion. — Extends an existing rule,
+added 2026-08-15 with essay 12.** `12-apprenticeships` asks about the German
+dual system, whose primary literature is largely German-language. Two
+consequences, and the second is the one that could go wrong quietly:
+
+- A German-language record that genuinely evidences the claim is `rel`. Language
+  is not topicality and the ladder never mentions it.
+- **But a record whose title and abstract you cannot read is `marg` at best**,
+  by the demotion already written above — *"without the abstract you are
+  guessing what the paper concluded, and a guess in the ground truth is worse
+  than a conservative label."* An unreadable title is the same situation as a
+  missing one, for the same reason, and an annotator who reads no German is in
+  exactly that position. Applying it here is an extension of the existing rule
+  rather than a new one; say so if you disagree.
+
+The risk this creates is worth naming: it will make a language the pipeline
+never queries look, in the labels, like a language with no good sources in it.
+That is a limit of the annotator, not a finding about coverage, and any
+conclusion drawn from `12-apprenticeships` about non-English retrieval has to
+carry it.
 
 ## Practical notes
 

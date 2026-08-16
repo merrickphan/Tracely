@@ -1,0 +1,45 @@
+{
+  "essay": "12-apprenticeships.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["unknown", "evidence", "evidence", "transition", "evidence", "unknown"]
+  },
+  "note": "Two gaps, and they are in different halves of the product. (1) RETRIEVAL: every essay in the set so far asks questions whose literature is written in English. This one does not. The dual system is studied most thoroughly in German — BIBB's Datenreport, the Bundesinstitut's own series, and a large German-language research literature — and the English-language material that OpenAlex and Crossref index well is thinner, more recent and more often comparative policy writing than primary research. queryVariants.ts builds English queries and every ranking signal downstream reads English text, so the honest question this essay asks is whether a claim can be well evidenced in a language the pipeline never queries. Note the interaction with RUBRIC.md's title-only demotion: a German-titled record with no English abstract is unreadable to an English-only annotator in exactly the way an abstract-less English record is, and the demotion should apply for the same reason. That is written into the rubric with this essay. (2) STRUCTURE: no annotated draft has ever contained an 'unknown' paragraph, so the entire provisional path is untested by eval — roles.ts returning unknown, complete:false, the panel saying 'provisional', and weaknesses.ts withholding every whole-draft finding while any paragraph is unlabelled. This draft has no thesis anywhere, which also means the largest single component of scoreDraft.ts's /100 (thesis, 20 points) scores zero for the first time in the set. The roles here are my honest read and not a construction: paragraph 1 is a family anecdote doing no argumentative work, and paragraph 6 closes without restating or asserting anything, so both are genuinely unlabelled rather than conveniently so. Merrick should re-read those two before they are trusted — they are the two most arguable labels in the file.",
+  "claims": [
+    {
+      "text": "Germany's dual system places roughly half of each cohort into apprenticeships that combine classroom instruction with paid work at a company, and the qualification at the end is recognised nationally rather than by the one employer who trained you.",
+      "paragraph": 2,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "True as written and hard to evidence from where the pipeline looks. The share has drifted down over the last two decades and 'roughly half of each cohort' is the loose figure a student would write from a news article rather than a precise one, which is realistic and is also why the correct source is a statistical yearbook rather than a paper. Expect English-language comparative-policy pieces to come back and to be on topic; under question 2 most of them evidence a different proposition (what other countries could learn) and are marg. The failure worth catching is an English-language paper about apprenticeships in general being labelled rel because nothing better was reachable."
+    },
+    {
+      "text": "Youth unemployment in Germany has stayed below the European Union average for most of the last two decades.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The positive control for the statistical route, and the first one in the set that should straightforwardly succeed. Youth unemployment (SL.UEM.1524.ZS) is one of the best-covered World Development Indicators, both Germany and the European Union aggregate are in it, and the claim is a comparison of two series rather than a local number nobody publishes. 09-parking-minimums tests the router being right about the KIND of claim while every provider has nothing; 04-energy-access tests a WDI series answering directly. This tests the case in between — the indicator exists and the claim is a comparison, which is one step of arithmetic beyond what worldBank.ts returns. If it comes back with the German series alone and that is scored as evidence for a comparative claim, that is a real finding, not a near miss."
+    },
+    {
+      "text": "Nancy Hoffman's Schooling in the Workplace argues that the American high school treats vocational training as what happens to students who could not manage the academic track, and that this attitude, rather than the funding, is the difference that matters.",
+      "paragraph": 5,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "citedSource": {
+        "says": "Schooling in the Workplace: How Six of the World's Best Vocational Education Systems Prepare Young People for Jobs and Life (Nancy Hoffman, Harvard Education Press, 2011) profiles six national systems, Germany's among them, and argues that the American treatment of vocational education as a lesser track is the structural difference. The characterisation in the sentence is faithful as far as I can check it, but I am working from the book's argument and not from a copy in front of me — this is the one claim in the file most worth Merrick verifying before it is trusted as ground truth."
+      },
+      "sources": [],
+      "note": "A regression guard for the book index added in dcc8848, which took the fabrication false-alarm rate from 4/36 to 0/36. This is a real, correctly-attributed book by a real author, cited in the way a student actually cites a book: title in the sentence, no year, no publisher, no DOI. Books have no DOI and are indexed poorly or not at all by all four providers, which is precisely the signature that reads as fabrication to a source-not-found check. The verdict is supported and the correct behaviour is that nothing about this sentence is flagged. If it ever comes back as fabricated-citation, that is the book index having regressed, and this claim is what says so."
+    },
+    {
+      "text": "The counselors at my school have one pathway and it ends at a four-year university, and nobody I have asked can tell me what the other one would even look like.",
+      "paragraph": 6,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Personal testimony about one school. Nothing could settle it and nothing should try. Distinct from 09's unindexed municipal facts, which are checkable in principle by records the providers do not hold — this is not checkable by anyone."
+    }
+  ]
+}
