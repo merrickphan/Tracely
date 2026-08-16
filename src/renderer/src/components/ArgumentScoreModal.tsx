@@ -218,6 +218,7 @@ export default function ArgumentScoreModal({
   citationStyle,
   onInsertCitation,
   onReanalyze,
+  onEvidenceSearched,
   onClose
 }: {
   outline: DocumentOutline | null
@@ -237,6 +238,20 @@ export default function ArgumentScoreModal({
    */
   onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
   onReanalyze: () => void
+  /**
+   * A claim's evidence search finished and wrote a strength score to the
+   * database. The surface that owns the claim list has to re-read it, because
+   * nothing else will tell it.
+   *
+   * Without this the document editor's underlines were unreachable in a single
+   * session, and the loop was closed: detection writes `strengthScore: null`,
+   * `measureMarks` will not mark an unscored claim, and the only in-editor way
+   * to score one is the popover on a mark that therefore never exists. This
+   * view could break the cycle — it is the one place a search can be started
+   * without an underline — but it kept the result to itself, so the editor went
+   * on holding the unscored copy until the document was closed and reopened.
+   */
+  onEvidenceSearched: () => void
   onClose: () => void
 }): JSX.Element {
   // Opens on the Essay Grade widget — 370:135, the compact card with the ring
@@ -284,6 +299,7 @@ export default function ArgumentScoreModal({
             claim={claims.find((c) => c.id === view.claimId) ?? null}
             citationStyle={citationStyle}
             onInsertCitation={onInsertCitation}
+            onEvidenceSearched={onEvidenceSearched}
             onBack={() => setView({ name: 'paragraph', index: view.fromParagraph })}
             onClose={onClose}
           />
@@ -714,12 +730,15 @@ function FindEvidenceResult({
   claim,
   citationStyle,
   onInsertCitation,
+  onEvidenceSearched,
   onBack,
   onClose
 }: {
   claim: Claim | null
   citationStyle: CitationStyle
   onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
+  /** See ArgumentScoreModal — this is the only place a first search can start. */
+  onEvidenceSearched: () => void
   onBack: () => void
   onClose: () => void
 }): JSX.Element {
@@ -759,6 +778,10 @@ function FindEvidenceResult({
       const res = await tracelyApi.findEvidence(claim.id)
       setEvidence(res.evidence)
       setSelected(res.evidence[0]?.source.id ?? null)
+      // The claim now has a strength score in the database. Tell the surface
+      // that owns the claim list, or its copy stays unscored and its underlines
+      // never appear — see onEvidenceSearched.
+      onEvidenceSearched()
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err))
     } finally {
