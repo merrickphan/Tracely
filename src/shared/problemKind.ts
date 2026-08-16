@@ -1,4 +1,4 @@
-import type { ClaimType, CritiqueVerdict } from '@shared/types'
+import type { ClaimType, CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 
 /**
  * What is actually wrong with a claim — decided once, in main, and sent to the
@@ -75,11 +75,86 @@ export interface ProblemKindInput {
   /** The writer's own citation in this sentence — see inlineCitation.ts. */
   hasInlineCitation: boolean
   /** Null until the background search resolves. */
-  evidence: { score: number; count: number } | null
+  evidence: {
+    score: number
+    /**
+     * How many results came back AT ALL. Retained because callers already have
+     * it and it reads naturally next to `score`; it no longer decides anything
+     * here — see `hasRelevantSource`, which is the question this file was
+     * actually asking all along.
+     */
+    count: number
+    /**
+     * Did any of those results actually speak to this claim?
+     *
+     * This is a different question from `count > 0`, and conflating them was a
+     * real bug in the overlay. Retrieval merges four providers down to eight
+     * results and returns eight of them whatever the claim is, so `count` was
+     * ~8 for every claim in the app and `count === 0` — the test this file used
+     * for "nothing found" — was effectively unreachable there. The document
+     * editor's call site had quietly been passing `scoreBreakdown.sourceCount`
+     * (the fraction that DID apply the relevance floor) into the same field,
+     * so the two surfaces were answering different questions from one input.
+     *
+     * Derive it with `hasRelevantSource(breakdown)` rather than by hand.
+     */
+    hasRelevantSource: boolean
+  } | null
   critiqueVerdict: CritiqueVerdict | null
 }
 
-/** Reasoning that does not follow. 'contradicted' is deliberately NOT here. */
+/**
+ * Did retrieval find anything that speaks to this claim?
+ *
+ * `sourceCount` is the share of the six-source cap that cleared the relevance
+ * floor (MIN_COUNTABLE_RELEVANCE in services/search/scoring.ts), so zero means
+ * every result that came back was about something else — not that the providers
+ * returned nothing.
+ */
+export function hasRelevantSource(breakdown: ScoreBreakdown | null): boolean {
+  return (breakdown?.sourceCount ?? 0) > 0
+}
+
+/**
+ * Is this `unsupported` verdict a statement about the CLAIM, or about the
+ * SEARCH?
+ *
+ * The relay's critique reaches `unsupported` two ways, and they are not the
+ * same finding:
+ *
+ *   1. it read the retrieved evidence and that evidence does not carry the
+ *      claim — a judgement about the sentence; and
+ *   2. it was handed nothing on topic and had nothing to read — a report on
+ *      retrieval, which happens to be phrased as a verdict on the sentence.
+ *
+ * Only (1) is something Tracely knows about the writing. Measured on
+ * 2026-08-16 (eval/critique/FINDINGS.md), two of the five `unsupported`
+ * verdicts in the run were case (2), and both were on sentences that are true
+ * and properly hedged — "Some researchers argue the effect is small" retrieved
+ * nothing relevant, scored 0, came back `unsupported`, and was then printed
+ * over the writer's correct sentence as **"Weak reasoning"**. Three layers each
+ * behaving reasonably, combining into an accusation.
+ *
+ * The discriminator is local, deterministic and already computed: did anything
+ * clear the relevance floor. The model is not asked, because the model cannot
+ * tell the difference — from inside the critique call, "no good evidence
+ * exists" and "no good evidence was handed to me" look identical.
+ */
+export function isRetrievalMiss(
+  verdict: CritiqueVerdict | null,
+  evidenceHasRelevantSource: boolean
+): boolean {
+  return verdict === 'unsupported' && !evidenceHasRelevantSource
+}
+
+/**
+ * Reasoning that does not follow. 'contradicted' is deliberately NOT here.
+ *
+ * `unsupported` IS here, but only survives `isRetrievalMiss` — see above. A
+ * verdict reached over real, on-topic evidence that fails to carry the claim is
+ * a finding about the reasoning; the same word reached over an empty table is
+ * a finding about the search.
+ */
 const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported']
 
 /** The 70/40 bands used everywhere else in the product. */
@@ -109,7 +184,14 @@ export function problemKindsFor({
   if (!evidence) return ['searching']
 
   const kinds: ScreenWatchProblemKind[] = []
-  const nothingFound = evidence.count === 0
+  // "Nothing that speaks to this claim came back", not "no rows returned".
+  const nothingFound = !evidence.hasRelevantSource
+
+  // An `unsupported` verdict the critique reached with no on-topic evidence in
+  // front of it. It says nothing about the sentence, so it decides nothing
+  // here — the retrieval kinds below report the same state honestly, as
+  // "No supporting sources" rather than "Weak reasoning".
+  const retrievalMiss = isRetrievalMiss(critiqueVerdict, evidence.hasRelevantSource)
 
   // Checked before 'contradicted' and outside the cited/uncited branches below,
   // because a fabricated reference is a fact about the citation itself: the
@@ -117,7 +199,9 @@ export function problemKindsFor({
   if (critiqueVerdict === 'fabricated') kinds.push('fabricated-citation')
   else if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
   else if (critiqueVerdict === 'overstated') kinds.push('overstated-claim')
-  else if (critiqueVerdict && WEAK_VERDICTS.includes(critiqueVerdict)) kinds.push('weak-reasoning')
+  else if (critiqueVerdict && !retrievalMiss && WEAK_VERDICTS.includes(critiqueVerdict)) {
+    kinds.push('weak-reasoning')
+  }
 
   // Cited, and the literature we DID find does not back what was attributed.
   // Subsumes the plain evidence bands for a cited claim: "thin support" is the
@@ -131,6 +215,13 @@ export function problemKindsFor({
   // cites. On an essay that cited an institution on nearly every line, every
   // line came back "Citation may not support this". Absence of evidence in a
   // corpus that was never going to hold it is not evidence of absence.
+  //
+  // That argument was always about RELEVANT evidence, and `nothingFound` only
+  // started meaning that on 2026-08-16. In the overlay it had meant "the
+  // providers returned literally nothing", which they essentially never do, so
+  // eight results about other subjects cleared this guard and the accusation
+  // went out anyway — the exact case the paragraph above says it must not fire
+  // on.
   if (hasInlineCitation && !nothingFound && evidence.score < MIXED) kinds.push('cited-unverified')
 
   // A number nothing carries, in a sentence with no citation to check it

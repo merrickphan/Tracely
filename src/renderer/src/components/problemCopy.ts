@@ -1,4 +1,5 @@
 import type { ScreenWatchClaimEvidence, ScreenWatchClaimSummary, ScreenWatchProblemKind } from '@shared/ipc-contract'
+import { hasRelevantSource } from '@shared/problemKind'
 import type { ClaimType } from '@shared/types'
 
 /**
@@ -96,7 +97,12 @@ type SupportLevel = 'none' | 'weak' | 'mixed' | 'strong'
 
 /** The same 70/40 bands every other score in the product uses. */
 function supportLevelFor(evidence: ScreenWatchClaimEvidence): SupportLevel {
-  if (evidence.count === 0) return 'none'
+  // Was `evidence.count === 0` — the number of results RETURNED, which is
+  // eight for essentially every claim (see problemKind's hasRelevantSource).
+  // So this copy could describe "8 sources came back, but they score 0/100"
+  // under an underline that problemKindsFor had already decided says "No
+  // supporting sources". One question, asked the same way in both places.
+  if (!hasRelevantSource(evidence.breakdown)) return 'none'
   if (evidence.score >= 70) return 'strong'
   if (evidence.score >= 40) return 'mixed'
   return 'weak'
@@ -142,6 +148,10 @@ export function problemCopyFor(
     return {
       title: 'Citation may not support this',
       description:
+        // Unreachable since 2026-08-16: problemKindsFor stopped raising
+        // 'cited-unverified' at all when nothing relevant came back, which is
+        // what this branch was the apology for. Left rather than deleted so the
+        // wording survives if the kind's condition ever loosens again.
         evidence.count === 0
           ? `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. Either the source is not indexed — or it does not say this.`
           : `You have cited this ${noun}, but the ${sources} found score ${evidence.score}/100 for supporting it. Check the source says what you have attributed to it.`,

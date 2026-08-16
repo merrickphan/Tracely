@@ -105,6 +105,52 @@ ordinary use — unlike the fabricated-citation gap, it fires on *good* writing.
 `unsupported` is doing two jobs: "the literature contradicts this" and "we did
 not find anything". Only the first is a statement about the claim.
 
+### Fixed — 2026-08-16
+
+Split, on the discriminator the pipeline already computes: did anything clear
+the relevance floor. `shared/problemKind.ts` gained `isRetrievalMiss`, and an
+`unsupported` verdict reached with no relevant source no longer becomes
+`weak-reasoning` — the retrieval kinds report the same state as "No supporting
+sources", whose copy ends *"It may still be true — but you have nothing to cite
+for it yet."* The verdict label follows in both cards: **No Evidence Found**,
+and it stops counting toward "N issues found".
+
+The relay is not asked, and its prompt is unchanged. From inside the critique
+call, "no good evidence exists" and "no good evidence was handed to me" look
+identical, so this is not a judgement the model is in a position to make.
+
+Re-scored against the same report — no new relay calls, the inputs were already
+recorded:
+
+```
+  unsupported verdicts: 5
+    about the evidence read:  3
+    about the search itself:  2   (0 relevant sources retrieved)
+
+  correct sentences accused of a problem: 0/2   (was 2/2)
+```
+
+The 3 that survive are the right 3, and they include the Ramirez claim — it
+retrieved six relevant papers and none of them is the study it names, so its
+`unsupported` is a genuine finding about the evidence. Finding 1 is untouched by
+this: that verdict should be `fabricated`, and it still is not.
+
+The verdict-level score is unchanged at 5/8, deliberately. The relay still
+answers `unsupported` for two sentences that are fine, and that miss is real —
+it is a retrieval failure, and hiding it behind a downstream fix would lose the
+only measurement pointing at it.
+
+**A second bug fell out of this.** `nothingFound` was `count === 0`, and the two
+call sites disagreed about what `count` meant: the document editor passed
+`scoreBreakdown.sourceCount` (relevance-floored), while Screen Watch passed the
+raw length of the returned list. Retrieval returns its top eight for every claim
+whatever the topic, so in the overlay that test was effectively unreachable —
+`no-sources` and `unverified-statistic` could not fire, and eight papers about
+other subjects read as eight sources. Both call sites now ask
+`hasRelevantSource(breakdown)`. The knock-on is that `cited-unverified` finally
+obeys the rule its own comment states: it no longer accuses a cited sentence
+when the search found nothing relevant.
+
 ## Also fixed
 
 `harness.ts` recorded `critique` and `verdict` but not `suggestedRevision` or

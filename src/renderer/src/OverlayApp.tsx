@@ -21,6 +21,7 @@ import type {
   ScreenWatchStructure,
   ScreenWatchWidget
 } from '@shared/ipc-contract'
+import { hasRelevantSource, isRetrievalMiss } from '@shared/problemKind'
 import figmaLogo from './assets/figma-logo.png'
 import MarkdownText from './components/MarkdownText'
 // Shared with the document editor, which draws the same marks over Tracely's
@@ -1010,8 +1011,22 @@ function WidgetClaimCard({
   const evidence = claim.evidence
   const issues = claim.critique ? critiqueIssues(claim.critique) : []
   const showCritique = body === 'critique' && issues.length > 0
-  const verdictLabel = claim.critiqueVerdict ? VERDICT_LABEL[claim.critiqueVerdict] : 'Critique'
-  const weakVerdict = claim.critiqueVerdict !== null && WEAK_VERDICTS.includes(claim.critiqueVerdict)
+  // An `unsupported` verdict reached with nothing on topic in front of the
+  // critique is a report on the SEARCH, and must not be printed over the
+  // writer's sentence as a judgement of it — see isRetrievalMiss. It stays
+  // visible ("Reviewed · No Evidence Found"), it just stops being an accusation
+  // and stops counting toward "N issues found".
+  const retrievalMiss = isRetrievalMiss(
+    claim.critiqueVerdict,
+    hasRelevantSource(claim.evidence?.breakdown ?? null)
+  )
+  const verdictLabel = retrievalMiss
+    ? 'No Evidence Found'
+    : claim.critiqueVerdict
+      ? VERDICT_LABEL[claim.critiqueVerdict]
+      : 'Critique'
+  const weakVerdict =
+    claim.critiqueVerdict !== null && !retrievalMiss && WEAK_VERDICTS.includes(claim.critiqueVerdict)
 
   const refreshLabel = evidenceBusy
     ? 'Searching…'

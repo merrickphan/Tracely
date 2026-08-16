@@ -1,3 +1,4 @@
+import { hasRelevantSource, isRetrievalMiss } from '@shared/problemKind'
 import type { CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 
 import MarkdownText from './MarkdownText'
@@ -66,11 +67,18 @@ export default function EvidenceScoreCard({
    *  so by the time this is non-null, two separate checks have agreed. */
   correction: string | null
 }): JSX.Element {
+  // "Unsupported" reached with nothing on topic retrieved is a fact about the
+  // search, not about the sentence — see isRetrievalMiss. Labelled for what it
+  // is, and not coloured `evidence-verdict-low`, which is a judgement.
+  const retrievalMiss = isRetrievalMiss(verdict, hasRelevantSource(breakdown))
+  const verdictLabel = retrievalMiss ? 'No Evidence Found' : verdict ? VERDICT_LABEL[verdict] : ''
+  const verdictClass = retrievalMiss ? 'evidence-verdict-mid' : verdict ? VERDICT_CLASS[verdict] : ''
+
   return (
-    <div className={`evidence-score-card ${verdict ? VERDICT_CLASS[verdict] : ''}`}>
+    <div className={`evidence-score-card ${verdictClass}`}>
       {verdict ? (
         <div className="evidence-score-header">
-          <span className="evidence-score-verdict">{VERDICT_LABEL[verdict]}</span>
+          <span className="evidence-score-verdict">{verdictLabel}</span>
           {score !== null ? (
             <span className="evidence-score-number">
               {score}

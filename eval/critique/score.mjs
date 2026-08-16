@@ -76,6 +76,47 @@ for (const v of TRUTH_VERDICTS) {
   console.log(`    ${v.padEnd(14)} fired ${got}x   (acceptable on ${want} claim(s) in this set)`)
 }
 
+// -- unsupported: about the claim, or about the search? ----------------------
+//
+// The verdict above is the relay's word, and `unsupported` is two findings
+// wearing one label: "the evidence I read does not carry this" and "I was
+// handed nothing on topic". Only the first says anything about the sentence.
+//
+// The discriminator is local and already recorded: breakdown.sourceCount is the
+// share of the six-source cap that cleared the relevance floor, so 0 means
+// nothing retrieved was about this claim. Re-derived here in two lines rather
+// than imported, because this is a .mjs scoring script and shared/problemKind.ts
+// is TypeScript — keep `isRetrievalMiss` there and this in step with it.
+const isRetrievalMiss = (claim) => claim.verdict === 'unsupported' && claim.breakdown.sourceCount === 0
+
+const unsupported = claims.filter((c) => c.claim.verdict === 'unsupported')
+const retrievalMisses = unsupported.filter((c) => isRetrievalMiss(c.claim))
+
+console.log(`\n  unsupported verdicts: ${unsupported.length}`)
+console.log(`    about the evidence read:  ${unsupported.length - retrievalMisses.length}`)
+console.log(`    about the search itself:  ${retrievalMisses.length}  (0 relevant sources retrieved)`)
+for (const { claim } of retrievalMisses) {
+  console.log(`      · ${claim.text.slice(0, 62)}`)
+}
+
+// The sharper question, and the one that decides whether the product is worth
+// trusting: how many sentences that are FINE did it accuse?
+//
+// Derived from expected.json rather than newly judged — a claim pre-registered
+// as well-supported or partially-supported is one the run should not have had a
+// problem with. Before the 2026-08-16 split, an `unsupported` verdict on a claim
+// with no relevant sources became `weak-reasoning`, so both of these were
+// printed over correct sentences as "Weak reasoning".
+const CLEAN = ['well-supported', 'partially-supported']
+const controls = expected.claims.filter((s) => CLEAN.includes(s.expected))
+const accused = controls.filter((spec) => {
+  const hit = claims.find((c) => c.claim.text.startsWith(spec.claim))
+  return hit?.claim.critique && !isRetrievalMiss(hit.claim) && !CLEAN.includes(hit.claim.verdict)
+})
+
+console.log(`\n  correct sentences accused of a problem: ${accused.length}/${controls.length}`)
+for (const spec of accused) console.log(`    · ${spec.claim.slice(0, 62)}`)
+
 if (misses.length) {
   console.log('\n  MISSES\n')
   for (const { spec, claim } of misses) {

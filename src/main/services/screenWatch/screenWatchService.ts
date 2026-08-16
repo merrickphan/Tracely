@@ -56,7 +56,7 @@ import {
   WIDGET_SIZE
 } from './panelSize'
 import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind } from '@shared/inlineCitation'
-import { problemKindsFor, problemSeverity } from '@shared/problemKind'
+import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
@@ -1307,7 +1307,17 @@ function updateOverlayAndWidget(
         problemKindsFor({
           claimType: c.claimType,
           hasInlineCitation: isCited(c),
-          evidence: evidence ? { score: evidence.score, count: evidence.evidence.length } : null,
+          evidence: evidence
+            ? {
+                score: evidence.score,
+                count: evidence.evidence.length,
+                // NOT `evidence.evidence.length > 0`. The aggregator returns
+                // its top eight for every claim regardless of whether any of
+                // them are on topic, so the list length says how hard the
+                // providers tried, not what they found.
+                hasRelevantSource: hasRelevantSource(evidence.breakdown)
+              }
+            : null,
           critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
         })
       ] as const
