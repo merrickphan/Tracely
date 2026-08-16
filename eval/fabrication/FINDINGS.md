@@ -177,6 +177,56 @@ Both reports are kept as `.stale-staging-build` and `.stale-cache` rather than
 deleted, since `eval:critique` picks the newest critique-bearing report and would
 otherwise have scored against them.
 
+## `fabricated` fires — and something else broke
+
+10 live relay calls, production, `5f982c0`. Relay cassettes archived and the
+scratch profile cleared first, so all 8 critiques are genuinely current.
+
+```
+  fabricated     fired 1x   (acceptable on 2)
+  contradicted   fired 1x   (acceptable on 1)
+  overstated     fired 3x   (acceptable on 3)
+
+  correct sentences accused of a problem: 0/2
+```
+
+All three truth verdicts fire for the first time. The headline test passes, and
+the output is exactly what the verdict is supposed to look like:
+
+> No well-known study by Ramirez and Doyle (2024) is recognized, and a targeted
+> Crossref search found no such work by these authors in 2024. The reference reads
+> as generated: plausible author pair, round recent year, and a precise effect
+> size that matches the claim.
+
+`suggestedRevision: null`, `citationFix: null`. The laundering is gone.
+
+**But the run also produced a false `contradicted`.** 08-C3 — *"GPT-5 class models
+now score above the median human rater"* — was pre-registered as the control for
+exactly this, and it moved the wrong way:
+
+> As of my knowledge cutoff in June 2024, GPT-5 has not been publicly released or
+> evaluated in peer-reviewed literature […] Thus, the claim is contradicted on the
+> specific point about GPT-5.
+
+The model treated its own training cutoff as evidence the world does not contain
+the thing. That is the same error Pass 2(c) was rewritten to remove — "I do not
+recognise it" standing in for "it does not exist" — reappearing one pass earlier,
+where the Crossref lookup cannot reach it. Pass 1 already warns against this in
+its own words; it did not hold.
+
+Two runs of this claim under the previous prompt returned `unsupported`, so the
+change is where suspicion belongs. The most likely mechanism is spillover: the new
+Pass 2 language ("an empty lookup forces a decision, and 'it could be a book' is
+not one") reads as a general instruction to commit, and Pass 1 committed. n=1, and
+the fix that removed one overreach appears to have created another.
+
+`contradicted-claim` is the second-highest severity in `problemKind.ts`, and the
+card reads **"Contradicted — check this fact"** on a claim about a recent model
+that may well be true. The symmetric repair is to give Pass 1 the guard Pass 2 now
+has: a knowledge cutoff is not evidence about the world, and a claim about
+something more recent than the cutoff falls through to Pass 2/3 rather than
+becoming a contradiction. Not yet made.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both
