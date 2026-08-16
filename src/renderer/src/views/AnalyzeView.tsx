@@ -1218,6 +1218,14 @@ function DocumentEditor({
           citationStyle={citationStyle}
           onInsertCitation={insertCitation}
           onReanalyze={() => void runStructure()}
+          // Re-read the claims the moment the report searches one. This is what
+          // closes the loop that made the editor's underlines unreachable: the
+          // report is the only place a first evidence search can start, and
+          // until now its result never came back here.
+          onEvidenceSearched={() => {
+            const analysisId = analysisIdRef.current
+            if (analysisId) void onRefreshClaims(analysisId)
+          }}
           onClose={() => setScoreOpen(false)}
         />
       ) : null}
