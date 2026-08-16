@@ -227,6 +227,44 @@ has: a knowledge cutoff is not evidence about the world, and a claim about
 something more recent than the cutoff falls through to Pass 2/3 rather than
 becoming a contradiction. Not yet made.
 
+## Pass 1 guard — the false contradiction is gone
+
+Production `3e14eb2`, 10 live calls.
+
+```
+  fabricated     fired 1x   (acceptable on 2)
+  contradicted   fired 0x   (acceptable on 1)
+  overstated     fired 5x   (acceptable on 3)
+```
+
+08-C3 moved from `contradicted` to `overstated`. The claim about a model newer
+than the critique's training data is no longer called false, which was the point.
+`fabricated` held on the headline test across both runs — two for two, the only
+thing here measured more than once.
+
+**`overstated` is now the catch-all.** Five fires where three are defensible. The
+verdict that was unreachable two days ago is now the answer to anything the model
+will not commit on, which is the same shape of problem as `unsupported` was before
+the retrieval split: one label absorbing several findings. Milder than a false
+contradiction, and worth watching rather than acting on at n=1.
+
+### The claim set changed under the run
+
+Only 7 of the 8 pre-registered claims were scored. Detection re-ran live — I had
+cleared every `relay-*.json` cassette, which includes `detect-claims` — and
+returned a different set for essay 05: *"Some researchers argue the effect is
+small"*, the control for false positives on correct writing, was not detected this
+time, and a different sentence was.
+
+So detection is not stable across re-runs despite `temperature: 0`, and the
+`correct sentences accused: 0/2` line is really 0/1 on this run, with the other
+control absent rather than passing. Comparisons across these three runs are not
+strictly like-for-like.
+
+The procedural fix is narrow: clear only the **critique** relay cassettes between
+prompt changes, never the detection ones. Holding the detected claim set fixed is
+what makes two critique runs comparable at all.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both
