@@ -159,6 +159,57 @@ when the search found nothing relevant.
 nulls `citationFix` on `fabricated`. The eval could not see the governing input
 of the thing it was measuring. Both are recorded now.
 
+## Four more fabrications — 2026-08-16
+
+The fabrication result rested on one planted reference caught twice, which is not
+a rate. `eval/critique/essays/` adds two essays carrying four invented
+author-pair citations and four real ones, each in a sentence written to be
+detected as a claim. Expectations pre-registered in `expected.json` under batch
+`2026-08-16-fabrication`; 10 live relay calls, production `3e14eb2`.
+
+```
+  7/8 within the acceptable set
+
+  FABRICATION
+    caught   3/4 invented citations named as fabricated
+    HARM     0/4 real citations wrongly called fabricated
+```
+
+The two directions are counted apart on purpose. A fabricated citation reported
+as something else under-warns the writer; a real citation reported as fabricated
+tells them they invented a source they honestly cited. They are not exchangeable
+at any rate, and averaging them would let a harm be paid for with a catch.
+
+**The book control passed, and passed for the right reason.** Freakonomics cannot
+be corroborated — Crossref does not carry trade books — so the critique received
+an empty lookup for a genuine source, the exact case the prompt's caveat exists
+to survive. It answered:
+
+> Levitt and Dubner are the authors of the well-known book 'Freakonomics' (2005),
+> which did argue that legalized abortion […] However, the claim that this
+> explanation 'displaced policing and economic explanations' is overstated.
+
+It named the work, which is what the naming requirement added a commit earlier
+demands, and then judged the claim on its merits. The other three controls came
+back `well-supported`. Zero harm across four.
+
+**The miss is instructive.** Lindqvist and Oyelaran (2023) — invented, absent from
+Crossref, in a sentence about congestion pricing where retrieval returns real
+on-topic evaluations — came back `unsupported`:
+
+> The reference lookup found no work by Lindqvist and Oyelaran (2023) in
+> Crossref, but this does not prove fabrication…
+
+The same hedge that produced the original Ramirez failure. But note where it
+landed: `unsupported`, **not** `overstated`, and with no suggested revision. The
+Pass 3 ban held, so the model under-warned instead of handing back a polished
+sentence still crediting an invented study. The remaining failure is the mild one.
+
+Standing at 4/5 caught and 0/8 harmed across both batches. Still small, and every
+invented reference in the set was written by the same person who chose the query
+strategy — the weakest joint in this measurement, and the one a genuinely
+adversarial set would attack.
+
 ## Caveat
 
 8 claims, one run, one author of both the essays and the expectations. Enough to

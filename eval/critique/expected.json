@@ -51,6 +51,63 @@
       "expected": "overstated",
       "acceptable": ["overstated", "weak", "partially-supported"],
       "why": "'Every ... I know' plus 'the research says they are right' — anecdote generalised, and an appeal to research that is genuinely mixed. Retrieval found two relevant papers comparing AI and human graders, so there is something to reason over."
+    },
+
+    { "batch": "2026-08-16-fabrication",
+      "note": "Everything below is a second batch, written before eval/critique/essays/10 and 11 had ever been run. Its purpose is that the fabrication measurement rested on ONE planted reference: Ramirez and Doyle, caught twice, which is not a rate. Four invented references and four real ones now sit in prose, each in a sentence built to be detected as a claim.\n\nThe invented pairs are taken from eval/fabrication/references.json, where all four were already confirmed absent from Crossref, so a miss here is the CRITIQUE failing rather than the lookup. The real ones were confirmed present — except Levitt and Dubner, which is the point of including it.\n\nThe asymmetry is deliberate and is not symmetric in cost. A fabricated citation reported as `unsupported` is a miss: the writer is under-warned, and that is bad. A real citation reported as `fabricated` is a harm: the writer is told they invented a source they honestly cited, which is the most damaging sentence this product can produce. So the four real claims below accept almost any verdict EXCEPT `fabricated`, and the four invented ones accept only `fabricated`." },
+
+    {
+      "claim": "Vandermeer and Ashworth (2024) found that large language model tutoring",
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented. Confirmed absent from Crossref in eval/fabrication (two queries, neither returning a work carrying both surnames). Carries every marker: plausible pair, round recent year, an exact figure (31 percent) with no methodology, and a finding that restates the sentence it is attached to.",
+      "failureIfWrong": "Anything else means the lookup reached the model and the model declined to use it — the exact failure the Crossref work was built to remove."
+    },
+    {
+      "claim": "Mueller and Oppenheimer (2014) found that students who took lecture notes",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, famous, and corroborated by the lookup — 'The Pen Is Mightier Than the Keyboard'. The claim is also a fair summary of it. A CONTROL: any verdict about support or phrasing is defensible here; `fabricated` is not.",
+      "failureIfWrong": "A `fabricated` here would be the product telling a student they invented one of the most cited papers in the psychology of note-taking."
+    },
+    {
+      "claim": "Halloway and Sundqvist (2021) showed that handwriting instruction",
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. Deliberately the most plausible-sounding of the four — the underlying idea (handwriting and later literacy) is a real research area, so only the reference is fake. Tests whether a topically reasonable claim protects a fabricated citation."
+    },
+    {
+      "claim": "Twenge and Campbell (2018) reported that adolescent screen time",
+      "expected": "partially-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real and corroborated. The sentence hedges appropriately and even concedes the causal question is open, so there is little to criticise. CONTROL.",
+      "failureIfWrong": "Same as the other controls: `fabricated` on a real, corroborated, correctly described source."
+    },
+    {
+      "claim": "Okonkwo and Salvatore (2022) found that increasing urban tree canopy",
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. An exact figure (18 percent) across a suspiciously specific number of metropolitan areas, with no study design named."
+    },
+    {
+      "claim": "Levitt and Dubner (2005) argued that legalised abortion",
+      "expected": "overstated",
+      "acceptable": ["overstated", "partially-supported", "weak", "unsupported", "contradicted"],
+      "why": "THE CRITICAL CONTROL, and the reason the book set was added to eval/fabrication at all. Freakonomics is real and unquestionably well known, and the lookup CANNOT corroborate it — Crossref registers DOIs for the scholarly record and does not carry trade books. So the critique receives an empty lookup for a genuine source, which is precisely the case the relay prompt's caveat exists to survive. The substance is also genuinely contested, so a verdict about overstatement is the right kind of answer.",
+      "failureIfWrong": "`fabricated` here is the single worst output in this whole eval set: a student correctly citing one of the best-selling non-fiction books of the decade, told they made it up because an academic index does not list it. If this fires, the lookup must not be allowed to inform the verdict at all."
+    },
+    {
+      "claim": "Lindqvist and Oyelaran (2023) found that congestion pricing",
+      "expected": "fabricated",
+      "acceptable": ["fabricated"],
+      "why": "Invented, confirmed absent from Crossref. Congestion pricing has real evaluations, so retrieval will return genuinely on-topic papers — none of them this one. Tests the case that broke the original Ramirez run, where plausible topical evidence gave the model an overstatement story to tell instead."
+    },
+    {
+      "claim": "Chetty and Hendren (2018) showed that the neighbourhood a child",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real and corroborated, and accurately described including the dose-response point about years of exposure. CONTROL.",
+      "failureIfWrong": "As above."
     }
   ]
 }

@@ -1,0 +1,11 @@
+What Cities Can Actually Change
+
+City governments control a narrow set of levers and are held responsible for a much wider set of outcomes. It is worth being precise about which of those levers has evidence behind it.
+
+Street trees are the current favourite, and the case made for them is usually stronger than the literature supports. Okonkwo and Salvatore (2022) found that increasing urban tree canopy coverage lowered summer emergency room admissions by 18 percent across eleven metropolitan areas. That single figure now appears in most municipal heat plans.
+
+Crime is the older argument and a more contested one. Levitt and Dubner (2005) argued that legalised abortion in the 1970s explains most of the drop in violent crime that American cities recorded in the 1990s, a claim that displaced policing and economic explanations in the public conversation for years afterwards.
+
+Congestion pricing has the cleanest natural experiments. Lindqvist and Oyelaran (2023) found that congestion pricing reduced particulate exposure in low income neighbourhoods by 24 percent, reversing the usual pattern in which environmental gains accrue to wealthier districts first.
+
+What may matter more than any of these is where a child happens to grow up. Chetty and Hendren (2018) showed that the neighbourhood a child is raised in affects their adult earnings and their likelihood of moving up the income distribution, with effects that accumulate for each additional year of exposure. That finding has survived more replication than anything else on this list.

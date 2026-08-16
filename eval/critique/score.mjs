@@ -15,7 +15,12 @@ import { fileURLToPath } from 'url'
 const HERE = fileURLToPath(new URL('.', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
 const REPO = fileURLToPath(new URL('../..', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
 
-const expected = JSON.parse(readFileSync(`${HERE}/expected.json`, 'utf8'))
+const expectedFile = JSON.parse(readFileSync(`${HERE}/expected.json`, 'utf8'))
+// The claims array also carries batch notes — entries with prose and no `claim`,
+// so a batch can explain itself next to the expectations it introduced rather
+// than in a file nobody opens. Filtered once here so nothing downstream has to
+// remember they exist.
+const expected = { ...expectedFile, claims: expectedFile.claims.filter((c) => c.claim) }
 
 // Newest report carrying critiques, unless one is named. Unlike the retrieval
 // labels this join needs no fixed report: the expectations are about the CLAIM,
@@ -116,6 +121,41 @@ const accused = controls.filter((spec) => {
 
 console.log(`\n  correct sentences accused of a problem: ${accused.length}/${controls.length}`)
 for (const spec of accused) console.log(`    · ${spec.claim.slice(0, 62)}`)
+
+// -- fabrication: the two error directions, which do not cost the same --------
+//
+// A fabricated citation reported as anything else is a MISS: the writer is
+// under-warned. A real citation reported as `fabricated` is a HARM: the writer
+// is told they invented a source they honestly cited. These are counted apart
+// because averaging them into one accuracy number would let a harm be paid for
+// with a catch, and they are not exchangeable at any rate.
+const invented = expected.claims.filter((s) => s.expected === 'fabricated')
+const genuine = expected.claims.filter((s) => s.acceptable && !s.acceptable.includes('fabricated'))
+const verdictOf = (spec) => claims.find((c) => c.claim.text.startsWith(spec.claim))?.claim
+
+const caught = invented.map(verdictOf).filter((c) => c?.verdict === 'fabricated').length
+const inventedSeen = invented.map(verdictOf).filter((c) => c?.critique).length
+const harmed = genuine.map(verdictOf).filter((c) => c?.verdict === 'fabricated')
+const genuineSeen = genuine.map(verdictOf).filter((c) => c?.critique).length
+
+if (inventedSeen + genuineSeen > 0) {
+  console.log(`\n  FABRICATION`)
+  console.log(`    caught   ${caught}/${inventedSeen} invented citations named as fabricated`)
+  console.log(`    HARM     ${harmed.length}/${genuineSeen} real citations wrongly called fabricated`)
+  for (const spec of genuine) {
+    const got = verdictOf(spec)
+    if (got?.verdict === 'fabricated') console.log(`      · ${spec.claim.slice(0, 60)}`)
+  }
+  // Says the denominator out loud. A claim can be absent because its essay was
+  // not in this run, or because the detector did not return it — and both look
+  // identical from here. Either way it is outside the fractions above, and a run
+  // that measured half the set should say so rather than report the flattering
+  // half as if it were the whole.
+  const missing = invented.length + genuine.length - inventedSeen - genuineSeen
+  if (missing > 0) {
+    console.log(`    ${missing} expectation(s) absent from this report — not counted either way`)
+  }
+}
 
 if (misses.length) {
   console.log('\n  MISSES\n')
