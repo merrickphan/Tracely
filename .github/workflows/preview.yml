@@ -32,11 +32,21 @@ concurrency:
 
 jobs:
   preview:
-    # ship-preview.mjs commits the version bump and pushes it back to main.
-    # That push is itself a push to main, so without this guard the workflow
-    # would retrigger itself forever, one beta per cycle, until someone noticed
-    # the Actions bill of minutes and a releases page with four hundred
-    # prereleases on it.
+    # Guards against a LOCAL `npm run ship:preview` retriggering this.
+    #
+    # The two paths through ship-preview.mjs differ here, and the difference is
+    # the whole reason this condition exists. Run locally on main, the script
+    # commits `Preview v<version>` and pushes it — a push to main, which without
+    # this guard starts a build, whose... nothing. CI does not commit, so the
+    # loop terminates after one extra build rather than running forever. Still
+    # a wasted Windows build and a duplicate prerelease per local publish.
+    #
+    # This comment used to say CI itself commits the bump and would retrigger
+    # itself "forever, one beta per cycle". That stopped being true when the CI
+    # path moved to GITHUB_RUN_NUMBER (ship-preview.mjs, `if (CI)`): nothing is
+    # committed and nothing is pushed there, because `check` is a required
+    # status check on main and a bot push would deadlock against it. The guard
+    # is still load-bearing — just for the local path, not this one.
     #
     # Also skipped on forks, where none of the secrets below exist and the
     # build would fail on the first preflight check rather than doing anything
@@ -50,7 +60,11 @@ jobs:
     # themselves: they run on Linux.
     runs-on: windows-latest
 
-    # ship-preview.mjs pushes the version bump commit and force-moves the tag.
+    # For creating the GitHub prerelease and uploading the installer to it —
+    # electron-builder does that with GITHUB_TOKEN, and releases live under the
+    # contents scope. NOT for pushing: the CI path commits nothing and moves no
+    # tag (both are behind `if (!CI)` in ship-preview.mjs), and could not push
+    # to main anyway with `check` required on it.
     permissions:
       contents: write
 
