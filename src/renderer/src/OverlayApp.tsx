@@ -2899,6 +2899,15 @@ type CitationFlowState =
 
 const CITATION_STYLES: CitationStyle[] = ['MLA', 'APA', 'Chicago']
 
+/**
+ * Below this many candidates the filter field is not drawn.
+ *
+ * A search box over three rows is furniture — it costs a row of height to save
+ * nobody a scan of two lines, in a popover whose whole budget is a few hundred
+ * pixels over someone's document.
+ */
+const FILTER_MIN_SOURCES = 4
+
 /** 18px, filled ink with a 3px white centre — the design's selected radio. */
 function Radio({ selected }: { selected: boolean }): JSX.Element {
   if (!selected) {
@@ -2984,13 +2993,11 @@ function CitationFlowCard({
   onSetStyle,
   onSearchAgain,
   onInsert,
-  onPreview,
   onCancel,
   onDone,
   onToggleWorksCited,
   onUndo,
   inserting,
-  previewing,
   undoing
 }: {
   state: CitationFlowState
@@ -3002,15 +3009,25 @@ function CitationFlowCard({
   onSearchAgain: () => void
   onInsert: () => void
   /** Toggles the "Preview" block — see the picking step's `preview` field. */
-  onPreview: () => void
+
   onCancel: () => void
   onDone: () => void
   onToggleWorksCited: () => void
   onUndo: () => void
   inserting: boolean
-  previewing: boolean
   undoing: boolean
 }): JSX.Element {
+  // Filters the sources already found for this claim. Local, and deliberately
+  // not a search: every candidate here was retrieved for THIS sentence, so the
+  // useful action on a list of three is to narrow it, not to go and fetch more
+  // — "Find new source" is the button for that. Declared before the step
+  // branches below because a hook cannot sit behind a conditional return.
+  //
+  // The card is remounted per claim (see the key on the hover popover), so the
+  // query resets when the user moves to a different underline rather than
+  // carrying a stale filter onto someone else's source list.
+  const [sourceQuery, setSourceQuery] = useState('')
+
   // "Find a Source (Searching)" — 294:343.
   if (state.step === 'searching') {
     return (
@@ -3123,9 +3140,14 @@ function CitationFlowCard({
     )
   }
 
-  // "Find a Source (Results)" — 295:349, with the style pills from
-  // "Add Citation (Choose Source)" (296:355).
-  const { candidates, selectedRef, style, preview } = state
+  // "Add Citation (Choose Source)" — 296:355.
+  const { candidates, selectedRef, style } = state
+  const needle = sourceQuery.trim().toLowerCase()
+  const shownCandidates = needle
+    ? candidates.filter((candidate) =>
+        `${candidate.title} ${candidate.venue ?? ''} ${candidate.year ?? ''}`.toLowerCase().includes(needle)
+      )
+    : candidates
   if (candidates.length === 0) {
     return (
       <>
@@ -3151,32 +3173,40 @@ function CitationFlowCard({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
-          <div style={POPOVER_TITLE}>
-            {candidates.length} source{candidates.length === 1 ? '' : 's'} found
-          </div>
-        </div>
-        <div
+      {/* Amber, and titled for the ACTION rather than the result. The panel
+          opens from a missing-citation underline, where the user's question is
+          "what do I put here", not "how many did you find" — and the count was
+          already visible in the list directly below it. The style chip that sat
+          opposite went for the same reason: the style pills further down state
+          it, and stating it twice in one card read as two controls. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_ORANGE, flexShrink: 0 }} />
+        <div style={POPOVER_TITLE}>Add citation</div>
+      </div>
+      <div style={POPOVER_BODY}>Pick a source from your document, or search for a new one.</div>
+      {/* Only shown once the list is long enough to be worth narrowing. Below
+          that the filter is furniture: it costs a row of height to save nobody
+          a scan of two lines. */}
+      {candidates.length >= FILTER_MIN_SOURCES ? (
+        <input
+          value={sourceQuery}
+          onChange={(event) => setSourceQuery(event.target.value)}
+          placeholder="Search sources"
           style={{
-            flexShrink: 0,
-            background: CHIP_BG,
-            borderRadius: 999,
-            padding: '4px 10px',
-            fontSize: 11.5,
-            fontWeight: 500,
-            color: MUTED
+            width: '100%',
+            boxSizing: 'border-box',
+            borderRadius: 10,
+            border: '1px solid #e0e0e0',
+            padding: '9px 12px',
+            fontFamily: 'inherit',
+            fontSize: 12.5,
+            color: INK,
+            outline: 'none'
           }}
-        >
-          {STYLE_LABEL[style]}
-        </div>
-      </div>
-      <div style={POPOVER_BODY}>
-        Ranked by how directly each source supports &ldquo;{truncate(claimText, 70)}.&rdquo;
-      </div>
+        />
+      ) : null}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
-        {candidates.map((candidate) => (
+        {shownCandidates.map((candidate) => (
           <CandidateRow
             key={candidate.sourceRef}
             candidate={candidate}
@@ -3184,6 +3214,12 @@ function CitationFlowCard({
             onSelect={() => onSelectCandidate(candidate.sourceRef)}
           />
         ))}
+        {shownCandidates.length === 0 ? (
+          <div style={{ ...POPOVER_BODY, paddingTop: 2 }}>
+            No source here matches &ldquo;{truncate(sourceQuery, 40)}.&rdquo; Clear the filter, or find a new
+            source.
+          </div>
+        ) : null}
       </div>
       {/* The style row from the Choose Source frame. Three pills rather than
           the one cycling button this used to be: the design shows every option
@@ -3214,30 +3250,14 @@ function CitationFlowCard({
           )
         })}
       </div>
-      {/* The design's Preview button shows what is about to be written; there
-          is nowhere else in this flow to see it before it lands in someone
-          else's document, and after "Insert citation" it is too late to be a
-          preview. Both forms, because the in-text marker goes into the
-          sentence and the entry goes into the works-cited list. */}
-      {preview ? (
-        <div
-          style={{
-            width: '100%',
-            background: SELECTED_BG,
-            borderRadius: 10,
-            padding: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6
-          }}
-        >
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
-            WILL BE INSERTED
-          </div>
-          <div style={{ fontSize: 12.5, fontWeight: 500, color: INK }}>{preview.inTextCitation}</div>
-          <div style={{ fontSize: 12, lineHeight: 1.4, color: MUTED }}>{preview.worksCitedEntry}</div>
-        </div>
-      ) : null}
+      {/* Two buttons, as the frame draws them. The Preview button that stood
+          here is gone deliberately, and it is worth recording what replaced the
+          job it did: it existed because there was nowhere else to see what was
+          about to be written into someone else's document. The answer now is
+          the panel on the other side of Insert — "Citation added" prints the
+          in-text marker and the full works-cited entry, and offers Undo. The
+          safeguard moved from before the write to immediately after it, which
+          is a real change in posture and not merely a moved button. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           className="tracely-btn-primary"
@@ -3251,28 +3271,22 @@ function CitationFlowCard({
         >
           {inserting ? 'Inserting…' : 'Insert citation'}
         </button>
-        <button
-          className="tracely-btn-secondary"
-          onClick={onPreview}
-          disabled={previewing || !selectedRef}
-          style={{
-            ...SECONDARY_BTN_STYLE,
-            opacity: previewing || !selectedRef ? 0.6 : 1,
-            cursor: previewing || !selectedRef ? 'default' : 'pointer'
-          }}
-        >
-          {previewing ? 'Formatting…' : preview ? 'Hide preview' : 'Preview'}
-        </button>
-        <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
-          Cancel
+        <button className="tracely-btn-secondary" onClick={onSearchAgain} style={SECONDARY_BTN_STYLE}>
+          Find new source
         </button>
       </div>
+      {/* Kept, though the frame shows no way out. This card is also the body of
+          SourceFinderPopover, which floats over the Essay Grade panel and has
+          no dismiss of its own — the hover card closes when the cursor leaves a
+          sentence, that one would not close at all. Demoted below the row
+          rather than made a third peer, so the two actions the design names
+          stay the two that read as actions. */}
       <button
         className="tracely-btn-secondary"
-        onClick={onSearchAgain}
+        onClick={onCancel}
         style={{ ...SECONDARY_BTN_STYLE, width: '100%' }}
       >
-        Search again
+        Cancel
       </button>
     </>
   )
@@ -3395,7 +3409,6 @@ export default function OverlayApp(): JSX.Element {
   // by claim id — absent means "just showing ProblemCard," not started.
   const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
   const [citationBusyIds, setCitationBusyIds] = useState<Set<string>>(new Set())
-  const [previewBusyIds, setPreviewBusyIds] = useState<Set<string>>(new Set())
   const [undoBusyIds, setUndoBusyIds] = useState<Set<string>>(new Set())
   /**
    * The claim whose Source Finder Popover is open over an Essay Grade card.
@@ -3669,49 +3682,6 @@ export default function OverlayApp(): JSX.Element {
   function setCandidateStyle(claimId: string, style: CitationStyle): void {
     const flow = citationFlowByClaimId.get(claimId)
     if (flow?.step === 'picking') setFlow(claimId, { ...flow, style, preview: null })
-  }
-
-  /**
-   * The Preview button — a toggle, so the same control puts the block away.
-   *
-   * Formatting is local and pure in main (no relay, no network, nothing
-   * written), so this is cheap enough to re-run on every open rather than
-   * caching a preview that a style change would only have to invalidate.
-   */
-  async function togglePreview(claimId: string): Promise<void> {
-    const flow = citationFlowByClaimId.get(claimId)
-    if (flow?.step !== 'picking' || !flow.selectedRef) return
-    if (flow.preview) {
-      setFlow(claimId, { ...flow, preview: null })
-      return
-    }
-    setPreviewBusyIds((prev) => new Set(prev).add(claimId))
-    try {
-      const { citation } = await window.tracely.screenWatch.previewCitation({
-        claimId,
-        sourceRef: flow.selectedRef,
-        style: flow.style
-      })
-      // Re-read rather than closing over `flow`: the rows and the style pills
-      // stay live while this is in flight, and a preview formatted for what was
-      // selected when it was asked for must not land on top of a different
-      // selection. Dropped rather than reapplied — the user changing their mind
-      // is not a reason to reopen a block they have moved on from.
-      setCitationFlowByClaimId((prev) => {
-        const current = prev.get(claimId)
-        if (current?.step !== 'picking') return prev
-        if (current.selectedRef !== flow.selectedRef || current.style !== flow.style) return prev
-        return new Map(prev).set(claimId, { ...current, preview: citation })
-      })
-    } catch (err) {
-      setFlow(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setPreviewBusyIds((prev) => {
-        const next = new Set(prev)
-        next.delete(claimId)
-        return next
-      })
-    }
   }
 
   async function insertCitation(claimId: string): Promise<void> {
@@ -4263,13 +4233,11 @@ export default function OverlayApp(): JSX.Element {
                       onSetStyle={(style) => setCandidateStyle(gradeFlowClaim.id, style)}
                       onSearchAgain={() => void startCitationFlow(gradeFlowClaim.id)}
                       onInsert={() => void insertCitation(gradeFlowClaim.id)}
-                      onPreview={() => void togglePreview(gradeFlowClaim.id)}
                       onCancel={() => closeGradeSourceFinder(gradeFlowClaim.id)}
                       onDone={() => closeGradeSourceFinder(gradeFlowClaim.id)}
                       onToggleWorksCited={() => toggleWorksCited(gradeFlowClaim.id)}
                       onUndo={() => void undoCitation(gradeFlowClaim.id)}
                       inserting={citationBusyIds.has(gradeFlowClaim.id)}
-                      previewing={previewBusyIds.has(gradeFlowClaim.id)}
                       undoing={undoBusyIds.has(gradeFlowClaim.id)}
                     />
                   </div>
@@ -4551,13 +4519,11 @@ export default function OverlayApp(): JSX.Element {
                     onSetStyle={(style) => setCandidateStyle(claimHoveredSummary.id, style)}
                     onSearchAgain={() => void startCitationFlow(claimHoveredSummary.id)}
                     onInsert={() => void insertCitation(claimHoveredSummary.id)}
-                    onPreview={() => void togglePreview(claimHoveredSummary.id)}
                     onCancel={() => setFlow(claimHoveredSummary.id, null)}
                     onDone={() => setFlow(claimHoveredSummary.id, null)}
                     onToggleWorksCited={() => toggleWorksCited(claimHoveredSummary.id)}
                     onUndo={() => void undoCitation(claimHoveredSummary.id)}
                     inserting={citationBusyIds.has(claimHoveredSummary.id)}
-                    previewing={previewBusyIds.has(claimHoveredSummary.id)}
                     undoing={undoBusyIds.has(claimHoveredSummary.id)}
                   />
                 ) : (
