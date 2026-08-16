@@ -108,6 +108,36 @@
       "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
       "why": "Real and corroborated, and accurately described including the dose-response point about years of exposure. CONTROL.",
       "failureIfWrong": "As above."
+    },
+
+    { "batch": "2026-08-16-unindexed",
+      "note": "The harm direction, written before eval/critique/essays/12 had been run. The prompt was changed so that a sentence describing a STUDY, with an empty lookup and no work the model can name, reaches `fabricated`. That moved risk onto real works Crossref does not index, and the 0/16 on modern articles said nothing about them.\n\nThe lookup was labelled first (eval/fabrication/references.json). Result: 0/16 modern articles and 0/6 PRE-DOI articles uncorroborated — Crossref backfills the landmark literature well, so age is not the exposure — against 2/8 books and 2/6 textbooks. The exposure is work TYPE, and the four references below are exactly the four real works the lookup could not corroborate.\n\nThree are cited the way a student actually cites a textbook. The fourth is the boundary: Levitt and Dubner cited as if they were a study, with a percentage and a comparison, which is the shape the new rule keys on. If the rule over-fires anywhere, it fires there — and that is the case worth knowing about before it reaches anyone's draft.\n\nOne caveat carried over from the lookup labelling: for books, a corroboration is usually a DIFFERENT work by the same pair (Cormen & Leiserson matched a hyperconcentrator switch paper; Thaler & Sunstein matched 'Exploiting the Shame Meter'). So what corroborate() really tests is whether two surnames co-occur on anything in that window. That errs safe, and it means 'the book set only lost 2 of 8' is partly an accident of co-authorship rather than a property of the check." },
+
+    {
+      "claim": "Hopcroft and Ullman (1979) established the standard treatment of automata theory",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated by the lookup, and cited as what it is — a textbook. The subset construction attribution is accurate. The model should be able to name this work, which is what the prompt requires before placing a reference.",
+      "failureIfWrong": "`fabricated` here means the check now accuses a student citing the standard textbook of their field, purely because Crossref does not carry it."
+    },
+    {
+      "claim": "Sedgewick and Wayne (2011) present red-black trees",
+      "expected": "well-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated, cited as a textbook, and the description of the 2-3 tree correspondence is correct. Less famous than Hopcroft and Ullman, which is the point of including both: it tests whether the protection depends on the work being famous enough to recall."
+    },
+    {
+      "claim": "Strunk and White (2000) instruct writers to omit needless words",
+      "expected": "partially-supported",
+      "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
+      "why": "Real, uncorroborated, and correctly described — the sentence even concedes the linguistic criticism. A style guide is about as far from an indexed study as a cited work gets."
+    },
+    {
+      "claim": "Levitt and Dubner (2005) found that legalised abortion accounted for 43 percent",
+      "expected": "overstated",
+      "acceptable": ["overstated", "partially-supported", "weak", "unsupported", "contradicted"],
+      "why": "THE BOUNDARY CASE. A real, uncorroborated book cited as though it were a study: 'found that', an exact percentage, a comparison to policing reform. That is precisely the shape the new Pass 2 rule reads as generated — author pair, year, specific quantitative finding, empty lookup. The protection that should hold is the naming requirement: the model recognises Freakonomics and places the reference before the study-shape rule is reached. The 43 percent figure is also not theirs, so a verdict about overstatement or contradiction is the right kind of answer.",
+      "failureIfWrong": "A `fabricated` here is the rule over-firing on a real source, and it would mean the study-shape test cannot tell a mis-described real book from an invented paper. That would be grounds to weaken the rule, not to keep the catch rate."
     }
   ]
 }

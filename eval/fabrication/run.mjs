@@ -264,7 +264,7 @@ for (const r of results.fabricated.filter((x) => x.result.found)) {
 // the check is safe on.
 const byForm = (form) => results.real.filter((r) => (r.entry.form ?? 'article') === form)
 console.log(`\n  FALSE ALARM ${alarms.length}/${results.real.length} real references not corroborated`)
-for (const form of ['article', 'book']) {
+for (const form of ['article', 'book', 'pre-doi', 'textbook']) {
   const set = byForm(form)
   if (set.length === 0) continue
   console.log(`    ${form.padEnd(8)} ${set.filter((r) => !r.result.found).length}/${set.length}`)

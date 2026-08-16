@@ -8934,5 +8934,2101 @@
    ],
    "year": 1980
   }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Watson+Crick+1953+molecular+structure+nucleic+acids+structure+deoxyribose+nucleic+acid&filter=from-pub-date%3A1952-01-01%2Cuntil-pub-date%3A1954-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Molecular Structure of Nucleic Acids: A Structure for Deoxyribose Nucleic Acid",
+   "authorSurnames": [
+    "WATSON",
+    "CRICK"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Molecular Structure of Nucleic Acids: Molecular Structure of Deoxypentose Nucleic Acids",
+   "authorSurnames": [
+    "WILKINS",
+    "STOKES",
+    "WILSON"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Structure of the Nucleic Acids",
+   "authorSurnames": [
+    "PAULING",
+    "COREY"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Genetical Implications of the Structure of Deoxyribonucleic Acid",
+   "authorSurnames": [
+    "WATSON",
+    "CRICK"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "The Phospho-Di-Anhydride Formula and Its Relation to the General Structure of the Nucleic Acids",
+   "authorSurnames": [
+    "Ronwin"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Nucleic acid transfer from parental to progeny bacteriophage",
+   "authorSurnames": [
+    "Watson",
+    "Maaløe"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "A Proposed Structure For The Nucleic Acids",
+   "authorSurnames": [
+    "Pauling",
+    "Corey"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Desoxypentose Nucleic Acids and Nucleoproteins of Malignant Tissues. II. Physico-Chemical Studies of the Desoxypentose Nucleic Acid of a Transplantable Mouse Lymphoma",
+   "authorSurnames": [],
+   "year": 1953
+  },
+  {
+   "title": "Helical Structure of Crystalline Deoxypentose Nucleic Acid",
+   "authorSurnames": [
+    "WILKINS",
+    "SEEDS",
+    "STOKES",
+    "WILSON"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Studies on the Structure of Nucleic Acids. VII. On the Identification of the Isomeric Cytidylic and Adenylic Acids<sup>1</sup>",
+   "authorSurnames": [
+    "Cavalieri"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Studies on the Structure of Nucleic Acids. VI. The Kinetics of Desoxyribonuclease Action<sup>1</sup>",
+   "authorSurnames": [
+    "Cavalieri",
+    "Hatch"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "THE QUANTITATIVE COMPOSITION OF DEOXYPENTOSE NUCLEIC ACIDS AS RELATED TO THE NEWLY PROPOSED STRUCTURE",
+   "authorSurnames": [
+    "Wyatt"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "THE STRUCTURE OF DNA",
+   "authorSurnames": [
+    "Watson",
+    "Crick"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Nucleic acids and proteins in the liver of guinea pigs dying from experimental ascorbic acid deficiency",
+   "authorSurnames": [
+    "Fukuda",
+    "Sibatani"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Virus Nucleic Acids",
+   "authorSurnames": [
+    "Markham"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "ENZYMES ACTING ON NUCLEIC ACIDS",
+   "authorSurnames": [
+    "DAVIDSON"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "The assimilation of amino-acids by bacteria. 14. Nucleic acid and protein synthesis in <i>Staphylococcus aureus</i>",
+   "authorSurnames": [
+    "Gale",
+    "Folkes"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Diabetogenic Effect of Nucleic Acid",
+   "authorSurnames": [
+    "BRADA"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Nucleic Acid Template Hypotheses",
+   "authorSurnames": [
+    "DOUNCE"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Chemical action of X-rays on nucleic acids and related substances in aqueous systems. 1. Degradation of nucleic acids, purines, pyrimidines, nucleosides and nucleotides by X-rays and by free radicals produced chemically",
+   "authorSurnames": [
+    "Scholes",
+    "Weiss"
+   ],
+   "year": 1953
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hodgkin+Huxley+1952+quantitative+description+membrane+current+application+conduction+excitation+nerve&filter=from-pub-date%3A1951-01-01%2Cuntil-pub-date%3A1953-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "A quantitative description of membrane current and its application to conduction and excitation in nerve",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Measurement of current‐voltage relations in the membrane of the giant axon of <i>Loligo</i>",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley",
+    "Katz"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "MOVEMENT OF SODIUM AND POTASSIUM IONS DURING NERVOUS ACTIVITY",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Propagation of electrical signals along giant nerve fibres",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "The components of membrane conductance in the giant axon of <i>Loligo</i>",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "CONDUCTION OF IMPULSES IN THE MYELINATED NERVE FIBER",
+   "authorSurnames": [
+    "Tasaki"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "The dual effect of membrane potential on sodium conductance in the giant axon of <i>Loligo</i>",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Currents carried by sodium and potassium ions through the membrane of the giant axon of <i>Loligo</i>",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Role of Potential Wave Spreading Along Myelinated Nerve Fiber in Excitation and Conduction",
+   "authorSurnames": [
+    "Hodler",
+    "Stämpfli",
+    "Tasaki"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Movement of radioactive potassium and membrane current in a giant axon",
+   "authorSurnames": [
+    "Hodgkin",
+    "Huxley"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "The distribution of membrane current in nerve with longitudinal linearly increasing applied current",
+   "authorSurnames": [
+    "Taylor"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Excitation and Inhibition in Nerve and Muscle Fibres",
+   "authorSurnames": [],
+   "year": 1952
+  },
+  {
+   "title": "High Blood Potassium in Insects in Relation to Nerve Conduction",
+   "authorSurnames": [
+    "HOYLE"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "THE HYPOTHESIS OF SALTATORY CONDUCTION",
+   "authorSurnames": [
+    "Frankenhaeuser"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Saltatory conduction in myelinated nerve fibres",
+   "authorSurnames": [
+    "Frankenhaeuser"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "A-V Conduction disturbance in the presence of the pre-excitation syndrome",
+   "authorSurnames": [
+    "Scherf",
+    "Blumenfeld",
+    "Mueller"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Excitation, Conduction, and Synaptic Transmission in the Nervous System",
+   "authorSurnames": [
+    "Brooks",
+    "Fuortes"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "NEURONS IN THE RETINA: ORGANIZATION, INHIBITION AND EXCITATION PROBLEMS",
+   "authorSurnames": [
+    "Kuffler"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "ON THE MATHEMATICAL BIOLOGY OF EXCITATION PHENOMENA",
+   "authorSurnames": [
+    "Karreman",
+    "Landahl"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "ELECTROTONUS IN DORSAL NERVE ROOTS",
+   "authorSurnames": [
+    "Lloyd"
+   ],
+   "year": 1952
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hershey+Chase+1952+independent+functions+viral+protein+nucleic+acid+growth+bacteriophage&filter=from-pub-date%3A1951-01-01%2Cuntil-pub-date%3A1953-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "INDEPENDENT FUNCTIONS OF VIRAL PROTEIN AND NUCLEIC ACID IN GROWTH OF BACTERIOPHAGE",
+   "authorSurnames": [
+    "Hershey",
+    "Chase"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "NUCLEIC ACID ECONOMY IN BACTERIA INFECTED WITH BACTERIOPHAGE T2",
+   "authorSurnames": [
+    "Hershey",
+    "Dixon",
+    "Chase"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "NUCLEIC ACID ECONOMY IN BACTERIA INFECTED WITH BACTERIOPHAGE T2",
+   "authorSurnames": [
+    "Hershey"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Reproduction of Bacteriophage",
+   "authorSurnames": [
+    "Hershey"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Nucleic Acid and Protein Conference",
+   "authorSurnames": [
+    "Stern",
+    "Lauffer"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "INHERITANCE IN BACTERIOPHAGE",
+   "authorSurnames": [
+    "Hershey"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "GENETIC RECOMBINATION AND HETEROZYGOSIS IN BACTERIOPHAGE",
+   "authorSurnames": [
+    "Hershey",
+    "Chase"
+   ],
+   "year": 1951
+  },
+  {
+   "title": "A Lipo-Protein-Nucleic Acid Complex in the Treatment of Radiation Injury (A Preliminary Report)",
+   "authorSurnames": [
+    "Thompson"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "A New Pyrimidine Base from Bacteriophage Nucleic Acids",
+   "authorSurnames": [
+    "WYATT",
+    "COHEN"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Avidin. I. Isolation and characterization of the protein and nucleic acid",
+   "authorSurnames": [
+    "Fraenkel-Conrat",
+    "Snell",
+    "Ducay"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Inheritance in Bacteriophage",
+   "authorSurnames": [
+    "Hershey"
+   ],
+   "year": 1953
+  },
+  {
+   "title": "Perchloric Acid Extraction of Ribose Nucleic Acid from Cytological Preparations",
+   "authorSurnames": [
+    "Di Stefano"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Nucleic Acid Metabolism during Insect Metamorphosis",
+   "authorSurnames": [
+    "AGRELL"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "NUCLEIC ACID PATTERNS IN RAT LIVER FOLLOWING HYPOPHYSECTOMY AND GROWTH HORMONE ADMINISTRATION<sup>1</sup>",
+   "authorSurnames": [
+    "STEFANO",
+    "BASS",
+    "DIERMEIER",
+    "TEPPERMAN"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "METABOLISM OF NUCLEIC ACID COMPONENTS IN BACTERIA",
+   "authorSurnames": [
+    "Lampen"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Paper Chromatography of Nucleic Acid Derivatives",
+   "authorSurnames": [
+    "Carpenter"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "EFFECTS OF A FOLIC ACID ANTAGONIST ON NUCLEIC ACID METABOLISM",
+   "authorSurnames": [
+    "Goldthwait",
+    "Bendich"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "A Stern chase is a long chase'",
+   "authorSurnames": [
+    "Walker"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Interrelations between nucleic acids and growth of the human placenta",
+   "authorSurnames": [
+    "Brody"
+   ],
+   "year": 1952
+  },
+  {
+   "title": "Nucleic acid transfer from parental to progeny bacteriophage",
+   "authorSurnames": [
+    "Watson",
+    "Maaløe"
+   ],
+   "year": 1953
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Luria+Delbruck+1943+mutations+bacteria+from+virus+sensitivity+virus+resistance&filter=from-pub-date%3A1942-01-01%2Cuntil-pub-date%3A1944-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "MUTATIONS OF BACTERIA FROM VIRUS SENSITIVITY TO VIRUS RESISTANCE",
+   "authorSurnames": [
+    "Luria",
+    "Delbrück"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "VIII. Potato breeding for virus resistance",
+   "authorSurnames": [
+    "Cockerham"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "ISOLATION OF SPECIFIC TYPES OF STREPTOCOCCI AND VIRUS FROM THE STOOL IN STUDIES OF EPIDEMIC POLIOMYELITIS AND ENCEPHALITIS, AND THE PRODUCTION OF VIRUS FROM THE “POLIOMYELITIC” STREPTOCOCCI",
+   "authorSurnames": [
+    "Rosenow"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Virus leaf roll resistance in the potato",
+   "authorSurnames": [
+    "Stevenson",
+    "Folsom",
+    "Dykstra"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "INTERFERENCE OF INACTIVE VIRUS WITH THE PROPAGATION OF VIRUS OF INFLUENZA",
+   "authorSurnames": [
+    "HENLE",
+    "HENLE"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "The Virus of the So-Called “Virus Pneumonias”",
+   "authorSurnames": [],
+   "year": 1943
+  },
+  {
+   "title": "Interference of Inactive Virus with the Propagation of Virus of Influenza",
+   "authorSurnames": [
+    "Henle",
+    "Henle"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "INFLUENZA VIRUS B ISOLATED FROM A FATAL CASE OF PNEUMONIA",
+   "authorSurnames": [
+    "Himmelweit"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "THE LETHAL EFFECT OF TRIETHYLENE GLYCOL VAPOR ON AIR-BORNE BACTERIA AND INFLUENZA VIRUS",
+   "authorSurnames": [
+    "ROBERTSON",
+    "PUCK",
+    "LEMON",
+    "LOOSLI"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Neurotropic Virus Diseases",
+   "authorSurnames": [],
+   "year": 1943
+  },
+  {
+   "title": "The Lethal Effect of Triethylene Glycol Vapor on Air-Borne Bacteria and Influenza Virus",
+   "authorSurnames": [
+    "Robertson",
+    "Puck",
+    "Lemon",
+    "Loosli"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "The Lethal Effect of Triethylene Glycol Vapor on Air-Borne Bacteria and Influenza Virus",
+   "authorSurnames": [
+    "Robertson",
+    "Puck",
+    "Lemon",
+    "Loosli"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Virus Isolated from Pemphiguslike Keratoconjunctivitis",
+   "authorSurnames": [
+    "Gallardo",
+    "Hardy"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Virus Diseases",
+   "authorSurnames": [],
+   "year": 1943
+  },
+  {
+   "title": "Atypical (Virus) Pneumonia",
+   "authorSurnames": [],
+   "year": 1943
+  },
+  {
+   "title": "Observations on Acquired Cellular Resistance to Equine Encephalomyelitis Virus",
+   "authorSurnames": [
+    "Schlesinger",
+    "Olitsky",
+    "Morgan"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "INDUCED RESISTANCE OF THE CENTRAL NERVOUS SYSTEM TO EXPERIMENTAL INFECTION WITH EQUINE ENCEPHALOMYELITIS VIRUS",
+   "authorSurnames": [
+    "Olitsky",
+    "Schlesinger",
+    "Morgan"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Virus Diseases",
+   "authorSurnames": [
+    "SMITH"
+   ],
+   "year": 1943
+  },
+  {
+   "title": "Potato Virus Diseases in Victoria",
+   "authorSurnames": [],
+   "year": 1943
+  },
+  {
+   "title": "Herpes Simplex Virus Recovered from the Spinal Fluid of a Suspected Case of Lymphocytic Choriomeningitis",
+   "authorSurnames": [
+    "Armstrong"
+   ],
+   "year": 1943
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Michelson+Morley+1887+relative+motion+earth+luminiferous+ether&filter=from-pub-date%3A1886-01-01%2Cuntil-pub-date%3A1888-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "On the relative motion of the Earth and the luminiferous ether",
+   "authorSurnames": [
+    "Michelson",
+    "Morley"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "LVIII. <i>On the relative motion of the earth and the luminiferous Æther</i>",
+   "authorSurnames": [
+    "Michelson",
+    "Morley"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "ALBERT A. MICHELSON et EDWARD MORLEY. — On the relative motion of the Earth and the luminiferous æther (Sur le mouvement relatif de la Terre et de l'éther lumineux); Philosophical Magazine, t. XXIV, p. 449; 1887",
+   "authorSurnames": [
+    "Gouy"
+   ],
+   "year": 1888
+  },
+  {
+   "title": "On a method of making the wavelength of sodium light the actual and practical standard of length",
+   "authorSurnames": [
+    "Michelson",
+    "Morley"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Influence of motion of the medium on the velocity of light",
+   "authorSurnames": [
+    "Michelson",
+    "Morley"
+   ],
+   "year": 1886
+  },
+  {
+   "title": "LIX. <i>On a method of making the wave-length of sodium light the actual and practical standard of length</i>",
+   "authorSurnames": [
+    "Michelson",
+    "Morley"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "A Rule for escaping a Danger",
+   "authorSurnames": [
+    "MORLEY"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "ETHER OR CHLOROFORM—WHICH",
+   "authorSurnames": [
+    "&NA;"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Ueber die galvano-chirurgischen Depilations-Methoden",
+   "authorSurnames": [
+    "Michelson"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Ueber die galvano-chirurgischen Depilations-Methoden",
+   "authorSurnames": [
+    "Michelson"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Freezing Water by the Evaporation of Ether",
+   "authorSurnames": [],
+   "year": 1887
+  },
+  {
+   "title": "A SUGGESTED IMPROVEMENT IN ETHER INHALERS.",
+   "authorSurnames": [
+    "Lloyd"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "\"A SUGGESTED IMPROVEMENT IN ETHER INHALERS.\"",
+   "authorSurnames": [
+    "Porritt"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "\"A SUGGESTED IMPROVEMENT IN ETHER INHALERS.\"",
+   "authorSurnames": [
+    "Blaikie Smith"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Buchanzeigen und Besprechungen",
+   "authorSurnames": [
+    "Pospeloff",
+    "Szadek",
+    "Michelson"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "THE RELATIVE RANK QUESTION.",
+   "authorSurnames": [],
+   "year": 1887
+  },
+  {
+   "title": "THE QUESTION OF RELATIVE RANK.",
+   "authorSurnames": [],
+   "year": 1887
+  },
+  {
+   "title": "THE RELATIVE RANK QUESTION.",
+   "authorSurnames": [
+    "Boileau"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "Essai théorique sur la distribution de l'énergie dans les spectres des solides",
+   "authorSurnames": [
+    "Michelson"
+   ],
+   "year": 1887
+  },
+  {
+   "title": "The Employment of Nitrous Oxide in Combination with Ether",
+   "authorSurnames": [
+    "Buxton"
+   ],
+   "year": 1887
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Banting+Best+1922+internal+secretion+pancreas+insulin+diabetes&filter=from-pub-date%3A1921-01-01%2Cuntil-pub-date%3A1923-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "THE INTERNAL SECRETION OF THE PANCREAS AND ITS APPLICATION TO THE TREATMENT OF DIABETES MELLITUS.",
+   "authorSurnames": [
+    "Wallis"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "THE EFFECTS OF INSULIN ON EXPERIMENTAL HYPERGLYCEMIA IN RABBITS",
+   "authorSurnames": [
+    "Banting",
+    "Best",
+    "Collip",
+    "Macleod",
+    "Noble"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "THE EFFECT OF PANCREATIC EXTRACT (INSULIN) ON NORMAL RABBITS",
+   "authorSurnames": [
+    "Banting",
+    "Best",
+    "Collip",
+    "Macleod",
+    "Noble"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "Internal secretion and the ductless glands",
+   "authorSurnames": [
+    "Vincent"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "COLOUR RESPONSES AND INTERNAL SECRETION.",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "THE PANCREAS IN DIABETES",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AND DIABETES",
+   "authorSurnames": [
+    "Thomson"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AND DIABETES",
+   "authorSurnames": [
+    "Carrasco-Formiguera"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "Insulin as a Cure for Diabetes",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AND DIABETES",
+   "authorSurnames": [
+    "Cammidge"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AS A CURE FOR DIABETES",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "THE NEW TREATMENT OF DIABETES BY INSULIN.",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "Internal Secretion and the Ductless Glands.",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AND DIABETES",
+   "authorSurnames": [
+    "Wright"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "The Treatment of Diabetes by Insulin.",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "THE ORGANS OF INTERNAL SECRETION",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "Internal Secretion between Mother and Foetus.",
+   "authorSurnames": [
+    "TANBERG"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "SOME CONDITIONS CONTROLLING INTERNAL SECRETION",
+   "authorSurnames": [
+    "CANNON"
+   ],
+   "year": 1922
+  },
+  {
+   "title": "THE ORGANS OF INTERNAL SECRETION, THEIR DISEASES AND THERAPEUTIC APPLICATIONTHE ORGANS OF INTERNAL SECRETION THEIR DISEASES AND THERAPEUTIC APPLICATION. CobbIvo Geikie, M.D., M.R.C.S. 3 ed. New York, 1921. Wm. Wood &amp; Company.352 p.",
+   "authorSurnames": [],
+   "year": 1922
+  },
+  {
+   "title": "INSULIN AND DIABETES: A GENERAL STATEMENT OF THE PHYSIOLOGICAL AND THERAPEUTIC EFFECTS OF INSULIN",
+   "authorSurnames": [
+    "Macleod"
+   ],
+   "year": 1922
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Kernighan+Ritchie+1978+programming+language&filter=from-pub-date%3A1977-01-01%2Cuntil-pub-date%3A1979-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "UNIX Time-Sharing System: The C Programming Language",
+   "authorSurnames": [
+    "Ritchie",
+    "Johnson",
+    "Lesk",
+    "Kernighan"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "Programming Language Structures",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "RETRACTED: ASSEMBLY LANGUAGE PROGRAMMING TECHNIQUES",
+   "authorSurnames": [
+    "PETERSON"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "Copyright",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "Dedication",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "INDEX",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "BIBLIOGRAPHY",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "Front Matter",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "APPENDIX",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "The Programming Language Concurrent Pascal",
+   "authorSurnames": [
+    "Hansen"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "Programming language FORTRAN",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "Second Language Acquisition Research. Issues and Implications",
+   "authorSurnames": [
+    "Paradis",
+    "Ritchie"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "RETRACTED: INPUT/OUTPUT PROGRAMMING",
+   "authorSurnames": [
+    "PETERSON"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "PL/I programming language",
+   "authorSurnames": [
+    "Abrahams"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "ANSWERS TO SELECTED PROBLEMS",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "Programming language",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "8080A/8085 assembly language programming",
+   "authorSurnames": [],
+   "year": 1978
+  },
+  {
+   "title": "RETRACTED: PREFACE",
+   "authorSurnames": [
+    "Peterson"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "RETRACTED: Copyright",
+   "authorSurnames": [
+    "PETERSON"
+   ],
+   "year": 1978
+  },
+  {
+   "title": "PREFACE",
+   "authorSurnames": [
+    "Organick",
+    "Forsythe",
+    "Plummer"
+   ],
+   "year": 1978
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hopcroft+Ullman+1979+introduction+automata+theory+languages+computation&filter=from-pub-date%3A1978-01-01%2Cuntil-pub-date%3A1980-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Review of \"Introduction to automata theory, languages and computation\" by John E. Hopcroft and Jeffrey D. Ullman. Addison-Wesley 1979.",
+   "authorSurnames": [
+    "Maier"
+   ],
+   "year": 1980
+  },
+  {
+   "title": "FORMAL LANGUAGES AND THEIR RELATION TO AUTOMATA: WHAT HOPCROFT &amp; ULLMAN DIDN'T TELL US",
+   "authorSurnames": [
+    "Goldstine"
+   ],
+   "year": 1980
+  },
+  {
+   "title": "Introduction to automata theory, languages, and computation",
+   "authorSurnames": [],
+   "year": 1980
+  },
+  {
+   "title": "A rational theory of AFLs",
+   "authorSurnames": [
+    "Goldstine"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "On the proof of a theorem by chomsky—hopcroft—ullman",
+   "authorSurnames": [
+    "Oemrawsingh",
+    "Ollongren"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Machines, languages, and computation",
+   "authorSurnames": [],
+   "year": 1979
+  },
+  {
+   "title": "Modeling communications protocols by automata",
+   "authorSurnames": [
+    "Aho",
+    "Ullman",
+    "Yannakakis"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "A systematic approach to formal language theory through parallel rewriting",
+   "authorSurnames": [
+    "Rozenberg"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Universality of data retrieval languages",
+   "authorSurnames": [
+    "Aho",
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Optimal decomposition of linear automata",
+   "authorSurnames": [
+    "Úry"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "A unique termination theorem for a theory with generalised commutative axioms",
+   "authorSurnames": [
+    "Jeanrond"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "EQL: A language for numerical computation",
+   "authorSurnames": [
+    "Nagata"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Strict deterministic languages and controlled rewriting systems",
+   "authorSurnames": [
+    "Chottin"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "On the succinctness of different representations of languages",
+   "authorSurnames": [
+    "Hartmanis"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Languages of nilpotent and solvable groups (extended abstract)",
+   "authorSurnames": [
+    "Thérien"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "7th international colloquium on automata, languages and programming",
+   "authorSurnames": [],
+   "year": 1979
+  },
+  {
+   "title": "7th international colloquium on automata, languages and programming",
+   "authorSurnames": [],
+   "year": 1979
+  },
+  {
+   "title": "INTRODUCTION",
+   "authorSurnames": [
+    "ROSENFELD"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "7th international colloquium on automata, languages and programming",
+   "authorSurnames": [],
+   "year": 1979
+  },
+  {
+   "title": "7th International colloquium on automata, languages and programming",
+   "authorSurnames": [],
+   "year": 1979
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hopcroft+Ullman+1979&filter=from-pub-date%3A1978-01-01%2Cuntil-pub-date%3A1980-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "On the proof of a theorem by chomsky—hopcroft—ullman",
+   "authorSurnames": [
+    "Oemrawsingh",
+    "Ollongren"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Review of \"Introduction to automata theory, languages and computation\" by John E. Hopcroft and Jeffrey D. Ullman. Addison-Wesley 1979.",
+   "authorSurnames": [
+    "Maier"
+   ],
+   "year": 1980
+  },
+  {
+   "title": "FORMAL LANGUAGES AND THEIR RELATION TO AUTOMATA: WHAT HOPCROFT &amp; ULLMAN DIDN'T TELL US",
+   "authorSurnames": [
+    "Goldstine"
+   ],
+   "year": 1980
+  },
+  {
+   "title": "Our guest editor--Dana Ullman",
+   "authorSurnames": [
+    "ULLMAN"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Aho, A. V. / Hopcroft, J. E. / Ullman, J. D., The Design and Analysis of Computer Algorithms. London‐Amsterdam‐Don Mills‐Sydney. Addison‐Wesley Publ. Comp. 1974 X, 470 S., $ 24,–",
+   "authorSurnames": [
+    "Issel"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "The Interpretation of Visual Motion",
+   "authorSurnames": [
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Salvaging America's Rhodesian Policy",
+   "authorSurnames": [
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Varus deformity in supracondylar fractures of the humerus in children",
+   "authorSurnames": [
+    "Dowd",
+    "Hopcroft"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "A note on Rabin's nearest-neighbor algorithm",
+   "authorSurnames": [
+    "Fortune",
+    "Hopcroft"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Untitled",
+   "authorSurnames": [
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "REMARKS",
+   "authorSurnames": [
+    "ULLMAN"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Worker health and safety in solar thermal power systems. VI. Solar ponds",
+   "authorSurnames": [
+    "Ullman",
+    "Sokolow",
+    "Broutman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Elementary Statistics: An Applied Approach.",
+   "authorSurnames": [
+    "Bissell",
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Isolation and characterization of cultured mouse T-lymphoma cells deficient in uridine-cytidine kinase.",
+   "authorSurnames": [
+    "Ullman",
+    "Levinson",
+    "Ullman",
+    "Martin"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "On the reachability problem for 5-dimensional vector addition systems",
+   "authorSurnames": [
+    "Hopcroft",
+    "Pansiot"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Worker health and safety in solar thermal power systems. III. Thermal energy storage subsystems",
+   "authorSurnames": [
+    "Ullman",
+    "Sokolow",
+    "Daniels",
+    "Hurt"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Small angle neutron scattering from polymer networks",
+   "authorSurnames": [
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Worker health and safety in solar thermal power systems. V. Off-normal events",
+   "authorSurnames": [
+    "Ullman",
+    "Sokolow",
+    "Pauker",
+    "Robinson",
+    "Busick"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Holistic health as a model of personal and social responsibility",
+   "authorSurnames": [
+    "Ullman"
+   ],
+   "year": 1979
+  },
+  {
+   "title": "Modeling communications protocols by automata",
+   "authorSurnames": [
+    "Aho",
+    "Ullman",
+    "Yannakakis"
+   ],
+   "year": 1979
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Cormen+Leiserson+1990+introduction+algorithms&filter=from-pub-date%3A1989-01-01%2Cuntil-pub-date%3A1991-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "A hyperconcentrator switch for routing bit-serial messages",
+   "authorSurnames": [
+    "Cormen",
+    "Leiserson"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Some Reflections on Bangladesh Development: Looking Backward to the Future",
+   "authorSurnames": [
+    "Leiserson"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Algorithms",
+   "authorSurnames": [
+    "Blaschek",
+    "Pomberger"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Introduction to Circuit Layout",
+   "authorSurnames": [
+    "Lengauer"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Introduction",
+   "authorSurnames": [
+    "Benveniste",
+    "Métivier",
+    "Priouret"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Introduction to the Book",
+   "authorSurnames": [
+    "Pirani"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Introduction",
+   "authorSurnames": [
+    "Ranka",
+    "Sahni"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "The organization of permutation architectures with bused interconnections",
+   "authorSurnames": [
+    "Kilian",
+    "Kipnis",
+    "Leiserson"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Introduction Ramsey Theory Old and New",
+   "authorSurnames": [
+    "Nešetřil",
+    "Rödl"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "An Introduction to Algorithms for Inference in Belief Nets",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "Introduction",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "Computer Algorithms — Introduction to design and analysis (second edition)",
+   "authorSurnames": [
+    "Ames"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Graph Algorithms",
+   "authorSurnames": [
+    "van LEEUWEN"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "A comparison of sorting algorithms for the connection machine CM-2",
+   "authorSurnames": [
+    "Blelloch",
+    "Leiserson",
+    "Maggs",
+    "Plaxton",
+    "Smith",
+    "Zagha"
+   ],
+   "year": 1991
+  },
+  {
+   "title": "(untitled)",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "Introduction",
+   "authorSurnames": [
+    "Choudhary",
+    "Patel"
+   ],
+   "year": 1990
+  },
+  {
+   "title": "Algorithms and Complexity",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "(untitled)",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "Editorial Board",
+   "authorSurnames": [],
+   "year": 1990
+  },
+  {
+   "title": "(untitled)",
+   "authorSurnames": [],
+   "year": 1990
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Press+Teukolsky+1986+numerical+recipes+scientific+computing&filter=from-pub-date%3A1985-01-01%2Cuntil-pub-date%3A1987-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Numerical Recipes: The Art of Scientific Computing",
+   "authorSurnames": [
+    "Ziegel",
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes: the art of scientific computing",
+   "authorSurnames": [
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling",
+    "Chipperfield"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes: The art of scientific computing. William H. Press, Brian P. Flanner, Saul A. Teukolsky, William T. Vetterling, Cambridge University Press, 1986, 818 pp. $39.50; Example Book (in Fortran or Pascal), $18.95",
+   "authorSurnames": [
+    "Finlayson"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes—the art of scientific computing, by W. H. Press, B. P. Flannery, S. A. Teukolsky and W. T. Vetterling. Pp 818. £25. 1986. ISBN 0-521-30811-9 (Cambridge University Press)",
+   "authorSurnames": [
+    "Planitz"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes—the art of scientific computing, by W. H. Press, B. P. Flannery, S. A. Teukolsky and W. T. Vetterling. Pp 818. £25. 1986. ISBN 0-521-30811-9 (Cambridge University Press)",
+   "authorSurnames": [
+    "Planitz"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "<i>Numerical Recipes: The Art of Scientific Computing</i>",
+   "authorSurnames": [
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling",
+    "Kramer"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "<i>Numerical Recipes, The Art of Scientific Computing</i>",
+   "authorSurnames": [
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling",
+    "Gould"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical Recipes, The Art of Scientific Computing.",
+   "authorSurnames": [
+    "Shampine",
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical Recipes: The Art of Scientific Computing",
+   "authorSurnames": [
+    "Taylor",
+    "Press",
+    "Flannery",
+    "Teukolsky",
+    "Vetterling"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes—example book (FORTRAN), by W. T. Vetterling, S. A. Teukolsky, W. H. Press and B. P. Flannery. Pp 179. £15. 1986. ISBN 0-521-31330-9 (Cambridge University Press) - \n            Numerical recipes—FORTRAN Diskette VI.O, by same authors. £15. 1986. ISBN 0-521-30958-1 (Cambridge University Press)",
+   "authorSurnames": [
+    "Arthur"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "<i>Numerical Recipes, The Art of Scientific Computing.</i> By W. H. Press, B. P. Flannery, S. A. Teukolsky, and W. T. Vetterling",
+   "authorSurnames": [
+    "Shampine"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical Recipes: The Art of Scientific Computing",
+   "authorSurnames": [
+    "Ziegel"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes: the art of scientific computing",
+   "authorSurnames": [
+    "B"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Numerical recipes: The art of scientific computing",
+   "authorSurnames": [
+    "DAVIDROPER"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "Scientific Computing Environment for the 1980s",
+   "authorSurnames": [],
+   "year": 1986
+  },
+  {
+   "title": "Numerical recipes—the art of scientific computing",
+   "authorSurnames": [
+    "Huang"
+   ],
+   "year": 1987
+  },
+  {
+   "title": "CESTAC, A TOOL FOR A STOCHASTIC ROUND-OFF ERROR ANALYSIS IN SCIENTIFIC COMPUTING",
+   "authorSurnames": [
+    "BRUNET",
+    "CHATELIN"
+   ],
+   "year": 1986
+  },
+  {
+   "title": "An analytical and numerical study of the two-dimensional Bratu equation",
+   "authorSurnames": [
+    "Boyd"
+   ],
+   "year": 1986
+  },
+  {
+   "title": "The Numerical Schwarz Alternating Procedure and SOR",
+   "authorSurnames": [
+    "Ehrlich"
+   ],
+   "year": 1986
+  },
+  {
+   "title": "IMACS TRANSACTIONS ON SCIENTIFIC COMPUTATION - 85",
+   "authorSurnames": [],
+   "year": 1986
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Sedgewick+Wayne+2011+algorithms+fourth+edition+sorting+searching+graphs&filter=from-pub-date%3A2010-01-01%2Cuntil-pub-date%3A2012-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Searching paths in directed graphs",
+   "authorSurnames": [
+    "Arndt"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "COMPARING SEARCHING AND SORTING ALGORITHMS EFFICIENCY IN IMPLEMENTING COMPUTATIONAL EXPERIMENT IN PROGRAMMING ENVIRONMENT",
+   "authorSurnames": [
+    "Sagan"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Sorting, Searching, and Simulation in the MapReduce Framework",
+   "authorSurnames": [
+    "Goodrich",
+    "Sitchinava",
+    "Zhang"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Algorithms for the Masses",
+   "authorSurnames": [
+    "Sedgewick"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Fast Sorting Algorithms",
+   "authorSurnames": [
+    "Alt"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Tagging, Sorting, and Searching",
+   "authorSurnames": [
+    "Asch"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Sorting and searching",
+   "authorSurnames": [
+    "Arndt"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "A Polynomial Algorithm for the Vertex Disjoint Min-Min Problem in Planar Graphs",
+   "authorSurnames": [
+    "Guo",
+    "Shen"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Thread-Level Parallel Algorithm for Sorting Integer Sequence on Multi-core Computers",
+   "authorSurnames": [
+    "Cheng",
+    "Qi",
+    "Jun",
+    "Yi-Ran"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Philippe flajolet, the father of analytic combinatorics",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallee"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Fast edge searching and fast searching on graphs",
+   "authorSurnames": [
+    "Yang"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "PREFACE TO TH E FOURTH EDITION",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Parallel Sorting - The Need for Speed",
+   "authorSurnames": [
+    "Wanka"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "2011 Fourth International Symposium on Parallel Architectures, Algorithms and Programming",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Fast searching in packed strings",
+   "authorSurnames": [
+    "Bille"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Cycles in Graphs",
+   "authorSurnames": [
+    "Schlingloff"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Sorting and Fast Algorithms",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Preface to Fourth Edition",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Planar Graphs",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Proof Techniques for Synthesis of Sorting Algorithms",
+   "authorSurnames": [
+    "Dramnesc",
+    "Jebelean"
+   ],
+   "year": 2011
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Sedgewick+Wayne+2011&filter=from-pub-date%3A2010-01-01%2Cuntil-pub-date%3A2012-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "Algorithms for the Masses",
+   "authorSurnames": [
+    "Sedgewick"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Wayne, June",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Thiebaud, Wayne",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Davis, Wayne Lambert",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Luboski, Richard Wayne",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "NGNP SITE 2 HAZARDS ASSESSMENT",
+   "authorSurnames": [
+    "Wayne Moe"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Imaging Techniques in Signal Transduction IHC",
+   "authorSurnames": [
+    "Sedgewick"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Barack Obama's Political Leadership",
+   "authorSurnames": [
+    "Wayne"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Obituary. Philippe Flajolet",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallee"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "PHILIPPE FLAJOLET 1 December 1948 – 22 March 2011",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallée"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Philippe Flajolet, the Father of Analytic Combinatorics",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallée"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "NGNP Project Regulatory Gap Analysis for Modular HTGRs",
+   "authorSurnames": [
+    "Wayne Moe"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Philippe flajolet, the father of analytic combinatorics",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallee"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Philippe Flajolet",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallee"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "PAIN IN CHRONIC KIDNEY DISEASE: PREVALENCE, CAUSE AND MANAGEMENT",
+   "authorSurnames": [
+    "Kafkia",
+    "Chamney",
+    "Drinkwater",
+    "Pegoraro",
+    "Sedgewick"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Snell, Richard Wayne (1931–1995)",
+   "authorSurnames": [],
+   "year": 2011
+  },
+  {
+   "title": "Philippe Flajolet, the Father of Analytic Combinatorics",
+   "authorSurnames": [
+    "Salvy",
+    "Sedgewick",
+    "Soria",
+    "Szpankowski",
+    "Vallée"
+   ],
+   "year": 2011
+  },
+  {
+   "title": "Cribb, Derek Wayne, (born 5 July 1966), Chief Executive, Institute and Faculty of Actuaries, since 2011",
+   "authorSurnames": [],
+   "year": 2012
+  },
+  {
+   "title": "Cribb, Derek Wayne, (born 5 July 1966), Chief Executive, Institute and Faculty of Actuaries, since 2011",
+   "authorSurnames": [],
+   "year": 2012
+  },
+  {
+   "title": "NRCS Conservation Practice Standards",
+   "authorSurnames": [
+    "Wayne M Bogovich",
+    "Alica J Ketchem",
+    "Mathew J Lyons"
+   ],
+   "year": 2011
+  }
+ ],
+ "https://api.crossref.org/works?query.bibliographic=Hastie+Tibshirani+2009+elements+statistical+learning+data+mining+inference+prediction&filter=from-pub-date%3A2008-01-01%2Cuntil-pub-date%3A2010-12-31&select=title%2Cauthor%2Cissued%2CDOI&rows=20": [
+  {
+   "title": "The Elements of Statistical Learning: Data Mining, Inference, and Prediction, Second Edition by Trevor Hastie, Robert Tibshirani, Jerome Friedman",
+   "authorSurnames": [
+    "Nordhausen"
+   ],
+   "year": 2009
+  },
+  {
+   "title": "The Elements of Statistical Learning: Data Mining, Inference, and Prediction by HASTIE, T., TIBSHIRANI, R., and FRIEDMAN, J.",
+   "authorSurnames": [
+    "Rosa"
+   ],
+   "year": 2010
+  },
+  {
+   "title": "Model Inference and Averaging",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "The Elements of Statistical Learning",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2009
+  },
+  {
+   "title": "Ensemble Learning",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Unsupervised Learning",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Neural Networks",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Neural Networks",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Overview of Supervised Learning",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Kernel Smoothing Methods",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Random Forests",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Basis Expansions and Regularization",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Introduction",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Undirected Graphical Models",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "High-Dimensional Problems: p N",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Undirected Graphical Models",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Linear Methods for Classification",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Boosting and Additive Trees",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Basis Expansions and Regularization",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  },
+  {
+   "title": "Linear Methods for Regression",
+   "authorSurnames": [
+    "Hastie",
+    "Tibshirani",
+    "Friedman"
+   ],
+   "year": 2008
+  }
  ]
 }

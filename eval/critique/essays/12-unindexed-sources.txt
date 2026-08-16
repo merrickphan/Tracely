@@ -1,0 +1,11 @@
+Reading Lists and What They Leave Out
+
+Every field has a handful of books that do more teaching than the journals do, and they sit awkwardly in a citation manager because the databases were never built for them.
+
+Hopcroft and Ullman (1979) established the standard treatment of automata theory and formal languages, and their construction for converting a nondeterministic finite automaton into a deterministic one is still the version taught in most undergraduate courses today.
+
+The same is true further along the curriculum. Sedgewick and Wayne (2011) present red-black trees as a direct encoding of 2-3 trees, which makes the balancing rules follow from the representation rather than having to be memorised as cases.
+
+Style guides occupy a similar position. Strunk and White (2000) instruct writers to omit needless words and to prefer the active voice, advice that has shaped American composition teaching for three generations despite persistent criticism from linguists.
+
+Not everything in this category is a textbook. Levitt and Dubner (2005) found that legalised abortion accounted for 43 percent of the decline in violent crime recorded in American cities during the 1990s, an effect larger than any policing reform measured over the same period.

@@ -265,6 +265,78 @@ The procedural fix is narrow: clear only the **critique** relay cassettes betwee
 prompt changes, never the detection ones. Holding the detected claim set fixed is
 what makes two critique runs comparable at all.
 
+## The unindexed exposure, labelled — 2026-08-16
+
+Sharpening the rule moved risk onto real works Crossref does not carry, and
+`0/16` on modern articles said nothing about them. Twelve more references, chosen
+from the two classes I can name works in with confidence and verify independently
+of any index.
+
+```
+  FALSE ALARM 4/36 real references not corroborated
+    article   0/16
+    pre-doi   0/6     articles from before DOIs existed
+    book      2/8
+    textbook  2/6
+```
+
+**The exposure is work type, not age.** Watson & Crick 1953, Michelson & Morley
+1887, Banting & Best 1922 — all corroborated. Crossref backfills the landmark
+literature well, so the "old sources will be missed" worry is unfounded for
+anything a student is likely to cite. What is missed is books: Levitt & Dubner,
+Strunk & White, Hopcroft & Ullman, Sedgewick & Wayne. That is the same class the
+prompt's rule already keys on, which is the first time here that a measurement has
+confirmed a design guess rather than overturned it.
+
+**A corroboration for a book is usually a different work by the same pair.**
+Cormen & Leiserson matched *"A hyperconcentrator switch for routing bit-serial
+messages"*; Thaler & Sunstein matched *"Exploiting the Shame Meter"*; Kernighan &
+Ritchie matched a UNIX Time-Sharing System paper. So `corroborate` really tests
+whether two surnames co-occur on **anything** in that window, not whether the
+cited work exists. It errs safe — that is why it protects real citations — but
+"the book set only lost 2 of 8" is partly an accident of co-authorship rather than
+a property of the check, and the honest reading of a book corroboration is "these
+two people published together around then".
+
+### The harm direction, measured
+
+The four real works the lookup could not corroborate, put through the critique.
+Three cited as textbooks, and one — Levitt & Dubner with an invented 43 percent
+figure and a comparison to policing reform — deliberately shaped like a study,
+which is exactly what the new rule reads as generated.
+
+```
+  4/4 within the acceptable set
+  HARM 0/4 real citations wrongly called fabricated
+```
+
+The naming requirement is what does the work. For the less famous textbook:
+
+> The claim accurately describes a well-known presentation from Sedgewick and
+> Wayne's textbook 'Algorithms' (4th edition, 2011)
+
+And the boundary case held for a better reason than the one it was built to test:
+
+> Levitt and Dubner co-authored the popular book 'Freakonomics' (2005) […] the
+> abortion-crime hypothesis originally published by Donohue and Levitt (2001).
+> However, 'Freakonomics' is not a peer-reviewed study and does not present new
+> quantitative findings
+
+It named the book, traced the claim to the underlying paper, and returned
+`overstated`. The study-shape rule did not fire because the reference was placed
+before it was reached.
+
+**Standing totals: 9/9 invented caught, 0/13 real citations harmed.**
+
+### Still unsampled, and it is the class that matters most
+
+Non-English and regional-society journals. That is where a real, indexed-nowhere,
+two-author *study* actually lives — the one shape that would defeat both the
+lookup and the naming requirement, since the model is least likely to recognise
+it. I cannot name specific works there with enough confidence to label honestly,
+and guessing would produce a number that looks like a measurement and is not one.
+Everything above is evidence about English-language scholarship.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both
