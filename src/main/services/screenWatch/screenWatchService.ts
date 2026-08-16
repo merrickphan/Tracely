@@ -41,6 +41,8 @@ import {
 } from '../../windows/overlayWindow'
 import { getMainWindow } from '../../windows/mainWindow'
 import {
+  ANALYZING_PANEL_HEIGHT,
+  ANALYZING_PANEL_WIDTH,
   computeAllPanelSize,
   computeStructurePanelSize,
   GRADE_PANEL_HEIGHT,
@@ -130,6 +132,29 @@ function hasMeaningfulDelta(next: string, previous: string): boolean {
   // Everything after the first difference is rewritten text on both sides.
   return previous.length - i + (next.length - i) >= MIN_TEXT_DELTA_CHARS
 }
+
+/**
+ * Is there a pass in flight, or one queued behind the debounce?
+ *
+ * Deliberately the *gating* half of the poll loop's trigger condition and not
+ * the timing half: STABLE_MS, MIN_ANALYSIS_INTERVAL_MS and the retry cooldown
+ * decide WHEN a pass runs, not WHETHER one is coming, and folding them in would
+ * make the overlay's "Analyzing" card blink off and on between poll ticks while
+ * the same pending text sat there waiting its turn.
+ *
+ * `lastError` is a state of its own: a detection that failed is not still
+ * running, and the spinner is the wrong thing to leave on screen for it.
+ */
+function analysisPending(): boolean {
+  if (detecting) return true
+  if (lastError) return false
+  return (
+    pendingText.trim().length >= MIN_TEXT_LENGTH &&
+    pendingText !== lastAnalyzedText &&
+    hasMeaningfulDelta(pendingText, lastAnalyzedText)
+  )
+}
+
 let currentClaims: Claim[] = []
 // Background evidence search result per currently-flagged claim — kicked
 // off right after detection (see triggerEvidenceSearch) rather than waiting
@@ -1124,6 +1149,31 @@ export async function findSourceForClaim(claimId: string, query?: string): Promi
   return candidates
 }
 
+/**
+ * The "Preview" button beside "Insert citation" — the same two formatted forms
+ * insertCitationForClaim would write, without writing anything.
+ *
+ * Everything here is the pure half of that function: no UIA write-back, no
+ * `currentSpans` lookup and no `citationByClaimId` entry, so previewing leaves
+ * the claim exactly as flagged as it was. It deliberately does NOT require the
+ * claim to still be locatable in the document (insert does, and says so) — you
+ * can read what a citation would look like even in a moment where the text has
+ * shifted under Tracely and the insert would have to be retried.
+ */
+export function previewCitationForClaim(
+  claimId: string,
+  sourceRef: string,
+  style: CitationStyle
+): ScreenWatchClaimCitation {
+  const item = resolveSourceRef(claimId, sourceRef)
+  if (!item) throw new Error('That source is no longer available — try searching again.')
+  const source = synthesizeSourceFromResult(item, 0)
+  return {
+    inTextCitation: formatInTextCitation(source, style),
+    worksCitedEntry: formatCitation(source, style)
+  }
+}
+
 // The overlay's "Insert citation" action — formats both citation forms from
 // the chosen candidate (never touching sourcesRepo/citationsRepo, same
 // ephemeral rule as the rest of Screen Watch) and types the in-text form
@@ -1382,6 +1432,10 @@ function updateOverlayAndWidget(
     height: WIDGET_SIZE
   }
   const structure = watchStructure?.structure ?? null
+  // See ScreenWatchWidget.analyzing: only ever true BEFORE a first reading, so
+  // a re-detection of an already-graded draft cannot replace its score with a
+  // spinner. The 'grade' card is the only panel the design gives this state to.
+  const analyzing = structure === null && analysisPending()
   const desiredPanelSize =
     widgetViewMode === 'all'
       ? computeAllPanelSize(claims.length)
@@ -1391,7 +1445,9 @@ function updateOverlayAndWidget(
             paragraphCount: structure?.paragraphs.length ?? 0
           })
         : widgetViewMode === 'grade'
-          ? { width: GRADE_PANEL_WIDTH, height: GRADE_PANEL_HEIGHT }
+          ? analyzing
+            ? { width: ANALYZING_PANEL_WIDTH, height: ANALYZING_PANEL_HEIGHT }
+            : { width: GRADE_PANEL_WIDTH, height: GRADE_PANEL_HEIGHT }
           : widgetViewMode === 'report'
             ? { width: REPORT_PANEL_WIDTH, height: REPORT_PANEL_HEIGHT }
             : widgetViewMode === 'paragraph'
@@ -1503,6 +1559,7 @@ function updateOverlayAndWidget(
       claims: ScreenWatchClaimSummary[]
       totalInfoCount: number
       structure: ScreenWatchStructure | null
+      analyzing: boolean
     }
   } = {
     underlines: localized,
@@ -1517,7 +1574,8 @@ function updateOverlayAndWidget(
       // on every resolved favicon; refreshWatchOutline owns when the reading
       // is actually redone, and returning the same object identity is what
       // keeps the dedupe below working.
-      structure
+      structure,
+      analyzing
     }
   }
 

@@ -402,6 +402,25 @@ export interface ScreenWatchFindSourceResponse {
   candidates: ScreenWatchSourceCandidate[]
 }
 
+/**
+ * What "Insert citation" WOULD write, without writing it — the Preview button
+ * in the design's Source Finder Popover (410:185).
+ *
+ * A separate call rather than a field on the candidate: the two formatted forms
+ * depend on the chosen style as well as the chosen source, so precomputing them
+ * would mean three styles x N candidates of formatting per search, nearly all
+ * of it thrown away. Formatting is pure and local (`citations/formatters/*`),
+ * so this costs no network call and touches neither the document nor the DB.
+ */
+export interface ScreenWatchPreviewCitationRequest {
+  claimId: string
+  sourceRef: string
+  style: CitationStyle
+}
+export interface ScreenWatchPreviewCitationResponse {
+  citation: ScreenWatchClaimCitation
+}
+
 export interface ScreenWatchInsertCitationRequest {
   claimId: string
   sourceRef: string
@@ -543,6 +562,22 @@ export interface ScreenWatchWidget {
   totalInfoCount: number
   // Null when there is no trustworthy structural read; see ScreenWatchStructure.
   structure: ScreenWatchStructure | null
+  /**
+   * A reading is being worked on and there is not one yet — the Figma "Essay
+   * Grade (Analyzing)" state (391:342).
+   *
+   * Distinct from `structure === null`, which covers two very different cases:
+   * a detection in flight (say so, and show the spinner) and a draft that was
+   * read and produced nothing trustworthy (structureFit refused, or it is too
+   * short — say THAT, and leave the score dashes). The renderer cannot tell
+   * them apart from the payload alone, and guessing means either a spinner that
+   * never resolves on a document Screen Watch has already given up on, or a
+   * flat "no reading yet" while the first pass is still running.
+   *
+   * Always false once `structure` is set: a re-detection of an already-graded
+   * draft must not replace a live score with a spinner.
+   */
+  analyzing: boolean
 }
 
 export interface ScreenWatchOverlayUpdateEvent {

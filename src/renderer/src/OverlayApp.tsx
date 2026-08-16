@@ -1541,6 +1541,96 @@ function EssayGradePanel({
   )
 }
 
+/**
+ * 'grade' before the first reading exists — Figma "Overlay Mockup - Essay Grade
+ * (Analyzing)" (391:342), whose card (391:540) is 340x204 at a 24px radius with
+ * 32px padding and a 16px stack, centred.
+ *
+ * Shown only while `widget.analyzing` is true, which main sets only when a
+ * detection is actually in flight or queued and no structure has landed yet —
+ * see ScreenWatchWidget.analyzing. A draft that was read and refused (too
+ * short, or structureFit rejected the paragraph split) falls through to the
+ * grade card's own "No reading of this draft yet", because a spinner there
+ * would promise a score that is never coming.
+ *
+ * The ring is an SVG arc rather than the frame's exported spinner SVG, for the
+ * two reasons GradeScoreSection gives for its own ring plus a third: this
+ * window's CSP is `img-src 'self' data:`, so a remote asset URL cannot load at
+ * all, and a rotating arc has to be drawn in a coordinate space we control to
+ * spin around its own centre. Geometry (56px box, 5px stroke) and colours are
+ * the frame's.
+ */
+function AnalyzingCard({ onClose }: { onClose: () => void }): JSX.Element {
+  const R = 25.5
+  const CIRC = 2 * Math.PI * R
+  return (
+    <>
+      {/* The frame draws no close button, and every other panel in this flow
+          has one. Kept, because the collapsed launcher is hidden while the
+          panel is expanded and the overlay is click-through everywhere else:
+          without it, a pass that hangs (a slow relay call — `detecting` has no
+          timeout of its own) leaves a card the user cannot put away sitting
+          over the document they are writing in. */}
+      <button
+        className="tracely-btn-text"
+        onClick={onClose}
+        title="Close"
+        aria-label="Close"
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          width: 26,
+          height: 26,
+          borderRadius: 999,
+          border: 'none',
+          background: '#eaf2ec',
+          color: '#376049',
+          fontFamily: 'inherit',
+          fontSize: 15,
+          lineHeight: 1,
+          cursor: 'pointer',
+          padding: 0
+        }}
+      >
+        ×
+      </button>
+      <div style={{ width: 56, height: 56, flexShrink: 0 }}>
+        <svg
+          className="tracely-ring"
+          width={56}
+          height={56}
+          viewBox="0 0 56 56"
+          aria-hidden="true"
+          style={{ display: 'block' }}
+        >
+          <circle cx={28} cy={28} r={R} fill="none" stroke={GRADE_RING_TRACK} strokeWidth={5} />
+          {/* A quarter turn of arc, which is what the frame draws — enough to
+              read as motion without reading as a progress figure, since
+              nothing here knows how far along the pass is. */}
+          <circle
+            cx={28}
+            cy={28}
+            r={R}
+            fill="none"
+            stroke={GRADE_GREEN}
+            strokeWidth={5}
+            strokeLinecap="round"
+            strokeDasharray={`${CIRC * 0.28} ${CIRC}`}
+            transform="rotate(-90 28 28)"
+          />
+        </svg>
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: W_INK, whiteSpace: 'nowrap' }}>
+        Grading your writing...
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.4, color: '#7e7f84', textAlign: 'center' }}>
+        Checking thesis strength, evidence, and citations across each paragraph
+      </div>
+    </>
+  )
+}
+
 /** 238 wpm — Brysbaert 2019, silent reading of English prose. Same figure the
  *  in-app report uses, so the two cannot disagree about a draft's read time. */
 const OVERLAY_READING_WPM = 238
@@ -1832,7 +1922,17 @@ function EssayGradeReportPanel({
                         {issue.claimId ? (
                           <button
                             className="tracely-btn-text"
-                            onClick={() => onFindForClaim(issue.claimId as string)}
+                            // The paragraph card is itself a button, so without
+                            // this the click reaches it too and "Find" opens the
+                            // paragraph detail as well as the source finder —
+                            // which throws the reader out of the report they
+                            // asked from, the exact thing openGradeSourceFinder
+                            // exists to stop. Harmless while both paths ended in
+                            // the same panel; not any more.
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onFindForClaim(issue.claimId as string)
+                            }}
                             style={{
                               border: 'none',
                               background: 'none',
@@ -2769,6 +2869,15 @@ type CitationFlowState =
       candidates: ScreenWatchSourceCandidate[]
       selectedRef: string | null
       style: CitationStyle
+      /**
+       * What "Insert citation" would write, once Preview has been pressed.
+       *
+       * Cleared by every change to `selectedRef` or `style` rather than
+       * refetched: both inputs feed the formatting, so a preview left standing
+       * across a change is a citation for a source or a style the buttons no
+       * longer say you are about to insert.
+       */
+      preview: ScreenWatchClaimCitation | null
     }
   | { step: 'inserted'; citation: ScreenWatchClaimCitation; showWorksCited: boolean }
   | { step: 'error'; message: string }
@@ -2860,11 +2969,13 @@ function CitationFlowCard({
   onSetStyle,
   onSearchAgain,
   onInsert,
+  onPreview,
   onCancel,
   onDone,
   onToggleWorksCited,
   onUndo,
   inserting,
+  previewing,
   undoing
 }: {
   state: CitationFlowState
@@ -2875,11 +2986,14 @@ function CitationFlowCard({
   onSetStyle: (style: CitationStyle) => void
   onSearchAgain: () => void
   onInsert: () => void
+  /** Toggles the "Preview" block — see the picking step's `preview` field. */
+  onPreview: () => void
   onCancel: () => void
   onDone: () => void
   onToggleWorksCited: () => void
   onUndo: () => void
   inserting: boolean
+  previewing: boolean
   undoing: boolean
 }): JSX.Element {
   // "Find a Source (Searching)" — 294:343.
@@ -2996,7 +3110,7 @@ function CitationFlowCard({
 
   // "Find a Source (Results)" — 295:349, with the style pills from
   // "Add Citation (Choose Source)" (296:355).
-  const { candidates, selectedRef, style } = state
+  const { candidates, selectedRef, style, preview } = state
   if (candidates.length === 0) {
     return (
       <>
@@ -3085,6 +3199,30 @@ function CitationFlowCard({
           )
         })}
       </div>
+      {/* The design's Preview button shows what is about to be written; there
+          is nowhere else in this flow to see it before it lands in someone
+          else's document, and after "Insert citation" it is too late to be a
+          preview. Both forms, because the in-text marker goes into the
+          sentence and the entry goes into the works-cited list. */}
+      {preview ? (
+        <div
+          style={{
+            width: '100%',
+            background: SELECTED_BG,
+            borderRadius: 10,
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
+            WILL BE INSERTED
+          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, color: INK }}>{preview.inTextCitation}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.4, color: MUTED }}>{preview.worksCitedEntry}</div>
+        </div>
+      ) : null}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           className="tracely-btn-primary"
@@ -3097,6 +3235,18 @@ function CitationFlowCard({
           }}
         >
           {inserting ? 'Inserting…' : 'Insert citation'}
+        </button>
+        <button
+          className="tracely-btn-secondary"
+          onClick={onPreview}
+          disabled={previewing || !selectedRef}
+          style={{
+            ...SECONDARY_BTN_STYLE,
+            opacity: previewing || !selectedRef ? 0.6 : 1,
+            cursor: previewing || !selectedRef ? 'default' : 'pointer'
+          }}
+        >
+          {previewing ? 'Formatting…' : preview ? 'Hide preview' : 'Preview'}
         </button>
         <button className="tracely-btn-secondary" onClick={onCancel} style={SECONDARY_BTN_STYLE}>
           Cancel
@@ -3111,6 +3261,57 @@ function CitationFlowCard({
       </button>
     </>
   )
+}
+
+// -- Grade flow: SourceFinderPopover -----------------------------------
+//
+// The same citation flow as the hover popover, floated over the Essay Grade
+// cards — Figma "Overlay Mockup - Essay Grade (Find Evidence Result)"
+// (409:141), whose Source Finder Popover (410:147) is 400 wide at a 16px radius
+// with a heavier shadow than the hover card and no tail, because it is not
+// pointing at a sentence: it belongs to the "Find evidence" button in the
+// report/paragraph card behind it.
+//
+// It reuses CitationFlowCard rather than redrawing the results list, which is
+// what the design does too — 410:147 and the hover popover's "Find a Source
+// (Results)" (295:349) are the same popover, down to the header dot, the style
+// pill and the full-width "Search again". Every step comes along for free:
+// searching skeletons, the empty result, the failure, and the inserted
+// confirmation.
+
+const SOURCE_FINDER_WIDTH = 400
+const SOURCE_FINDER_RADIUS = 16
+const SOURCE_FINDER_SHADOW = '0px 12px 32px 0px rgba(0, 0, 0, 0.18)'
+
+/**
+ * Placed over the panel it was opened from, never outside it.
+ *
+ * Not cosmetic: hoverTracking.ts hit-tests clicks against the widget's own
+ * rect, so a popover drawn past the panel's edge would be visible and
+ * completely unclickable. Centred horizontally, then clamped into the rect with
+ * an 8px margin, so a panel clamped small by a short watched window still gets
+ * a popover that can be pressed.
+ *
+ * Pinned to the TOP of the panel rather than to the frame's own y (548 of 1080,
+ * about halfway): the report card is 1210px tall and scrolls, so a popover
+ * placed by proportion lands below the fold of any window shorter than the
+ * frame — which is most of them.
+ */
+function sourceFinderRect(panel: { x: number; y: number; width: number; height: number }): {
+  left: number
+  top: number
+  width: number
+  maxHeight: number
+} {
+  const margin = 8
+  const width = Math.min(SOURCE_FINDER_WIDTH, Math.max(1, panel.width - margin * 2))
+  const maxHeight = Math.max(1, panel.height - margin * 2)
+  return {
+    left: panel.x + Math.max(margin, Math.round((panel.width - width) / 2)),
+    top: panel.y + margin,
+    width,
+    maxHeight
+  }
 }
 
 export default function OverlayApp(): JSX.Element {
@@ -3179,7 +3380,20 @@ export default function OverlayApp(): JSX.Element {
   // by claim id — absent means "just showing ProblemCard," not started.
   const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
   const [citationBusyIds, setCitationBusyIds] = useState<Set<string>>(new Set())
+  const [previewBusyIds, setPreviewBusyIds] = useState<Set<string>>(new Set())
   const [undoBusyIds, setUndoBusyIds] = useState<Set<string>>(new Set())
+  /**
+   * The claim whose Source Finder Popover is open over an Essay Grade card.
+   *
+   * Separate from `selectedClaimId` (which claim the 'single' panel is focused
+   * on) because this one is about a popover that floats over a DIFFERENT panel:
+   * the grade flow's "Find evidence" used to set selectedClaimId and switch to
+   * 'single', which threw the reader out of the report they were reading to
+   * answer a question they asked from inside it. The flow state itself lives in
+   * the same citationFlowByClaimId map the hover popover uses, so a claim
+   * cannot end up mid-flow twice with two different answers.
+   */
+  const [gradeFlowClaimId, setGradeFlowClaimId] = useState<string | null>(null)
   const [defaultStyle, setDefaultStyle] = useState<CitationStyle>('APA')
 
   useEffect(() => {
@@ -3365,6 +3579,26 @@ export default function OverlayApp(): JSX.Element {
     }
   }
 
+  /**
+   * "Find evidence →" on an uncited claim in the report or paragraph card.
+   *
+   * Opens the Source Finder Popover over the card the reader is already in
+   * (Figma 409:141) rather than switching the panel to the single-claim view,
+   * which is what this used to do: the question was asked about one line of a
+   * report, and answering it by replacing the report loses the place they asked
+   * it from and makes Back the only way home.
+   */
+  function openGradeSourceFinder(claimId: string): void {
+    setGradeFlowClaimId(claimId)
+    void startCitationFlow(claimId)
+  }
+
+  /** Puts the popover away AND drops the flow, so reopening starts clean. */
+  function closeGradeSourceFinder(claimId: string): void {
+    setGradeFlowClaimId(null)
+    setFlow(claimId, null)
+  }
+
   function setFlow(claimId: string, state: CitationFlowState | null): void {
     setCitationFlowByClaimId((prev) => {
       const next = new Map(prev)
@@ -3394,7 +3628,8 @@ export default function OverlayApp(): JSX.Element {
           step: 'picking',
           candidates,
           selectedRef: candidates[0]?.sourceRef ?? null,
-          style: defaultStyle
+          style: defaultStyle,
+          preview: null
         })
         return next
       })
@@ -3408,14 +3643,60 @@ export default function OverlayApp(): JSX.Element {
     }
   }
 
+  // Both drop `preview`: it was formatted from the source and style being
+  // replaced, so keeping it would show a citation for something other than what
+  // "Insert citation" is now about to write.
   function selectCandidate(claimId: string, ref: string): void {
     const flow = citationFlowByClaimId.get(claimId)
-    if (flow?.step === 'picking') setFlow(claimId, { ...flow, selectedRef: ref })
+    if (flow?.step === 'picking') setFlow(claimId, { ...flow, selectedRef: ref, preview: null })
   }
 
   function setCandidateStyle(claimId: string, style: CitationStyle): void {
     const flow = citationFlowByClaimId.get(claimId)
-    if (flow?.step === 'picking') setFlow(claimId, { ...flow, style })
+    if (flow?.step === 'picking') setFlow(claimId, { ...flow, style, preview: null })
+  }
+
+  /**
+   * The Preview button — a toggle, so the same control puts the block away.
+   *
+   * Formatting is local and pure in main (no relay, no network, nothing
+   * written), so this is cheap enough to re-run on every open rather than
+   * caching a preview that a style change would only have to invalidate.
+   */
+  async function togglePreview(claimId: string): Promise<void> {
+    const flow = citationFlowByClaimId.get(claimId)
+    if (flow?.step !== 'picking' || !flow.selectedRef) return
+    if (flow.preview) {
+      setFlow(claimId, { ...flow, preview: null })
+      return
+    }
+    setPreviewBusyIds((prev) => new Set(prev).add(claimId))
+    try {
+      const { citation } = await window.tracely.screenWatch.previewCitation({
+        claimId,
+        sourceRef: flow.selectedRef,
+        style: flow.style
+      })
+      // Re-read rather than closing over `flow`: the rows and the style pills
+      // stay live while this is in flight, and a preview formatted for what was
+      // selected when it was asked for must not land on top of a different
+      // selection. Dropped rather than reapplied — the user changing their mind
+      // is not a reason to reopen a block they have moved on from.
+      setCitationFlowByClaimId((prev) => {
+        const current = prev.get(claimId)
+        if (current?.step !== 'picking') return prev
+        if (current.selectedRef !== flow.selectedRef || current.style !== flow.style) return prev
+        return new Map(prev).set(claimId, { ...current, preview: citation })
+      })
+    } catch (err) {
+      setFlow(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setPreviewBusyIds((prev) => {
+        const next = new Set(prev)
+        next.delete(claimId)
+        return next
+      })
+    }
   }
 
   async function insertCitation(claimId: string): Promise<void> {
@@ -3841,10 +4122,26 @@ export default function OverlayApp(): JSX.Element {
             if (widget.viewMode === 'grade' || widget.viewMode === 'report' || widget.viewMode === 'paragraph') {
               const isReport = widget.viewMode === 'report'
               const isParagraph = widget.viewMode === 'paragraph'
+              // Only the summary card has an analyzing state to be in: 'report'
+              // and 'paragraph' are both reached from a reading that exists.
+              const isAnalyzing = widget.viewMode === 'grade' && widget.analyzing
               // 407:359 is a different box from the two grade cards: 24px
               // radius, 25px gutter, a heavier shadow. The frame's own values.
               const scrolls = isReport || isParagraph
+              // The claim the Source Finder Popover is open for, if it is still
+              // one of the claims this panel is about. A claim that was cited,
+              // dismissed or re-detected away while the popover sat open takes
+              // the popover with it rather than leaving a card floating over a
+              // report that no longer mentions it.
+              const gradeFlowClaim = gradeFlowClaimId
+                ? (widget.claims.find((c) => c.id === gradeFlowClaimId) ?? null)
+                : null
+              const gradeFlow = gradeFlowClaim ? (citationFlowByClaimId.get(gradeFlowClaim.id) ?? null) : null
+              const finderRect = sourceFinderRect(
+                { x: panelPos.x, y: panelPos.y, width: widget.rect.width, height: widget.rect.height }
+              )
               return (
+                <>
                 <div
                   style={{
                     position: 'absolute',
@@ -3862,7 +4159,9 @@ export default function OverlayApp(): JSX.Element {
                     // same hairline and costs no layout.
                     outline: '1px solid #000',
                     outlineOffset: -1,
-                    borderRadius: isParagraph ? 24 : 28,
+                    // The analyzing card is its own frame (391:540): 24px like
+                    // the paragraph detail, not the grade card's 28.
+                    borderRadius: isParagraph || isAnalyzing ? 24 : 28,
                     boxShadow: isParagraph
                       ? '0px 12px 28px -4px rgba(15, 26, 20, 0.18)'
                       : '0px 10px 28px -4px rgba(15, 26, 20, 0.14)',
@@ -3873,23 +4172,27 @@ export default function OverlayApp(): JSX.Element {
                     overflowY: scrolls ? 'auto' : 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    padding: isParagraph ? '23px 25px' : '22px 24px',
-                    gap: isParagraph ? 17 : 22,
+                    // The analyzing card centres its spinner and both lines;
+                    // every other card here is a left-aligned stack.
+                    alignItems: isAnalyzing ? 'center' : 'flex-start',
+                    justifyContent: isAnalyzing ? 'center' : 'flex-start',
+                    padding: isAnalyzing ? 32 : isParagraph ? '23px 25px' : '22px 24px',
+                    gap: isAnalyzing ? 16 : isParagraph ? 17 : 22,
                     pointerEvents: 'auto'
                   }}
                 >
-                  {isParagraph ? (
+                  {isAnalyzing ? (
+                    <AnalyzingCard
+                      onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
+                    />
+                  ) : isParagraph ? (
                     <ParagraphDetailPanel
                       structure={widget.structure}
                       claims={widget.claims}
                       index={detailParagraph}
                       onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
                       onBack={showReport}
-                      onFindForClaim={(claimId) => {
-                        setSelectedClaimId(claimId)
-                        showSingle()
-                      }}
+                      onFindForClaim={openGradeSourceFinder}
                     />
                   ) : isReport ? (
                     <EssayGradeReportPanel
@@ -3899,10 +4202,7 @@ export default function OverlayApp(): JSX.Element {
                       onBackToSummary={showGrade}
                       onArgumentCheck={showAll}
                       onOpenParagraph={showParagraph}
-                      onFindForClaim={(claimId) => {
-                        setSelectedClaimId(claimId)
-                        showSingle()
-                      }}
+                      onFindForClaim={openGradeSourceFinder}
                     />
                   ) : (
                     <EssayGradePanel
@@ -3912,6 +4212,54 @@ export default function OverlayApp(): JSX.Element {
                     />
                   )}
                 </div>
+
+                {gradeFlowClaim && gradeFlow ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: finderRect.left,
+                      top: finderRect.top,
+                      width: finderRect.width,
+                      maxHeight: finderRect.maxHeight,
+                      boxSizing: 'border-box',
+                      background: '#fff',
+                      // This card's own chrome, not the hover popover's: no
+                      // border at all and a deeper shadow, which is what lifts
+                      // it off the panel it is sitting on rather than off the
+                      // user's document.
+                      borderRadius: SOURCE_FINDER_RADIUS,
+                      boxShadow: SOURCE_FINDER_SHADOW,
+                      padding: 16,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                      color: INK,
+                      overflowX: 'hidden',
+                      overflowY: 'auto',
+                      pointerEvents: 'auto'
+                    }}
+                  >
+                    <CitationFlowCard
+                      state={gradeFlow}
+                      claimText={gradeFlowClaim.text}
+                      visibleClaimCount={visibleClaims.filter((c) => c.id !== gradeFlowClaim.id).length}
+                      onSelectCandidate={(ref) => selectCandidate(gradeFlowClaim.id, ref)}
+                      onSetStyle={(style) => setCandidateStyle(gradeFlowClaim.id, style)}
+                      onSearchAgain={() => void startCitationFlow(gradeFlowClaim.id)}
+                      onInsert={() => void insertCitation(gradeFlowClaim.id)}
+                      onPreview={() => void togglePreview(gradeFlowClaim.id)}
+                      onCancel={() => closeGradeSourceFinder(gradeFlowClaim.id)}
+                      onDone={() => closeGradeSourceFinder(gradeFlowClaim.id)}
+                      onToggleWorksCited={() => toggleWorksCited(gradeFlowClaim.id)}
+                      onUndo={() => void undoCitation(gradeFlowClaim.id)}
+                      inserting={citationBusyIds.has(gradeFlowClaim.id)}
+                      previewing={previewBusyIds.has(gradeFlowClaim.id)}
+                      undoing={undoBusyIds.has(gradeFlowClaim.id)}
+                    />
+                  </div>
+                ) : null}
+                </>
               )
             }
 
@@ -4188,11 +4536,13 @@ export default function OverlayApp(): JSX.Element {
                     onSetStyle={(style) => setCandidateStyle(claimHoveredSummary.id, style)}
                     onSearchAgain={() => void startCitationFlow(claimHoveredSummary.id)}
                     onInsert={() => void insertCitation(claimHoveredSummary.id)}
+                    onPreview={() => void togglePreview(claimHoveredSummary.id)}
                     onCancel={() => setFlow(claimHoveredSummary.id, null)}
                     onDone={() => setFlow(claimHoveredSummary.id, null)}
                     onToggleWorksCited={() => toggleWorksCited(claimHoveredSummary.id)}
                     onUndo={() => void undoCitation(claimHoveredSummary.id)}
                     inserting={citationBusyIds.has(claimHoveredSummary.id)}
+                    previewing={previewBusyIds.has(claimHoveredSummary.id)}
                     undoing={undoBusyIds.has(claimHoveredSummary.id)}
                   />
                 ) : (
@@ -4300,6 +4650,15 @@ export default function OverlayApp(): JSX.Element {
           border-top-color: ${ACCENT};
           border-radius: 50%;
           animation: tracely-spin 0.7s linear infinite;
+        }
+        /* The analyzing card's 56px ring. transform-only, so it composites
+           rather than laying out — same reason UnderlineMark moves by
+           transform, and the same caveat: this window is never focused, so if
+           Chromium throttles the animation the degraded state is a ring that
+           sits still, not one that disappears. */
+        .tracely-ring {
+          transform-origin: 50% 50%;
+          animation: tracely-spin 1s linear infinite;
         }
         .tracely-progress-track {
           height: 6px;

@@ -637,6 +637,12 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
     claimCount: screenWatchClaims.length,
     claims: screenWatchClaims,
     totalInfoCount: screenWatchClaims.length + 10,
-    structure: screenWatchStructure
+    structure: screenWatchStructure,
+    // False alongside a non-null `structure`, because those are the only two
+    // states main ever pushes together — see ScreenWatchWidget.analyzing. The
+    // rail's Screen Watch scenario flips this (and drops the structure) to
+    // reach the Analyzing card, which is otherwise only visible during the
+    // second or two before a real draft's first reading lands.
+    analyzing: false
   }
 }
