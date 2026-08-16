@@ -45,6 +45,8 @@ import {
   computeStructurePanelSize,
   GRADE_PANEL_HEIGHT,
   GRADE_PANEL_WIDTH,
+  PARAGRAPH_PANEL_HEIGHT,
+  PARAGRAPH_PANEL_WIDTH,
   REPORT_PANEL_HEIGHT,
   REPORT_PANEL_WIDTH,
   SINGLE_PANEL_HEIGHT,
@@ -254,7 +256,7 @@ let widgetManualPos: { x: number; y: number } | null = null
 // scrolling — the panel's actual pixel size (see updateOverlayAndWidget)
 // depends on this, so it has to be known server-side rather than left as a
 // renderer-only toggle the way the hover popover's own single/all switch is.
-export type WidgetViewMode = 'single' | 'all' | 'structure' | 'grade' | 'report'
+export type WidgetViewMode = 'single' | 'all' | 'structure' | 'grade' | 'report' | 'paragraph'
 let widgetViewMode: WidgetViewMode = 'single'
 
 export function setWidgetExpanded(expanded: boolean): void {
@@ -1392,7 +1394,9 @@ function updateOverlayAndWidget(
           ? { width: GRADE_PANEL_WIDTH, height: GRADE_PANEL_HEIGHT }
           : widgetViewMode === 'report'
             ? { width: REPORT_PANEL_WIDTH, height: REPORT_PANEL_HEIGHT }
-            : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
+            : widgetViewMode === 'paragraph'
+              ? { width: PARAGRAPH_PANEL_WIDTH, height: PARAGRAPH_PANEL_HEIGHT }
+              : { width: SINGLE_PANEL_WIDTH, height: SINGLE_PANEL_HEIGHT }
   // Some watched windows are narrower/shorter than the ideal 400px card. The
   // overlay itself is clipped to that window, so an unclamped panel makes its
   // right/bottom actions unreachable. Keep a small inset and let the renderer
@@ -1408,7 +1412,7 @@ function updateOverlayAndWidget(
   // because it is a verdict on the whole draft rather than a note about the one
   // sentence the cursor is on.
   const panelLocalAnchored: ScreenRect =
-    widgetViewMode === 'grade' || widgetViewMode === 'report'
+    widgetViewMode === 'grade' || widgetViewMode === 'report' || widgetViewMode === 'paragraph'
       ? {
           x: Math.max(panelInset, Math.round((winBounds.width - panelSize.width) / 2)),
           y: Math.max(panelInset, Math.round((winBounds.height - panelSize.height) / 2)),

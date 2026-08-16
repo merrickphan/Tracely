@@ -528,7 +528,7 @@ export interface ScreenWatchWidget {
   // the others (560 against 480) and NOT anchored bottom-right: the frame
   // centres it over the document, so the jump-sideways argument above does not
   // apply to it. See GRADE_PANEL_WIDTH in panelSize.ts.
-  viewMode: 'single' | 'all' | 'structure' | 'grade' | 'report'
+  viewMode: 'single' | 'all' | 'structure' | 'grade' | 'report' | 'paragraph'
   claimCount: number
   // Ordered by confidence, highest first — the popup/panel picks which one
   // to show (hovered claim, or the top one by default) from this list
@@ -583,7 +583,7 @@ export interface ScreenWatchSetWidgetExpandedResponse {
 }
 
 export interface ScreenWatchSetWidgetViewModeRequest {
-  mode: 'single' | 'all' | 'structure' | 'grade' | 'report'
+  mode: 'single' | 'all' | 'structure' | 'grade' | 'report' | 'paragraph'
 }
 export interface ScreenWatchSetWidgetViewModeResponse {
   ok: true

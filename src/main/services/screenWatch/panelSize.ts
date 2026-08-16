@@ -106,6 +106,17 @@ export const GRADE_PANEL_HEIGHT = 321
 export const REPORT_PANEL_WIDTH = 560
 export const REPORT_PANEL_HEIGHT = 1210
 
+/**
+ * 'paragraph' — Figma "Paragraph Detail" (407:359), 520x930.
+ *
+ * Narrower than the grade and report cards, which is the frame's own choice:
+ * this one is about a single paragraph, and the design gives it a tighter
+ * measure and a rounder corner (24 against 28) to say so. Clamped and scrolled
+ * exactly like the report.
+ */
+export const PARAGRAPH_PANEL_WIDTH = 520
+export const PARAGRAPH_PANEL_HEIGHT = 930
+
 export function computeAllPanelSize(claimCount: number): { width: number; height: number } {
   const count = Math.max(1, claimCount)
   const naturalHeight =

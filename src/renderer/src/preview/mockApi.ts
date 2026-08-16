@@ -195,6 +195,9 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
             // height — the harness should show the scrolling case, not a
             // 1210px card no real window would give it.
             { x: 100, y: 8, width: 560, height: 464 }
+          : viewMode === 'paragraph'
+            ? // PARAGRAPH_PANEL_* is 520x930, clamped the same way.
+              { x: 120, y: 8, width: 520, height: 464 }
         : {
             x: 90,
             y: 20,

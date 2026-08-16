@@ -33,7 +33,7 @@ import {
 
 const setEnabledSchema = z.object({ enabled: z.boolean() })
 const setWidgetExpandedSchema = z.object({ expanded: z.boolean() })
-const setWidgetViewModeSchema = z.object({ mode: z.enum(['single', 'all', 'structure', 'grade', 'report']) })
+const setWidgetViewModeSchema = z.object({ mode: z.enum(['single', 'all', 'structure', 'grade', 'report', 'paragraph']) })
 const widgetDragEndSchema = z.object({ x: z.number(), y: z.number() })
 const rectSchema = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
 const setActivePopoverRectSchema = z.object({ claimId: z.string().nullable(), rect: rectSchema.nullable() })
