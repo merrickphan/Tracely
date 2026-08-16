@@ -155,7 +155,14 @@ export const claims: Claim[] = [
     searchQuery: 'screen time adolescent depression causal',
     strengthScore: 34,
     // Low support is what makes this a 34: one source agrees, one disagrees.
-    scoreBreakdown: { sourceCount: 3, quality: 0.8, recency: 0.9, relevance: 0.6, support: 0.1 },
+    //
+    // sourceCount is a FRACTION, not a tally: min(relevant, 6) / 6 in
+    // services/search/scoring.ts. Three of the six-source cap cleared the
+    // relevance floor, so 3/6 = 0.5. It read `3` until 2026-08-16, which is a
+    // value the formula cannot produce — and it was the reason the preview
+    // could not show the bug that field caused, since an integer passed off as
+    // a source count looks exactly like a source count.
+    scoreBreakdown: { sourceCount: 0.5, quality: 0.8, recency: 0.9, relevance: 0.6, support: 0.1 },
     // Carries markdown on purpose. The relay's prompts neither request nor
     // forbid it and gpt-4.1 emits it freely, so this is what the surface
     // actually receives — keeping it here means the preview exercises
@@ -173,7 +180,8 @@ export const claims: Claim[] = [
     confidence: 0.87,
     searchQuery: 'adolescents social media three hours anxiety prevalence',
     strengthScore: 61,
-    scoreBreakdown: { sourceCount: 2, quality: 0.7, recency: 0.8, relevance: 0.75, support: 0.33 },
+    // 2 of the 6-source cap on topic: 2/6 = 0.333…
+    scoreBreakdown: { sourceCount: 1 / 3, quality: 0.7, recency: 0.8, relevance: 0.75, support: 0.33 },
     critique: null,
     critiqueVerdict: null,
     createdAt: T0

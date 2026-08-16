@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { placePopover } from '@shared/popoverPlacement'
 import type { DocumentMark, MarkRect } from './documentMarks'
+import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, isReasoningProblem, popoverCopyFor } from './problemCopy'
 
 /**
@@ -29,6 +31,14 @@ export interface DocumentMarkLayerProps {
   active: { mark: DocumentMark; rect: MarkRect } | null
   /** Width of the scroll container, so the popover can be kept inside it. */
   wrapWidth: number
+  /**
+   * Visible height of the scroll container, and how far it is scrolled, as of
+   * the hover that opened the popover. Together they say where the visible box
+   * sits in the content coordinates `rect` and the card are positioned in —
+   * which is what decides whether the card fits below the sentence.
+   */
+  wrapHeight: number
+  wrapScrollTop: number
   onFindSource: (mark: DocumentMark) => void
   onSuggestFix: (mark: DocumentMark) => void
   onDismiss: (mark: DocumentMark) => void
@@ -41,6 +51,8 @@ export default function DocumentMarkLayer({
   marks,
   active,
   wrapWidth,
+  wrapHeight,
+  wrapScrollTop,
   onFindSource,
   onSuggestFix,
   onDismiss,
@@ -77,6 +89,8 @@ export default function DocumentMarkLayer({
           mark={active.mark}
           rect={active.rect}
           wrapWidth={wrapWidth}
+          wrapHeight={wrapHeight}
+          wrapScrollTop={wrapScrollTop}
           onFindSource={() => onFindSource(active.mark)}
           onSuggestFix={() => onSuggestFix(active.mark)}
           onDismiss={() => onDismiss(active.mark)}
@@ -92,6 +106,8 @@ function MarkPopover({
   mark,
   rect,
   wrapWidth,
+  wrapHeight,
+  wrapScrollTop,
   onFindSource,
   onSuggestFix,
   onDismiss,
@@ -101,6 +117,8 @@ function MarkPopover({
   mark: DocumentMark
   rect: MarkRect
   wrapWidth: number
+  wrapHeight: number
+  wrapScrollTop: number
   onFindSource: () => void
   onSuggestFix: () => void
   onDismiss: () => void
@@ -122,12 +140,18 @@ function MarkPopover({
   const left = Math.max(8, Math.min(idealLeft, wrapWidth - POPOVER_WIDTH - 8))
   const tailLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - left - TAIL_WIDTH / 2, POPOVER_WIDTH - 28))
 
-  // Above the line when there is no room below. `height` is 0 on the first
-  // paint, which reads as "it fits" — correct, because below is the default and
-  // the measured pass a frame later moves it only if it actually does not.
-  const below = rect.top + rect.height + POPOVER_GAP
-  const wantsAbove = height > 0 && below + height > rect.top + rect.height + 400
-  const top = wantsAbove ? rect.top - POPOVER_GAP - height : below
+  // Above the line only when there is genuinely no room below and there is room
+  // above. Decided in `shared/popoverPlacement.ts`, which is where the tests for
+  // it are — the version inlined here reduced to `height > 390` and had been
+  // flipping on the card's own height rather than on any measurement.
+  const { above: wantsAbove, top } = placePopover({
+    markTop: rect.top,
+    markHeight: rect.height,
+    cardHeight: height,
+    gap: POPOVER_GAP,
+    viewportHeight: wrapHeight,
+    scrollTop: wrapScrollTop
+  })
 
   // No 'searching' variant here, unlike the overlay's card. A mark is only ever
   // drawn for a claim whose search has resolved — see measureMarks — so there is
@@ -160,7 +184,14 @@ function MarkPopover({
             </span>
           ) : null}
         </div>
-        <p className="docmark-body">{description}</p>
+        {/* Markdown, not plain text. Two of these descriptions are the
+            critique verbatim (see popoverCopyFor), the relay's prompts neither
+            request nor forbid markdown, and the model emits it freely — so this
+            card was printing literal `**cross-sectional**` at the reader. The
+            overlay's identical card has rendered it since MarkdownText existed;
+            this one was simply missed. Renders React elements from a parsed
+            tree, never HTML, so model output cannot inject markup. */}
+        <MarkdownText className="docmark-body">{description}</MarkdownText>
         <div className="docmark-actions">
           <button
             className="docmark-btn-primary"

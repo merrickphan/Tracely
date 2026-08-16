@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CitationStyle, Claim, DocumentOutline, DocumentRecord, Source } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
@@ -236,11 +236,34 @@ function DocumentEditor({
   const [marks, setMarks] = useState<DocumentMark[]>([])
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
   const [wrapWidth, setWrapWidth] = useState(0)
+  // The editor's visible box, as of the hover that opened the popover — see
+  // handleBodyMouseMove for why it is sampled there and not on every measure.
+  const [wrapView, setWrapView] = useState({ height: 0, scrollTop: 0 })
   // Claims the writer has waved away this session. Client-side only: a
   // dismissal is "I know, leave me alone while I finish this paragraph", not a
   // durable judgement about the sentence, and persisting it would mean a real
   // problem could be hidden forever by one impatient click.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  // How many articles each claim's evidence search returned, by claim id.
+  //
+  // Read out of the evidence table rather than off the claim, because the claim
+  // does not carry it — `scoreBreakdown.sourceCount` is the 0..1 fraction that
+  // cleared the relevance floor, and feeding that to the popover printed
+  // "0.667 sources" (see claimEvidenceFor). A claim absent from this map is not
+  // marked at all, so the number the card quotes is always one that was read.
+  //
+  // The score each count was read at is kept beside it so a re-run search
+  // invalidates the entry. Several places can re-search one claim (checkClaims
+  // here, the report's per-claim button), and all of them land back here as a
+  // changed score rather than as a notification.
+  const [countedEvidence, setCountedEvidence] = useState<
+    ReadonlyMap<string, { score: number; count: number }>
+  >(new Map())
+  const articleCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const [id, entry] of countedEvidence) counts.set(id, entry.count)
+    return counts
+  }, [countedEvidence])
   // Bumped whenever something that moves text happens, to re-measure. A counter
   // rather than the text itself: identical text can still need re-measuring
   // after a font or alignment change.
@@ -570,6 +593,49 @@ function DocumentEditor({
   }
 
   /**
+   * Loads the article count for every claim whose search has resolved.
+   *
+   * Reads persisted rows out of the local database — no relay call, no network
+   * — and only for claims whose count is missing or was read at a different
+   * score, so re-running detection or checking one more claim costs one read
+   * rather than a full sweep.
+   */
+  useEffect(() => {
+    const pending = (claims ?? []).filter(
+      (claim) =>
+        claim.strengthScore !== null &&
+        countedEvidence.get(claim.id)?.score !== claim.strengthScore
+    )
+    if (pending.length === 0) return
+    let cancelled = false
+    void Promise.all(
+      pending.map(async (claim) => {
+        try {
+          const res = await tracelyApi.getEvidenceForClaim(claim.id)
+          return [claim.id, { score: claim.strengthScore as number, count: res.evidence.length }] as const
+        } catch {
+          // One claim's read failing must not withhold the others' marks.
+          return null
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return
+      const found = entries.filter(
+        (entry): entry is readonly [string, { score: number; count: number }] => entry !== null
+      )
+      if (found.length === 0) return
+      setCountedEvidence((prev) => {
+        const next = new Map(prev)
+        for (const [id, entry] of found) next.set(id, entry)
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [claims, countedEvidence])
+
+  /**
    * Re-measures the underlines.
    *
    * useLayoutEffect, not useEffect: these are absolute positions over live
@@ -587,14 +653,14 @@ function DocumentEditor({
     let frame = 0
     frame = requestAnimationFrame(() => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
-      setMarks(measureMarks(body, wrap, live))
+      setMarks(measureMarks(body, wrap, live, articleCounts))
       setWrapWidth(wrap.clientWidth)
     })
     return () => cancelAnimationFrame(frame)
     // `structureOpen` was a dependency here: opening the rail narrowed the
     // editor, so every mark had to be re-measured. With the rail gone the
     // editor's width no longer changes from inside this component.
-  }, [claims, dismissed, measureTick, fontFamily, fontSize, align])
+  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align])
 
   // The editor reflows on window resize, which does not go through
   // handleInput.
@@ -630,6 +696,11 @@ function DocumentEditor({
       return
     }
     if (activeMark?.mark.claim.id === hit.mark.claim.id) return
+    // Captured here rather than in the measure effect: scrolling changes
+    // scrollTop without re-rendering this component, and the popover decides
+    // whether it fits below the sentence from where the visible box sits. Read
+    // at the moment of the hover, it is right by construction.
+    setWrapView({ height: wrap.clientHeight, scrollTop: wrap.scrollTop })
     setActiveMark(hit)
   }
 
@@ -1061,6 +1132,8 @@ function DocumentEditor({
           marks={marks}
           active={activeMark}
           wrapWidth={wrapWidth}
+          wrapHeight={wrapView.height}
+          wrapScrollTop={wrapView.scrollTop}
           onFindSource={(mark) => {
             // The claim's own evidence search, then the report opened on it —
             // the same "Find Evidence" destination the design reaches from the
