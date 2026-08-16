@@ -1247,18 +1247,19 @@ function ClaimListItem({ claim, onClick }: { claim: ScreenWatchClaimSummary; onC
 
 // -- Structure: the draft's argument, not its sentences ---------------
 //
-// The same reading the in-app Structure rail shows, computed over whatever
-// document Screen Watch is watching. Everything behind it is local — paragraph
-// splitting, the role heuristics, the rubric, the weakness rules — so unlike
-// critique it costs nothing to keep current, which is what makes an always-there
-// passive score defensible at all.
+// The same reading the in-app report (ArgumentScoreModal) shows, computed over
+// whatever document Screen Watch is watching. Everything behind it is local —
+// paragraph splitting, the role heuristics, the rubric, the weakness rules — so
+// unlike critique it costs nothing to keep current, which is what makes an
+// always-there passive score defensible at all.
 //
-// Deliberately NOT a port of StructurePanel.tsx. That component is 118
-// `docedit-*` class names resolved from styles/index.css, which this window does
-// not load — the overlay is inline styles plus the one scoped <style> block at
-// the bottom of this file. What is shared is the vocabulary, the role labels and
-// the rubric, and those are duplicated below rather than imported, because
-// importing the component would drag its stylesheet dependency along with it.
+// Deliberately NOT a port of that component, and it was not a port of the
+// Structure rail before it was deleted either. Both are class names resolved
+// from styles/index.css, which this window does not load — the overlay is inline
+// styles plus the one scoped <style> block at the bottom of this file. What is
+// shared is the vocabulary, the role labels and the rubric, and those are
+// duplicated below rather than imported, because importing the component would
+// drag its stylesheet dependency along with it.
 
 const ROLE_LABEL: Record<ParagraphRole, string> = {
   thesis: 'Thesis',
