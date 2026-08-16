@@ -1,7 +1,7 @@
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { hasInlineCitationNear } from '@shared/inlineCitation'
-import { problemKindsFor } from '@shared/problemKind'
+import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
 import type { Claim } from '@shared/types'
 
@@ -191,7 +191,11 @@ export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim
     const problemKinds = problemKindsFor({
       claimType: span.claim.claimType,
       hasInlineCitation: cited,
-      evidence: { score: evidence.score, count: evidence.count },
+      evidence: {
+        score: evidence.score,
+        count: evidence.count,
+        hasRelevantSource: hasRelevantSource(span.claim.scoreBreakdown)
+      },
       critiqueVerdict: span.claim.critiqueVerdict
     }) as MarkProblemKind[]
     // Nothing is wrong with this sentence. Not drawing it is the point: a

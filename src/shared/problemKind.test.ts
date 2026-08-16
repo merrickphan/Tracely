@@ -1,11 +1,40 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { problemKindFor, problemKindsFor, problemSeverity } from './problemKind.ts'
+import {
+  hasRelevantSource,
+  isRetrievalMiss,
+  problemKindFor,
+  problemKindsFor,
+  problemSeverity
+} from './problemKind.ts'
+
+/**
+ * A resolved search that returned `count` results, `count > 0` of which were
+ * on topic.
+ *
+ * The two are separate inputs because retrieval separates them: it returns its
+ * top eight for every claim whether or not any of them speak to it. Every case
+ * below that used to write `count: 0` meant "nothing relevant came back", and
+ * that is what it still means; `retrieved` covers the case the old shape could
+ * not express at all — results came back, and none of them were about this.
+ */
+const found = (score: number, count: number): { score: number; count: number; hasRelevantSource: boolean } => ({
+  score,
+  count,
+  hasRelevantSource: count > 0
+})
+
+/** Results came back and NONE of them cleared the relevance floor. */
+const retrieved = (count: number): { score: number; count: number; hasRelevantSource: boolean } => ({
+  score: 0,
+  count,
+  hasRelevantSource: false
+})
 
 const base = {
   claimType: 'factual' as const,
   hasInlineCitation: false,
-  evidence: { score: 80, count: 5 },
+  evidence: found(80, 5),
   critiqueVerdict: null
 }
 
@@ -31,7 +60,7 @@ describe('problemKindFor', () => {
     ok(problemSeverity('contradicted-claim') < problemSeverity('cited-unverified'))
     ok(problemSeverity('contradicted-claim') < problemSeverity('weak-reasoning'))
     deepStrictEqual(
-      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 }, critiqueVerdict: 'contradicted' })[0],
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(0, 0), critiqueVerdict: 'contradicted' })[0],
       'contradicted-claim'
     )
   })
@@ -40,7 +69,7 @@ describe('problemKindFor', () => {
     // The point of the ordering: a claim can be perfectly well sourced and
     // still not follow from what those sources say.
     strictEqual(
-      problemKindFor({ ...base, evidence: { score: 95, count: 8 }, critiqueVerdict: 'weak' }),
+      problemKindFor({ ...base, evidence: found(95, 8), critiqueVerdict: 'weak' }),
       'weak-reasoning'
     )
   })
@@ -51,17 +80,17 @@ describe('problemKindFor', () => {
 
   it('separates an unfindable number from an unfindable assertion', () => {
     strictEqual(
-      problemKindFor({ ...base, claimType: 'statistic', evidence: { score: 0, count: 0 } }),
+      problemKindFor({ ...base, claimType: 'statistic', evidence: found(0, 0) }),
       'unverified-statistic'
     )
-    strictEqual(problemKindFor({ ...base, evidence: { score: 0, count: 0 } }), 'no-sources')
+    strictEqual(problemKindFor({ ...base, evidence: found(0, 0) }), 'no-sources')
   })
 
   it('bands evidence on the same 70/40 thresholds as the rest of the app', () => {
-    strictEqual(problemKindFor({ ...base, evidence: { score: 39, count: 4 } }), 'weak-evidence')
-    strictEqual(problemKindFor({ ...base, evidence: { score: 40, count: 4 } }), 'partial-evidence')
-    strictEqual(problemKindFor({ ...base, evidence: { score: 69, count: 4 } }), 'partial-evidence')
-    strictEqual(problemKindFor({ ...base, evidence: { score: 70, count: 4 } }), 'missing-citation')
+    strictEqual(problemKindFor({ ...base, evidence: found(39, 4) }), 'weak-evidence')
+    strictEqual(problemKindFor({ ...base, evidence: found(40, 4) }), 'partial-evidence')
+    strictEqual(problemKindFor({ ...base, evidence: found(69, 4) }), 'partial-evidence')
+    strictEqual(problemKindFor({ ...base, evidence: found(70, 4) }), 'missing-citation')
   })
 
   it('never says "missing citation" about a sentence that has one', () => {
@@ -75,12 +104,12 @@ describe('problemKindFor', () => {
     // does not carry what they attributed. It used to fall into weak-evidence,
     // whose copy never mentions the citation at all.
     strictEqual(
-      problemKindFor({ ...base, hasInlineCitation: true, evidence: { score: 22, count: 5 } }),
+      problemKindFor({ ...base, hasInlineCitation: true, evidence: found(22, 5) }),
       'cited-unverified'
     )
     // Uncited at the same score is a different problem with different advice.
     strictEqual(
-      problemKindFor({ ...base, hasInlineCitation: false, evidence: { score: 22, count: 5 } }),
+      problemKindFor({ ...base, hasInlineCitation: false, evidence: found(22, 5) }),
       'weak-evidence'
     )
   })
@@ -93,7 +122,7 @@ describe('problemKindFor', () => {
     // something nobody checked — and on a well-cited essay it fired on nearly
     // every line.
     deepStrictEqual(
-      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 0, count: 0 } }),
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(0, 0) }),
       []
     )
     deepStrictEqual(
@@ -101,14 +130,14 @@ describe('problemKindFor', () => {
         ...base,
         claimType: 'statistic',
         hasInlineCitation: true,
-        evidence: { score: 0, count: 0 }
+        evidence: found(0, 0)
       }),
       []
     )
     // Uncited and unfindable is still a real finding: nothing was attributed,
     // and nothing was found.
     deepStrictEqual(
-      problemKindsFor({ ...base, hasInlineCitation: false, evidence: { score: 0, count: 0 } }),
+      problemKindsFor({ ...base, hasInlineCitation: false, evidence: found(0, 0) }),
       ['no-sources']
     )
   })
@@ -135,7 +164,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
         ...base,
         claimType: 'statistic',
         hasInlineCitation: true,
-        evidence: { score: 12, count: 4 }
+        evidence: found(12, 4)
       }),
       ['cited-unverified']
     )
@@ -144,7 +173,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
   it('does not double-report thin evidence for a cited claim', () => {
     // cited-unverified already says it, with the right advice.
     deepStrictEqual(
-      problemKindsFor({ ...base, hasInlineCitation: true, evidence: { score: 20, count: 5 } }),
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(20, 5) }),
       ['cited-unverified']
     )
   })
@@ -213,7 +242,7 @@ describe('fabricated-citation — a source that does not exist', () => {
       problemKindFor({
         ...base,
         hasInlineCitation: true,
-        evidence: { score: 0, count: 0 },
+        evidence: found(0, 0),
         critiqueVerdict: 'fabricated'
       }),
       'fabricated-citation'
@@ -225,7 +254,7 @@ describe('fabricated-citation — a source that does not exist', () => {
       problemKindFor({
         ...base,
         hasInlineCitation: true,
-        evidence: { score: 95, count: 8 },
+        evidence: found(95, 8),
         critiqueVerdict: 'fabricated'
       }),
       'fabricated-citation'
@@ -256,8 +285,95 @@ describe('overstated-claim — defensible substance, indefensible quantifier', (
 
   it('survives a zero evidence score — the problem is the wording, not the sourcing', () => {
     strictEqual(
-      problemKindFor({ ...base, evidence: { score: 0, count: 0 }, critiqueVerdict: 'overstated' }),
+      problemKindFor({ ...base, evidence: found(0, 0), critiqueVerdict: 'overstated' }),
       'overstated-claim'
     )
+  })
+})
+
+describe('unsupported — a verdict about the claim, or about the search?', () => {
+  // eval/critique/FINDINGS.md, 2026-08-16. Two of the five `unsupported`
+  // verdicts in that run were reached with nothing on topic retrieved, and both
+  // were on sentences that are true and properly hedged. The product printed
+  // "Weak reasoning" over them.
+  it('does not call a sentence weak because the search came back empty', () => {
+    const kinds = problemKindsFor({ ...base, evidence: found(0, 0), critiqueVerdict: 'unsupported' })
+    strictEqual(kinds.includes('weak-reasoning'), false, 'a retrieval miss is not a reasoning finding')
+    // Reported honestly instead — same state, and the copy for this one says
+    // "It may still be true — but you have nothing to cite for it yet."
+    deepStrictEqual(kinds, ['no-sources'])
+  })
+
+  it('still calls it weak when there WAS on-topic evidence to read', () => {
+    // The half of `unsupported` that is a real finding: the critique had
+    // relevant sources in front of it and they do not carry the claim.
+    deepStrictEqual(
+      problemKindsFor({ ...base, evidence: found(30, 6), critiqueVerdict: 'unsupported' }),
+      ['weak-reasoning', 'weak-evidence']
+    )
+  })
+
+  it('says nothing at all about a cited sentence nothing was found for', () => {
+    // Already attributed, and the academic corpus has no opinion. Neither half
+    // of that is a finding about the writing.
+    deepStrictEqual(
+      problemKindsFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: found(0, 0),
+        critiqueVerdict: 'unsupported'
+      }),
+      []
+    )
+  })
+
+  it('gates only `unsupported`, never `weak`', () => {
+    // `weak` is a judgement about how the argument is made, which is readable
+    // from the sentence itself. Only `unsupported` is the word doing two jobs.
+    deepStrictEqual(
+      problemKindsFor({ ...base, evidence: found(0, 0), critiqueVerdict: 'weak' }),
+      ['weak-reasoning', 'no-sources']
+    )
+  })
+
+  it('leaves the three truth verdicts alone, however empty the search', () => {
+    for (const verdict of ['fabricated', 'contradicted', 'overstated'] as const) {
+      strictEqual(
+        problemKindsFor({ ...base, evidence: found(0, 0), critiqueVerdict: verdict }).length > 0,
+        true,
+        `${verdict} asserts something about the claim and must survive an empty search`
+      )
+    }
+  })
+})
+
+describe('results returned vs results that are about the claim', () => {
+  // The bug this separation exists for. The aggregator merges four providers
+  // down to its top eight and returns eight for every claim in the app, so the
+  // overlay's `count === 0` test for "nothing found" was unreachable — eight
+  // papers about other subjects read as eight sources.
+  it('reports eight off-topic results as no sources, not as weak evidence', () => {
+    deepStrictEqual(problemKindsFor({ ...base, evidence: retrieved(8) }), ['no-sources'])
+  })
+
+  it('does not accuse a cited sentence over eight off-topic results', () => {
+    // 'cited-unverified' says "your citation may not support this". Saying it
+    // because a search of the wrong corpus came back empty is the accusation
+    // problemKind's own comments say it must not make.
+    deepStrictEqual(problemKindsFor({ ...base, hasInlineCitation: true, evidence: retrieved(8) }), [])
+  })
+
+  it('reads the relevance floor off the breakdown, not the result count', () => {
+    strictEqual(hasRelevantSource(null), false)
+    strictEqual(hasRelevantSource({ sourceCount: 0, quality: 1, recency: 1, relevance: 0, support: 0 }), false)
+    strictEqual(hasRelevantSource({ sourceCount: 0.167, quality: 0, recency: 0, relevance: 0, support: 0 }), true)
+  })
+
+  it('names a retrieval miss only for the one verdict that is ambiguous', () => {
+    strictEqual(isRetrievalMiss('unsupported', false), true)
+    strictEqual(isRetrievalMiss('unsupported', true), false)
+    strictEqual(isRetrievalMiss('weak', false), false)
+    strictEqual(isRetrievalMiss('contradicted', false), false)
+    strictEqual(isRetrievalMiss(null, false), false)
   })
 })
