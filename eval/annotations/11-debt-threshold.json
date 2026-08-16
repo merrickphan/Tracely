@@ -1,0 +1,45 @@
+{
+  "essay": "11-debt-threshold.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+  },
+  "note": "The failure mode the set cannot currently express: a real source, correctly attributed, that says exactly what the sentence says, and that the literature has since refuted. 05-social-media is a real source that says something else (miscited). 08-ai-grading is a source that does not exist (fabricated). Both are about the CITATION being wrong. This one is about the citation being right and the claim being wrong anyway, and every existing verdict fits it badly — see the note on claim 1 and the new open case added to RUBRIC.md. It matters beyond labelling because the ladder and the strength score both push the same way here: the refuted paper is on topic, addresses the exact proposition, sits in a top venue and is one of the most-cited economics papers of the decade, so it earns rel at question 3 and scores high in computeStrengthScore. Tracely would tell a student their refuted claim is well supported, and would be following its own rules to do it. Secondary: economics as a discipline, and a second exercise of the statistical route on a different indicator family from 04-energy-access — general government debt as a share of GDP rather than an energy series. Deliberately a flawed draft; the README asks for roughly 3:1 flawed to clean.",
+  "claims": [
+    {
+      "text": "Reinhart and Rogoff found that when a country's public debt passes ninety percent of GDP, average growth falls sharply.",
+      "paragraph": 2,
+      "verdict": "contradicted",
+      "citationWorthy": "yes",
+      "citedSource": {
+        "says": "Growth in a Time of Debt (Reinhart and Rogoff, American Economic Review Papers and Proceedings, 2010) reports exactly this: median and mean growth falling markedly for countries with gross public debt above 90 percent of GDP. The sentence represents the source accurately. What it omits is that the result did not survive — Herndon, Ash and Pollin (Cambridge Journal of Economics, 2014) reproduced the dataset and found a spreadsheet range error, selective country-year exclusions and an unusual weighting scheme, and the effect largely disappears when those are corrected."
+      },
+      "sources": [],
+      "note": "Filed as contradicted because that is the closest existing verdict and the literature does now argue against the proposition — but it is a poor fit and the gap should be read rather than the label. contradicted implies the student picked up something the literature disagrees with; here the student picked up a specific paper that agrees with them, and the disagreement is with that paper. miscited is wrong by definition (validation requires citedSource.says to record a gap between the sentence and the source, and there is no gap). unsupported is wrong the way it was wrong for 08 before 'fabricated' existed. citedSource.says is supplied anyway, even though nothing requires it here, because the finding IS the pair — what the source says and what happened to it afterwards. This is the same shape as the fabricated case: filed under the nearest verdict with the gap written on it, for Merrick to settle. Do not add a verdict on my say-so."
+    },
+    {
+      "text": "In 2013 a graduate student trying to reproduce the result for a class assignment found a coding error in the underlying spreadsheet, along with weighting choices the paper had never explained.",
+      "paragraph": 2,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The control, and the paired half of claim 1. Thomas Herndon's reanalysis is itself published and well cited, so retrieval should find it easily. The comparison worth watching is between this claim and claim 1: both are about the same paper, both are squarely in economics, and the correct evidence lists barely overlap. If claim 1 scores as well as or better than this one, the tool is ranking by how famous a paper is rather than by what the sentence asserts."
+    },
+    {
+      "text": "Japan has carried debt above two hundred percent of GDP for more than a decade without the growth collapse the threshold predicts.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "Statistical route, and a harder case for it than 04's energy series. Japan's gross general government debt above 200 percent of GDP is a well-published figure, but the series that carries it best is the IMF's rather than a World Development Indicator — worldBank.ts's closest is central government debt (GC.DOD.TOTL.GD.ZS), whose coverage for Japan is patchy and whose definition is narrower than the number a student would have read. So the interesting outcome here is not whether a number comes back but WHICH: a central-government series returned against a claim about general government debt is a scale-and-definition mismatch of the kind RUBRIC.md's 'scale is part of specificity' section describes, and it would look authoritative. Under that section it is marg, not rel — same topic, same specificity, different proposition."
+    },
+    {
+      "text": "If the United States keeps borrowing at the present rate, a debt crisis within the decade is unavoidable.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "borderline",
+      "sources": [],
+      "note": "A prediction, so nothing can settle it, and the same shape as 01's 'depression rates will double' and 07's 'routine surgery will become impossible'. Borderline rather than no because it is the kind of sentence that ought to carry a source for the borrowing rate even though the conclusion cannot carry one — which is a distinction the product does not currently draw and probably should."
+    }
+  ]
+}
