@@ -166,7 +166,7 @@ export async function generateCritique(
     ...(referenceCheck ? { referenceCheck } : {})
   })
 
-  const result = normalizeCritique(raw)
+  const result = normalizeCritique(raw, claim.text)
   setCached(key, 'ai:critique', result)
   return result
 }
