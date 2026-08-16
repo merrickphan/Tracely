@@ -95,6 +95,43 @@ in 66 uncited sentences**, including every trap in the control essay:
 
 The `NOT_AN_AUTHOR` stoplist and the capital-anchor rule are doing their job.
 
+## Fixed, same day
+
+Findings 1-3 are fixed; 4 and 5 are the documented gaps and stay.
+
+```
+                 before          after
+RECALL sentence  34/36  94%      35/37  95%
+       span      28/36  78%      35/37  95%
+PRECISION        34/35  97%      35/36  97%
+```
+
+Span recall now equals sentence recall, which is the result worth checking: the
+window no longer loses anything the patterns can see. Chicago went 1/5 to 6/6.
+The remaining two misses are finding 4 and the remaining false positive is
+finding 5 — every failure left is one the module documents.
+
+The cited-sentence total moved 36 → 37 and uncited 66 → 68 because finding 1's
+fix splits the Chicago essay correctly, so there are simply more sentences than
+there were. That is the fix showing up in the denominator, not a relabelling.
+
+- `sentenceSplit.ts` — superscripts added to the boundary's closing group,
+  beside the quotes that were there for the same reason.
+- `inlineCitation.ts` — one `sentenceEndAt` helper, applied in both scan
+  directions: absorb trailing marks, and treat a terminator with no whitespace
+  after it as not a terminator. Findings 2 and 3 were the same rule missing
+  twice.
+
+Three regression tests, in the two unit suites rather than only here: 357 pass.
+
+**One thing deliberately not changed.** `structure/roles.ts` duplicates a
+simplified splitter (`/[.!?]+["'’”)\]]*\s/`) and has the same superscript
+blindness. It is left alone: that module documents why it must stay a leaf with
+no imports, and the failure is benign there — a footnoted first sentence makes
+`afterFirstSentence` empty, so a role degrades to `unknown`, which the design
+already treats as an honest answer rather than a wrong one. Worth knowing, not
+worth editing a file whose comment says not to tidy it.
+
 ## What this changes about the diagnosis
 
 The complaint that started this was "it can't even detect what a citation is."

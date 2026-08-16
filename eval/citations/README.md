@@ -11,9 +11,8 @@ Free. No relay, no provider, no model — pure string matching against hand
 labels, so unlike `npm run evaluate` this can run on every change to the
 patterns, and exits non-zero on any undocumented failure.
 
-**It currently exits 1.** That is the correct state, not a broken script: see
-FINDINGS.md 1-3. It goes green when those are fixed, not by being relaxed until
-it does.
+It exits non-zero on any failure that is not recorded in a label as known. It
+found three bugs on its first run and is green as of the fixes in FINDINGS.md.
 
 ## Why this exists separately from `eval/essays`
 

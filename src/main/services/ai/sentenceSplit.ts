@@ -131,7 +131,17 @@ export function splitSentences(text: string): SentenceSpan[] {
   // terminal punctuation, which is what headings, titles and bullet
   // fragments look like; without it a heading was glued onto the first
   // sentence of the paragraph below it and the pair got flagged as one claim.
-  const boundary = /(?:[.!?]+["'’”)\]]*(?:\s+|$))|(?:\n+)/g
+  //
+  // Superscripts are in the closing group for the same reason the quotes are:
+  // a Word footnote renders as a bare mark AFTER the full stop, so `posted.²`
+  // put a non-space between the terminator and the whitespace and no boundary
+  // matched at all. Every footnoted sentence was returned glued to the one
+  // following it — 13 sentences arriving as 10 on eval/citations'
+  // 05-chicago-notes.txt. Detection selects claims by sentence INDEX, so a
+  // merged pair shares one number and the model cannot pick one without the
+  // other; the reconstructed span then underlines both sentences. Found by
+  // `npm run eval:citations`, which is also what pins it.
+  const boundary = /(?:[.!?]+["'’”)\]¹²³⁰-⁹]*(?:\s+|$))|(?:\n+)/g
   let start = 0
   let match: RegExpExecArray | null
 

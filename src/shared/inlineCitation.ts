@@ -148,6 +148,37 @@ const PATTERNS: Array<[string, RegExp]> = [
 export function sentenceAround(text: string, start: number, end: number): string {
   const isTerminator = (ch: string): boolean => ch === '.' || ch === '!' || ch === '?' || ch === '\n'
 
+  /**
+   * Where the sentence ends, given a terminator at `i` — or -1 if that
+   * terminator does not end anything.
+   *
+   * Both halves were bugs, both found by `npm run eval:citations`, and both
+   * cost the same thing: a window that stops one character short of the
+   * citation, so the pattern that can see it perfectly is never shown it.
+   *
+   *  - **Trailing marks belong to the sentence they hang off.** A Word footnote
+   *    renders as `travel.¹` — the terminator ends the window and the mark sits
+   *    outside it. Every Chicago-style citation failed this way: 5 of 5 found
+   *    when handed the sentence, 1 of 5 when handed a claim span inside it.
+   *  - **A terminator with no whitespace after it is not a terminator.** The
+   *    dots in `doi: 10.1257/aer.20191325` and `www.bls.gov/news.release` closed
+   *    the window mid-URL, leaving a fragment with no second dot in it. `doi`
+   *    and `url` both scored 100% by sentence and 0% by span.
+   *
+   * Applied in both directions. Backward matters for the same reason forward
+   * does: with a link earlier in the sentence, a dot inside it is nearer than
+   * the real boundary and would cut the window off in front of the citation.
+   */
+  const CLOSERS = /["'’”)\]¹²³⁰-⁹]/
+  const sentenceEndAt = (i: number): number => {
+    // A newline ends a sentence whatever follows it — it is whitespace itself,
+    // so the trailing-whitespace rule below would ask about the wrong character.
+    if (text[i] === '\n') return i + 1
+    let after = i + 1
+    while (after < text.length && CLOSERS.test(text[after])) after++
+    return after >= text.length || /\s/.test(text[after]) ? after : -1
+  }
+
   let stop = Math.max(0, Math.min(end, text.length))
   let depth = 0
   while (stop < text.length) {
@@ -155,8 +186,11 @@ export function sentenceAround(text: string, start: number, end: number): string
     if (ch === '(' || ch === '[') depth++
     else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
     else if (depth === 0 && isTerminator(ch)) {
-      stop++
-      break
+      const sentenceEnd = sentenceEndAt(stop)
+      if (sentenceEnd !== -1) {
+        stop = sentenceEnd
+        break
+      }
     }
     stop++
   }
@@ -167,7 +201,7 @@ export function sentenceAround(text: string, start: number, end: number): string
     const ch = text[from - 1]
     if (ch === ')' || ch === ']') depth++
     else if (ch === '(' || ch === '[') depth = Math.max(0, depth - 1)
-    else if (depth === 0 && isTerminator(ch)) break
+    else if (depth === 0 && isTerminator(ch) && sentenceEndAt(from - 1) !== -1) break
     from--
   }
 
