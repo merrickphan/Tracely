@@ -1,0 +1,14 @@
+{
+  "essay": "04-numeric-ieee.txt",
+  "style": "Numeric / IEEE",
+  "note": "The one style where the citation carries no author, no year and no title — a bracketed integer is the whole signature.",
+  "citations": [
+    { "text": "[1]", "shape": "numeric", "expected": "detected" },
+    { "text": "[2,3]", "shape": "numeric", "expected": "detected" },
+    { "text": "[4]", "shape": "numeric", "expected": "detected" },
+    { "text": "[5-7]", "shape": "numeric", "expected": "detected" },
+    { "text": "[8]", "shape": "numeric", "expected": "detected" },
+    { "text": "[9]", "shape": "numeric", "expected": "detected" },
+    { "text": "[10]", "shape": "numeric", "expected": "detected" }
+  ]
+}

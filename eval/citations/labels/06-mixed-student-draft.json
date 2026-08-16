@@ -1,0 +1,32 @@
+{
+  "essay": "06-mixed-student-draft.txt",
+  "style": "Mixed — what an actual first draft looks like",
+  "note": "Styles mixed within one document, links pasted raw, and two forms inlineCitation.ts documents as knowingly undetected. Those are labelled as citations anyway: a writer who typed one has cited their sentence whatever the detector can see, and a recall figure that quietly excluded them would be measuring the detector's opinion of itself.",
+  "citations": [
+    {
+      "text": "working more minutes per shift rather than working faster (42)",
+      "shape": "bare-page-after-narrative",
+      "expected": "known-gap",
+      "note": "MLA bare page locator following a narrative mention of the author ('Bloom's ... experiment', two sentences earlier). Documented as undetectable by regex at inlineCitation.ts:99 — catching it needs the surrounding sentences, not this pattern."
+    },
+    { "text": "(Barrero et al., 2023)", "shape": "parenthetical", "expected": "detected" },
+    { "text": "doi: 10.1257/aer.20191325", "shape": "doi", "expected": "detected" },
+    {
+      "text": "(Cornell)",
+      "shape": "whole-work",
+      "expected": "known-gap",
+      "note": "MLA whole-work with no locator. Indistinguishable from an ordinary parenthetical aside by shape alone — inlineCitation.ts:100."
+    },
+    {
+      "text": "www.bls.gov/news.release/flex2.nr0.htm",
+      "shape": "url",
+      "expected": "detected",
+      "note": "Scheme-less, as a rendered hyperlink arrives through UIA."
+    },
+    {
+      "text": "https://www.pewresearch.org/social-trends/2023/03/30/about-a-third-of-us-workers-who-can-work-from-home-do-so-all-the-time/",
+      "shape": "url",
+      "expected": "detected"
+    }
+  ]
+}
