@@ -1,13 +1,29 @@
 import { app, BrowserWindow, dialog } from 'electron'
 import { autoUpdater, NsisUpdater } from 'electron-updater'
+import { getFloatingWindow } from './windows/floatingWindow'
 import { getMainWindow } from './windows/mainWindow'
+import { isScreenWatchEnabled } from './services/screenWatch/screenWatchService'
 import { isPreviewBuild } from './appIdentity'
+import { shouldInstallImmediately } from './updatePolicy'
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 hours
+// Preview checks far more often than production. The whole point of the
+// preview channel is that the testers are looking at the SAME build; six hours
+// of drift after a publish is most of a working session spent comparing two
+// different apps and calling the difference a bug. Cheap, too — a check is one
+// request for an atom feed and one for a small YAML file.
+const PREVIEW_CHECK_INTERVAL_MS = 20 * 60 * 1000 // 20 minutes
 
 let checking = false
 let manualCheck = false
 let initialized = false
+
+/** Any Tracely window the user could currently be looking at. */
+function anyWindowVisible(): boolean {
+  return [getMainWindow(), getFloatingWindow()].some(
+    (win) => win !== null && !win.isDestroyed() && win.isVisible() && !win.isMinimized()
+  )
+}
 
 /**
  * A message box the user can actually see.
@@ -41,7 +57,21 @@ export function initAutoUpdater(): void {
   if (initialized) return
   initialized = true
 
-  autoUpdater.autoDownload = false
+  // Preview downloads without asking; production still asks first.
+  //
+  // Two testers only stay in sync if the update actually lands, and it used to
+  // need two separate clicks — "Download", then "Restart now" — either of which
+  // could be declined indefinitely. With 13 previews published in three days,
+  // any two people diverged within hours and then reported the difference
+  // between their builds as a bug in one of them.
+  //
+  // The download is silent. The INSTALL is not automatic in every case; see
+  // shouldInstallImmediately in updatePolicy.ts for when it restarts on its own.
+  autoUpdater.autoDownload = isPreviewBuild()
+  // Whatever is downloaded and not installed goes in on the next quit. This is
+  // the default, set explicitly because it is the backstop that makes "Later"
+  // mean "later" rather than "never".
+  autoUpdater.autoInstallOnAppQuit = true
   // Installer is unsigned, so skip the publisher-certificate check (there is none to verify).
   ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
 
@@ -84,6 +114,22 @@ export function initAutoUpdater(): void {
       return
     }
 
+    // Preview already started downloading (autoDownload). Asking permission for
+    // something in progress is worse than saying nothing, so the automatic
+    // check stays silent — but a check the user ASKED for owes them an answer.
+    if (isPreviewBuild()) {
+      console.log(`[updater] preview ${info.version} downloading automatically`)
+      if (wasManual) {
+        showMessageBox(getMainWindow(), {
+          type: 'info',
+          title: 'Downloading preview',
+          message: `Tracely Preview ${info.version} is downloading (you have ${app.getVersion()}).`,
+          detail: 'It installs on its own once Tracely is idle, or next time you quit.'
+        })
+      }
+      return
+    }
+
     const win = getMainWindow()
     showMessageBox(win, {
       type: 'info',
@@ -102,6 +148,25 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', (info) => {
     checking = false
+
+    // Restart on its own only when nothing is on screen and Screen Watch is
+    // idle — for this app that is the normal resting state, since it lives in
+    // the tray. Anything else gets the dialog below, and failing that the
+    // next quit installs it (autoInstallOnAppQuit).
+    if (
+      shouldInstallImmediately({
+        isPreview: isPreviewBuild(),
+        hasVisibleWindow: anyWindowVisible(),
+        screenWatchActive: isScreenWatchEnabled()
+      })
+    ) {
+      console.log(`[updater] installing preview ${info.version} while idle`)
+      // isSilent: no installer UI. isForceRunAfter: come back up afterwards,
+      // otherwise an idle auto-update reads as the app having vanished.
+      autoUpdater.quitAndInstall(true, true)
+      return
+    }
+
     const win = getMainWindow()
     showMessageBox(win, {
       type: 'info',
@@ -146,7 +211,10 @@ export function initAutoUpdater(): void {
   })
 
   runCheck(false)
-  setInterval(() => runCheck(false), CHECK_INTERVAL_MS)
+  setInterval(
+    () => runCheck(false),
+    isPreviewBuild() ? PREVIEW_CHECK_INTERVAL_MS : CHECK_INTERVAL_MS
+  )
 }
 
 export function checkForUpdatesNow(): void {
