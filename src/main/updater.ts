@@ -9,11 +9,31 @@ let checking = false
 let manualCheck = false
 let initialized = false
 
+/**
+ * A message box the user can actually see.
+ *
+ * `dialog.showMessageBox(win, …)` is MODAL TO `win`. A hidden parent therefore
+ * produces a hidden dialog: the promise is pending, the box exists, and nothing
+ * appears on screen. The parentless overload has no such problem — it opens its
+ * own top-level window.
+ *
+ * That distinction is the whole bug. Every dialog in this file answers an action
+ * the user took from the TRAY, which is the one place they reach when the main
+ * window is closed to the background — so the case where the window is hidden
+ * is not an edge case here, it is the normal one. Found 2026-08-16: "Check for
+ * Updates…" on a running Preview did nothing at all, and the reply had been
+ * rendered modal to a window that was not on screen.
+ *
+ * Deliberately NOT fixed by calling showMainWindow(). The same helper serves the
+ * automatic six-hourly check, and a background timer that yanks the main window
+ * open to say "you're up to date" is worse than the silence it replaces.
+ */
 function showMessageBox(
   win: BrowserWindow | null,
   options: Electron.MessageBoxOptions
 ): Promise<Electron.MessageBoxReturnValue> {
-  return win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
+  const visible = win !== null && !win.isDestroyed() && win.isVisible() && !win.isMinimized()
+  return visible ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
 }
 
 export function initAutoUpdater(): void {
