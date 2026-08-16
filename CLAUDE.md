@@ -140,6 +140,38 @@ so publishing without bumping produces a release nobody is ever shown.
 `GH_TOKEN` lives in `.env.release` and must be in the environment for
 `--publish` to work; electron-builder does not read that file on its own.
 
+### How updates reach each build (`updater.ts`, `updatePolicy.ts`)
+
+**Preview updates itself; production asks first.** The two channels are not
+just different feeds, they behave differently on purpose:
+
+| | production | preview |
+|---|---|---|
+| `autoDownload` | `false` — asks | `true` — silent |
+| check interval | 6h | 20min |
+| install | always a dialog | silent when idle, else dialog |
+
+The reason is that a preview channel only does its job if the testers are on the
+**same** build. Landing an update used to take two separate clicks — "Download",
+then "Restart now" — either of which could be declined forever, and with 13
+previews published in three days any two testers diverged within hours and then
+reported the difference between their builds as a bug in one of them.
+
+- **`shouldInstallImmediately` (`updatePolicy.ts`) is the only thing that
+  restarts the app unasked**, and it requires preview + no visible window +
+  Screen Watch off. That combination is this app's *resting* state, not a rare
+  one — `window-all-closed` deliberately keeps it alive in the tray. When it
+  says no the update is not dropped: the dialog offers it, and failing that
+  `autoInstallOnAppQuit` installs it on the next quit. It decides *silently now*
+  vs *ask*, never *now* vs *never*.
+- **Do not derive "is this a preview build?" from the version's `-preview`
+  suffix.** `appIdentity.isPreviewBuild()` reads `app.getName()`, which
+  electron-builder sets via `-c.extraMetadata.name=tracely-preview`. A second
+  derivation is a second truth that can disagree with the first, silently.
+- **This cannot fix an install retroactively.** A tester already running an
+  older preview has to install one build by hand; every one after that is
+  automatic. Auto-update can only be delivered *by* an update.
+
 ## Previewing the UI (`npm run preview:ui`, or `/preview`)
 
 **`/preview` is the command for this** — it covers booting the harness, driving

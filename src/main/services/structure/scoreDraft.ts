@@ -49,35 +49,31 @@ export interface DraftScore {
   components: StructureComponents
   complete: boolean
   /**
-   * Whether this rubric can measure this text at all — see MIN_PARAGRAPHS_FOR_RUBRIC.
-   * False means the number is not a grade and must not be shown as one.
+   * Always true. Retained because `src/shared/types.ts` carries this field and
+   * shared files are additive — see the branch rules in CLAUDE.md.
+   *
+   * It used to be false for a draft under three paragraphs, and every surface
+   * rendered a "not enough draft to grade" state instead of a number. That was
+   * a deliberate choice with a real case behind it, recorded here because the
+   * reasoning has not stopped being true, only stopped being what this product
+   * does: a genuinely strong single-paragraph MUN position paper — nine
+   * sentences, five citations, a thesis and a close — scored 20/100 and was
+   * told it had no argument in it.
+   *
+   * The mechanism is still there, and is worth knowing when reading a low
+   * score. Four of the six components can only be earned by a paragraph OTHER
+   * than the first or last: `governingClaims` reads `roles.slice(1, -1)`,
+   * `warrant` reads the claim and evidence paragraphs inside it, and
+   * counterargument and significance need somewhere to live. Hand this rubric
+   * one paragraph and that slice is empty, so 80 points are unreachable however
+   * good the writing is.
+   *
+   * Owner's call, 2026-08-16: "Worst case scenario it would be a 0/100, I never
+   * want it to say not enough info to grade." A number every time, including
+   * the ones that hurt.
    */
   applicable: boolean
 }
-
-/**
- * Below this, the rubric is measuring an essay that isn't there.
- *
- * Four of the six components can only be earned by a paragraph OTHER than the
- * first or last: `governingClaims` reads `roles.slice(1, -1)`, `warrant` reads
- * the claim and evidence paragraphs inside it, and counterargument and
- * significance need somewhere to live. Hand this rubric a single paragraph and
- * that slice is empty, so 80 of the 100 points are unreachable no matter how
- * good the writing is — a ceiling of 20/100, which the modal renders as an F.
- *
- * Found on a genuinely strong single-paragraph MUN position paper: nine
- * sentences, five citations, a thesis and a close, scored 20 and told the
- * writer it had no argument in it. The paragraph was fine. The rubric was
- * answering a question nobody asked of it.
- *
- * Three is the smallest draft where the body slice is non-empty, which is the
- * exact condition the unreachable components need. Rather than invent a second
- * rubric for excerpts, this reports `applicable: false` and lets the panel say
- * what it actually knows — the same stance `roles.ts` takes with 'unknown',
- * and `analyzeStructure` with `complete`. A confident F is much worse than no
- * letter at all.
- */
-export const MIN_PARAGRAPHS_FOR_RUBRIC = 3
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -97,15 +93,12 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
     conclusion: 0
   }
 
+  // An empty draft is the one case with nothing to compute over — there are no
+  // paragraphs to read a role off. It still reports `applicable: true` so no
+  // surface has to render a "cannot grade" state; 0/100 for an empty document
+  // is a true statement rather than a refusal.
   if (paragraphs.length === 0) {
-    return { score: 0, components: zero, complete: false, applicable: false }
-  }
-
-  // Scored components are deliberately left at zero rather than part-computed.
-  // A partial number invites the panel to render "20/100" beside the caveat,
-  // and the number is the thing people read.
-  if (paragraphs.length < MIN_PARAGRAPHS_FOR_RUBRIC) {
-    return { score: 0, components: zero, complete: false, applicable: false }
+    return { score: 0, components: zero, complete: false, applicable: true }
   }
 
   const roles = paragraphs.map((p) => p.role)
@@ -182,5 +175,8 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
     thesis + governingClaims + warrant + counterargument + significance + conclusion
   )
 
+  // For anyone re-adding a length floor here: the panel no longer has a
+  // "cannot grade" state to fall back to. Suppressing the number now renders a
+  // card with nothing in it.
   return { score, components, complete, applicable: true }
 }

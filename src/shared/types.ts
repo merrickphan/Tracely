@@ -345,9 +345,13 @@ export interface DocumentOutline {
   /** False when any paragraph is 'unknown'. The UI must say "provisional". */
   complete: boolean
   /**
-   * False when the draft is too short for the document rubric to measure — see
-   * MIN_PARAGRAPHS_FOR_RUBRIC. `score` is 0 and meaningless; the UI must NOT
-   * render a number or a letter grade.
+   * Always true. It once meant "the draft is too short for the rubric to
+   * measure, do not render a number" — see `applicable` in scoreDraft.ts for
+   * the case that produced it and the call that removed it.
+   *
+   * Kept rather than deleted because `src/shared/*` is additive (CLAUDE.md),
+   * and because a consumer reading it still gets a correct answer: every draft
+   * is gradeable now.
    */
   applicable: boolean
   rolesFrom: 'heuristic' | 'model'

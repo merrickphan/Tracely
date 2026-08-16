@@ -217,20 +217,24 @@ describe('scoreDraft — completeness and bounds', () => {
   })
 })
 
-describe('scoreDraft — refuses to grade a draft the rubric cannot measure', () => {
-  // A real single-paragraph MUN position paper — nine sentences, five
-  // citations, a thesis and a close — scored 20/100 and was shown an F. Four of
-  // the six components read `roles.slice(1, -1)` or the paragraphs inside it,
-  // which is empty for a one-paragraph draft, so 80 points were unreachable
-  // however good the writing was.
-  it('reports a single paragraph as unmeasurable rather than failing it', () => {
+describe('scoreDraft — always returns a grade', () => {
+  // This suite used to pin the opposite: a draft under three paragraphs was
+  // reported `applicable: false` and every surface showed "not enough draft to
+  // grade" instead of a number. The case behind that is real and is recorded on
+  // `applicable` in scoreDraft.ts — a strong single-paragraph MUN position
+  // paper scored 20/100 and was shown an F.
+  //
+  // Owner's call, 2026-08-16: "Worst case scenario it would be a 0/100, I never
+  // want it to say not enough info to grade." So a short draft scores low now,
+  // and the components below are what explains the number.
+  it('grades a single paragraph rather than declining to', () => {
     const result = scoreDraft(outline('thesis'), NO_SIGNALS)
-    strictEqual(result.applicable, false)
-    strictEqual(result.score, 0)
+    strictEqual(result.applicable, true)
+    ok(result.score >= 0, 'a one-paragraph draft still gets a number')
   })
 
-  it('does the same for two paragraphs, which still have no body', () => {
-    strictEqual(scoreDraft(outline('thesis', 'conclusion'), NO_SIGNALS).applicable, false)
+  it('grades two paragraphs, which still have no body slice', () => {
+    strictEqual(scoreDraft(outline('thesis', 'conclusion'), NO_SIGNALS).applicable, true)
   })
 
   it('grades from three paragraphs up, where the body slice is non-empty', () => {
@@ -239,14 +243,20 @@ describe('scoreDraft — refuses to grade a draft the rubric cannot measure', ()
     ok(result.score > 0, 'a three-paragraph draft should score above zero')
   })
 
-  it('zeroes every component when it declines, so no partial number leaks out', () => {
-    const { components } = scoreDraft(outline('thesis'), NO_SIGNALS)
-    for (const [name, value] of Object.entries(components)) {
-      strictEqual(value, 0, `${name} should be 0 when the rubric does not apply`)
-    }
+  it('scores a short draft below a full one, since the body components are unreachable', () => {
+    // The mechanism the old gate existed to hide, now visible as a number: a
+    // one-paragraph draft cannot earn governingClaims, warrant, counterargument
+    // or significance, because all four read the slice between first and last.
+    const short = scoreDraft(outline('thesis'), NO_SIGNALS)
+    const full = scoreDraft(outline('thesis', 'claim+', 'counterargument', 'conclusion'), NO_SIGNALS)
+    ok(short.score < full.score, `short ${short.score} should be under full ${full.score}`)
+    strictEqual(short.components.governingClaims, 0)
+    strictEqual(short.components.warrant, 0)
   })
 
-  it('is not applicable for an empty draft either', () => {
-    strictEqual(scoreDraft(outline(), NO_SIGNALS).applicable, false)
+  it('reports an empty draft as 0, not as ungradeable', () => {
+    const result = scoreDraft(outline(), NO_SIGNALS)
+    strictEqual(result.applicable, true)
+    strictEqual(result.score, 0)
   })
 })
