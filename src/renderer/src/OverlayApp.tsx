@@ -1617,6 +1617,7 @@ function EssayGradeReportPanel({
   onClose,
   onBackToSummary,
   onArgumentCheck,
+  onOpenParagraph,
   onFindForClaim
 }: {
   structure: ScreenWatchStructure | null
@@ -1624,6 +1625,7 @@ function EssayGradeReportPanel({
   onClose: () => void
   onBackToSummary: () => void
   onArgumentCheck: () => void
+  onOpenParagraph: (index: number) => void
   onFindForClaim: (claimId: string) => void
 }): JSX.Element {
   const stats = structure?.stats ?? null
@@ -1705,10 +1707,21 @@ function EssayGradeReportPanel({
           const cited = paragraph.claimIds.filter((id) => claimById.get(id)?.hasInlineCitation).length
 
           return (
-            <div
+            // A button, not a div: the frame puts a `›` on every card, and a
+            // chevron that is not a control is a promise the panel does not
+            // keep. The whole card is the target, as the chevron implies.
+            <button
               key={paragraph.index}
+              className="tracely-list-row"
+              onClick={() => onOpenParagraph(paragraph.index)}
+              title={`Open paragraph ${paragraph.index}`}
               style={{
                 background: '#f8f9f8',
+                border: 'none',
+                font: 'inherit',
+                color: 'inherit',
+                textAlign: 'left',
+                cursor: 'pointer',
                 borderRadius: 12,
                 padding: '12px 14px',
                 display: 'flex',
@@ -1752,6 +1765,9 @@ function EssayGradeReportPanel({
                   }}
                 >
                   {strong ? 'Strong' : 'Needs Work'}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#999a9e', flexShrink: 0 }} aria-hidden="true">
+                  ›
                 </span>
               </div>
 
@@ -1837,7 +1853,7 @@ function EssayGradeReportPanel({
                     </div>
                   )
                 })}
-            </div>
+            </button>
           )
         })}
       </div>
@@ -1863,6 +1879,270 @@ function EssayGradeReportPanel({
 
       <GradeDivider />
       <GradeButtonRow primaryLabel="Back to Summary" onPrimary={onBackToSummary} />
+    </>
+  )
+}
+
+const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+
+/** Stable enough to dedupe one paragraph's sources: title + year. */
+function articleRowKey(a: ScreenWatchEvidenceArticle): string {
+  return `${a.title}::${a.year ?? ''}`
+}
+
+/**
+ * The Screen Watch panel in 'paragraph' mode — Figma "Paragraph Detail — P2"
+ * (407:359).
+ *
+ * 520x930 at a 24px radius with a 25px gutter, which is narrower and rounder
+ * than the grade card (560/28) — the frame's own values, not a simplification.
+ *
+ * Reached from a paragraph card in the full report, and Back returns to the
+ * report rather than to the summary, because that is where you came from. The
+ * frame's link says "Back to summary" and is kept as drawn.
+ *
+ * Three places the frame has content Tracely does not hold:
+ *
+ *  - "58 words" — main sends `previews`, one line per paragraph, deliberately
+ *    (shipping whole paragraphs would put the entire UIA read in every payload).
+ *    There is no per-paragraph word count to print, so the slot carries the
+ *    claim count, which is the figure this panel is actually about.
+ *  - The quote box holds the whole paragraph in the frame; here it holds that
+ *    same preview line, for the same reason.
+ *  - Each article in the frame carries a two-line abstract.
+ *    ScreenWatchEvidenceArticle has no abstract — the search returns title,
+ *    venue, year and url — so the row stops at the venue rather than
+ *    paraphrasing a paper nobody read.
+ */
+function ParagraphDetailPanel({
+  structure,
+  claims,
+  index,
+  onClose,
+  onBack,
+  onFindForClaim
+}: {
+  structure: ScreenWatchStructure | null
+  claims: ScreenWatchClaimSummary[]
+  index: number
+  onClose: () => void
+  onBack: () => void
+  onFindForClaim: (claimId: string) => void
+}): JSX.Element {
+  const paragraph = structure?.paragraphs.find((p) => p.index === index) ?? null
+  const issues = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === index)
+  const strong = issues.length === 0
+  const claimById = new Map(claims.map((c) => [c.id, c] as const))
+  const paragraphClaims = (paragraph?.claimIds ?? []).map((id) => claimById.get(id)).filter(Boolean) as ScreenWatchClaimSummary[]
+  const uncited = paragraphClaims.filter((c) => !c.hasInlineCitation)
+
+  const articles: ScreenWatchEvidenceArticle[] = []
+  const seen = new Set<string>()
+  for (const claim of paragraphClaims) {
+    for (const article of claim.evidence?.articles ?? []) {
+      const key = articleRowKey(article)
+      if (seen.has(key)) continue
+      seen.add(key)
+      articles.push(article)
+    }
+  }
+
+  const ordinal = ORDINAL[index - 1] ?? `${index}th`
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <button
+          className="tracely-btn-text"
+          onClick={onBack}
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            fontFamily: 'inherit',
+            fontSize: 13,
+            fontWeight: 500,
+            color: '#666',
+            cursor: 'pointer'
+          }}
+        >
+          ← Back to summary
+        </button>
+        <button
+          className="tracely-btn-text"
+          onClick={onClose}
+          title="Close"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 999,
+            border: 'none',
+            background: '#f2f2f2',
+            color: '#000',
+            fontFamily: 'inherit',
+            fontSize: 15,
+            lineHeight: 1,
+            cursor: 'pointer',
+            padding: 0,
+            flexShrink: 0
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1f' }}>
+        Paragraph {index}
+        {paragraph ? ` — ${ROLE_LABEL[paragraph.role]}` : ''}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span
+          style={{
+            background: strong ? '#e0f2e5' : '#fff1e5',
+            color: strong ? GRADE_GREEN : '#cb5c19',
+            borderRadius: 999,
+            padding: '4px 10px',
+            fontSize: 12,
+            fontWeight: 600
+          }}
+        >
+          {strong ? 'Strong' : 'Needs Work'}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: '#7e7f84' }}>
+          {paragraphClaims.length} claim{paragraphClaims.length === 1 ? '' : 's'} · {ordinal} paragraph
+        </span>
+      </div>
+
+      <div
+        style={{
+          background: '#f8f9f8',
+          borderRadius: 10,
+          padding: '12px 14px',
+          width: '100%',
+          boxSizing: 'border-box',
+          fontSize: 13.5,
+          lineHeight: 1.5,
+          color: '#1b1b21'
+        }}
+      >
+        {structure?.previews[index - 1] || 'No text captured for this paragraph.'}
+      </div>
+
+      {/* Only when there IS something to explain. The frame draws the
+          needs-work variant; a paragraph with no weakness has no "why", and a
+          heading over an empty block reads as a failure to load. */}
+      {issues.length > 0 ? (
+        <div style={{ width: '100%' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>WHY THIS NEEDS WORK</div>
+          <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.5, color: '#35363c' }}>
+            {issues.map((w) => w.message).join(' ')}
+          </div>
+        </div>
+      ) : null}
+
+      {uncited.map((claim) => (
+        <div
+          key={claim.id}
+          style={{
+            background: '#fef5e9',
+            border: '1px solid #ecbd7b',
+            borderRadius: 12,
+            padding: '11px 13px',
+            width: '100%',
+            boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#cb5c19', letterSpacing: 0.66 }}>UNCITED CLAIM</div>
+            <div style={{ marginTop: 4, fontSize: 13, lineHeight: 1.5, color: '#524026' }}>
+              &ldquo;{claim.text}&rdquo; — this figure has no source attached.
+            </div>
+          </div>
+          <button
+            className="tracely-btn-primary"
+            onClick={() => onFindForClaim(claim.id)}
+            style={{
+              width: 150,
+              height: 36,
+              flexShrink: 0,
+              border: 'none',
+              borderRadius: 8,
+              background: 'linear-gradient(to right, #f97316, #dc2626)',
+              color: '#fff',
+              fontFamily: 'inherit',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer'
+            }}
+          >
+            Find evidence →
+          </button>
+        </div>
+      ))}
+
+      {articles.length > 0 ? (
+        <div style={{ width: '100%' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
+            EVIDENCE CITED IN THIS PARAGRAPH ({articles.length})
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {articles.map((article, i) => (
+              <div key={`${article.title}-${i}`} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                {/* The frame's 32px/9px-radius tile, at the frame's size — the
+                    28px SourceIcon used elsewhere is a different row. */}
+                <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9,
+                      overflow: 'hidden',
+                      background: article.faviconDataUrl ? '#fff' : PROVIDER_COLOR[article.provider],
+                      border: article.faviconDataUrl ? '1px solid #ededed' : 'none',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {article.faviconDataUrl ? (
+                      <img src={article.faviconDataUrl} alt="" width={20} height={20} style={{ objectFit: 'contain' }} />
+                    ) : (
+                      PROVIDER_LABEL[article.provider]
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div
+                    title={article.title}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#1a1a1f',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      cursor: article.url ? 'pointer' : 'default'
+                    }}
+                    onClick={() => openUrl(article.url)}
+                  >
+                    {article.title}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: DIM }}>
+                    {[article.venue, article.year ? String(article.year) : null].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
@@ -2861,6 +3141,8 @@ export default function OverlayApp(): JSX.Element {
   // WHICH claim is shown doesn't change the panel's size, so there's no
   // reason for main to need to know it.
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null)
+  /** Which paragraph the 'paragraph' panel is showing. See showParagraph. */
+  const [detailParagraph, setDetailParagraph] = useState(1)
   /**
    * Paragraph whose claim underlines are temporarily lit, from clicking a ¶
    * chip on a structural weakness. Cleared on a timer and on any view change:
@@ -2980,6 +3262,20 @@ export default function OverlayApp(): JSX.Element {
   function showReport(): void {
     void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
     void window.tracely.screenWatch.setWidgetViewMode({ mode: 'report' })
+    setHover(null)
+  }
+
+  /**
+   * One paragraph, from a card in the report — Figma 407:359.
+   *
+   * The index lives in renderer state rather than in the payload: `viewMode` is
+   * a bare string on the wire, and main only needs to know WHICH panel to size
+   * the click-through region for, not which paragraph is in it.
+   */
+  function showParagraph(index: number): void {
+    setDetailParagraph(index)
+    void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
+    void window.tracely.screenWatch.setWidgetViewMode({ mode: 'paragraph' })
     setHover(null)
   }
 
@@ -3542,8 +3838,12 @@ export default function OverlayApp(): JSX.Element {
             // 28px radius, their own header with a close button and no drag
             // title, so wrapping them in the shared panel chrome below would
             // double the border and the header. Everything else shares it.
-            if (widget.viewMode === 'grade' || widget.viewMode === 'report') {
+            if (widget.viewMode === 'grade' || widget.viewMode === 'report' || widget.viewMode === 'paragraph') {
               const isReport = widget.viewMode === 'report'
+              const isParagraph = widget.viewMode === 'paragraph'
+              // 407:359 is a different box from the two grade cards: 24px
+              // radius, 25px gutter, a heavier shadow. The frame's own values.
+              const scrolls = isReport || isParagraph
               return (
                 <div
                   style={{
@@ -3562,28 +3862,43 @@ export default function OverlayApp(): JSX.Element {
                     // same hairline and costs no layout.
                     outline: '1px solid #000',
                     outlineOffset: -1,
-                    borderRadius: 28,
-                    boxShadow: '0px 10px 28px -4px rgba(15, 26, 20, 0.14)',
+                    borderRadius: isParagraph ? 24 : 28,
+                    boxShadow: isParagraph
+                      ? '0px 12px 28px -4px rgba(15, 26, 20, 0.18)'
+                      : '0px 10px 28px -4px rgba(15, 26, 20, 0.14)',
                     // The report asks for the frame's full 1210px; main clamps
                     // that to the watched window, so on anything shorter the
                     // card scrolls rather than losing its foot.
                     overflowX: 'hidden',
-                    overflowY: isReport ? 'auto' : 'hidden',
+                    overflowY: scrolls ? 'auto' : 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-start',
-                    padding: '22px 24px',
-                    gap: 22,
+                    padding: isParagraph ? '23px 25px' : '22px 24px',
+                    gap: isParagraph ? 17 : 22,
                     pointerEvents: 'auto'
                   }}
                 >
-                  {isReport ? (
+                  {isParagraph ? (
+                    <ParagraphDetailPanel
+                      structure={widget.structure}
+                      claims={widget.claims}
+                      index={detailParagraph}
+                      onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
+                      onBack={showReport}
+                      onFindForClaim={(claimId) => {
+                        setSelectedClaimId(claimId)
+                        showSingle()
+                      }}
+                    />
+                  ) : isReport ? (
                     <EssayGradeReportPanel
                       structure={widget.structure}
                       claims={widget.claims}
                       onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
                       onBackToSummary={showGrade}
                       onArgumentCheck={showAll}
+                      onOpenParagraph={showParagraph}
                       onFindForClaim={(claimId) => {
                         setSelectedClaimId(claimId)
                         showSingle()
