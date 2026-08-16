@@ -58,6 +58,7 @@
 
     {
       "claim": "Vandermeer and Ashworth (2024) found that large language model tutoring",
+      "smoke": true,
       "expected": "fabricated",
       "acceptable": ["fabricated"],
       "why": "Invented. Confirmed absent from Crossref in eval/fabrication (two queries, neither returning a work carrying both surnames). Carries every marker: plausible pair, round recent year, an exact figure (31 percent) with no methodology, and a finding that restates the sentence it is attached to.",
@@ -65,6 +66,7 @@
     },
     {
       "claim": "Mueller and Oppenheimer (2014) found that students who took lecture notes",
+      "smoke": true,
       "expected": "well-supported",
       "acceptable": ["well-supported", "partially-supported", "overstated", "weak", "unsupported"],
       "why": "Real, famous, and corroborated by the lookup — 'The Pen Is Mightier Than the Keyboard'. The claim is also a fair summary of it. A CONTROL: any verdict about support or phrasing is defensible here; `fabricated` is not.",
@@ -72,6 +74,7 @@
     },
     {
       "claim": "Halloway and Sundqvist (2021) showed that handwriting instruction",
+      "smoke": true,
       "expected": "fabricated",
       "acceptable": ["fabricated"],
       "why": "Invented, confirmed absent from Crossref. Deliberately the most plausible-sounding of the four — the underlying idea (handwriting and later literacy) is a real research area, so only the reference is fake. Tests whether a topically reasonable claim protects a fabricated citation."
@@ -85,6 +88,7 @@
     },
     {
       "claim": "Okonkwo and Salvatore (2022) found that increasing urban tree canopy",
+      "smoke": true,
       "expected": "fabricated",
       "acceptable": ["fabricated"],
       "why": "Invented, confirmed absent from Crossref. An exact figure (18 percent) across a suspiciously specific number of metropolitan areas, with no study design named."
@@ -98,6 +102,7 @@
     },
     {
       "claim": "Lindqvist and Oyelaran (2023) found that congestion pricing",
+      "smoke": true,
       "expected": "fabricated",
       "acceptable": ["fabricated"],
       "why": "Invented, confirmed absent from Crossref. Congestion pricing has real evaluations, so retrieval will return genuinely on-topic papers — none of them this one. Tests the case that broke the original Ramirez run, where plausible topical evidence gave the model an overstatement story to tell instead."
@@ -134,6 +139,7 @@
     },
     {
       "claim": "Levitt and Dubner (2005) found that legalised abortion accounted for 43 percent",
+      "smoke": true,
       "expected": "overstated",
       "acceptable": ["overstated", "partially-supported", "weak", "unsupported", "contradicted"],
       "why": "THE BOUNDARY CASE. A real, uncorroborated book cited as though it were a study: 'found that', an exact percentage, a comparison to policing reform. That is precisely the shape the new Pass 2 rule reads as generated — author pair, year, specific quantitative finding, empty lookup. The protection that should hold is the naming requirement: the model recognises Freakonomics and places the reference before the study-shape rule is reached. The 43 percent figure is also not theirs, so a verdict about overstatement or contradiction is the right kind of answer.",

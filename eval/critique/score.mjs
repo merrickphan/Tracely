@@ -8,6 +8,9 @@
 // expected.json holds one per claim, written before the run this scores.
 //
 //   node eval/critique/score.mjs [report.json]
+//
+// With no argument it scores the newest report that carries critiques and is
+// NOT a smoke run — see the selection below. To score a smoke run, name it.
 
 import { readdirSync, readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -35,10 +38,23 @@ const reportPath =
     .reverse()
     .find((f) => {
       const r = JSON.parse(readFileSync(`${REPO}/eval/reports/${f}`, 'utf8'))
+      // A smoke run critiques only a marked subset, so it is never what "the
+      // latest results" means. Auto-selection skips it; naming it explicitly
+      // still works. Without this a five-claim run becomes the newest
+      // critique-bearing report and scores 5/5 — a clean bill of health from a
+      // run that never looked at most of the set.
+      if (r.some((e) => e.smoke)) return false
       return r.flatMap((e) => e.claims).some((c) => c.critique)
     })}`
 
 const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+
+if (report.some((e) => e.smoke)) {
+  console.log('  ' + '='.repeat(66))
+  console.log('  SMOKE RUN — only the marked claims were critiqued.')
+  console.log('  Every fraction below is over that subset. Not a full result.')
+  console.log('  ' + '='.repeat(66))
+}
 const claims = report.flatMap((essay) => essay.claims.map((claim) => ({ essay: essay.file, claim })))
 
 console.log(`report: ${reportPath.split('/').pop()}\n`)

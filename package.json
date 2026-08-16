@@ -22,6 +22,7 @@
     "ship": "node scripts/ship.mjs",
     "ship:preview": "node scripts/ship-preview.mjs",
     "evaluate": "node scripts/evaluate.mjs",
+    "evaluate:smoke": "node scripts/evaluate.mjs --smoke",
     "eval:citations": "node eval/citations/run.mjs",
     "eval:rank": "node eval/retrieval/rank.mjs",
     "eval:robustness": "node eval/retrieval/robustness.mjs",
