@@ -55,6 +55,17 @@ interface EvaluatedClaim {
   sources: EvaluatedSource[]
   critique: string | null
   verdict: string | null
+  /**
+   * Recorded because they DECIDE the verdict, not merely decorate it.
+   *
+   * normalizeCritique downgrades `overstated` to `weak` whenever
+   * suggestedRevision is null, and forces citationFix to null on `fabricated`.
+   * Without these two fields a report cannot show why a verdict came out the
+   * way it did, and eval/critique/score.mjs was reading verdicts whose
+   * governing input was not written down.
+   */
+  suggestedRevision: string | null
+  citationFix: string | null
   error: string | null
 }
 
@@ -141,11 +152,15 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
 
     let critique: string | null = null
     let verdict: string | null = null
+    let suggestedRevision: string | null = null
+    let citationFix: string | null = null
     if (!process.env.EVAL_SKIP_CRITIQUE) {
       const claim = asClaim(detected, score, `eval-${index}-${detected.text.slice(0, 40)}`)
       const result = await generateCritique(claim, evidenceItems)
       critique = result.critique
       verdict = result.verdict
+      suggestedRevision = result.suggestedRevision
+      citationFix = result.citationFix
     }
 
     return {
@@ -175,6 +190,8 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
       })),
       critique,
       verdict,
+      suggestedRevision,
+      citationFix,
       error: null
     }
   } catch (error) {
@@ -187,6 +204,8 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
       sources: [],
       critique: null,
       verdict: null,
+      suggestedRevision: null,
+      citationFix: null,
       error: error instanceof Error ? error.message : String(error)
     }
   }
