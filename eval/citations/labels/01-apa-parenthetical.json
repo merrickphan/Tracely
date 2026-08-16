@@ -1,0 +1,23 @@
+{
+  "essay": "01-apa-parenthetical.txt",
+  "style": "APA 7",
+  "note": "The shape the detector was built for. If recall is not 100% here, something is badly wrong.",
+  "citations": [
+    { "text": "(Carskadon, 2011)", "shape": "parenthetical", "expected": "detected" },
+    { "text": "Wheaton and Ferro (2016)", "shape": "narrative", "expected": "detected" },
+    { "text": "(Minges & Redeker, 2016)", "shape": "parenthetical", "expected": "detected" },
+    {
+      "text": "(\"Later School Start Times and Adolescent Crash Rates\", 2018)",
+      "shape": "parenthetical",
+      "expected": "detected",
+      "note": "Quoted title with a year — the opening quotation mark before the capital is what the first version of the pattern missed."
+    },
+    { "text": "(Dunster et al., 2018)", "shape": "parenthetical", "expected": "detected" },
+    {
+      "text": "(Jacob & Rockoff, 2011: 14)",
+      "shape": "parenthetical",
+      "expected": "detected",
+      "note": "Page locator after the year — also a documented past miss."
+    }
+  ]
+}

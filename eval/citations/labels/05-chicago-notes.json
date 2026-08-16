@@ -1,0 +1,13 @@
+{
+  "essay": "05-chicago-notes.txt",
+  "style": "Chicago notes-bibliography",
+  "note": "Screen Watch reads rendered text, so a Word footnote arrives as a bare superscript digit with nothing else attached to it.",
+  "citations": [
+    { "text": "dissent could travel.¹", "shape": "superscript", "expected": "detected" },
+    { "text": "being posted.²", "shape": "superscript", "expected": "detected" },
+    { "text": "(ibid., 47)", "shape": "ibid", "expected": "detected" },
+    { "text": "the gap between him and the second was not close.³", "shape": "superscript", "expected": "detected" },
+    { "text": "(op. cit.)", "shape": "ibid", "expected": "detected" },
+    { "text": "constructed slowly and unevenly.⁴", "shape": "superscript", "expected": "detected" }
+  ]
+}

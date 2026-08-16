@@ -60,6 +60,31 @@ describe('splitSentences — a period is not always a sentence end', () => {
     }
   })
 
+  it('breaks after a footnote mark, which sits past the full stop', () => {
+    // Found by `npm run eval:citations` on 05-chicago-notes.txt, where 13
+    // sentences arrived as 10. `posted.²` put a non-space between the
+    // terminator and the whitespace, so no boundary matched and every
+    // footnoted sentence was returned glued to the one after it.
+    //
+    // Citations were how this surfaced, but detection is what it costs:
+    // claimDetection.ts numbers these sentences and asks the model which
+    // ones state a claim, so a merged pair shares one number and the
+    // reconstructed span underlines both.
+    deepStrictEqual(texts('Print spread fast.¹ Manuscripts did not.'), [
+      'Print spread fast.¹',
+      'Manuscripts did not.'
+    ])
+    deepStrictEqual(texts('He was the most published author.⁴ The gap was not close.'), [
+      'He was the most published author.⁴',
+      'The gap was not close.'
+    ])
+    // Mark before the terminator already worked; keep it working.
+    deepStrictEqual(texts('Print spread fast².  Manuscripts did not.'), [
+      'Print spread fast².',
+      'Manuscripts did not.'
+    ])
+  })
+
   it('does not run the whole document together when brackets are unbalanced', () => {
     // Bracket depth is counted from the start of the current span, not the
     // document, so one stray "(" cannot disable splitting for everything after

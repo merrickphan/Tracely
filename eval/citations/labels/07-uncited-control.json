@@ -1,0 +1,13 @@
+{
+  "essay": "07-uncited-control.txt",
+  "style": "None — a genuinely uncited personal-argument draft",
+  "note": "Zero citations, and full of the shapes that look like one. This is the half of the measurement that matters most: a false positive here silently DROPS a card the writer should have seen, which is the failure nobody reports because nothing appears on screen. Traps present: bracketed lowercase asides, bare parenthesised years, (Table 3), (Chapter 11), (Proposition 13), and quoted speech.",
+  "citations": [],
+  "expectedFalsePositives": [
+    {
+      "text": "(\"A Pool for Every Neighbourhood\")",
+      "shape": "titled",
+      "note": "A naming gloss, not a reference. inlineCitation.ts:74 names this exact cost when it accepts the 'titled' pattern: a quoted phrase of six or more characters inside brackets is a reference essentially every time, and this is the every-so-often. Recorded so a NEW false positive can be told apart from this known one."
+    }
+  ]
+}

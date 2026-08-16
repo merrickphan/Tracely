@@ -1,0 +1,11 @@
+Antibiotic Resistance in Hospital-Acquired Infections
+
+Resistance to last-line antibiotics has risen faster than the rate at which new classes reach clinical use [1]. The pipeline problem is structural: a drug reserved for resistant infections is by design prescribed rarely, so it earns little and is developed by almost nobody [2,3].
+
+Carbapenem-resistant Enterobacterales are the clearest example. Mortality in bloodstream infections caused by these organisms is roughly double that of susceptible strains [4]. Hospital surveillance in twelve European countries recorded a threefold increase in isolates between 2007 and 2015 [5-7].
+
+Stewardship programmes reduce inappropriate prescribing, but the measured effect on resistance rates themselves is smaller than the effect on prescribing volume [8]. This distinction is frequently collapsed in policy summaries, which report the easier number.
+
+Rapid diagnostics may matter more than stewardship in the long run. Identifying an organism in two hours rather than two days removes the clinical reason for broad-spectrum empirical therapy in the first place [9]. Trials of these platforms have shown shorter time to targeted therapy without worse outcomes, though none were powered to detect a resistance effect [10].
+
+The most likely near-term outcome is that resistance continues to rise while the response remains fragmented across national systems. Coordinated surveillance would at least make the trajectory visible before it becomes irreversible.

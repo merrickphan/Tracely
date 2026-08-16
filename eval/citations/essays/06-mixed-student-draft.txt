@@ -1,0 +1,15 @@
+Does Remote Work Actually Work?
+
+Remote work went from a perk to a default in about six weeks, and most of what companies believe about it was decided during that scramble. The research since has been more mixed than either side admits.
+
+Bloom's Chinese call-centre experiment is the study everyone cites. Workers who went remote handled 13% more calls, and about a third of that came from working more minutes per shift rather than working faster (42). The same study found promotion rates fell for remote workers, which is the part that rarely gets quoted.
+
+A more recent review of hybrid arrangements found no productivity penalty at all, and slightly higher retention (Barrero et al., 2023). Others have found that the effect depends almost entirely on whether the work is individual or collaborative, see doi: 10.1257/aer.20191325 for the clearest version of this argument.
+
+Managers consistently rate remote workers as less visible, and visibility predicts promotion better than measured output does (Cornell). That finding should worry anyone who assumes remote work is neutral for careers.
+
+Company policy is not keeping up with any of this. Several large employers reversed their remote policies in 2023 while publishing no internal data at all, according to www.bls.gov/news.release/flex2.nr0.htm which shows the opposite trend nationally.
+
+There is also the question of who benefits. Remote work is most available to workers who already have the most bargaining power, and least available in the sectors where a bad commute costs the most. https://www.pewresearch.org/social-trends/2023/03/30/about-a-third-of-us-workers-who-can-work-from-home-do-so-all-the-time/ breaks this down by income.
+
+Remote work is neither the productivity collapse nor the liberation it was sold as. It is a redistribution of who absorbs the costs of the working day, and most companies have not decided what they think about that.

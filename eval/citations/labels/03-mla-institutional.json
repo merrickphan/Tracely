@@ -1,0 +1,23 @@
+{
+  "essay": "03-mla-institutional.txt",
+  "style": "MLA, citing institutions rather than papers",
+  "note": "The shape of the real MUN position paper that prompted the 'titled' pattern — 26 of its 34 citations were invisible. Also the corpus the academic search APIs do not index, so a claim here can be correctly read as cited and still find nothing.",
+  "citations": [
+    {
+      "text": "(\"Status of Ratification Interactive Dashboard\")",
+      "shape": "titled",
+      "expected": "detected",
+      "note": "Quoted title, no year at all — the MLA short form for a source with no dated author."
+    },
+    { "text": "(\"IOM Libya Migrant Report Round 44\", 2022: 15)", "shape": "parenthetical", "expected": "detected" },
+    { "text": "(\"Report of the Independent Fact-Finding Mission on Libya\")", "shape": "titled", "expected": "detected" },
+    {
+      "text": "(Tyche Hendricks, 2024)",
+      "shape": "parenthetical",
+      "expected": "detected",
+      "note": "The sentence a detected claim span stops short of — see the sentenceAround measurement, which is where this one historically failed."
+    },
+    { "text": "(World Bank, 2024)", "shape": "parenthetical", "expected": "detected" },
+    { "text": "(\"Background to the Convention\")", "shape": "titled", "expected": "detected" }
+  ]
+}

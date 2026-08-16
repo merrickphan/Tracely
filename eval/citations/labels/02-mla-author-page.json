@@ -1,0 +1,13 @@
+{
+  "essay": "02-mla-author-page.txt",
+  "style": "MLA 9 author-page",
+  "note": "MLA puts no year in the text at all, so every author-date pattern is blind to it. This is the default style in US high-school English — most of the drafts Screen Watch runs on.",
+  "citations": [
+    { "text": "(Shoup 45)", "shape": "author-page", "expected": "detected" },
+    { "text": "(Shoup 22-24)", "shape": "author-page", "expected": "detected" },
+    { "text": "(Willson 34)", "shape": "author-page", "expected": "detected" },
+    { "text": "(Manville and Shoup 279)", "shape": "author-page", "expected": "detected" },
+    { "text": "(Gabbe and Pierce 112)", "shape": "author-page", "expected": "detected" },
+    { "text": "(Shoup 501-503)", "shape": "author-page", "expected": "detected" }
+  ]
+}

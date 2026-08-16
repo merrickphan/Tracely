@@ -206,4 +206,38 @@ describe('sentenceAround — a claim is a sub-span, not a sentence', () => {
     const d = 'Laptop users score lower (Mueller & Oppenheimer, 2014).'
     strictEqual(hasInlineCitationNear(d, 0, d.length), true)
   })
+
+  // Both found by `npm run eval:citations`, which measures this function the
+  // way production uses it — with the citation OUTSIDE the span being tested.
+  // Each pattern scored 100% when handed a whole sentence and 0% through a
+  // span, which is a window bug wearing a detection bug's clothes.
+
+  it('reaches a footnote mark, which sits past the full stop', () => {
+    // Chicago scored 5/5 by sentence and 1/5 by span: the window closed on the
+    // terminator and the mark was one character outside it, every time.
+    const d = 'The printing press changed how fast dissent could travel.¹ Manuscripts were slower.'
+    const c = 'The printing press changed how fast dissent could travel'
+    strictEqual(hasInlineCitation(c), false)
+    strictEqual(hasInlineCitationNear(d, 0, c.length), true)
+    strictEqual(sentenceAround(d, 0, c.length).includes('Manuscripts'), false)
+  })
+
+  it('does not mistake the dots inside a URL or DOI for sentence ends', () => {
+    // `doi` and `url` were both 100% by sentence and 0% by span: the window
+    // stopped at the dot in `10.1257` and in `www.`, leaving a fragment with no
+    // second dot for the pattern to match. A pasted link is how students cite
+    // when they are not using a style guide at all.
+    const doi = 'The clearest version of this argument is doi: 10.1257/aer.20191325 in the AER.'
+    const claim = 'The clearest version of this argument is'
+    strictEqual(hasInlineCitationNear(doi, 0, claim.length), true)
+
+    const url = 'Employers reversed course, according to www.bls.gov/news.release/flex2.nr0.htm which shows otherwise.'
+    const uClaim = 'Employers reversed course, according to'
+    strictEqual(hasInlineCitationNear(url, 0, uClaim.length), true)
+
+    // The rule is "no whitespace after the terminator", so a real boundary
+    // still ends the window — a following sentence's citation is not borrowed.
+    const two = 'Rates rose sharply. Other work disagrees (Smith, 2020).'
+    strictEqual(hasInlineCitationNear(two, 0, 'Rates rose sharply'.length), false)
+  })
 })
