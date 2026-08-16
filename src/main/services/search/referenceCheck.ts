@@ -2,6 +2,7 @@ import {
   corroborate,
   crossrefReferenceQueries,
   isCheckable,
+  openLibraryReferenceQuery,
   parseReferences,
   type CandidateWork,
   type CitedReference
@@ -46,6 +47,15 @@ export interface ReferenceCheck {
   matchedTitle: string | null
   /** How many works the targeted queries returned in total. */
   candidatesConsidered: number
+  /**
+   * Which index carried the match, or null when nothing did.
+   *
+   * Worth recording rather than collapsing to a boolean: a Crossref match means
+   * the scholarly record contains the work, an Open Library match means it is a
+   * book. Those are different facts about a citation, and the critique reasons
+   * differently about them.
+   */
+  index: 'crossref' | 'openlibrary' | null
 }
 
 const CROSSREF_TIMEOUT_MS = 4000
@@ -82,6 +92,46 @@ async function fetchWorks(url: string): Promise<CandidateWork[] | null> {
 }
 
 /**
+ * Open Library, normalised into the same shape Crossref results take.
+ *
+ * `publish_year` carries every edition, and `corroborate` needs all of them —
+ * a book is cited by the edition in the student's hands, not by its first
+ * printing. Unauthenticated and unmetered; no key, no rate limit worth
+ * throttling for one request behind an empty Crossref result.
+ */
+async function fetchBooks(url: string): Promise<CandidateWork[] | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(CROSSREF_TIMEOUT_MS) })
+    if (!res.ok) {
+      console.warn(`[referenceCheck] openlibrary ${res.status} ${res.statusText}`)
+      return null
+    }
+    const data = (await res.json()) as {
+      docs?: Array<{
+        title?: string
+        author_name?: string[]
+        first_publish_year?: number
+        publish_year?: number[]
+      }>
+    }
+    return (data.docs ?? []).map((doc) => ({
+      title: doc.title ?? '(untitled)',
+      // Open Library gives full names ("Steven D. Levitt"), not family names.
+      // corroborate matches a cited surname against the LAST word, so the whole
+      // name is passed through and left for it to split.
+      authorSurnames: doc.author_name ?? [],
+      year: doc.first_publish_year ?? null,
+      years: doc.publish_year ?? []
+    }))
+  } catch (error) {
+    console.warn(
+      `[referenceCheck] openlibrary lookup failed: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
+  }
+}
+
+/**
  * Both queries, stopping at the first corroboration.
  *
  * Not "the first query that returns results" — every query returns twenty.
@@ -100,21 +150,38 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
 
   let considered = 0
   let answered = false
+
+  const hit = (title: string | null, index: ReferenceCheck['index']): ReferenceCheck => ({
+    raw: ref.raw,
+    surnames: ref.surnames,
+    year: ref.year!,
+    corroborated: true,
+    matchedTitle: title,
+    candidatesConsidered: considered,
+    index
+  })
+
   for (const url of urls) {
     const works = await fetchWorks(url)
     if (works === null) continue
     answered = true
     considered += works.length
     const result = corroborate(ref, works)
-    if (result.found) {
-      return {
-        raw: ref.raw,
-        surnames: ref.surnames,
-        year: ref.year!,
-        corroborated: true,
-        matchedTitle: result.match?.title ?? null,
-        candidatesConsidered: considered
-      }
+    if (result.found) return hit(result.match?.title ?? null, 'crossref')
+  }
+
+  // Only now, and only because Crossref came up empty. Every reference this
+  // check has ever failed on was a book, and that is a gap in the corpus rather
+  // than in the method — so the repair is another corpus. See
+  // openLibraryReferenceQuery.
+  const bookUrl = openLibraryReferenceQuery(ref)
+  if (bookUrl) {
+    const books = await fetchBooks(bookUrl)
+    if (books !== null) {
+      answered = true
+      considered += books.length
+      const result = corroborate(ref, books)
+      if (result.found) return hit(result.match?.title ?? null, 'openlibrary')
     }
   }
 
@@ -125,7 +192,8 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
     year: ref.year!,
     corroborated: false,
     matchedTitle: null,
-    candidatesConsidered: considered
+    candidatesConsidered: considered,
+    index: null
   }
 }
 
@@ -168,12 +236,26 @@ export function describeReferenceChecks(checks: ReferenceCheck[]): string | null
   return checks
     .map((check) => {
       const who = `${check.surnames.join(' and ')} ${check.year}`
-      return check.corroborated
-        ? `${check.raw} — a targeted search of Crossref found a ${check.year} work by ${who}: "${check.matchedTitle}".`
-        : `${check.raw} — a targeted search of Crossref for a work by ${who} returned ` +
-            `${check.candidatesConsidered} results and none of them lists all of these authors. ` +
-            `Crossref does not index most books, government and NGO reports, or non-English work, ` +
-            `so this is not by itself proof the source does not exist.`
+      if (check.corroborated) {
+        const where =
+          check.index === 'openlibrary'
+            ? 'Open Library (the book index)'
+            : 'Crossref (the scholarly index)'
+        return `${check.raw} — a targeted search of ${where} found a work by ${who}: "${check.matchedTitle}".`
+      }
+      // Both indexes now, and the sentence has to say so — the model's remaining
+      // reasons to doubt an empty result were "it might be a book" and "it might
+      // be a report", and the first of those is no longer available. What is
+      // left is narrower and is stated as such, rather than leaving the model to
+      // apply a caveat that no longer fits.
+      return (
+        `${check.raw} — targeted searches of BOTH Crossref (the scholarly index) and ` +
+        `Open Library (the book index) for a work by ${who} returned ` +
+        `${check.candidatesConsidered} results in total, and none of them lists all of these ` +
+        `authors. Neither index covers government and NGO reports, working papers, or much ` +
+        `non-English publishing, so this is not by itself proof the source does not exist — ` +
+        `but a book or textbook would have been found.`
+      )
     })
     .join('\n')
 }

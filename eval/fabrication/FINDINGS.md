@@ -337,6 +337,87 @@ it. I cannot name specific works there with enough confidence to label honestly,
 and guessing would produce a number that looks like a measurement and is not one.
 Everything above is evidence about English-language scholarship.
 
+## A second index closes the book gap — 2026-08-16
+
+Every reference the check has ever failed on was a book. That is a gap in the
+corpus, not in the method, so the repair is another corpus rather than a looser
+rule. Open Library, searched by author, free and unauthenticated:
+
+```
+                 before        after
+  article        0/16          0/16
+  pre-doi        0/6           0/6
+  book           2/8           0/8
+  textbook       2/6           0/6
+  ── total       4/36          0/36
+
+  invented wrongly corroborated  0/10   0/10
+```
+
+Cold cache, no cached results carried over. Detection is untouched: none of the
+ten invented pairs is corroborated by either index.
+
+Three details decided it, and two were found by measurement rather than design.
+
+**Ask by author, not by topic.** Open Library's free-text `q` ANDs its terms, so
+a sentence's worth of words returns *zero* documents — which looks exactly like
+the book being absent. "freakonomics" alone returns it immediately. The author
+index behaves like Crossref's and is the right analogue.
+
+**Match any edition year, not the first printing.** A book is cited by the
+edition in the student's hands. Strunk & White is cited as 2000 and first
+appeared in 1920; Open Library's first-publication year for Sedgewick & Wayne's
+*Algorithms* is 2016 for a work students cite as 2011. Testing
+`first_publish_year` alone rejects 4 of 14 real books. `publish_year` carries
+every edition, and `CandidateWork.years` now holds it.
+
+That year test is also what stops the one near-miss. Open Library has a real 2017
+book by a Ramirez and a Doyle — *Believe Me* — and the invented citation says
+2024. Author matching alone would have corroborated a fabrication.
+
+**A real bug, surfaced by the book index but not caused by it.** Open Library
+records *The Elements of Style* under "William Strunk, Jr.", which normalises to
+`william strunk jr`. The surname test was "is the last word", so a citation's
+"Strunk" matched neither the whole name nor its ending, and the one book both
+indexes actually hold came back uncorroborated. Generational suffixes are
+stripped now. This applied to Crossref equally the whole time; the second index
+only made it visible.
+
+### Downstream
+
+`describeReferenceChecks` now names which index found the work — a Crossref match
+means the scholarly record has it, an Open Library match means it is a book, and
+those are different facts about a citation. On an empty result it says both were
+searched.
+
+The relay prompt carried the old measurement as a reason to doubt an empty
+lookup: *"on a test set of well-known two-author BOOKS it failed to return a
+quarter of them"*. That is now false, and leaving it would have the model apply a
+caveat the evidence no longer supports — the exact mechanism behind the original
+Ramirez failure. It now says a book or textbook would have been found, and names
+what is genuinely still uncovered: reports, working papers, dissertations,
+non-English publishing.
+
+Both critique batches re-run against production `e1b81ef`:
+
+```
+  fabrication batch   12/12 acceptable   caught 4/4   HARM 0/8
+  original batch       5/7  acceptable   caught 1/1   HARM 0/5
+```
+
+The two books that previously returned nothing — Hopcroft & Ullman, Strunk &
+White — now come back `well-supported`. No regression on the original batch; its
+two failures are the pre-existing retrieval misses. Standing totals: **10/10
+invented caught, 0/21 real citations harmed.**
+
+### What 0/36 does not mean
+
+It does not mean the lookup may reach a verdict alone. It means the classes
+*sampled* are covered. Reports, working papers, dissertations and non-English
+publishing are still not in the set, and a real work in any of them still returns
+nothing from both indexes — which is now the whole of the residual risk, and is
+stated in the prompt rather than papered over.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both

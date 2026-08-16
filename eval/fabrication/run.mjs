@@ -38,9 +38,13 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url)).replace(/\\/g, '/'
 // The real module, imported rather than reimplemented — Node strips the types,
 // and citedReference.ts is a leaf for exactly this reason. A copy of the
 // patterns here would drift and then measure itself.
-const { corroborate, crossrefReferenceQueries, isCheckable, parseReferences } = await import(
-  pathToFileURL(`${REPO}/src/shared/citedReference.ts`).href
-)
+const {
+  corroborate,
+  crossrefReferenceQueries,
+  isCheckable,
+  openLibraryReferenceQuery,
+  parseReferences
+} = await import(pathToFileURL(`${REPO}/src/shared/citedReference.ts`).href)
 // Per SENTENCE, not per document: the query is anchored on the sentence's own
 // words, which is what lifts the cited work above the forty other Wheatons.
 const { splitSentences } = await import(
@@ -90,6 +94,26 @@ async function fetchWorks(url, label) {
  * results. The stop condition is a work carrying both cited names, which is the
  * only thing that settles the question.
  */
+async function fetchBooks(url, label) {
+  if (cache[url]) return cache[url]
+  await sleep(700)
+  const res = await fetch(url, { headers: { 'User-Agent': 'Tracely-eval/1.0 (fabrication check)' } })
+  if (!res.ok) {
+    console.warn(`  ! openlibrary ${res.status} for ${label}`)
+    return null
+  }
+  const data = await res.json()
+  const docs = (data.docs ?? []).map((doc) => ({
+    title: doc.title ?? '(untitled)',
+    // Full names, not family names — corroborate matches on the last word.
+    authorSurnames: doc.author_name ?? [],
+    year: doc.first_publish_year ?? null,
+    years: doc.publish_year ?? []
+  }))
+  cache[url] = docs
+  return docs
+}
+
 async function check(ref, context) {
   const urls = crossrefReferenceQueries(ref, { context, mailto })
   if (urls.length === 0) return null
@@ -98,9 +122,21 @@ async function check(ref, context) {
     const works = await fetchWorks(url, ref.raw)
     if (works === null) continue
     last = corroborate(ref, works)
-    if (last.found) return last
+    if (last.found) return { ...last, index: 'crossref' }
   }
-  return last
+
+  // The book index, second and only on an empty Crossref result — the same
+  // order production uses, so this measures the shipped path rather than a
+  // friendlier one.
+  const bookUrl = openLibraryReferenceQuery(ref)
+  if (bookUrl) {
+    const books = await fetchBooks(bookUrl, ref.raw)
+    if (books !== null) {
+      const result = corroborate(ref, books)
+      if (result.found) return { ...result, index: 'openlibrary' }
+    }
+  }
+  return { ...last, index: null }
 }
 
 // -- the corpus ---------------------------------------------------------------
@@ -277,6 +313,9 @@ for (const r of alarms) {
 }
 
 console.log(
-  `\n  A "not corroborated" is EVIDENCE, not a verdict. On the book set it is\n` +
-    `  wrong often enough that nothing downstream may treat it as one on its own.\n`
+  `\n  A "not corroborated" is still EVIDENCE, not a verdict — and 0/36 does NOT\n` +
+    `  change that. What it shows is that the classes SAMPLED here are covered:\n` +
+    `  journal articles, pre-DOI articles, books, textbooks. Reports, working\n` +
+    `  papers, dissertations and non-English publishing are not in this set, and\n` +
+    `  a real work in one of them still returns nothing from both indexes.\n`
 )

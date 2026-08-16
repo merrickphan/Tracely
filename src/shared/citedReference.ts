@@ -190,6 +190,20 @@ export function parseReferences(sentence: string): CitedReference[] {
   return refs
 }
 
+/**
+ * Generational suffixes, which sit AFTER the surname and so break a
+ * surname-is-the-last-word test.
+ *
+ * Found by measurement, not by inspection: Open Library records The Elements of
+ * Style under "William Strunk, Jr.", which normalises to `william strunk jr`,
+ * and a citation's "Strunk" matched neither the whole string nor its ending. So
+ * the one book in the labelled set that both indexes actually hold was reported
+ * as uncorroborated — the exact false-accusation direction this check must not
+ * fail in. It applies to Crossref just as much; the book index only made it
+ * visible.
+ */
+const NAME_SUFFIXES = /\s+(?:jr|sr|ii|iii|iv|v)$/
+
 // Diacritics folded and case dropped, so "Ángel" in an index matches "Angel"
 // as a student typed it, and "van Dijk" matches "Van Dijk".
 function normalizeName(name: string): string {
@@ -198,6 +212,8 @@ function normalizeName(name: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z\s]/g, '')
+    .trim()
+    .replace(NAME_SUFFIXES, '')
     .trim()
 }
 
@@ -219,6 +235,20 @@ export interface CandidateWork {
   /** Family names, as the index returns them. */
   authorSurnames: string[]
   year: number | null
+  /**
+   * Every year this work was published, when the index knows more than one.
+   *
+   * Books are cited by the edition in the student's hands, and that is rarely
+   * the first. Strunk & White is cited as 2000 and first appeared in 1920;
+   * Open Library's first-publication year for Sedgewick & Wayne's *Algorithms*
+   * is 2016 for a work students cite as 2011. Measured 2026-08-16: testing the
+   * first-publication year alone rejects four of fourteen real books, which is
+   * the false accusation the book index was added to prevent.
+   *
+   * Optional because Crossref articles have exactly one date and do not need
+   * it — an absent list simply falls back to `year`.
+   */
+  years?: number[]
 }
 
 export interface Corroboration {
@@ -255,7 +285,13 @@ export function corroborate(ref: CitedReference, candidates: CandidateWork[]): C
 
   const match =
     candidates.find((work) => {
-      if (work.year !== null && Math.abs(work.year - ref.year!) > YEAR_TOLERANCE) return false
+      // Any edition within tolerance. An index that records no date at all does
+      // not get to veto a match on that basis — absence of a year is not a
+      // wrong year.
+      const years = [work.year, ...(work.years ?? [])].filter((y): y is number => y !== null)
+      if (years.length > 0 && !years.some((y) => Math.abs(y - ref.year!) <= YEAR_TOLERANCE)) {
+        return false
+      }
       const have = work.authorSurnames.map(normalizeName)
       // `endsWith` rather than equality: indexes carry compound and hyphenated
       // surnames a citation shortens, and a citation's "Dijk" should meet the
@@ -403,4 +439,44 @@ export function crossrefReferenceQueries(
   // clear the same authors-and-year test. Measured 2026-08-16: neither query
   // finds any of the ten invented pairs, together they find 16 of 16 real ones.
   return terms ? [build(`${names} ${terms}`), build(names)] : [build(names)]
+}
+
+/**
+ * The book index, asked only when the scholarly one comes up empty.
+ *
+ * Crossref registers DOIs for the scholarly record. Measured over the labelled
+ * set (eval/fabrication), it corroborated 16 of 16 modern journal articles and
+ * 6 of 6 pre-DOI ones — and 10 of 14 books. Every reference the check has ever
+ * failed on has been a book: Freakonomics, The Elements of Style, Hopcroft &
+ * Ullman, Sedgewick & Wayne. That was the whole residual risk, and it is not a
+ * gap in the method but in the corpus, so the repair is another corpus rather
+ * than a looser rule.
+ *
+ * Open Library, searched by author, closes it: 14 of 14 real books, 0 of 10
+ * invented pairs. Free, unauthenticated, no key.
+ *
+ * Asked SECOND and only on an empty Crossref result, for two reasons. The
+ * signal that matters most — a sentence describing a study with no matching
+ * study in the scholarly index — is Crossref's to give, and a book index has
+ * nothing to add once a work is already corroborated. And it costs a request
+ * nobody needs on the common path, where the citation is a paper and Crossref
+ * has it.
+ *
+ * The author index rather than a title search, deliberately. Open Library's
+ * free-text `q` ANDs its terms, so a sentence's worth of words returns nothing
+ * at all — measured, and it looked exactly like the book being absent.
+ */
+export function openLibraryReferenceQuery(
+  ref: CitedReference,
+  { limit = 40 }: { limit?: number } = {}
+): string | null {
+  if (!isCheckable(ref)) return null
+  const params = new URLSearchParams({
+    author: ref.surnames.join(' '),
+    // publish_year is the load-bearing field: it carries every edition, and a
+    // book is cited by the edition in the student's hands. See CandidateWork.
+    fields: 'title,author_name,first_publish_year,publish_year',
+    limit: String(limit)
+  })
+  return `https://openlibrary.org/search.json?${params.toString()}`
 }

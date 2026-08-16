@@ -198,3 +198,43 @@ describe('crossrefReferenceQueries — two queries that fail in opposite directi
     deepStrictEqual(crossrefReferenceQueries(first('this is biological (Carskadon, 2011).')), [])
   })
 })
+
+describe('index quirks that produced a false accusation', () => {
+  const strunk = first('as (Strunk & White, 2000) advise.')
+
+  it('sees past a generational suffix on the surname', () => {
+    // Open Library records The Elements of Style under "William Strunk, Jr.",
+    // which normalises to `william strunk jr` — so a citation's "Strunk" matched
+    // neither the whole name nor its ending, and the one book both indexes
+    // actually hold came back uncorroborated. Applies to Crossref equally; the
+    // book index only made it visible.
+    const works = [
+      { title: 'The Elements of Style', authorSurnames: ['William Strunk, Jr.', 'E. B. White'], year: 1920, years: [1999, 2000, 2001] }
+    ]
+    strictEqual(corroborate(strunk, works).found, true)
+  })
+
+  it('matches an edition year rather than the first printing', () => {
+    // A book is cited by the edition in the student's hands. Testing the first
+    // publication year alone rejected four of fourteen real books.
+    const works = [
+      { title: 'Algorithms', authorSurnames: ['Robert Sedgewick', 'Kevin Wayne'], year: 2016, years: [2011, 2016] }
+    ]
+    strictEqual(corroborate(first('per (Sedgewick & Wayne, 2011).'), works).found, true)
+  })
+
+  it('still rejects a real work by the same pair in the wrong decade', () => {
+    // The near miss that makes the year test earn its place: Open Library has a
+    // real 2017 book by a Ramirez and a Doyle, and the invented citation says
+    // 2024. Without the year test that fabrication corroborates.
+    const works = [
+      { title: 'Believe Me', authorSurnames: ['Ramirez', 'Doyle'], year: 2017, years: [2017] }
+    ]
+    strictEqual(corroborate(first('Ramirez and Doyle (2024) found this.'), works).found, false)
+  })
+
+  it('does not let a suffix strip turn a one-word name into nothing', () => {
+    const works = [{ title: 'A paper', authorSurnames: ['Jr'], year: 2020, years: [] }]
+    strictEqual(corroborate(first('(Smith & Jones, 2020) report this.'), works).found, false)
+  })
+})
