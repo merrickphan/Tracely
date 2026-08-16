@@ -418,6 +418,45 @@ publishing are still not in the set, and a real work in any of them still return
 nothing from both indexes — which is now the whole of the residual risk, and is
 stated in the prompt rather than papered over.
 
+## Prompt trimmed — 2026-08-16, production `be5da00`
+
+The critique system prompt had grown 63% across this work, and much of the
+addition was rationale rather than instruction: why a rule exists, what went
+wrong before it, which run measured what. The model needs none of that to follow
+a rule, and it is charged on every critique call — including claims with no
+citation at all. The history lives in git and in this file, which is where anyone
+changing a rule will actually look.
+
+```
+  session start   1,814 tokens
+  before trim     2,964
+  after trim      2,393
+```
+
+Net cost of the whole fabrication feature is now **+579 tokens per critique**
+rather than +1,150 — a typical call goes from ~2,900 to ~3,500 input tokens
+instead of ~4,100.
+
+Every operative rule survives: the cutoff guard, the two-index lookup, what an
+empty lookup does and does not cover, the naming requirement, unplaced becoming
+`fabricated` or `unsupported` with no suggestedRevision, the study-shape
+discriminator, and the obligation to state what was searched. The first pass of
+the trim did cut one thing too far — (c) requires "the marks of generation" and
+the paragraph defining them was gone, leaving the phrase undefined. Restored as
+a single line.
+
+Both batches re-run against the trimmed prompt, detection replayed from cassette
+so the claim sets match the untrimmed runs exactly:
+
+```
+  fabrication batch   12/12 acceptable   caught 4/4   HARM 0/8
+  original batch       5/7  acceptable   caught 1/1   HARM 0/5
+```
+
+Identical on every measure that matters. One claim moved inside its own
+acceptable set (08-C2, `unsupported` to `weak`), which is the run-to-run
+variation this eval has shown throughout rather than a signal.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both
