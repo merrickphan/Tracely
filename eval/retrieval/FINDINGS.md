@@ -55,6 +55,49 @@ supported" and "nothing found" were arriving at the same verdict, which is a
 complete account of why the product's judgements read as arbitrary — and it was
 never a retrieval failure.
 
+## Correction — the band evidence above is weaker than it reads
+
+Added 2026-08-16 after a robustness pass (`node eval/retrieval/robustness.mjs`).
+The numbers above are as measured; the weight put on them was too high, and the
+paragraph beginning "Before the fix" overstates what 13 claims can support.
+
+Re-run under a second defensible labelling — Wikipedia demoted from `rel` to
+`marg` for general historical claims, and 01-C4's sources demoted because none
+of them establish the *primacy* its claim asserts:
+
+```
+                        as labelled            strict
+  0 relevant         60.3 -> 58.0         52.8 -> 63.5
+  1-2 relevant       71.0 -> 67.7         71.0 -> 67.7
+  3+ relevant        58.7 -> 73.3         73.0 -> 70.0
+```
+
+**Under the strict labelling the before-fix bands are already monotonic.** The
+inversion is carried almost entirely by 01-C4, which had three sources labelled
+relevant and the lowest score in the run (30) — and whose claim is overreaching
+in a way the critique separately caught. Move that one claim and the headline
+finding of this document weakens to a shrug.
+
+What survives, and what does not:
+
+| | |
+|---|---|
+| the 0.42 floor | **robust** — every relevant source clears it under both labellings |
+| retrieval finds evidence for most claims | **robust** — 77% / 69% |
+| relevant source ranked 1st | **fragile** — 80% / 56%, swinging on the Wikipedia call alone |
+| the score inversion | **fragile** — one claim carries it |
+
+The scoring fix itself still stands, on the mechanism rather than on these bands:
+averaging venue tier and publication year over six irrelevant papers is wrong
+whatever the labels say, and `scoring.test.ts` demonstrates it deterministically
+with no labels involved. But **"a claim with three supporting papers scored below
+one with none" should not be repeated as a finding** — it is one labelled claim,
+by one labeller, at n=13.
+
+The honest read of this whole directory is that it is enough evidence to justify
+a floor and a formula change, and nowhere near enough to make quantitative claims
+about how good the score now is.
+
 ## The floor was never calibrated, and the code said so
 
 `MIN_COUNTABLE_RELEVANCE.dense` was 0.35, documented in place as "a starting
