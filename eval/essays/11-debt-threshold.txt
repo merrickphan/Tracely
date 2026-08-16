@@ -1,0 +1,7 @@
+There is one number in every argument about the federal debt, and almost nobody who repeats it has read where it came from. It is not a forecast or a target. It is a finding from a single paper.
+
+Reinhart and Rogoff found that when a country's public debt passes ninety percent of GDP, average growth falls sharply. The figure has been quoted in budget speeches on both sides of the Atlantic ever since, because a clean threshold turns a judgement call into a rule and rules are easier to defend. In 2013 a graduate student trying to reproduce the result for a class assignment found a coding error in the underlying spreadsheet, along with weighting choices the paper had never explained.
+
+The rebuttal did not make the debt problem go away, and it is worth being careful about that. Japan has carried debt above two hundred percent of GDP for more than a decade without the growth collapse the threshold predicts. That is evidence against a hard cutoff, not evidence that borrowing is free.
+
+What is left is the boring version: debt matters, and how much it matters depends on what the money bought and who is lending. If the United States keeps borrowing at the present rate, a debt crisis within the decade is unavoidable.
