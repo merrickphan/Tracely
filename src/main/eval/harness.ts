@@ -16,6 +16,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
 import type { Claim, EvidenceItem, ScoreBreakdown, Source } from '@shared/types'
+import { sentenceAround } from '@shared/inlineCitation'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
 import { setAccessTokenProvider } from '../services/ai/identity'
@@ -138,7 +139,11 @@ function asEvidence(results: RankedSourceResult[]): EvidenceItem[] {
   })
 }
 
-async function evaluateClaim(detected: DetectedClaim, index: number): Promise<EvaluatedClaim> {
+async function evaluateClaim(
+  detected: DetectedClaim,
+  index: number,
+  sentence?: string
+): Promise<EvaluatedClaim> {
   const base = {
     text: detected.text,
     claimType: detected.claimType,
@@ -156,7 +161,10 @@ async function evaluateClaim(detected: DetectedClaim, index: number): Promise<Ev
     let citationFix: string | null = null
     if (!process.env.EVAL_SKIP_CRITIQUE) {
       const claim = asClaim(detected, score, `eval-${index}-${detected.text.slice(0, 40)}`)
-      const result = await generateCritique(claim, evidenceItems)
+      // The whole sentence, for the reference check — see generateCritique.
+      // The harness has the essay text, so this is the one path that never has
+      // to fall back.
+      const result = await generateCritique(claim, evidenceItems, sentence)
       critique = result.critique
       verdict = result.verdict
       suggestedRevision = result.suggestedRevision
@@ -224,7 +232,11 @@ async function evaluateEssay(path: string): Promise<EvaluatedEssay> {
   const claims: EvaluatedClaim[] = []
   for (const [index, claim] of detected.entries()) {
     process.stdout.write(`    [${index + 1}/${detected.length}] ${claim.searchQuery}\n`)
-    claims.push(await evaluateClaim(claim, index))
+    // The claim's sentence in the essay, so the reference check sees a trailing
+    // "(Author, Year)" the detected span stops before.
+    const at = text.indexOf(claim.text)
+    const sentence = at === -1 ? undefined : sentenceAround(text, at, at + claim.text.length)
+    claims.push(await evaluateClaim(claim, index, sentence))
   }
 
   return {
