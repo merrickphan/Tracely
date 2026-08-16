@@ -127,16 +127,22 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[], referenceCheck: string
  *   to look up. Omitted, the check falls back to the claim text, which still
  *   covers narrative citations ("Ramirez and Doyle (2024) found …") since those
  *   sit at the front.
+ * @param document The whole draft, when the caller has it. Numbered "[3]" and
+ *   MLA "(Shoup 45)" citations name nobody and no year in the sentence — the
+ *   reference lives in a list at the end — so the check needs the document to
+ *   resolve them, and without it an IEEE or MLA draft gets no fabrication check
+ *   at all.
  */
 export async function generateCritique(
   claim: Claim,
   evidence: EvidenceItem[],
-  sentence?: string
+  sentence?: string,
+  document?: string
 ): Promise<CritiqueResult> {
   // Looked up before the cache key is built, because the answer is part of the
   // question — the same claim and evidence with a corroborated reference and
   // with an uncorroborated one are two different critiques.
-  const references = await checkReferences(sentence ?? claim.text)
+  const references = await checkReferences(sentence ?? claim.text, document)
   const referenceCheck = describeReferenceChecks(references)
 
   const key = cacheKey(claim, evidence, referenceCheck)

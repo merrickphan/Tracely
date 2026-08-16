@@ -27,7 +27,10 @@ export function registerCritiqueHandlers(): void {
     const span = analysis ? computeClaimSpans(analysis.sourceText, [claim])[0] : undefined
     const sentence =
       analysis && span ? sentenceAround(analysis.sourceText, span.start, span.end) : undefined
-    const result = await generateCritique(claim, evidence, sentence)
+    // The whole document as well as the sentence: a "[3]" or "(Shoup 45)" is
+    // resolved against the reference list at its end, which no amount of
+    // widening around the claim would ever reach.
+    const result = await generateCritique(claim, evidence, sentence, analysis?.sourceText)
     updateClaimCritique(claimId, result.critique, result.verdict)
 
     // Only sources the local model flagged as contradicting, and only ones

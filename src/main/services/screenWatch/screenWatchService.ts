@@ -1089,7 +1089,16 @@ export async function critiqueClaim(claimId: string): Promise<CritiqueResult> {
   // the span cannot be located, which is what generateCritique defaults to.
   const span = computeClaimSpans(lastAnalyzedText, [claim])[0]
   const sentence = span ? sentenceAround(lastAnalyzedText, span.start, span.end) : undefined
-  const result = await generateCritique(withEvidenceScores(claim), evidenceItems, sentence)
+  // The watched text entire, for a numbered or MLA citation whose reference
+  // list sits at the end of the document rather than near the claim. Screen
+  // Watch sees whatever is on screen, so the list may not be captured at all —
+  // in which case the marker simply goes unchecked, as it did before.
+  const result = await generateCritique(
+    withEvidenceScores(claim),
+    evidenceItems,
+    sentence,
+    lastAnalyzedText
+  )
   if (currentClaims.some((c) => c.id === claimId)) {
     critiqueByClaimId.set(claimId, result)
     redrawOverlay()

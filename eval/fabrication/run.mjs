@@ -249,8 +249,10 @@ for (const [kind, n] of byKind) console.log(`    ${kind.padEnd(16)} ${n}`)
 if (verbose) for (const s of skipped) console.log(`    · ${s.ref.raw}  ${s.essay}`)
 
 console.log(
-  `\n  Numeric ([3]) and MLA author-page ("Shoup 45") references are not parsed at\n` +
-    `  all — they carry no year, so an IEEE or MLA draft gets no fabrication check.`
+  `\n  Numeric ([3]) and MLA author-page ("Shoup 45") references carry no author and\n` +
+    `  no year in the sentence, so this harness — which reads sentences — still sees\n` +
+    `  nothing in them. They are resolved against the document's own reference list\n` +
+    `  instead, and measured separately: eval/bibliography.`
 )
 
 // -- the labelled set ---------------------------------------------------------

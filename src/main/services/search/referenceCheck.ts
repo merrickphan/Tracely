@@ -8,6 +8,7 @@ import {
   type CandidateWork,
   type CitedReference
 } from '@shared/citedReference'
+import { bibliographyReferences } from '@shared/bibliography'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import { politePoolMailto } from '../storage/settingsRepo'
 
@@ -39,6 +40,14 @@ export interface ReferenceCheck {
   year: number | null
   /** The work the sentence named, when it named one. */
   title: string | null
+  /**
+   * The reference-list entry, when the sentence cited by pointing at one.
+   *
+   * Carried through to the description because the critique needs to see WHICH
+   * work "[3]" turned out to name — the marker alone tells it nothing, and a
+   * lookup result attached to a bare "[3]" would be unreadable.
+   */
+  entry?: string
   /**
    * Did an index return a work carrying every cited surname in that year?
    *
@@ -163,7 +172,8 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
     corroborated: true,
     matchedTitle: title,
     candidatesConsidered: considered,
-    index
+    index,
+    entry: ref.entry
   })
 
   for (const url of urls) {
@@ -209,7 +219,8 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
     corroborated: false,
     matchedTitle: null,
     candidatesConsidered: considered,
-    index: null
+    index: null,
+    entry: ref.entry
   }
 }
 
@@ -225,9 +236,29 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
  * quoted title — are absent from the result rather than present and negative.
  * A caller that reads "no entry" as "corroborated" has turned every citation
  * style this cannot cover into a clean bill of health.
+ *
+ * @param document The whole draft, when the caller has it. Numbered "[3]" and
+ *   MLA "(Shoup 45)" citations name no author and no year in the sentence — the
+ *   reference is in a list at the end — so without this they got no fabrication
+ *   check at all, and whether a draft was covered was decided by its citation
+ *   style. Omitted, the author-date shapes still work exactly as before.
  */
-export async function checkReferences(sentence: string): Promise<ReferenceCheck[]> {
-  const refs = parseReferences(sentence).filter(isCheckable).slice(0, MAX_REFERENCES_PER_CLAIM)
+export async function checkReferences(
+  sentence: string,
+  document?: string
+): Promise<ReferenceCheck[]> {
+  const inline = parseReferences(sentence)
+  const resolved = document ? bibliographyReferences(sentence, document) : []
+  // Inline first: a sentence carrying both "(Smith & Jones, 2019)" and "[3]"
+  // for the same work should be looked up once, and the shape the writer
+  // actually typed is the one worth quoting back at them.
+  const seen = new Set(inline.map((ref) => `${ref.surnames.join('|').toLowerCase()}|${ref.year}`))
+  const refs = [
+    ...inline,
+    ...resolved.filter((ref) => !seen.has(`${ref.surnames.join('|').toLowerCase()}|${ref.year}`))
+  ]
+    .filter(isCheckable)
+    .slice(0, MAX_REFERENCES_PER_CLAIM)
   if (refs.length === 0) return []
 
   const checks: ReferenceCheck[] = []
@@ -247,9 +278,23 @@ export async function checkReferences(sentence: string): Promise<ReferenceCheck[
  * things the lookup cannot — that the reference is to a book, a government
  * report, or something the index was never going to carry.
  */
+/**
+ * The relay's zod schema caps this field at 1200 characters and rejects the
+ * whole request past it — see api/critique.ts. Three absent references plus
+ * their reference-list entries can exceed that, so the last check is dropped
+ * rather than the text being cut: a truncated line could end mid-caveat, and
+ * the caveat is the half that says an empty lookup is not proof. A dropped
+ * check is an unchecked reference, which is a state the whole design already
+ * handles; half a sentence saying no work was found is not.
+ */
+const MAX_DESCRIPTION_CHARS = 1200
+
+/** Enough of an entry to identify the work, bounded for the same reason. */
+const MAX_ENTRY_CHARS = 140
+
 export function describeReferenceChecks(checks: ReferenceCheck[]): string | null {
   if (checks.length === 0) return null
-  return checks
+  const lines = checks
     .map((check) => {
       // "Reinhart and Rogoff 2010" when the sentence gave a year, "Reinhart and
       // Rogoff" when it did not — never "Reinhart and Rogoff null", and never a
@@ -257,12 +302,18 @@ export function describeReferenceChecks(checks: ReferenceCheck[]): string | null
       const who = [check.surnames.join(' and '), check.year, check.title && `"${check.title}"`]
         .filter(Boolean)
         .join(' ')
+      // "[3]" on its own names nothing, so the entry it resolved to has to be
+      // shown with it — otherwise the critique is reading a lookup result for a
+      // work it has not been told the identity of.
+      const cited = check.entry
+        ? `${check.raw}, which the document's reference list gives as "${check.entry.length > MAX_ENTRY_CHARS ? `${check.entry.slice(0, MAX_ENTRY_CHARS).trimEnd()}…` : check.entry}"`
+        : check.raw
       if (check.corroborated) {
         const where =
           check.index === 'openlibrary'
             ? 'Open Library (the book index)'
             : 'Crossref (the scholarly index)'
-        return `${check.raw} — a targeted search of ${where} found a work by ${who}: "${check.matchedTitle}".`
+        return `${cited} — a targeted search of ${where} found a work by ${who}: "${check.matchedTitle}".`
       }
       // Both indexes now, and the sentence has to say so — the model's remaining
       // reasons to doubt an empty result were "it might be a book" and "it might
@@ -270,7 +321,7 @@ export function describeReferenceChecks(checks: ReferenceCheck[]): string | null
       // left is narrower and is stated as such, rather than leaving the model to
       // apply a caveat that no longer fits.
       return (
-        `${check.raw} — targeted searches of BOTH Crossref (the scholarly index) and ` +
+        `${cited} — targeted searches of BOTH Crossref (the scholarly index) and ` +
         `Open Library (the book index) for a work by ${who} returned ` +
         `${check.candidatesConsidered} results in total, and none of them lists all of these ` +
         `authors. Neither index covers government and NGO reports, working papers, or much ` +
@@ -278,5 +329,11 @@ export function describeReferenceChecks(checks: ReferenceCheck[]): string | null
         `but a book or textbook would have been found.`
       )
     })
-    .join('\n')
+
+  while (lines.length > 1 && lines.join('\n').length > MAX_DESCRIPTION_CHARS) lines.pop()
+  const described = lines.join('\n')
+  // A single line that still will not fit is reported as no lookup rather than
+  // as a cut one, for the reason above: every state this function can return
+  // is safe except a half-sentence.
+  return described.length <= MAX_DESCRIPTION_CHARS ? described : null
 }

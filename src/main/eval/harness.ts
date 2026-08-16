@@ -177,7 +177,8 @@ function asEvidence(results: RankedSourceResult[]): EvidenceItem[] {
 async function evaluateClaim(
   detected: DetectedClaim,
   index: number,
-  sentence?: string
+  sentence?: string,
+  document?: string
 ): Promise<EvaluatedClaim> {
   const base = {
     text: detected.text,
@@ -199,7 +200,7 @@ async function evaluateClaim(
       // The whole sentence, for the reference check — see generateCritique.
       // The harness has the essay text, so this is the one path that never has
       // to fall back.
-      const result = await generateCritique(claim, evidenceItems, sentence)
+      const result = await generateCritique(claim, evidenceItems, sentence, document)
       critique = result.critique
       verdict = result.verdict
       suggestedRevision = result.suggestedRevision
@@ -271,7 +272,7 @@ async function evaluateEssay(path: string): Promise<EvaluatedEssay> {
     // "(Author, Year)" the detected span stops before.
     const at = text.indexOf(claim.text)
     const sentence = at === -1 ? undefined : sentenceAround(text, at, at + claim.text.length)
-    claims.push(await evaluateClaim(claim, index, sentence))
+    claims.push(await evaluateClaim(claim, index, sentence, text))
   }
 
   return {

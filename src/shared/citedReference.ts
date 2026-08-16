@@ -82,6 +82,22 @@ export type CitedReferenceKind =
    * evidence the work does not exist, only that the query missed.
    */
   | 'author-title'
+  /**
+   * A marker resolved against the document's own reference list: "[3]",
+   * "(Shoup 45)".
+   *
+   * Not produced here — see bibliography.ts, which needs the whole document
+   * where everything in this file needs only the sentence. Listed here because
+   * the resolved object is an ordinary CitedReference from that point on, and
+   * `corroborate` and the query builders treat it as one.
+   *
+   * Strictly MORE information than an inline citation, not less. The entry
+   * carries every author, the year and usually the title, where "(Shoup 45)"
+   * carries one surname — so this kind is the only one that can be either
+   * informative or not depending on the instance, and `absenceIsInformative`
+   * decides per reference rather than per kind.
+   */
+  | 'bibliographic'
 
 export interface CitedReference {
   /** Exactly as the writer typed it, for quoting back in a critique. */
@@ -94,6 +110,15 @@ export interface CitedReference {
   title: string | null
   /** "et al." — there are more authors than the sentence names. */
   etAl: boolean
+  /**
+   * The reference-list entry a marker resolved to, verbatim.
+   *
+   * Only 'bibliographic' references have one, and it is the best query material
+   * available anywhere in this file: `query.bibliographic` is Crossref's
+   * reference-MATCHING field, and a whole reference string is exactly what it
+   * was built to be given.
+   */
+  entry?: string
 }
 
 // Same particle list as inlineCitation.ts. Duplicated rather than shared
@@ -391,6 +416,27 @@ const titleTokens = (title: string): string[] =>
  */
 const TITLE_MATCH_RATIO = 2 / 3
 
+/**
+ * Does the title have to match, or is it only there to rank the query?
+ *
+ * It gates when it is the ONLY thing discriminating — which is the case
+ * titleMatches was added for, a possessive reference naming one surname and no
+ * year, corroborated by "HIV Disease and Work" on the surname alone.
+ *
+ * Two surnames and a year discriminate by themselves; that pairing is what was
+ * measured at 0/36 false alarms, and it did not have a title to help it. A
+ * reference-list entry supplies one anyway, and making it a second hurdle would
+ * ADD a failure mode the measured configuration does not have: real titles are
+ * subtitled, translated and abbreviated between a bibliography and an index, and
+ * a title that misses at the two-thirds threshold would turn a corroborated
+ * source into a reported absence. So for those, the title stays in the query
+ * where it helps and out of the test where it could only hurt.
+ */
+function titleGates(ref: CitedReference): boolean {
+  if (!ref.title) return false
+  return !(ref.surnames.length >= MIN_CHECKABLE_SURNAMES && ref.year !== null)
+}
+
 function titleMatches(refTitle: string, workTitle: string): boolean {
   const wanted = titleTokens(refTitle)
   if (wanted.length === 0) return true
@@ -422,7 +468,7 @@ export function corroborate(ref: CitedReference, candidates: CandidateWork[]): C
       // A named work has to be THE named work. Without this the surname alone
       // decides, which is the coincidence problem MIN_CHECKABLE_SURNAMES exists
       // to prevent for author-year references.
-      if (ref.title && !titleMatches(ref.title, work.title)) return false
+      if (titleGates(ref) && !titleMatches(ref.title!, work.title)) return false
       const have = work.authorSurnames.map(normalizeName)
       // `endsWith` rather than equality: indexes carry compound and hyphenated
       // surnames a citation shortens, and a citation's "Dijk" should meet the
@@ -484,6 +530,12 @@ export function isCheckable(ref: CitedReference): boolean {
   // title carries the discrimination.
   if (ref.kind === 'author-noyear') return ref.surnames.length >= MIN_CHECKABLE_SURNAMES
   if (ref.kind === 'author-title') return ref.surnames.length > 0 && Boolean(ref.title)
+  // A resolved marker is worth looking up on one author, because the entry also
+  // gives a year or a title to go with it. Whether its ABSENCE may be reported
+  // is a separate and stricter question — see absenceIsInformative.
+  if (ref.kind === 'bibliographic') {
+    return ref.surnames.length > 0 && (ref.year !== null || ref.title !== null)
+  }
   return false
 }
 
@@ -516,8 +568,41 @@ export function isCheckable(ref: CitedReference): boolean {
  *
  * So these two can only ever REMOVE doubt, never create it — which also makes
  * them free of the risk that dominates every other decision in this file.
+ *
+ * A resolved marker ('bibliographic') is judged per instance rather than per
+ * kind, because unlike every shape above it does not have a fixed amount of
+ * information: "[3]" pointing at "Smith, J., & Doe, A. (2019). Title." is the
+ * measured author-year case with the title thrown in, while "(Shoup 45)"
+ * pointing at a single-author book is the single-surname case that
+ * MIN_CHECKABLE_SURNAMES exists to refuse. The test is therefore the same one
+ * `isCheckable` applies to author-year — two named authors and a year — asked
+ * of the ENTRY rather than of the sentence, which is the whole point of going
+ * and reading the entry.
  */
+/**
+ * Venues both indexes systematically under-cover, named in the entry's own text.
+ *
+ * Crossref registers DOIs and Open Library holds books; conference proceedings,
+ * preprints, working papers and theses fall between them. Measured 2026-08-16:
+ * "A. Vaswani and N. Shazeer, 'Attention is all you need,' Advances in Neural
+ * Information Processing Systems, 2017" — one of the most cited papers of the
+ * decade — is in neither index, and was reported absent. Every reason the
+ * describe-line already gives for doubting an empty lookup applies here, and
+ * this is the one case where the reference SAYS SO in the text the writer typed.
+ *
+ * Only reachable from a reference list, because only a reference list states
+ * the venue. An inline "(Vaswani & Shazeer, 2017)" carries no venue at all and
+ * this cannot help it — the gap is narrowed where the evidence exists to narrow
+ * it, not closed.
+ */
+const UNDER_INDEXED_VENUE =
+  /\b(?:proceedings|conference|symposium|workshop|neurips|nips|icml|iclr|cvpr|acl|advances in neural information processing|preprint|arxiv|biorxiv|ssrn|working paper|technical report|white paper|dissertation|thesis)\b/i
+
 export function absenceIsInformative(ref: CitedReference): boolean {
+  if (ref.kind === 'bibliographic') {
+    if (UNDER_INDEXED_VENUE.test(ref.entry ?? '')) return false
+    return ref.surnames.length >= MIN_CHECKABLE_SURNAMES && ref.year !== null
+  }
   return ref.kind === 'author-year'
 }
 
@@ -536,6 +621,21 @@ function contextTerms(context: string, ref: CitedReference, maxChars = 120): str
     .split(/\s+/)
     .filter((word) => word.length > 3)
     .join(' ')
+    .slice(0, maxChars)
+}
+
+/**
+ * A reference-list entry as a query term.
+ *
+ * Bounded because it rides in a URL, and stripped of the punctuation a
+ * bibliography is dense with — brackets, colons, "vol.", quotes — which carry
+ * no matching signal and cost length that the authors and title need.
+ */
+function entryQuery(entry: string, maxChars = 300): string {
+  return entry
+    .replace(/[^\p{L}\p{N}\s'’-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
     .slice(0, maxChars)
 }
 
@@ -596,6 +696,19 @@ export function crossrefReferenceQueries(
   // The title is the strongest term available when there is one, and it stands
   // in for the year this reference does not have.
   const names = [ref.surnames.join(' '), ref.year ?? '', ref.title ?? ''].filter(Boolean).join(' ')
+
+  // A resolved marker brings its own context, and a far better one. The
+  // sentence around "[3]" says nothing about the work — that is what made the
+  // marker unusable in the first place — while the reference-list entry is a
+  // complete reference string, which is precisely the input
+  // `query.bibliographic` is Crossref's reference-matching field FOR. The
+  // second query drops back to names and year for the same reason the pair
+  // exists below: a journal or publisher name the index reads as a term of art
+  // can bury the work its own reference describes.
+  if (ref.entry) {
+    return [build(entryQuery(ref.entry)), build(names)]
+  }
+
   const terms = contextTerms(context, ref)
 
   // Two queries, and a match on EITHER corroborates. They fail in opposite
@@ -655,7 +768,15 @@ export function openLibraryReferenceQuery(
     // A possessive reference names the work, and Open Library's title index is
     // the one place that is worth more than the author name — this is the shape
     // students use for books, which is what Open Library holds.
-    ...(ref.title ? { title: ref.title } : {}),
+    //
+    // The SAME condition as the match gate, and for a stronger reason here: a
+    // title filter is a narrowing, and Open Library's title index does not hold
+    // the subtitle a bibliography writes out. Measured 2026-08-16 — filtering
+    // on "Freakonomics: A Rogue Economist Explores the Hidden Side of
+    // Everything" returned nothing for a book Open Library plainly has, and the
+    // same for Hopcroft & Ullman and Sedgewick & Wayne. Two surnames and a year
+    // find the book on their own; a title can only take it away.
+    ...(titleGates(ref) ? { title: ref.title as string } : {}),
     // publish_year is the load-bearing field: it carries every edition, and a
     // book is cited by the edition in the student's hands. See CandidateWork.
     fields: 'title,author_name,first_publish_year,publish_year',

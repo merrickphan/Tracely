@@ -1,0 +1,46 @@
+{
+  "note": "Real reference-list entries, written out in full, to measure the one query shape that has never been measured: a whole reference string handed to Crossref's query.bibliographic. The inline path was measured on surnames + the SENTENCE's words (eval/fabrication, 0/36 false alarms); a resolved marker replaces those words with the entry itself, and that substitution can only be justified by a number.",
+
+  "realSelection": "The same standard as eval/fabrication/references.json — independently, famously real, spread across decades and disciplines — and rendered in the style a writer using that citation system would actually type. Titles and venues are written from knowledge of the literature, NOT copied from a Crossref result, so a miss here is a finding about the query rather than a labelling artefact.",
+
+  "fabricatedConstruction": "The same ten invented pairs the inline check was measured on, given the reference-list entry a language model would produce for them: a plausible journal, a round recent year, and a title that restates the claim. If the entry string makes one of these corroborate, the entry query is buying recall at the cost of the only thing that matters.",
+
+  "entries": [
+    { "label": "real", "style": "apa", "text": "Kahneman, D., & Tversky, A. (1979). Prospect theory: An analysis of decision under risk. Econometrica, 47(2), 263-291." },
+    { "label": "real", "style": "apa", "text": "Mueller, P. A., & Oppenheimer, D. M. (2014). The pen is mightier than the keyboard: Advantages of longhand over laptop note taking. Psychological Science, 25(6), 1159-1168." },
+    { "label": "real", "style": "apa", "text": "Card, D., & Krueger, A. B. (1994). Minimum wages and employment: A case study of the fast-food industry in New Jersey and Pennsylvania. American Economic Review, 84(4), 772-793." },
+    { "label": "real", "style": "apa", "text": "Deci, E. L., & Ryan, R. M. (2000). The \"what\" and \"why\" of goal pursuits: Human needs and the self-determination of behavior. Psychological Inquiry, 11(4), 227-268." },
+    { "label": "real", "style": "apa", "text": "Baumeister, R. F., & Leary, M. R. (1995). The need to belong: Desire for interpersonal attachments as a fundamental human motivation. Psychological Bulletin, 117(3), 497-529." },
+    { "label": "real", "style": "apa", "text": "Simons, D. J., & Chabris, C. F. (1999). Gorillas in our midst: Sustained inattentional blindness for dynamic events. Perception, 28(9), 1059-1074." },
+    { "label": "real", "style": "apa", "text": "Loftus, E. F., & Palmer, J. C. (1974). Reconstruction of automobile destruction: An example of the interaction between language and memory. Journal of Verbal Learning and Verbal Behavior, 13(5), 585-589." },
+    { "label": "real", "style": "apa", "text": "Dweck, C. S., & Leggett, E. L. (1988). A social-cognitive approach to motivation and personality. Psychological Review, 95(2), 256-273." },
+    { "label": "real", "style": "apa", "text": "Nisbett, R. E., & Wilson, T. D. (1977). Telling more than we can know: Verbal reports on mental processes. Psychological Review, 84(3), 231-259." },
+    { "label": "real", "style": "apa", "text": "Reinhart, C. M., & Rogoff, K. S. (2010). Growth in a time of debt. American Economic Review, 100(2), 573-578." },
+
+    { "label": "real", "style": "ieee", "text": "M. A. Carskadon and W. C. Dement, \"Normal human sleep: An overview,\" Principles and Practice of Sleep Medicine, pp. 16-26, 2011." },
+    { "label": "real", "style": "ieee", "text": "Y. LeCun, Y. Bengio and G. Hinton, \"Deep learning,\" Nature, vol. 521, no. 7553, pp. 436-444, 2015." },
+    { "label": "real", "style": "ieee", "text": "A. Vaswani and N. Shazeer, \"Attention is all you need,\" Advances in Neural Information Processing Systems, 2017." },
+    { "label": "real", "style": "ieee", "text": "S. Hochreiter and J. Schmidhuber, \"Long short-term memory,\" Neural Computation, vol. 9, no. 8, pp. 1735-1780, 1997." },
+    { "label": "real", "style": "ieee", "text": "D. E. Rumelhart, G. E. Hinton and R. J. Williams, \"Learning representations by back-propagating errors,\" Nature, vol. 323, pp. 533-536, 1986." },
+
+    { "label": "real", "style": "ieee-unquoted", "text": "J. E. Hopcroft and J. D. Ullman, Introduction to Automata Theory, Languages, and Computation. Reading, MA: Addison-Wesley, 1979." },
+    { "label": "real", "style": "ieee-unquoted", "text": "R. Sedgewick and K. Wayne, Algorithms. Upper Saddle River, NJ: Addison-Wesley, 2011." },
+
+    { "label": "real", "style": "mla", "text": "Strunk, William, and E. B. White. The Elements of Style. Macmillan, 2000." },
+    { "label": "real", "style": "mla", "text": "Levitt, Steven D., and Stephen J. Dubner. Freakonomics: A Rogue Economist Explores the Hidden Side of Everything. William Morrow, 2005." },
+    { "label": "real", "style": "mla", "text": "Manning, Christopher D., and Hinrich Schütze. Foundations of Statistical Natural Language Processing. MIT Press, 1999." },
+    { "label": "real", "style": "mla", "text": "Acemoglu, Daron, and James A. Robinson. Why Nations Fail: The Origins of Power, Prosperity, and Poverty. Crown, 2012." },
+    { "label": "real", "style": "mla", "text": "Shoup, Donald. The High Cost of Free Parking. Planners Press, 2005." },
+
+    { "label": "fabricated", "style": "apa", "text": "Ramirez, L., & Doyle, K. (2024). AI-generated feedback and student essay revision: A randomized study. Journal of Educational Technology Research, 41(2), 118-135." },
+    { "label": "fabricated", "style": "apa", "text": "Whitfield, S., & Nakamura, T. (2023). Remote instruction and mathematics attainment in secondary schools. International Journal of Learning Sciences, 18(4), 302-319." },
+    { "label": "fabricated", "style": "apa", "text": "Okonkwo, C., & Salvatore, M. (2022). Urban tree canopy and summer emergency admissions. Journal of Urban Health Policy, 29(3), 211-228." },
+    { "label": "fabricated", "style": "apa", "text": "Bergstrom, A., & Ferreira, P. (2024). Four-day working weeks, output and burnout. Journal of Organizational Behaviour Studies, 33(1), 44-61." },
+    { "label": "fabricated", "style": "apa", "text": "Halloway, R., & Sundqvist, E. (2021). Early handwriting instruction and later reading fluency. Journal of Primary Literacy, 12(2), 77-94." },
+    { "label": "fabricated", "style": "ieee", "text": "V. Vandermeer and T. Ashworth, \"Large language model tutoring and the attainment gap in secondary mathematics,\" Journal of Educational Computing, vol. 52, no. 3, pp. 401-419, 2024." },
+    { "label": "fabricated", "style": "ieee", "text": "J. Castellanos and D. Prewitt, \"Microplastic concentrations in drinking water and inflammatory markers,\" Environmental Health Reports, vol. 15, no. 2, pp. 88-104, 2023." },
+    { "label": "fabricated", "style": "ieee-unquoted", "text": "A. Quintero and R. Bramwell, School Music Programmes and Executive Function. London: Educational Press, 2022." },
+    { "label": "fabricated", "style": "mla", "text": "Lindqvist, Anna, and Femi Oyelaran. Congestion Pricing and Particulate Exposure in Low-Income Neighbourhoods. Urban Policy Press, 2023." },
+    { "label": "fabricated", "style": "mla", "text": "Thackeray, Grace, and Chidi Nwosu. Smartphone Bans and Standardized Test Scores. Education Futures Press, 2024." }
+  ]
+}
