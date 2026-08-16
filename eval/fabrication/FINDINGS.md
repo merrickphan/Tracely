@@ -113,6 +113,70 @@ thing from a lookup that found nothing.
   reporting it as an invented citation would be the more serious of the two
   accusations and the wrong repair entirely.
 
+## Deployed and run against production — 2026-08-16
+
+The lookup reaches the model and the model uses it. Both live critiques in the
+production run name it unprompted: *"Evidence 2 and the reference lookup confirm
+the study exists"*, and *"The reference lookup found no work by Ramirez and Doyle
+(2024) in Crossref"*. The wiring is verified end to end.
+
+**The verdict is not stable.** Probed in isolation, the Ramirez claim returns
+`fabricated`, with the lookup quoted as the reason. In the full pipeline — real
+retrieved evidence, real abstracts, a strength score of 80 — the same reference
+returns `overstated`:
+
+> The reference lookup found no work by Ramirez and Doyle (2024) in Crossref, but
+> this is not definitive proof of fabrication, as the work could be a book,
+> report, or non-indexed source.
+
+That is the caveat this prompt deliberately added, applied where it does not fit:
+the sentence cites a *study* with a percentage and a sample, not a book. n=1 in
+each direction, so what is established is that both outcomes are reachable for the
+same reference, not a rate.
+
+**`overstated` is a bad place for a suspected fabrication to land**, and worse
+than the `unsupported` it used to get. The verdict obliges a hedge-only revision,
+so the product offered:
+
+> Ramirez and Doyle (2024) found that students who received AI-generated feedback
+> improved their essay scores over a single semester…
+
+— a rewritten sentence that still credits a study that does not exist. Softening
+the number is the wrong repair when the problem is the source.
+
+Two candidate fixes, neither tried: shorten the book caveat and tie it to the
+kind of work the sentence actually describes, or forbid `overstated` outright
+when the lookup came back empty, so the fall-through is `unsupported` rather than
+a polished citation to nothing.
+
+### The run itself is only two-thirds current
+
+6 of the 8 critiques replayed from cassettes recorded under the **previous**
+prompt — their request bodies are unchanged, because only the two claims with
+checkable references carry a `referenceCheck` field. Only those two were live.
+The other six are not evidence about the new prompt either way.
+
+### Two measurement hazards, found the expensive way
+
+**The staging alias was stale.** `tracely-relay-staging.vercel.app` served a
+deployment from 2026-08-09 while newer commits built and went READY behind it.
+An 8-call run against "staging" tested a build from a week earlier, and the
+README's `merge --ff-only staging` invariant — production cannot contain a commit
+staging never ran — had been quietly false for two promotions.
+
+**The eval's scratch profile was not namespaced by environment.** Cassettes are,
+for a reason written down in `scripts/evaluate.mjs`; the SQLite profile holding
+the `ai:critique` cache was not. That cache keys on the request, not the relay
+host, because a shipped build has `RELAY_URL` compiled in and can never talk to a
+second relay — but the eval can. So a staging run populated it and the next
+production run answered every claim from staging's cache, made **zero** relay
+calls, and reported the old build's verdicts as production's. It looked like a
+clean free re-run. `dataDir` is now `out/eval/data/<env>`.
+
+Both reports are kept as `.stale-staging-build` and `.stale-cache` rather than
+deleted, since `eval:critique` picks the newest critique-bearing report and would
+otherwise have scored against them.
+
 ## Caveat
 
 24 real references and 10 invented ones, one index, one labeller who wrote both

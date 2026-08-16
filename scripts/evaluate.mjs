@@ -65,7 +65,18 @@ function argValue(flag) {
 const essayArg = argValue('--essays') ?? 'eval/essays'
 const essayDir = isAbsolute(essayArg) ? essayArg : join(repoRoot, essayArg)
 const outDir = join(repoRoot, 'eval', 'reports')
-const dataDir = join(repoRoot, 'out', 'eval', 'data')
+// Namespaced by environment for exactly the reason the cassette directory is,
+// and it was not — which cost a full run to discover on 2026-08-16.
+//
+// This scratch profile holds the SQLite `ai:critique` cache, and that cache is
+// keyed on the claim text, score, evidence ids and reference lookup: the
+// REQUEST. Not on the relay host, because a shipped build has RELAY_URL
+// compiled in and can never talk to a second relay. The eval can. So a run
+// against staging populated the cache, and the next run — against production,
+// deliberately, to test a newly deployed prompt — answered every claim out of
+// staging's cache, made zero relay calls, and reported the OLD build's verdicts
+// as production's. It looked like a clean free re-run.
+const dataDir = join(repoRoot, 'out', 'eval', 'data', ENV_NAME)
 const bundlePath = join(repoRoot, 'out', 'eval', 'harness.mjs')
 const workerPath = join(repoRoot, 'out', 'eval', 'mlWorker.cjs')
 
