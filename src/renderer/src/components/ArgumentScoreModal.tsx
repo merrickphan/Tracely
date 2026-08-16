@@ -219,6 +219,8 @@ export default function ArgumentScoreModal({
   onInsertCitation,
   onReanalyze,
   onEvidenceSearched,
+  onCheckClaims,
+  checking,
   onClose
 }: {
   outline: DocumentOutline | null
@@ -252,6 +254,22 @@ export default function ArgumentScoreModal({
    * on holding the unscored copy until the document was closed and reopened.
    */
   onEvidenceSearched: () => void
+  /**
+   * Runs the evidence search over the given claims, in order.
+   *
+   * The bulk entry point. Every other route into a search here is one claim at
+   * a time — the paragraph detail's Find Evidence, the editor's mark popover —
+   * and the popover route additionally needs an underline that only a scored
+   * claim gets, so a freshly detected draft had no way to check itself at all
+   * without clicking through its claims individually. This is the button that
+   * used to live on the Structure rail, which is no longer mounted anywhere.
+   *
+   * Owned by the surface holding the claim list because it is serial with a
+   * visible count and has to survive this modal closing mid-sweep.
+   */
+  onCheckClaims: (ids: string[]) => void
+  /** Progress of a running sweep, or null when idle. */
+  checking: { done: number; total: number } | null
   onClose: () => void
 }): JSX.Element {
   // Opens on the Essay Grade widget — 370:135, the compact card with the ring
@@ -329,6 +347,8 @@ export default function ArgumentScoreModal({
             compact={view.name === 'summary'}
             onView={setView}
             onReanalyze={onReanalyze}
+            onCheckClaims={onCheckClaims}
+            checking={checking}
             onClose={onClose}
           />
         )}
@@ -370,6 +390,8 @@ function ScoreReport({
   compact,
   onView,
   onReanalyze,
+  onCheckClaims,
+  checking,
   onClose
 }: {
   outline: DocumentOutline
@@ -378,6 +400,8 @@ function ScoreReport({
   compact: boolean
   onView: (view: View) => void
   onReanalyze: () => void
+  onCheckClaims: (ids: string[]) => void
+  checking: { done: number; total: number } | null
   onClose: () => void
 }): JSX.Element {
   const { detected, withRelevantSource, withOwnCitation, unchecked } = outline.coverage
@@ -402,6 +426,10 @@ function ScoreReport({
   })
   const missing = COMPONENT_LABEL.filter(([key]) => !claimed.has(key))
   const draftWeaknesses = outline.weaknesses.filter((w) => w.paragraphIndex === null)
+  // Unchecked claims, in draft order. `strengthScore === null` is the same test
+  // `outline.coverage.unchecked` counts with, so the button's number and the
+  // "N not checked yet" line above it can never disagree.
+  const pending = claims.filter((claim) => claim.strengthScore === null).map((claim) => claim.id)
 
   return (
     <>
@@ -475,6 +503,24 @@ function ScoreReport({
         </div>
       </div>
 
+      {/*
+        Also on the widget, not only in the full report.
+        370:135 is a ring, an eyebrow, a grade and one line, and the claim
+        counts were pulled out of it for exactly that reason — but this is a
+        button, not another statistic, and the widget is the screen the writer
+        actually lands on. Leaving the only whole-draft sweep two clicks in
+        behind "View Full Report" is how it went missing in the first place.
+
+        The compact form is the button alone. The sentence explaining what a
+        sweep does is what would not fit, and it is the droppable half.
+      */}
+      {/* Not wrapped in a padded container: CheckAllRow renders nothing when
+          every claim is already checked, and a wrapper would leave its padding
+          behind as a gap under the ring. The compact variant carries its own. */}
+      {compact ? (
+        <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} compact />
+      ) : null}
+
       {!compact ? (
         <div className="argscore-scroll">
           <div className="argscore-stats">
@@ -506,6 +552,8 @@ function ScoreReport({
               </button>
             ) : null}
           </div>
+
+          <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} />
 
           {rows.map(({ paragraph, keys, verdict, weaknesses }) => (
             <button
@@ -580,6 +628,61 @@ function ScoreReport({
         </button>
       </footer>
     </>
+  )
+}
+
+/**
+ * The whole-draft evidence sweep.
+ *
+ * Free — the four public academic APIs, not the paid relay — which is what
+ * makes a button that fires N searches at once offerable at all.
+ *
+ * While a sweep runs the button is REPLACED by the count rather than disabled
+ * beside it: `checkClaims` is serial, and a second press would queue a
+ * duplicate pass over claims the first one is still working through.
+ *
+ * One component for both the widget and the report so the two cannot drift into
+ * disagreeing about when a sweep is offered — the widget's copy of this went
+ * missing once already, when the Structure rail was deleted.
+ */
+function CheckAllRow({
+  pending,
+  checking,
+  onCheckClaims,
+  compact = false
+}: {
+  pending: string[]
+  checking: { done: number; total: number } | null
+  onCheckClaims: (ids: string[]) => void
+  /** Drops the explanatory line; the widget frame has no room for it. */
+  compact?: boolean
+}): JSX.Element | null {
+  if (pending.length === 0 && !checking) return null
+
+  return (
+    <div className="argscore-checkall-row" data-compact={compact ? 'true' : undefined}>
+      {checking ? (
+        <p className="argscore-checkall-progress">
+          <Spinner />
+          <span>
+            Searching {Math.min(checking.done + 1, checking.total)} of {checking.total}…
+          </span>
+        </p>
+      ) : (
+        <>
+          <button className="argscore-checkall" onClick={() => onCheckClaims(pending)}>
+            Check all {pending.length}
+          </button>
+          {!compact ? (
+            <span className="argscore-checkall-note">
+              Searches the academic databases for{' '}
+              {pending.length === 1 ? 'the claim' : `all ${pending.length} claims`} that{' '}
+              {pending.length === 1 ? 'has' : 'have'} not been checked yet.
+            </span>
+          ) : null}
+        </>
+      )}
+    </div>
   )
 }
 

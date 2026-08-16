@@ -1226,6 +1226,12 @@ function DocumentEditor({
             const analysisId = analysisIdRef.current
             if (analysisId) void onRefreshClaims(analysisId)
           }}
+          // The bulk sweep. It lives here rather than in the modal because it
+          // is serial with a visible count, and `checkClaims` re-reads the
+          // claims and the outline when it finishes — closing the modal
+          // mid-sweep must not abandon either.
+          onCheckClaims={(ids) => void checkClaims(ids)}
+          checking={checking}
           onClose={() => setScoreOpen(false)}
         />
       ) : null}
