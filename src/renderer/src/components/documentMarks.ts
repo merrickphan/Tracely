@@ -1,3 +1,4 @@
+import { claimEvidenceFor } from '@shared/claimEvidence'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { hasInlineCitationNear } from '@shared/inlineCitation'
@@ -111,39 +112,36 @@ function buildTextMap(root: HTMLElement): { text: string; nodes: TextNodePos[] }
   return { text, nodes }
 }
 
-/** The text node and in-node offset holding character `offset`. */
+/**
+ * The text node and in-node offset holding character `offset`.
+ *
+ * No node contains an offset that lands exactly ON a boundary, and a claim's
+ * END offset is a boundary every time the claim ends its paragraph — which is
+ * most of them. That case used to be special-cased for the LAST node only, so
+ * every earlier paragraph's final sentence resolved to null and
+ * `measureMarks` skipped it. Measured in the preview harness against the
+ * fixture document: both flagged claims ended at a node boundary (43 of a
+ * 43-char node, 162 of a node ending at 162) and the editor drew no underlines
+ * at all.
+ *
+ * A boundary now resolves to the end of the node that precedes it, which is
+ * the same character position expressed as a place a Range can actually
+ * address. Null is kept for an offset past every node — there the text really
+ * has moved on, and a guessed position would underline the wrong sentence.
+ */
 function locate(nodes: TextNodePos[], offset: number): { node: Text; offset: number } | null {
+  let before: TextNodePos | null = null
   for (const entry of nodes) {
     const end = entry.start + entry.node.data.length
     if (offset >= entry.start && offset < end) {
       return { node: entry.node, offset: offset - entry.start }
     }
+    if (offset >= end) before = entry
   }
-  // An offset landing exactly at the very end of the last node is valid as a
-  // range END even though no node "contains" it.
-  const last = nodes[nodes.length - 1]
-  if (last && offset === last.start + last.node.data.length) {
-    return { node: last.node, offset: last.node.data.length }
+  if (before) {
+    return { node: before.node, offset: before.node.data.length }
   }
   return null
-}
-
-/**
- * The evidence a Claim carries, in the shape the shared popover copy expects.
- *
- * Null when the search has not resolved, which is NOT the same as a score of
- * zero — see problemKindsFor, where null produces 'searching' rather than an
- * accusation. `articles` is empty because the document editor has never needed
- * the article list here; the popover's copy reads only `score` and `count`.
- */
-function evidenceOf(claim: Claim): ScreenWatchClaimEvidence | null {
-  if (claim.strengthScore === null) return null
-  return {
-    score: claim.strengthScore,
-    count: claim.scoreBreakdown?.sourceCount ?? 0,
-    articles: [],
-    breakdown: claim.scoreBreakdown ?? { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 }
-  }
 }
 
 /**
@@ -153,8 +151,19 @@ function evidenceOf(claim: Claim): ScreenWatchClaimEvidence | null {
  * come back in its coordinate space with scroll folded in — an absolutely
  * positioned child of a scroll container scrolls with the content, so this
  * stays correct without re-measuring on every scroll event.
+ *
+ * `articleCounts` maps a claim id to how many articles its evidence search
+ * returned. It has to be passed in: a persisted `Claim` does not carry one, and
+ * the number the popover prints ("5 sources came back…") cannot be derived from
+ * anything on the row — see claimEvidenceFor. A claim missing from the map is
+ * simply not marked, the same as one whose search has not resolved.
  */
-export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim[]): DocumentMark[] {
+export function measureMarks(
+  body: HTMLElement,
+  wrap: HTMLElement,
+  claims: Claim[],
+  articleCounts: ReadonlyMap<string, number>
+): DocumentMark[] {
   if (claims.length === 0) return []
 
   const { text, nodes } = buildTextMap(body)
@@ -170,7 +179,7 @@ export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim
     // sentence as uncited. `span` already carries offsets into `text`, so the
     // sentence is right there.
     const cited = hasInlineCitationNear(text, span.start, span.end)
-    const evidence = evidenceOf(span.claim)
+    const evidence = claimEvidenceFor(span.claim, articleCounts.get(span.claim.id))
 
     // A claim nothing has been searched for yet gets no mark at all.
     //
@@ -184,6 +193,10 @@ export function measureMarks(body: HTMLElement, wrap: HTMLElement, claims: Claim
     //
     // Underlining an unchecked claim in any colour makes the same mistake the
     // coverage line used to: reporting a verdict Tracely has not reached.
+    //
+    // A claim whose article count has not loaded lands here too, and for the
+    // same reason: the popover's copy quotes that number, so drawing the mark
+    // before it arrives means opening a card that has to invent one.
     if (!evidence) continue
 
     // The cast is what the `if (!evidence) continue` above earns: 'searching'
