@@ -116,7 +116,13 @@ const CLEAN = ['well-supported', 'partially-supported']
 const controls = expected.claims.filter((s) => CLEAN.includes(s.expected))
 const accused = controls.filter((spec) => {
   const hit = claims.find((c) => c.claim.text.startsWith(spec.claim))
-  return hit?.claim.critique && !isRetrievalMiss(hit.claim) && !CLEAN.includes(hit.claim.verdict)
+  if (!hit?.claim.critique || isRetrievalMiss(hit.claim)) return false
+  // Against the claim's OWN pre-registered acceptable set, not against a fixed
+  // list of good verdicts. 05-C4 is half anecdote and its registration says so —
+  // `weak` was written down in advance as a defensible reading. Counting it as a
+  // false accusation would have this file overrule a judgement made before the
+  // run, which is the one thing pre-registration exists to prevent.
+  return !spec.acceptable.includes(hit.claim.verdict)
 })
 
 console.log(`\n  correct sentences accused of a problem: ${accused.length}/${controls.length}`)
