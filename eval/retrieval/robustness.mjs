@@ -21,17 +21,12 @@
 //
 //   node eval/retrieval/robustness.mjs
 
-import { readFileSync } from 'fs'
-import { fileURLToPath } from 'url'
-
-const HERE = fileURLToPath(new URL('.', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
-const REPO = fileURLToPath(new URL('../..', import.meta.url)).replace(/\\/g, '/').replace(/\/$/, '')
+import { loadLabelled } from './load.mjs'
+import { REPO } from './load.mjs'
 
 const { computeStrengthScore } = await import(new URL(`file:///${REPO}/src/main/services/search/scoring.ts`).href)
 
-const labels = JSON.parse(readFileSync(`${HERE}/labels-2026-08-10.json`, 'utf8'))
-const report = JSON.parse(readFileSync(`${REPO}/eval/reports/${labels.report}`, 'utf8'))
-const flat = report.flatMap((essay) => essay.claims)
+const loaded = loadLabelled()
 
 const isWikipedia = (claim, i) => (claim.sources[i].venue ?? '') === 'Wikipedia'
 
@@ -46,11 +41,10 @@ const VARIANTS = {
 }
 
 const build = (mutate) =>
-  labels.claims.map((labelled) => {
-    const claim = flat.find((c) => c.text.startsWith(labelled.claim))
-    const verdicts = labelled.verdicts.map((v, i) => mutate(v, i, labelled, claim))
+  loaded.rows.map((row) => {
+    const verdicts = row.verdicts.map((v, i) => mutate(v, i, row.labelled, row.claim))
     const rescored = computeStrengthScore(
-      claim.sources.map((s, i) => ({
+      row.sources.map((s, i) => ({
         venueType: s.venueType,
         year: s.year,
         relevanceRank: i,
@@ -61,9 +55,9 @@ const build = (mutate) =>
     ).score
     return {
       verdicts,
-      sources: claim.sources,
+      sources: row.sources,
       rel: verdicts.filter((v) => v === 'rel').length,
-      before: claim.strengthScore,
+      before: row.claim.strengthScore,
       after: rescored
     }
   })
@@ -82,8 +76,9 @@ for (const [name, mutate] of Object.entries(VARIANTS)) {
   const band = (lo, hi) => rows.filter((r) => r.rel >= lo && r.rel <= hi)
 
   console.log(`\n=== ${name}`)
-  console.log(`  strict precision        ${rel.length}/104  ${pct(rel.length, 104)}`)
-  console.log(`  claims with >=1 rel     ${found.length}/13  ${pct(found.length, 13)}`)
+  const nSources = rows.reduce((n, r) => n + r.verdicts.length, 0)
+  console.log(`  strict precision        ${rel.length}/${nSources}  ${pct(rel.length, nSources)}`)
+  console.log(`  claims with >=1 rel     ${found.length}/${rows.length}  ${pct(found.length, rows.length)}`)
   console.log(`  ...ranked 1st           ${atRank1}/${found.length}  ${pct(atRank1, found.length)}`)
   console.log(`  lowest rel similarity   ${lowestRel.toFixed(3)}  (the floor cannot go above this for free)`)
   console.log('  mean score        before / after')

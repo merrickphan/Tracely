@@ -1,5 +1,58 @@
 # Retrieval — what is actually wrong, 2026-08-16
 
+> **Update, same day — the set is now 36 claims, not 13.** Essays 04-09 had
+> never been run or labelled; they are now (`labels/2026-08-16-essays-04-09.json`,
+> 6 relay calls, 0 OpenAlex credits). Every headline below moved, and the section
+> after this one is the current picture. The 13-claim numbers are kept as
+> written because the correction they carry is the point.
+
+## The 36-claim picture
+
+```
+  strict precision           51/288   18%
+  claims with >=1 relevant   22/36    61%
+  ...of the ANSWERABLE ones  22/25    88%
+  ...with it ranked 1st      15/22    68%
+  ...within the top 3        21/22    95%
+  MRR (of those found)        0.81
+```
+
+**The denominator was the problem with "61%".** Eleven of the fourteen claims
+that retrieved nothing relevant are claims no literature can settle as phrased,
+and they are now marked `answerable: false`:
+
+- unfalsifiable predictions — *"depression rates will double within the next
+  decade"*, *"routine surgery will become impossible"*
+- facts about a text rather than the world — *"the moment of animation takes up
+  barely a paragraph"*
+- one local council's vote, and one town's rents
+- **a fabricated citation** — 08-C1's *"Ramirez and Doyle (2024)"* does not exist
+
+**All eleven returned zero relevant sources, which is the correct answer.** Among
+claims that literature can actually speak to, retrieval finds something for 88%
+and puts it in the top three 95% of the time.
+
+Two headlines got worse with more data, as they should:
+
+| | 13 claims | 36 claims |
+|---|---|---|
+| relevant source ranked 1st | 80% | **68%** |
+| score correlation, before → after | 0.31 → 0.54 | **0.35 → 0.38** |
+
+Essays 01-03 were easier than the rest. The scoring fix still helps and helps
+less than the small set suggested — which is exactly what the robustness section
+below predicted would happen.
+
+**The residual defect is unchanged and now better measured.** Mean score for a
+claim with no relevant sources is **60.4**, and the dilution fix does not move it
+(60.4 before, 60.4 after), because those sources clear the 0.42 floor while
+being marginal rather than irrelevant. A claim nothing supports lands mid-band
+and is reported as partially supported. That includes the fabricated citation:
+the evidence pipeline alone cannot tell an invented study from a poorly-retrieved
+real one, and only the critique's `fabricated` verdict can.
+
+
+
 `eval/baseline.md` and the 08-09 re-run both concluded **"detection is fine,
 retrieval is the bottleneck"**, from a strict precision of 22-29% that did not
 move across ~35 commits of retrieval work.

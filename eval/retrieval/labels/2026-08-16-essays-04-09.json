@@ -1,0 +1,348 @@
+{
+  "report": "report-2026-08-16T01-44-53-903Z.json",
+  "labelledBy": "claude",
+  "labelledOn": "2026-08-16",
+  "spotCheckedBy": null,
+  "rubric": "eval/baseline.md — rel: actually evidence for this specific claim · marg: right topic, does not evidence the claim as phrased · irr: not about this claim at all",
+  "note": "The six essays in eval/essays that had never been run or labelled. Detection only — EVAL_SKIP_CRITIQUE=1, 6 paid relay calls, 0 OpenAlex credits.\n\nONLY THE TOP 8 SOURCES OF EACH CLAIM ARE LABELLED. This run returns 16 (MAX_EVIDENCE_RESULTS moved from 8 to 16 in 2b0c0e9, after the older set was labelled), and a precision figure over 16 is not comparable with one over 8 — a longer list is mechanically less precise whatever retrieval does. Truncating keeps one number meaning one thing across both label files. The other 8 per claim are unlabelled, not judged irrelevant.\n\nThese essays are harder than 01-03 by construction, and deliberately so: they carry unfalsifiable predictions, claims about a local council, meta-commentary about a study's sample, and one FABRICATED citation (08-C1's 'Ramirez and Doyle (2024)' does not exist). 0 rel is the correct answer for several of them.",
+  "claims": [
+    {
+      "claim": "Roughly half the population of Sub-Saharan Africa still lacks access",
+      "verdicts": [
+        "rel",
+        "rel",
+        "marg",
+        "marg",
+        "rel",
+        "irr",
+        "irr",
+        "marg"
+      ],
+      "note": "Rank 2 is the World Development Indicator itself — the statistic the claim makes, from the routed World Bank provider."
+    },
+    {
+      "claim": "But a solar home system delivers on the order of tens of watts",
+      "verdicts": [
+        "irr",
+        "marg",
+        "marg",
+        "marg",
+        "irr",
+        "marg",
+        "irr",
+        "marg"
+      ],
+      "note": "0 rel. A comparison of wattages against appliance loads is engineering common knowledge, not a finding anyone published.",
+      "answerable": false,
+      "unanswerableBecause": "engineering common knowledge, not a published finding"
+    },
+    {
+      "claim": "Critics of grid investment point out that centralized generation",
+      "verdicts": [
+        "rel",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "marg",
+        "irr",
+        "irr"
+      ]
+    },
+    {
+      "claim": "The result is that the absolute number of people without power",
+      "verdicts": [
+        "marg",
+        "irr",
+        "marg",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel. Rank 2 is 'Number and percentage of undernourished people in the world' — the claim's SHAPE matched, its subject did not."
+    },
+    {
+      "claim": "Household solar systems can now power lighting, phone charging",
+      "verdicts": [
+        "rel",
+        "marg",
+        "rel",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr"
+      ]
+    },
+    {
+      "claim": "Orben and Przybylski (2019) analyzed data from over 350,000 adolescents",
+      "verdicts": [
+        "marg",
+        "rel",
+        "marg",
+        "irr",
+        "marg",
+        "marg",
+        "irr",
+        "irr"
+      ],
+      "note": "Rank 2 IS Orben & Przybylski 2019. Worth knowing that the paper argues the OPPOSITE of what the claim attributes to it — the retrieval is right and the sentence is wrong, which is the case the stance model exists to catch and cannot."
+    },
+    {
+      "claim": "Since smartphones became widespread around 2012",
+      "verdicts": [
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel. 'no other explanation fits' is not a claim any single paper addresses.",
+      "answerable": false,
+      "unanswerableBecause": "'no other explanation fits' is not a testable proposition"
+    },
+    {
+      "claim": "Some researchers argue the effect is small",
+      "verdicts": [
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "rel",
+        "marg",
+        "irr"
+      ],
+      "note": "Rank 1 is a climate paper — it matched the phrase 'some researchers argue' rather than the subject. A sentence this short carries almost no topical signal, and the query inherits that."
+    },
+    {
+      "claim": "But small average effects can hide large effects in vulnerable subgroups",
+      "verdicts": [
+        "rel",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "rel"
+      ],
+      "note": "Rank 8, 'Variation in social media sensitivity across people and contexts', is squarely the heterogeneity literature this claim is about."
+    },
+    {
+      "claim": "The novel was published anonymously in 1818",
+      "verdicts": [
+        "rel",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "rel"
+      ]
+    },
+    {
+      "claim": "The moment of animation takes up barely a paragraph",
+      "verdicts": [
+        "irr",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "marg",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel, and the best failure case in the set: 'animation' retrieves cartoon-timing manuals and 'paragraph' retrieves the journal named Paragraph. Both senses wrong at once.",
+      "answerable": false,
+      "unanswerableBecause": "a fact about the text itself, not about the world"
+    },
+    {
+      "claim": "When the creature finally speaks, he speaks in the register",
+      "verdicts": [
+        "irr",
+        "marg",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel. A close reading of a novel — the academic APIs index criticism about Frankenstein, but nothing that evidences this particular observation.",
+      "answerable": false,
+      "unanswerableBecause": "a close reading; the providers index criticism, not this observation"
+    },
+    {
+      "claim": "A 2019 global analysis attributed 1.27 million deaths",
+      "verdicts": [
+        "rel",
+        "rel",
+        "rel",
+        "irr",
+        "marg",
+        "marg",
+        "rel",
+        "irr"
+      ],
+      "note": "The best retrieval in either label file. Rank 3 is the GBD AMR paper the claim is actually about."
+    },
+    {
+      "claim": "Roughly 30 percent of antibiotic prescriptions written in American outpatient",
+      "verdicts": [
+        "marg",
+        "rel",
+        "marg",
+        "rel",
+        "marg",
+        "marg",
+        "irr",
+        "irr"
+      ],
+      "note": "Rank 2 is the JAMA 2016 paper the 30% figure comes from."
+    },
+    {
+      "claim": "Resistance genes have been recovered from permafrost sediment",
+      "verdicts": [
+        "marg",
+        "rel",
+        "marg",
+        "rel",
+        "marg",
+        "marg",
+        "irr",
+        "irr"
+      ],
+      "note": "Ranks 2 and 4 are the same Siberian permafrost study indexed twice — a PubMed record and its Russian Journal of Genetics record. The DOI/title dedupe did not merge them."
+    },
+    {
+      "claim": "If nothing changes, routine surgery will become impossible within a decade",
+      "verdicts": [
+        "irr",
+        "marg",
+        "irr",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel, correctly — an unfalsifiable prediction, the same class as 01-C5.",
+      "answerable": false,
+      "unanswerableBecause": "unfalsifiable prediction"
+    },
+    {
+      "claim": "Ramirez and Doyle (2024) found that students who received AI-generated feedback",
+      "verdicts": [
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "marg"
+      ],
+      "note": "0 rel and 8 marg, which is exactly right: THE STUDY DOES NOT EXIST. Retrieval returned eight real papers on the correct topic and none of them can evidence a fabricated citation. The most valuable claim in this file — it is the fabricated-citation case, and the evidence pipeline alone cannot tell it apart from a poorly-retrieved real one.",
+      "answerable": false,
+      "unanswerableBecause": "THE STUDY DOES NOT EXIST — fabricated citation"
+    },
+    {
+      "claim": "Their sample was large and the effect held across grade levels",
+      "verdicts": [
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel, 0 marg — the only claim in either file where nothing retrieved is even on topic. It is a claim ABOUT a (fabricated) study's methodology, so the query became 'sample size' and returned statistics primers.",
+      "answerable": false,
+      "unanswerableBecause": "about a fabricated study"
+    },
+    {
+      "claim": "GPT-5 class models now score above the median human rater",
+      "verdicts": [
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel. The literature covers GPT-4 essay scoring; nothing covers GPT-5 on the AP English Language rubric, and a vendor's own published claim is not indexed anywhere these providers look.",
+      "answerable": false,
+      "unanswerableBecause": "a vendor's published claim, not indexed by academic providers"
+    },
+    {
+      "claim": "Every English teacher I know is quietly worried",
+      "verdicts": [
+        "marg",
+        "rel",
+        "irr",
+        "irr",
+        "marg",
+        "irr",
+        "rel",
+        "irr"
+      ]
+    },
+    {
+      "claim": "The council voted last year to remove parking minimums",
+      "verdicts": [
+        "marg",
+        "marg",
+        "marg",
+        "marg",
+        "irr",
+        "marg",
+        "marg",
+        "marg"
+      ],
+      "note": "0 rel and 7 marg. A specific local council's vote cannot be evidenced by any literature — retrieval found the whole parking-minimum canon, which is the right topic and the wrong question.",
+      "answerable": false,
+      "unanswerableBecause": "one local council's vote"
+    },
+    {
+      "claim": "A two-bedroom apartment within walking distance of downtown",
+      "verdicts": [
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr",
+        "irr"
+      ],
+      "note": "0 rel, 0 marg. Local rents and a local vacancy rate. Nothing published can speak to this, and the honest product behaviour is to decline rather than to list eight papers.",
+      "answerable": false,
+      "unanswerableBecause": "local rents and a local vacancy rate"
+    },
+    {
+      "claim": "Cities that removed parking requirements have seen developers build smaller",
+      "verdicts": [
+        "rel",
+        "rel",
+        "marg",
+        "rel",
+        "rel",
+        "rel",
+        "marg",
+        "irr"
+      ],
+      "note": "5 rel. The claim is general, well-studied, and phrased the way the literature phrases it — which is what good retrieval looks like."
+    }
+  ]
+}
