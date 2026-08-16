@@ -1,0 +1,17 @@
+What Cities and Corpora Have in Common
+
+Two literatures that never cite each other turn out to make the same argument: a resource that looks free is being paid for somewhere else, and the accounting is hidden by convention rather than by difficulty.
+
+The parking case is the cleanest one to state. Shoup argues that minimum parking requirements in American zoning codes push the cost of parking into the price of housing, where drivers and non-drivers pay for it alike (Shoup 45).
+
+Corpus linguistics reached a similar conclusion about counting. Manning and Schütze report that word frequencies in natural language follow a Zipfian distribution, so a few hundred function words account for most of the tokens in a corpus while the majority of the vocabulary appears only once or twice (Manning and Schütze 210).
+
+School policy has produced a comparable finding more recently. Thackeray and Nwosu found that banning smartphones in secondary schools raised standardized test scores by 18 percent, with the largest gains concentrated among students who had previously been in the bottom quartile (Thackeray and Nwosu 88).
+
+Works Cited
+
+Manning, Christopher D., and Hinrich Schütze. Foundations of Statistical Natural Language Processing. MIT Press, 1999.
+
+Shoup, Donald. The High Cost of Free Parking. Planners Press, 2005.
+
+Thackeray, Grace, and Chidi Nwosu. Smartphone Bans and Standardized Test Scores. Education Futures Press, 2024.

@@ -249,13 +249,27 @@ export async function checkReferences(
 ): Promise<ReferenceCheck[]> {
   const inline = parseReferences(sentence)
   const resolved = document ? bibliographyReferences(sentence, document) : []
-  // Inline first: a sentence carrying both "(Smith & Jones, 2019)" and "[3]"
-  // for the same work should be looked up once, and the shape the writer
-  // actually typed is the one worth quoting back at them.
-  const seen = new Set(inline.map((ref) => `${ref.surnames.join('|').toLowerCase()}|${ref.year}`))
+
+  // The same work can be picked up twice. "Thackeray and Nwosu found that …
+  // (Thackeray and Nwosu 88)" is a yearless narrative pair AND a resolved
+  // marker, and looking it up twice costs two queries and a duplicated line in
+  // the description.
+  //
+  // The resolved one wins whenever the names match and the inline reference has
+  // no year of its own, because it is strictly the better object: it carries
+  // the year and title from the entry, and — unlike a bare pair of names the
+  // pattern cannot be sure is a citation at all — its absence may be reported.
+  // Keeping the inline one instead would silently disarm the check.
+  const names = (ref: { surnames: string[] }): string => ref.surnames.join('|').toLowerCase()
+  const resolvedNames = new Set(resolved.map(names))
+
   const refs = [
-    ...inline,
-    ...resolved.filter((ref) => !seen.has(`${ref.surnames.join('|').toLowerCase()}|${ref.year}`))
+    ...inline.filter((ref) => !(ref.year === null && resolvedNames.has(names(ref)))),
+    // A marker and an author-date citation for the same work in the same
+    // sentence — belt and braces from the writer — is still one lookup.
+    ...resolved.filter(
+      (ref) => !inline.some((other) => `${names(other)}|${other.year}` === `${names(ref)}|${ref.year}`)
+    )
   ]
     .filter(isCheckable)
     .slice(0, MAX_REFERENCES_PER_CLAIM)
