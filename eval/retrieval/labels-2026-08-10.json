@@ -1,0 +1,75 @@
+{
+  "report": "report-2026-08-10T00-18-39-402Z.json",
+  "labelledBy": "claude",
+  "labelledOn": "2026-08-16",
+  "spotCheckedBy": null,
+  "rubric": "eval/baseline.md — rel: actually evidence for this specific claim · marg: right topic, does not evidence the claim as phrased · irr: not about this claim at all",
+  "note": "Verdicts are in RANK ORDER, index 0 = the source shown first. Joined to the report by claim text prefix, never by position — see eval/scripts/paths.mjs for what a positional join costs. Labels for 01-C1..C3 and 01-C5 agree source-for-source with eval/baseline.md's counts on the earlier run, which is the only external check available that this labelling pass is calibrated the same way.",
+  "claims": [
+    {
+      "claim": "The American Academy of Pediatrics recommended in 2014",
+      "verdicts": ["rel", "marg", "marg", "marg", "irr", "irr", "irr", "irr"],
+      "note": "Only the MMWR prevalence paper evidences the 'majority still begin before 8:30' half. Ranks 6-8 are 1910/1911/1979 papers about high schools generally — the query's own words, a century out."
+    },
+    {
+      "claim": "Teenagers require between eight and ten hours of sleep",
+      "verdicts": ["marg", "marg", "rel", "irr", "irr", "marg", "marg", "marg"],
+      "note": "Nothing retrieved reports the 70%-get-under-seven prevalence the claim actually makes. The one rel is the closest thing to it."
+    },
+    {
+      "claim": "The consequence is not subtle: pushing start times later",
+      "verdicts": ["rel", "rel", "rel", "rel", "marg", "rel", "marg", "rel"],
+      "note": "The one genuinely good retrieval in the set, and it was good in the baseline too."
+    },
+    {
+      "claim": "Studies show that this sleep debt is the primary driver",
+      "verdicts": ["rel", "irr", "marg", "irr", "rel", "marg", "rel", "marg"],
+      "note": "Labelled rel for the substance, following eval/baseline.md's convention on this claim. Strictly, nothing evidences PRIMACY — 'the primary driver' is the part no paper here establishes, and the critique is what caught that."
+    },
+    {
+      "claim": "If schools do not act, depression rates among teenagers will double",
+      "verdicts": ["marg", "irr", "irr", "marg", "marg", "irr", "irr", "irr"],
+      "note": "0 rel, and correctly so: an unfalsifiable prediction. No literature can support it as phrased."
+    },
+    {
+      "claim": "A randomized controlled trial at a Chinese travel agency",
+      "verdicts": ["rel", "marg", "marg", "marg", "irr", "irr", "marg", "marg"],
+      "note": "Rank 1 is the Ctrip trial registration — the paper the claim is about, and the one queryVariants.ts was built to reach. Rank 7 is the later Trip.com hybrid experiment: a different study, so marg."
+    },
+    {
+      "claim": "Meanwhile, commercial office vacancy rates in major American cities",
+      "verdicts": ["irr", "marg", "rel", "rel", "irr", "irr", "irr", "irr"],
+      "note": "Both rel are post-2020; the irrelevant ones are pre-2020 vacancy-rate papers matching on the words rather than the period the claim is about."
+    },
+    {
+      "claim": "Research suggests that fully remote workers are less likely to be promoted",
+      "verdicts": ["marg", "marg", "irr", "irr", "irr", "marg", "irr", "irr"],
+      "note": "0 rel. The 'visibility' sense collapse the rerun named: tabletop gestures, supply chains, and global eye health."
+    },
+    {
+      "claim": "Johannes Gutenberg introduced movable-type printing to Europe",
+      "verdicts": ["rel", "marg", "irr", "marg", "marg", "marg", "irr", "rel"],
+      "note": "Wikipedia at rank 1 counts as rel for a general historical claim — it evidences the date. Its venue tier says what it is worth citing."
+    },
+    {
+      "claim": "Movable type had already existed in Korea and China",
+      "verdicts": ["rel", "rel", "rel", "marg", "rel", "rel", "marg", "irr"],
+      "note": "The best-retrieving claim after 01-C3. Rank 8 is 'DNA could have existed long before life itself' — 'existed ... before'."
+    },
+    {
+      "claim": "The Protestant Reformation depended on cheap pamphlets",
+      "verdicts": ["rel", "rel", "irr", "marg", "irr", "irr", "irr", "irr"],
+      "note": "Both rel speak to the witch-hunting half. NOTHING retrieved evidences the Reformation half — the claim has two limbs and the search only ever answered one."
+    },
+    {
+      "claim": "Cities that adopted printing early experienced faster economic growth",
+      "verdicts": ["rel", "irr", "marg", "irr", "irr", "irr", "irr", "irr"],
+      "note": "Rank 1 is Dittmar 2011, exactly the paper. Ranks 2-8 are seven papers about cities, or growth, or printing, and none about all three."
+    },
+    {
+      "claim": "What distinguished the European case was the alphabet's small character set",
+      "verdicts": ["marg", "marg", "irr", "marg", "irr", "irr", "irr", "irr"],
+      "note": "0 rel. A three-limbed claim; 'The Merchant as Character on Paper' is the merchant+paper+character collapse from the rerun."
+    }
+  ]
+}

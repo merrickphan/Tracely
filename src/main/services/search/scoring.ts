@@ -39,12 +39,34 @@ export type RelevanceMetric = 'lexical' | 'dense'
 // — measured on the eval's own failure case, genuinely relevant papers sat at
 // 0.43-0.54 and irrelevant ones at 0.03-0.23.
 //
-// The dense figure is a starting point from four labelled pairs, not a
-// calibration. It is meant to be moved by what `npm run evaluate` reports, and
-// should not be treated as settled until it has been.
+// The dense figure was a starting point from four labelled pairs, explicitly
+// flagged here as "not a calibration ... meant to be moved by what the eval
+// reports". 2026-08-16 is that calibration, over 104 hand-labelled sources
+// (eval/retrieval/labels-2026-08-10.json, `node eval/retrieval/rank.mjs`).
+//
+// The signal is good and the threshold was simply in the wrong place. Dense
+// similarity separates a relevant source from an irrelevant one at AUC 0.905;
+// at 0.35 it admitted 29 of 44 irrelevant sources while every relevant one sat
+// at 0.43 or above. Sweeping the floor against the labels:
+//
+//     floor   rel kept   irrelevant admitted
+//     0.350     24/24         29/44
+//     0.400     24/24         25/44
+//     0.425     24/24         17/44     <- every relevant source still kept
+//     0.500     18/24         10/44
+//     0.600     13/24          0/44
+//
+// 0.42 is the last point that costs nothing: past it, precision is bought with
+// genuine evidence, and a dropped relevant source tells a well-supported claim
+// it has no support — the failure this product can least afford.
+//
+// Fitted to the minimum of 24 observations by one labeller, so it is a
+// calibration and not a constant: 0.42 rather than 0.425 leaves a little room
+// under the lowest relevant source seen, and the true minimum is probably lower
+// than anything in this sample. Re-run the sweep whenever labels are added.
 export const MIN_COUNTABLE_RELEVANCE: Record<RelevanceMetric, number> = {
   lexical: 0.2,
-  dense: 0.35
+  dense: 0.42
 }
 
 function clamp01(value: number): number {
@@ -160,28 +182,59 @@ export function computeStrengthScore(
 
   const currentYear = new Date().getFullYear()
 
-  const relevantCount = items.filter((item) => item.textRelevance >= MIN_COUNTABLE_RELEVANCE[metric]).length
-  const sourceCount = Math.min(relevantCount, SOURCE_COUNT_CAP) / SOURCE_COUNT_CAP
+  /**
+   * The sources this claim is actually evidenced by — everything else in the
+   * list is a retrieval miss that happened to be returned.
+   *
+   * Every factor below is computed over THIS set, not over `items`. Until
+   * 2026-08-16 only `sourceCount` applied the floor and `quality`, `recency`
+   * and `relevance` were plain averages over all eight scored sources, which
+   * inverted the whole measure. Retrieval returns ~2 relevant sources in 8
+   * (eval/retrieval/labels-2026-08-10.json), and the six behind them are
+   * usually recent journal articles about something else — so they scored 1.0
+   * on venue tier and near 1.0 on recency, and a claim's score was mostly a
+   * report on papers that had nothing to do with it.
+   *
+   * The measurement, over 13 labelled claims:
+   *
+   *     mean strength score, by relevant sources actually retrieved
+   *       0 relevant   60.3
+   *       1-2          71.0
+   *       3+           58.7
+   *
+   * A claim with three or more genuinely supporting papers scored LOWER than a
+   * claim with none. The highest score in the run (81) went to a claim with one
+   * relevant source; a claim with five scored 68, exactly level with an
+   * unfalsifiable prediction that retrieved nothing. That is not a weak signal,
+   * it is an absent one — and `problemKind.ts` reads this number to decide what
+   * to tell the writer, so "well supported" and "nothing found" were arriving
+   * at the same verdict.
+   *
+   * When nothing clears the floor these are 0 rather than "the average of the
+   * noise". A claim with no relevant sources should score near zero: that is
+   * what `no-sources` means, and the old behaviour floored it around 60 by
+   * averaging venue tier and publication year over papers about other subjects.
+   */
+  const relevant = items.filter((item) => item.textRelevance >= MIN_COUNTABLE_RELEVANCE[metric])
+  const sourceCount = Math.min(relevant.length, SOURCE_COUNT_CAP) / SOURCE_COUNT_CAP
 
-  const quality =
-    items.reduce((sum, item) => sum + VENUE_TIER_WEIGHT[item.venueType ?? 'other'], 0) / items.length
+  const meanOver = (score: (item: ScorableItem) => number): number =>
+    relevant.length === 0 ? 0 : relevant.reduce((sum, item) => sum + score(item), 0) / relevant.length
 
-  const recency =
-    items.reduce((sum, item) => {
-      if (item.year === null) return sum + 0.3
-      return sum + clamp01(1 - (currentYear - item.year) / RECENCY_WINDOW_YEARS)
-    }, 0) / items.length
+  const quality = meanOver((item) => VENUE_TIER_WEIGHT[item.venueType ?? 'other'])
+
+  const recency = meanOver((item) =>
+    item.year === null ? 0.3 : clamp01(1 - (currentYear - item.year) / RECENCY_WINDOW_YEARS)
+  )
 
   // Mostly grounded in actual word overlap with the claim, with the
   // provider's own rank kept as a minor tiebreaker — previously this factor
   // was ONLY the provider's rank, so a search provider's confidently-wrong
   // top result scored as "highly relevant" with no independent check against
   // what the claim actually says.
-  const relevance =
-    items.reduce((sum, item) => {
-      const rankRelevance = clamp01(1 - item.relevanceRank / PER_PROVIDER_LIMIT)
-      return sum + (0.75 * item.textRelevance + 0.25 * rankRelevance)
-    }, 0) / items.length
+  const relevance = meanOver(
+    (item) => 0.75 * item.textRelevance + 0.25 * clamp01(1 - item.relevanceRank / PER_PROVIDER_LIMIT)
+  )
 
   const supporting = items.filter((item) => item.stance === 'supports').length
   const contradicting = items.filter((item) => item.stance === 'contradicts').length
