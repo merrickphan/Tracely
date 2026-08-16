@@ -278,6 +278,48 @@ export const MIN_CONTRADICTION_CONFIDENCE = 0.8
 export const MIN_SUPPORT_CONFIDENCE = 0.5
 
 /**
+ * Whether to ask the stance model anything at all. OFF as of 2026-08-16.
+ *
+ * `nli-deberta-v3-xsmall` was chosen on twelve hand-written (claim, finding)
+ * pairs — short, clean sentences it handles well. Against real retrieved
+ * abstracts it does not work, and `node eval/retrieval/stance.mjs` measures
+ * exactly how, over 51 hand-labelled sources:
+ *
+ *                            supports  contradicts  unclear
+ *     whole abstract    51          0            1       50
+ *     sentence level    51          0            1       50
+ *
+ * **Zero supports at either granularity.** That also settles the hypothesis
+ * written into eval/scripts/stance-sentence.mjs and never run — that the
+ * granularity was wrong and one sentence at a time would fix it. It does not.
+ *
+ * The two decisive verdicts it does produce are both false contradictions, at
+ * 0.98 and 0.99 — far above MIN_CONTRADICTION_CONFIDENCE, so the bar below is
+ * no protection. One of them is against a source hand-labelled RELEVANT for the
+ * claim it supposedly contradicts; the other is a sentence of narrative prose
+ * ("In 1727, an old woman from Loth in Sutherland was brought before a blazing
+ * fire in Dornoch").
+ *
+ * What a single false contradiction does in production is the reason this is a
+ * gate rather than a note. `stanceDecided` flips true, so computeStrengthScore
+ * switches to the with-stance weights; `contradicting >= supporting` is
+ * trivially satisfied when nothing ever supports, so CONTRADICTED_SCORE_CAP
+ * floors the claim at 30; and problemKind.ts reports `contradicted-claim`, the
+ * second most severe kind it has and the one that asserts something is FALSE.
+ *
+ * So the only thing this model can currently do to a student's draft is take a
+ * well-evidenced claim and tell them it is factually wrong. With no upside
+ * available — supports never fire — that is a strictly negative expected value,
+ * and `null` is the honest answer until a model that can do this exists.
+ *
+ * Everything stays wired: null is the documented "model unavailable" path, so
+ * scoring degrades to the pre-stance weights it used before any of this, which
+ * is a state that has always been exercised. Flip this back on with a candidate
+ * model and re-run eval/retrieval/stance.mjs — it prints the table above.
+ */
+const STANCE_ENABLED = false
+
+/**
  * Asks, for each passage, whether it supports or contradicts the claim.
  *
  * Returns `null` rather than throwing when the model is unavailable, like
@@ -291,6 +333,7 @@ export const MIN_SUPPORT_CONFIDENCE = 0.5
  * order.
  */
 export async function classifyStance(claim: string, passages: string[]): Promise<StanceVerdict[] | null> {
+  if (!STANCE_ENABLED) return null
   if (passages.length === 0) return []
 
   const active = ensureWorker()
