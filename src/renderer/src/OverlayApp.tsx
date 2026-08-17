@@ -4241,7 +4241,9 @@ export default function OverlayApp(): JSX.Element {
       {widget && !widget.expanded
         ? (() => {
             const circlePos = dragPos ?? widget.rect
-            const hasInfo = widget.totalInfoCount > 0
+            // The badge counts UNDERLINES, which is what the launcher points
+            // at. It counted sources once, so it read 8 over two marks.
+            const hasInfo = widget.underlineCount > 0
             // A solid black circle with the plain Tracely mark, plus a
             // small solid-orange count badge overlapping its top-right
             // edge once there's something to show — matches the Figma
@@ -4318,7 +4320,7 @@ export default function OverlayApp(): JSX.Element {
                       justifyContent: 'center'
                     }}
                   >
-                    {widget.totalInfoCount}
+                    {widget.underlineCount}
                   </span>
                 ) : null}
               </button>

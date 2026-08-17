@@ -607,6 +607,20 @@ export interface ScreenWatchWidget {
   // (they are heuristic, and they are exactly what goes noisy when paragraph
   // extraction misfires — see structureFit.ts).
   totalInfoCount: number
+  /**
+   * How many underlines are actually drawn on screen right now.
+   *
+   * What the collapsed launcher's badge counts. NOT `totalInfoCount`, which it
+   * used to show — that is the number of SOURCES found across every flagged
+   * claim, so the badge read 8 over a paragraph carrying two underlines and
+   * there was no way to tell what the 8 referred to.
+   *
+   * And not `claimCount` either, which is every currently-flagged claim
+   * including the ones whose rects came back off-screen or scrolled out and so
+   * were filtered before drawing. The badge sits on a launcher pointing at the
+   * document in front of the user; it should count the marks they can see.
+   */
+  underlineCount: number
   // Null when there is no trustworthy structural read; see ScreenWatchStructure.
   structure: ScreenWatchStructure | null
   /**

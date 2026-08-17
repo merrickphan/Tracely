@@ -288,13 +288,30 @@ let widgetManualPos: { x: number; y: number } | null = null
 // depends on this, so it has to be known server-side rather than left as a
 // renderer-only toggle the way the hover popover's own single/all switch is.
 export type WidgetViewMode = 'single' | 'all' | 'structure' | 'grade' | 'report' | 'paragraph'
-let widgetViewMode: WidgetViewMode = 'single'
+
+// What opening the launcher lands on.
+//
+// 'grade', because the Figma flow opens on the Essay Grade Widget (370:191) and
+// puts the per-claim cards behind it — and because the score is the one thing
+// that is about the DRAFT rather than about one sentence. Opening on 'single'
+// answered a question nobody had asked yet: it led with whichever claim
+// happened to score highest, out of any context, before saying anything about
+// the piece of writing as a whole.
+//
+// Safe before a reading exists, which is the thing to check before changing
+// this: 'grade' has a designed state for every case. A detection in flight
+// draws the Analyzing card (391:342), and a draft that was read and refused —
+// too short, or structureFit rejected the split — falls through to the grade
+// card's own "No reading of this draft yet" rather than a spinner that never
+// resolves. See ScreenWatchWidget.analyzing.
+const DEFAULT_VIEW_MODE: WidgetViewMode = 'grade'
+let widgetViewMode: WidgetViewMode = DEFAULT_VIEW_MODE
 
 export function setWidgetExpanded(expanded: boolean): void {
   widgetExpanded = expanded
   if (!expanded) {
     widgetManualPos = null
-    widgetViewMode = 'single'
+    widgetViewMode = DEFAULT_VIEW_MODE
   }
   redrawOverlay()
 }
@@ -431,7 +448,7 @@ function resetTrackingState(): void {
   currentSpans = []
   hoverTargets = []
   widgetExpanded = false
-  widgetViewMode = 'single'
+  widgetViewMode = DEFAULT_VIEW_MODE
   widgetManualPos = null
   lastUpdateInputs = null
   activePopoverClaimId = null
@@ -1594,6 +1611,7 @@ function updateOverlayAndWidget(
       claimCount: number
       claims: ScreenWatchClaimSummary[]
       totalInfoCount: number
+      underlineCount: number
       structure: ScreenWatchStructure | null
       analyzing: boolean
     }
@@ -1606,6 +1624,10 @@ function updateOverlayAndWidget(
       claimCount: claimSummaries.length,
       claims: claimSummaries,
       totalInfoCount,
+      // `underlines`, not `claims`: it is the post-clip, post-filter list —
+      // exactly the marks that will be painted — so a claim scrolled out of
+      // view stops being counted at the same moment it stops being drawn.
+      underlineCount: underlines.length,
       // Read, never computed here. This function runs on every poll tick and
       // on every resolved favicon; refreshWatchOutline owns when the reading
       // is actually redone, and returning the same object identity is what
