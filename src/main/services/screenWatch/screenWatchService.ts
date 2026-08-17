@@ -61,6 +61,7 @@ import {
   inlineCitationKind,
   sentenceAround
 } from '@shared/inlineCitation'
+import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
@@ -1318,7 +1319,7 @@ function updateOverlayAndWidget(
    */
   const citedById = new Map(
     computeClaimSpans(fullText, claims).map(
-      (span) => [span.claim.id, hasInlineCitationNear(fullText, span.start, span.end)] as const
+      (span) => [span.claim.id, isCitedInScope(fullText, span.start, span.end)] as const
     )
   )
   const isCited = (claim: Claim): boolean => citedById.get(claim.id) ?? hasInlineCitation(claim.text)

@@ -12,6 +12,17 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
+    // Same reason as tsconfig.node.json, which carries the full note: a module
+    // that value-imports a sibling by relative path AND has a .test.ts beside
+    // it must spell that import with an explicit `.ts`, because `npm test` runs
+    // it through node --test as real ESM and Node does not guess extensions.
+    //
+    // It is needed here too because both configs compile `src/shared/**/*`, so
+    // a tested shared module is in this program as well — without the flag,
+    // `shared/citationScope.ts` typechecks under main and fails under the
+    // renderer, for an import Node requires. Safe for the same reason: `noEmit`
+    // is on and the real build goes through electron-vite.
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/renderer/src/*"],
