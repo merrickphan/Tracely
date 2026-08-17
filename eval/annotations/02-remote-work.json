@@ -4,8 +4,9 @@
   "report": "report-2026-08-08T02-37-26-088Z.json",
   "imported": true,
   "draft": {
-    "roles": null
+    "roles": ["thesis", "evidence", "conclusion"]
   },
+  "note": "draft.roles backfilled 2026-08-17 (claude — DRAFT, unreviewed). See the note on 01-school-start-times for why roles and not verdicts. The cleanest of the three to label: P1 states the thesis and immediately evidences it, P2 is entirely evidence, and P3 opens with the words 'The honest conclusion is'. If any of the nine backfilled roles are safe, these are.",
   "claims": [
     {
       "text": "A randomized controlled trial at a Chinese travel agency found that employees working from home were roughly 13 percent more productive than their in-office counterparts, and that attrition fell by half.",

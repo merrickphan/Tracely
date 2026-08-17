@@ -4,8 +4,9 @@
   "report": "report-2026-08-08T02-37-26-088Z.json",
   "imported": true,
   "draft": {
-    "roles": null
+    "roles": ["thesis", "claim"]
   },
+  "note": "draft.roles backfilled 2026-08-17 (claude — DRAFT, unreviewed). The three imported essays were the only ones in the set with roles:null, so the paragraph-role work the annotations README ranks second could never use the oldest third of the corpus. Roles need no retrieval — they are a reading of the text — so they are the one thing about 01-03 a cloud run can honestly add. Verdicts are deliberately left null: judging whether the literature supports these claims needs a search, this machine cannot reach the providers (see the note in eval/annotations/README.md), and inventing a verdict from memory is exactly the guessing the null convention exists to prevent. P2 is the arguable one: it asserts a run of unevidenced governing claims and then closes on them, so it does the work of both `claim` and `conclusion` in five sentences. Labelled `claim` because the assertions are what the paragraph is for and the closing sentence restates rather than concludes.",
   "claims": [
     {
       "text": "The American Academy of Pediatrics recommended in 2014 that middle and high schools start no earlier than 8:30 a.m., yet the majority of public high schools in the United States still begin before that.",
