@@ -2990,12 +2990,15 @@ function CitationFlowCard({
   onSetStyle,
   onSearchAgain,
   onInsert,
+  onPreview,
   onCancel,
   onDone,
   onToggleWorksCited,
   onUndo,
   inserting,
-  undoing
+  previewing,
+  undoing,
+  showCancel
 }: {
   state: CitationFlowState
   /** The sentence being cited — the design quotes it back to the reader. */
@@ -3088,8 +3091,14 @@ function CitationFlowCard({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
           <div style={POPOVER_TITLE}>Citation added</div>
         </div>
+        {/* Names the STYLE, not the marker. The frame reads "MLA 9 in-text
+            citation inserted" — the marker itself is already visible in the
+            sentence behind this card, so printing it here says nothing the
+            document does not, while the style is the one decision the writer
+            made whose result they cannot see. */}
         <div style={POPOVER_BODY}>
-          This claim is now backed by a source in your document. {state.citation.inTextCitation} inserted.
+          This claim is now backed by a source in your document. {STYLE_LABEL[state.style]} in-text citation
+          inserted.
         </div>
         {state.showWorksCited ? (
           <div
@@ -3135,14 +3144,8 @@ function CitationFlowCard({
     )
   }
 
-  // "Add Citation (Choose Source)" — 296:355.
-  const { candidates, selectedRef, style } = state
-  const needle = sourceQuery.trim().toLowerCase()
-  const shownCandidates = needle
-    ? candidates.filter((candidate) =>
-        `${candidate.title} ${candidate.venue ?? ''} ${candidate.year ?? ''}`.toLowerCase().includes(needle)
-      )
-    : candidates
+  // "Find a Source (Results)" — 295:349.
+  const { candidates, selectedRef, style, preview } = state
   if (candidates.length === 0) {
     return (
       <>
