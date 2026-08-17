@@ -74,6 +74,17 @@ its lines.
   not.** Same rule as `problemCopy.ts`, and for the same reason: the overlay is
   inline styles in a window that loads no stylesheet, the editor is `.docmark-*`
   classes from `index.css`. Two copies of the strings would be two products.
+- **The confirmation says different things on the two surfaces, because they do
+  different things.** The editor appends a real reference section to the
+  document (`shared/worksCited.ts`, written through the same `execCommand` path
+  as the marker, so one Undo unwinds both), and "ADDED TO WORKS CITED" is true
+  there. The overlay writes the in-text marker into another application through
+  UIA and nothing else — it owns no document and cannot see that window's
+  reference list — so it says `ADD THIS TO YOUR REFERENCE LIST` over an
+  always-visible entry with **Copy entry**, where the frame draws "View Works
+  Cited". It carried the editor's label for a while over a list it had added
+  nothing to, which is a card that makes a student hand in an essay one
+  reference short and hear about it from a marker.
 - **`Preview` earns its place differently on each surface.** Over another app
   the overlay writes through UIA, and being shown the citation first is the only
   way to see it before it lands. In Tracely's own editor the insert goes through
