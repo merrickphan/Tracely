@@ -5,14 +5,7 @@ import Button from './Button'
 import EvidenceCard from './EvidenceCard'
 import EvidenceScoreCard from './EvidenceScoreCard'
 import Spinner from './Spinner'
-
-const CLAIM_TYPE_LABEL: Record<Claim['claimType'], string> = {
-  statistic: 'Statistic',
-  causal: 'Causal claim',
-  factual: 'Factual claim',
-  prediction: 'Prediction',
-  opinion: 'Opinion'
-}
+import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
 
 export default function ClaimCard({ claim: initialClaim }: { claim: Claim }): JSX.Element {
   const [claim, setClaim] = useState(initialClaim)

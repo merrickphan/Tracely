@@ -40,6 +40,7 @@ import {
 import type { Bucket } from './components/problemCopy'
 // Same band, same score, both surfaces — see the note in essayGrade.ts.
 import { gradeFor } from './components/essayGrade'
+import { CLAIM_TYPE_LABEL } from './components/claimTypeLabel'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
@@ -345,14 +346,6 @@ function UnderlineMark({
       />
     </div>
   )
-}
-
-const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
-  statistic: 'Statistic',
-  causal: 'Causal claim',
-  factual: 'Factual claim',
-  prediction: 'Prediction',
-  opinion: 'Opinion'
 }
 
 // >=70/40 thresholds match the main app's score-good/mid/low bands

@@ -4,14 +4,18 @@ import type {
   Claim,
   DocumentOutline,
   EvidenceItem,
+  DraftCohesion,
   ParagraphRole,
   Source,
-  StructureComponents
+  StructureComponents,
+  StructureWeakness,
+  StructureWeaknessKind
 } from '@shared/types'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
+import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
 
 /**
  * What the document editor's "AI Insights" button opens.
@@ -198,16 +202,17 @@ function ComponentBar({ value, max, label }: { value: number; max: number; label
 
 /**
  * Which view is showing. `paragraph` carries the 1-based index it is showing;
- * `evidence` the claim whose sources it is listing, and the paragraph to go
- * back to — the design reaches Find Evidence from a paragraph detail, so Back
- * has to return there rather than to the report.
+ * `evidence` the claim whose sources it is listing, and the view to go back to
+ * — Find Evidence is reachable from a paragraph detail and from the argument
+ * check, so Back has to return to whichever one opened it rather than to a
+ * fixed screen.
  */
 type View =
   | { name: 'summary' }
   | { name: 'full' }
   | { name: 'paragraph'; index: number }
   | { name: 'argument' }
-  | { name: 'evidence'; claimId: string; fromParagraph: number }
+  | { name: 'evidence'; claimId: string; from: { name: 'paragraph'; index: number } | { name: 'argument' } }
 
 export default function ArgumentScoreModal({
   outline,
@@ -320,7 +325,7 @@ export default function ArgumentScoreModal({
             citationStyle={citationStyle}
             onInsertCitation={onInsertCitation}
             onEvidenceSearched={onEvidenceSearched}
-            onBack={() => setView({ name: 'paragraph', index: view.fromParagraph })}
+            onBack={() => setView(view.from)}
             onClose={onClose}
           />
         ) : view.name === 'paragraph' ? (
@@ -330,17 +335,21 @@ export default function ArgumentScoreModal({
             paragraphTexts={paragraphTexts}
             index={view.index}
             onFindEvidence={(claimId) =>
-              setView({ name: 'evidence', claimId, fromParagraph: view.index })
+              setView({ name: 'evidence', claimId, from: { name: 'paragraph', index: view.index } })
             }
             onBack={() => setView({ name: 'summary' })}
             onClose={onClose}
           />
         ) : view.name === 'argument' ? (
-          /* Back lands on the Essay Grade widget, not the full report. This is
-             the view AI Insights opens now, so "back" cannot mean "the screen
-             you came from" — there isn't one. The widget is the hub every
-             other view hangs off, so that is where it leads. */
-          <ArgumentCheck claims={claims} onBack={() => setView({ name: 'summary' })} onClose={onClose} />
+          <ArgumentCheck
+            claims={claims}
+            onFindEvidence={(claimId) =>
+              setView({ name: 'evidence', claimId, from: { name: 'argument' } })
+            }
+            onRecheck={(claimId) => onCheckClaims([claimId])}
+            checking={checking}
+            onClose={onClose}
+          />
         ) : (
           <ScoreReport
             outline={outline}
@@ -968,6 +977,11 @@ function initialsFor(source: Source): string {
   return (words[0] ?? name).slice(0, 2).toUpperCase()
 }
 
+/** The band beside the score, in the design's own word for 34/100. */
+function strengthLabel(score: number): string {
+  return score >= 70 ? 'Strong' : score >= 40 ? 'Moderate' : 'Weak'
+}
+
 /**
  * 353:129 — per-CLAIM, which is why it is only reachable from the explicit
  * link and never from the paragraph flow.
@@ -975,65 +989,118 @@ function initialsFor(source: Source): string {
  * The design draws one claim. This shows the weakest checked claim, since that
  * is the one worth opening the view for, and says how many others there are
  * rather than silently picking one out of several.
+ *
+ * Built from the frame, top to bottom: title + round close on one row over a
+ * divider, the claim-type line with its dot, the quote, a divider, the score
+ * block (eyebrow + band pill on the left, 26px number and /100 on the right,
+ * a 6px track under both), BREAKDOWN, the four metrics as a 2x2 grid, the
+ * sources line, a divider, the critique behind its own dot, and the two
+ * buttons. It had none of that: an 18px title, the quote, one strength number
+ * with no band and no bar, four full-width stacked bars, and no actions at all.
+ *
+ * TWO DEPARTURES, both because a frame is a picture of one state:
+ *
+ *   - No "← Essay Grade" in the header. The frame draws a single dismissal and
+ *     nothing else on that row, so back went with the redraw. Reopening AI
+ *     Insights lands on Essay Grade, which is one click from here.
+ *   - The metric percentages are the four `scoreBreakdown` factors, not the
+ *     design's numbers. `sourceCount` is the fifth and is not a percentage of
+ *     anything, so it stays the sources line the frame already gives it.
  */
 function ArgumentCheck({
   claims,
-  onBack,
+  onFindEvidence,
+  onRecheck,
+  checking,
   onClose
 }: {
   claims: Claim[]
-  onBack: () => void
+  onFindEvidence: (claimId: string) => void
+  /** Re-runs the evidence search for this one claim, through the shared sweep. */
+  onRecheck: (claimId: string) => void
+  checking: { done: number; total: number } | null
   onClose: () => void
 }): JSX.Element {
   const checked = claims.filter((claim) => claim.strengthScore !== null)
   const weakest = checked.slice().sort((a, b) => (a.strengthScore ?? 0) - (b.strengthScore ?? 0))[0] ?? null
+  const score = weakest?.strengthScore ?? 0
+  const tone = toneFor(score)
 
   return (
     <>
       <header className="argscore-head">
-        <button className="argscore-back" onClick={onBack}>
-          ← Essay Grade
-        </button>
+        <h2 className="argscore-title">Argument check</h2>
         <button className="argscore-close" onClick={onClose} aria-label="Close">
           ×
         </button>
       </header>
-      <div className="argscore-scroll argscore-detail">
-        <h2 className="argscore-detail-title">Argument check</h2>
+      <div className="argscore-scroll argscore-check">
         {!weakest ? (
           <p className="muted">
             No claim has been checked yet. Run an evidence search on a claim and its strength appears here.
           </p>
         ) : (
           <>
-            <p className="argscore-quote">“{weakest.text}”</p>
-            <div className="argscore-strength">
+            <p className="argscore-check-claim">
+              <span className="argscore-check-dot" />
+              {CLAIM_TYPE_LABEL[weakest.claimType]} · {Math.round(weakest.confidence * 100)}% confidence
+            </p>
+            <p className="argscore-check-quote">“{weakest.text}”</p>
+
+            <div className="argscore-check-rule" />
+
+            <div className="argscore-check-score">
               <span className="argscore-eyebrow">Argument strength</span>
-              <span className={`argscore-strength-score tone-${toneFor(weakest.strengthScore ?? 0)}`}>
-                {weakest.strengthScore}
-                <small> /100</small>
+              <span className={`argscore-check-band tone-${tone}`}>{strengthLabel(score)}</span>
+              <span className="argscore-check-number">
+                {score}
+                <small>/100</small>
               </span>
             </div>
+            <span className="argscore-check-track">
+              <span className={`argscore-check-fill tone-${tone}`} style={{ width: `${score}%` }} />
+            </span>
+
             {weakest.scoreBreakdown ? (
-              <div className="argscore-breakdown">
-                <ComponentBar value={weakest.scoreBreakdown.support * 100} max={100} label="Support" />
-                <ComponentBar value={weakest.scoreBreakdown.relevance * 100} max={100} label="Relevance" />
-                <ComponentBar value={weakest.scoreBreakdown.quality * 100} max={100} label="Quality" />
-                <ComponentBar value={weakest.scoreBreakdown.recency * 100} max={100} label="Recency" />
-              </div>
+              <>
+                <span className="argscore-eyebrow argscore-check-eyebrow">Breakdown</span>
+                {/* The same ComponentBar the report uses — it already draws a
+                    label/percent row over a full-width track, which is the
+                    frame's metric cell. `.argscore-check-metrics` is what makes
+                    it a 2x2 grid and paints the fills one ink colour: these four
+                    are parts of the number above them, not four verdicts, and
+                    the frame colours only the score bar. */}
+                <div className="argscore-check-metrics">
+                  <ComponentBar value={weakest.scoreBreakdown.support * 100} max={100} label="Support" />
+                  <ComponentBar value={weakest.scoreBreakdown.relevance * 100} max={100} label="Relevance" />
+                  <ComponentBar value={weakest.scoreBreakdown.quality * 100} max={100} label="Quality" />
+                  <ComponentBar value={weakest.scoreBreakdown.recency * 100} max={100} label="Recency" />
+                </div>
+                <p className="argscore-check-sources">
+                  <span className="argscore-check-bullet" />
+                  {weakest.scoreBreakdown.sourceCount} source
+                  {weakest.scoreBreakdown.sourceCount === 1 ? '' : 's'} cited for this claim
+                </p>
+              </>
             ) : null}
+
             {weakest.critique ? (
               <>
-                <h3 className="argscore-section">Critique</h3>
+                <div className="argscore-check-rule" />
+                <h3 className="argscore-check-heading">
+                  <span className="argscore-check-dot" />
+                  Critique
+                </h3>
                 {/* Through MarkdownText, like every other surface that shows a
                     critique. The relay's prompts neither request nor forbid
                     markdown and the model emits it freely, so rendering the raw
                     string printed literal ** around the emphasis. */}
-                <div className="argscore-weakness-block">
+                <div className="argscore-check-critique">
                   <MarkdownText>{weakest.critique}</MarkdownText>
                 </div>
               </>
             ) : null}
+
             {checked.length > 1 ? (
               <p className="argscore-footnote">
                 Showing the weakest of {checked.length} checked claims. The rest are under the document.
@@ -1042,6 +1109,22 @@ function ArgumentCheck({
           </>
         )}
       </div>
+      {weakest ? (
+        <div className="argscore-foot">
+          <button className="argscore-btn ink" onClick={() => onFindEvidence(weakest.id)}>
+            Find Evidence
+          </button>
+          {/* Disabled only while a sweep is actually running, since that sweep
+              is owned by the view behind this modal and can outlive it. */}
+          <button
+            className="argscore-btn outline"
+            onClick={() => onRecheck(weakest.id)}
+            disabled={checking !== null}
+          >
+            {checking ? `Checking ${checking.done}/${checking.total}…` : 'Re-check Argument'}
+          </button>
+        </div>
+      ) : null}
     </>
   )
 }
