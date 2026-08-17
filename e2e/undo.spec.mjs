@@ -64,15 +64,61 @@ function launchIsolated() {
   }
 }
 
+/**
+ * Quits the app, rather than asking it to.
+ *
+ * `electronApplication.close()` closes the windows and then waits for the
+ * process to exit — which never happens here. `window-all-closed` deliberately
+ * does NOT quit this app (main/index.ts keeps it alive in the tray so the
+ * global hotkey still works with no window open), so close() sat until the
+ * processes were killed by hand: the assertions had long since passed and the
+ * run still took ten and a half minutes.
+ *
+ * `app.exit(0)` skips the quit handlers and ends the process. Losing the final
+ * `persist()` in `before-quit` costs nothing — the only database it could write
+ * is the throwaway one this run created.
+ */
+async function teardown(app, userData) {
+  await app.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {})
+  await app.close().catch(() => {})
+  rmSync(userData, { recursive: true, force: true })
+}
+
+/**
+ * The MAIN window, chosen by which entry point it loaded.
+ *
+ * NOT `app.firstWindow()`. main/index.ts creates the main window and then the
+ * hidden floating one, and Playwright hands back whichever it happens to see
+ * first — measured at 6 index.html to 2 floating.html over eight launches. A
+ * handle on the floating window fails in a way that reads like a broken app
+ * rather than a broken selector: it has no PASSWORD field, so the auth-gate
+ * assertion below passes, and then "New Session" times out after 30 seconds
+ * because that window has never had one.
+ *
+ * Polled rather than awaited via the 'window' event, because a window can be
+ * reported before it has navigated, and its url() is empty until it does.
+ */
+async function mainWindow(app, timeoutMs = 30_000) {
+  const isMain = (w) => w.url().endsWith('/index.html')
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const found = app.windows().find(isMain)
+    if (found) return found
+    if (Date.now() > deadline) {
+      throw new Error(`no index.html window after ${timeoutMs}ms; saw: ${app.windows().map((w) => w.url()).join(', ') || '(none)'}`)
+    }
+    await new Promise((r) => setTimeout(r, 50))
+  }
+}
+
 test('a real Ctrl+Z reverts an applied revision in one press', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
-    await app.close().catch(() => {})
-    rmSync(userData, { recursive: true, force: true })
+    await teardown(app, userData)
   })
 
-  const page = await app.firstWindow()
+  const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
 
   // The auth gate is skipped only because `test:e2e` builds with the Supabase
@@ -155,8 +201,7 @@ test('the Edit role that carries Ctrl+Z is actually installed', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
-    await app.close().catch(() => {})
-    rmSync(userData, { recursive: true, force: true })
+    await teardown(app, userData)
   })
 
   // Read in the MAIN process: the accelerator lives on the application menu,
