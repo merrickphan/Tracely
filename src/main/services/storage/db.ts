@@ -133,6 +133,25 @@ const MIGRATIONS: Migration[] = [
       addColumnIfMissing(database, 'claim_evidence', 'stance', 'TEXT')
       addColumnIfMissing(database, 'claim_evidence', 'stance_confidence', 'REAL')
     }
+  },
+  {
+    version: 4,
+    describe: 'claims.suggested_revision / citation_fix — the critique output that is a fix',
+    up: (database) => {
+      // The critique has returned both since the relay's v7 response, and both
+      // went to the renderer that asked for it and nowhere else. Everything
+      // that reads a claim back — the document editor's underlines and the
+      // popover over them — sees only `critique` and `critique_verdict`, so a
+      // sentence flagged "Overstated" could offer the complaint and not the
+      // narrowed sentence that is the whole content of that verdict.
+      //
+      // No backfill is possible: the values were never written, and re-deriving
+      // them means paying for the most expensive call in the product on every
+      // historical claim. Old rows stay null and the card falls back to the
+      // critique prose, which is what they have.
+      addColumnIfMissing(database, 'claims', 'suggested_revision', 'TEXT')
+      addColumnIfMissing(database, 'claims', 'citation_fix', 'TEXT')
+    }
   }
 ]
 

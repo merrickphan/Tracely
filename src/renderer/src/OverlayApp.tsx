@@ -34,9 +34,19 @@ import {
   PROBLEM_COLOR,
   PROBLEM_LABEL,
   bucketFor,
-  isReasoningProblem,
+  opensFixFlow,
   popoverCopyFor
 } from './components/problemCopy'
+// The fix card's wording, shared with the editor's DocumentMarkLayer for the
+// same reason citationFlowCopy.ts is.
+import {
+  CITATION_FIX_LABEL,
+  NO_REVISION_BODY,
+  OVERLAY_APPLY_NOTE,
+  REVISION_LABEL,
+  REVISION_RULE,
+  fixTitle
+} from './components/fixFlowCopy'
 import type { Bucket } from './components/problemCopy'
 // Same band, same score, both surfaces — see the note in essayGrade.ts.
 import { gradeFor } from './components/essayGrade'
@@ -47,7 +57,8 @@ import {
   CITATION_STYLE_LABEL,
   emptyResultsBody,
   flagsLeft,
-  insertedBody,
+  insertedBodyExternal,
+  EXTERNAL_REFERENCE_LABEL,
   resultsBody,
   resultsTitle,
   searchingBody
@@ -2738,6 +2749,94 @@ function NoReadingView(): JSX.Element {
 // what these say. The wording above is the reasoning behind them and stays
 // here with the card that shows it.
 
+/**
+ * "Suggest fix", answered inside the popover instead of by navigating.
+ *
+ * Pressing it used to select the claim, drop the hover card and expand the
+ * widget panel in the corner — a jump to the other side of the screen, away
+ * from the sentence the question was asked about, to read something the panel
+ * was already able to show. The citation flow stopped doing that; this is the
+ * same correction for the other button.
+ *
+ * There is no Figma frame for it (see components/fixFlowCopy.ts). It is
+ * assembled from what this popover already draws: the header dot in the mark's
+ * colour, POPOVER_BODY prose, and — for the two blocks of proposed text — the
+ * widget panel's own CritiqueFixRow, unchanged, which is what has been showing
+ * a suggested revision since before this card existed.
+ *
+ * Nothing is fetched. Every word here came off the claim, written by the
+ * critique that raised the underline, so opening this cannot make the relay
+ * call that Screen Watch deliberately never makes on its own.
+ *
+ * Copy, not Apply, and that is not taste: this window is drawn over another
+ * application it reads through UI Automation. It can write a short citation at
+ * a located offset, which is a different proposition from selecting a whole
+ * sentence in someone else's editor and typing over it — a button that appeared
+ * to rewrite the paragraph underneath would be claiming a reach this window
+ * does not have. Tracely's own editor, which owns its text, does apply it.
+ */
+function FixCard({
+  claim,
+  kind,
+  fallbackDetail,
+  onBack
+}: {
+  claim: ScreenWatchClaimSummary
+  kind: ScreenWatchProblemKind
+  /**
+   * What the problem card said, for a claim carrying no critique text.
+   *
+   * `popoverCopyFor` already keeps a sentence for that case, and this card
+   * needs the same one: `critiqueIssues('')` returns an empty array, so without
+   * a fallback "Suggest fix" opened onto a header and a Back button. Reached in
+   * the preview harness against a claim flagged 'weak-reasoning' with a null
+   * critique.
+   */
+  fallbackDetail: string
+  onBack: () => void
+}): JSX.Element {
+  const revision = claim.suggestedRevision
+  const citationFix = claim.citationFix
+  // Only when there is nothing to hand over. Where a revision exists the
+  // critique prose was already read on the card behind this one, and repeating
+  // it above the sentence it produced buries the one thing worth looking at.
+  const issues = revision || citationFix ? [] : critiqueIssues(claim.critique || fallbackDetail)
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{ width: 8, height: 8, borderRadius: '50%', background: PROBLEM_COLOR[kind], flexShrink: 0 }}
+        />
+        <div style={POPOVER_TITLE}>{fixTitle(kind)}</div>
+      </div>
+      {revision ? (
+        <>
+          <div style={POPOVER_BODY}>{REVISION_RULE}</div>
+          <CritiqueFixRow label={REVISION_LABEL} text={revision} />
+          <div style={{ ...POPOVER_BODY, fontSize: 11.5 }}>{OVERLAY_APPLY_NOTE}</div>
+        </>
+      ) : null}
+      {citationFix ? <CritiqueFixRow label={CITATION_FIX_LABEL} text={citationFix} monospace /> : null}
+      {issues.length ? (
+        <>
+          <div style={POPOVER_BODY}>{NO_REVISION_BODY}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            {issues.map((issue, i) => (
+              <CritiqueIssueRow key={i} title={issue.title} detail={issue.detail} />
+            ))}
+          </div>
+        </>
+      ) : null}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="tracely-btn-secondary" onClick={onBack} style={SECONDARY_BTN_STYLE}>
+          Back
+        </button>
+      </div>
+    </>
+  )
+}
+
 function ProblemCard({
   claim,
   activeKind,
@@ -2786,7 +2885,7 @@ function ProblemCard({
     claim.evidence as ScreenWatchClaimEvidence,
     kind
   )
-  const onPrimary = isReasoningProblem(kind) ? onSuggestFix : onStartCitationFlow
+  const onPrimary = opensFixFlow(kind) ? onSuggestFix : onStartCitationFlow
 
   return (
     <>
@@ -2892,7 +2991,15 @@ type CitationFlowState =
        * in the document rather than merely that something was.
        */
       style: CitationStyle
-      showWorksCited: boolean
+      /**
+       * Whether the reference entry has been copied to the clipboard.
+       *
+       * Was `showWorksCited`, a toggle over a block this surface drew as
+       * "ADDED TO WORKS CITED" — over a list it had added nothing to. The block
+       * is now always visible and the button copies, so the flag records the
+       * copy rather than the disclosure.
+       */
+      entryCopied: boolean
     }
   | { step: 'error'; message: string }
 
@@ -2963,11 +3070,45 @@ function CandidateRow({
       }}
     >
       <SourceIcon provider={candidate.provider} faviconDataUrl={candidate.faviconDataUrl} />
-      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: INK }}>{candidate.title}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
-          {meta ? <span style={{ color: DIM }}>{meta}</span> : null}
-          <span style={{ color: POSITIVE, fontWeight: 500 }}>{candidate.matchPercent}% match</span>
+      {/* `overflow: hidden` as well as `minWidth: 0`. The min-width lets this
+          shrink below its content; without the overflow it shrinks and its
+          children paint straight out of it regardless, which pushed the row and
+          the whole 380px card sideways. Measured: card scrollWidth 435 against
+          clientWidth 361, on a real result from the fixture. */}
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+        <div
+          style={{
+            fontSize: 13.5,
+            fontWeight: 500,
+            color: INK,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {candidate.title}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, minWidth: 0 }}>
+          {/* The venue is what gives, and the match percentage is what does not.
+              Ellipsising the line as a whole would cut the number the card is
+              titled around — "Ranked by how directly each source supports…" is
+              a promise that the ranking is legible on every row. */}
+          {meta ? (
+            <span
+              style={{
+                color: DIM,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {meta}
+            </span>
+          ) : null}
+          <span style={{ color: POSITIVE, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {candidate.matchPercent}% match
+          </span>
         </div>
       </div>
       <Radio selected={selected} />
@@ -2986,7 +3127,7 @@ function CitationFlowCard({
   onPreview,
   onCancel,
   onDone,
-  onToggleWorksCited,
+  onEntryCopied,
   onUndo,
   inserting,
   previewing,
@@ -3005,7 +3146,8 @@ function CitationFlowCard({
   onPreview: () => void
   onCancel: () => void
   onDone: () => void
-  onToggleWorksCited: () => void
+  /** Records that the reference entry reached the clipboard. */
+  onEntryCopied: () => void
   onUndo: () => void
   inserting: boolean
   previewing: boolean
@@ -3081,30 +3223,42 @@ function CitationFlowCard({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
           <div style={POPOVER_TITLE}>Citation added</div>
         </div>
-        {/* Names the STYLE, not the marker. The frame reads "MLA 9 in-text
-            citation inserted" — the marker itself is already visible in the
-            sentence behind this card, so printing it here says nothing the
-            document does not, while the style is the one decision the writer
-            made whose result they cannot see. */}
-        <div style={POPOVER_BODY}>{insertedBody(state.style)}</div>
-        {state.showWorksCited ? (
+        {/* Names the STYLE, not the marker: the marker is already visible in
+            the sentence behind this card. The second half is what separates
+            this surface from the editor — see insertedBodyExternal. */}
+        <div style={POPOVER_BODY}>{insertedBodyExternal(state.style)}</div>
+        {/* Always drawn, never behind a toggle. This entry is the one piece of
+            work the card is handing back to the writer, and a task hidden
+            behind a button labelled "View" is a task most people never see. */}
+        <div
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            background: SELECTED_BG,
+            borderRadius: 10,
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
+            {EXTERNAL_REFERENCE_LABEL}
+          </div>
           <div
             style={{
-              width: '100%',
-              background: SELECTED_BG,
-              borderRadius: 10,
-              padding: 12,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: MUTED,
+              // Selectable, so a refused clipboard write is inconvenient rather
+              // than a dead end — the same fallback CritiqueFixRow relies on.
+              userSelect: 'text',
+              wordBreak: 'break-word'
             }}
           >
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
-              ADDED TO WORKS CITED
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.4, color: MUTED }}>{state.citation.worksCitedEntry}</div>
+            {state.citation.worksCitedEntry}
           </div>
-        ) : null}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, whiteSpace: 'nowrap' }}>
           <span style={{ color: POSITIVE, fontWeight: 500 }}>Claim resolved</span>
           <span style={{ color: DIM }}>· {flagsLeft(remaining)}</span>
@@ -3113,8 +3267,23 @@ function CitationFlowCard({
           <button className="tracely-btn-primary" onClick={onDone} style={PRIMARY_BTN_STYLE}>
             Done
           </button>
-          <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
-            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+          {/* "Copy entry", not "View Works Cited". The frame's button opens a
+              list this surface does not have; the useful action here is to put
+              the reference somewhere the writer can paste it. */}
+          <button
+            className="tracely-btn-secondary"
+            onClick={() => {
+              // No error surfaced on failure: a clipboard write can be refused
+              // and there is nothing useful to say about it here. The entry
+              // above is selectable, which is the fallback.
+              void navigator.clipboard?.writeText(state.citation.worksCitedEntry).then(
+                () => onEntryCopied(),
+                () => undefined
+              )
+            }}
+            style={SECONDARY_BTN_STYLE}
+          >
+            {state.entryCopied ? '✓ Copied' : 'Copy entry'}
           </button>
           <button
             className="tracely-btn-secondary"
@@ -3407,6 +3576,15 @@ export default function OverlayApp(): JSX.Element {
   // The hover popup's citation flow (Find a source / Add citation), keyed
   // by claim id — absent means "just showing ProblemCard," not started.
   const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
+  /**
+   * Claims whose hover popover is currently showing the fix card.
+   *
+   * A set of ids rather than a single id, to match citationFlowByClaimId: the
+   * hover moves between sentences freely here (nothing pins it, unlike the
+   * editor), and a single slot would silently retarget the open card at
+   * whichever claim the pointer crossed last.
+   */
+  const [fixOpenIds, setFixOpenIds] = useState<Set<string>>(new Set())
   const [citationBusyIds, setCitationBusyIds] = useState<Set<string>>(new Set())
   const [previewBusyIds, setPreviewBusyIds] = useState<Set<string>>(new Set())
   const [undoBusyIds, setUndoBusyIds] = useState<Set<string>>(new Set())
@@ -3627,6 +3805,18 @@ export default function OverlayApp(): JSX.Element {
     setFlow(claimId, null)
   }
 
+  function openFix(claimId: string): void {
+    setFixOpenIds((prev) => new Set(prev).add(claimId))
+  }
+
+  function closeFix(claimId: string): void {
+    setFixOpenIds((prev) => {
+      const next = new Set(prev)
+      next.delete(claimId)
+      return next
+    })
+  }
+
   function setFlow(claimId: string, state: CitationFlowState | null): void {
     setCitationFlowByClaimId((prev) => {
       const next = new Map(prev)
@@ -3737,7 +3927,7 @@ export default function OverlayApp(): JSX.Element {
       // the half of the insert the writer cannot see — the in-text marker is
       // already visible in their sentence — so hiding it behind a button meant
       // the confirmation confirmed only the part that needed no confirming.
-      setFlow(claimId, { step: 'inserted', citation, style: flow.style, showWorksCited: true })
+      setFlow(claimId, { step: 'inserted', citation, style: flow.style, entryCopied: false })
     } catch (err) {
       setFlow(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -3749,9 +3939,9 @@ export default function OverlayApp(): JSX.Element {
     }
   }
 
-  function toggleWorksCited(claimId: string): void {
+  function markEntryCopied(claimId: string): void {
     const flow = citationFlowByClaimId.get(claimId)
-    if (flow?.step === 'inserted') setFlow(claimId, { ...flow, showWorksCited: !flow.showWorksCited })
+    if (flow?.step === 'inserted') setFlow(claimId, { ...flow, entryCopied: true })
   }
 
   async function undoCitation(claimId: string): Promise<void> {
@@ -4279,7 +4469,7 @@ export default function OverlayApp(): JSX.Element {
                       onPreview={() => void previewCitation(gradeFlowClaim.id)}
                       onCancel={() => closeGradeSourceFinder(gradeFlowClaim.id)}
                       onDone={() => closeGradeSourceFinder(gradeFlowClaim.id)}
-                      onToggleWorksCited={() => toggleWorksCited(gradeFlowClaim.id)}
+                      onEntryCopied={() => markEntryCopied(gradeFlowClaim.id)}
                       onUndo={() => void undoCitation(gradeFlowClaim.id)}
                       inserting={citationBusyIds.has(gradeFlowClaim.id)}
                       previewing={previewBusyIds.has(gradeFlowClaim.id)}
@@ -4571,21 +4761,30 @@ export default function OverlayApp(): JSX.Element {
                     onPreview={() => void previewCitation(claimHoveredSummary.id)}
                     onCancel={() => setFlow(claimHoveredSummary.id, null)}
                     onDone={() => setFlow(claimHoveredSummary.id, null)}
-                    onToggleWorksCited={() => toggleWorksCited(claimHoveredSummary.id)}
+                    onEntryCopied={() => markEntryCopied(claimHoveredSummary.id)}
                     onUndo={() => void undoCitation(claimHoveredSummary.id)}
                     inserting={citationBusyIds.has(claimHoveredSummary.id)}
                     previewing={previewBusyIds.has(claimHoveredSummary.id)}
                     undoing={undoBusyIds.has(claimHoveredSummary.id)}
                     showCancel={false}
                   />
+                ) : fixOpenIds.has(claimHoveredSummary.id) ? (
+                  <FixCard
+                    claim={claimHoveredSummary}
+                    kind={hoveredActiveKind}
+                    fallbackDetail={
+                      popoverCopyFor(
+                        claimHoveredSummary,
+                        claimHoveredSummary.evidence as ScreenWatchClaimEvidence,
+                        hoveredActiveKind as Exclude<ScreenWatchProblemKind, 'searching'>
+                      ).description
+                    }
+                    onBack={() => closeFix(claimHoveredSummary.id)}
+                  />
                 ) : (
                   <ProblemCard
                     claim={claimHoveredSummary}
-                    onSuggestFix={() => {
-                      selectClaim(claimHoveredSummary.id)
-                      setHover(null)
-                      void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
-                    }}
+                    onSuggestFix={() => openFix(claimHoveredSummary.id)}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
                     activeKind={hoveredActiveKind}
                     remaining={hoveredRemaining}

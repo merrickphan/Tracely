@@ -79,6 +79,58 @@ export function insertedBody(style: CitationStyle): string {
 }
 
 /**
+ * The label over the entry in the confirmation card — Figma 298:136 reads
+ * "ADDED TO WORKS CITED", and until the editor grew a real works-cited section
+ * that was the card asserting something the document could not back up.
+ *
+ * Three answers rather than one, because there are three outcomes and the frame
+ * only drew the happy one. Citing a source for a second sentence is ordinary —
+ * every style lists a work once — and saying "added" there would report a
+ * second entry that is deliberately not written. `failed` is the honest read of
+ * a document whose text moved on between the search and the insert: the marker
+ * went in, the list did not, and a card claiming otherwise sends the writer to
+ * hand in an essay whose references are short by one.
+ *
+ * Only the editor uses this. Screen Watch writes into another application's
+ * window through UIA, owns no document, and cannot add anything to a list.
+ */
+export function worksCitedLabel(status: 'added' | 'already-listed' | 'failed'): string {
+  if (status === 'added') return 'ADDED TO WORKS CITED'
+  if (status === 'already-listed') return 'ALREADY IN WORKS CITED'
+  return 'NOT ADDED TO WORKS CITED'
+}
+
+/** Said under the entry only when it could not be written — never silently. */
+export const WORKS_CITED_FAILED_NOTE =
+  'The in-text citation went in, but the reference list could not be updated — add this line to it yourself.'
+
+/**
+ * The same confirmation, said by Screen Watch, where half of it is not true.
+ *
+ * The editor owns its document and now really does append the reference, so
+ * `insertedBody` + `worksCitedLabel` describe two writes that happened. Over
+ * another application the overlay writes the in-text marker through UIA and
+ * nothing else: it has no document, keeps no state between polls, and cannot
+ * see — let alone edit — whatever reference list that window may or may not
+ * have. It said "ADDED TO WORKS CITED" over an entry it had added to nothing,
+ * which is the most quietly damaging thing this card could do: a student who
+ * believes it hands in an essay whose references are short by one, and finds
+ * out from a marker.
+ *
+ * So the marker is reported as inserted, because it was, and the entry is
+ * handed over as work still to do rather than as work already done.
+ */
+export function insertedBodyExternal(style: CitationStyle): string {
+  return (
+    `${CITATION_STYLE_LABEL[style]} in-text citation inserted. Tracely cannot edit that document's reference ` +
+    'list, so the entry below is not in it yet.'
+  )
+}
+
+/** Reads as an instruction, not a receipt. See `insertedBodyExternal`. */
+export const EXTERNAL_REFERENCE_LABEL = 'ADD THIS TO YOUR REFERENCE LIST'
+
+/**
  * The monogram tile's letters: an acronym for a multi-word venue, else the
  * first two letters of whatever name there is.
  *

@@ -74,6 +74,17 @@ its lines.
   not.** Same rule as `problemCopy.ts`, and for the same reason: the overlay is
   inline styles in a window that loads no stylesheet, the editor is `.docmark-*`
   classes from `index.css`. Two copies of the strings would be two products.
+- **The confirmation says different things on the two surfaces, because they do
+  different things.** The editor appends a real reference section to the
+  document (`shared/worksCited.ts`, written through the same `execCommand` path
+  as the marker, so one Undo unwinds both), and "ADDED TO WORKS CITED" is true
+  there. The overlay writes the in-text marker into another application through
+  UIA and nothing else — it owns no document and cannot see that window's
+  reference list — so it says `ADD THIS TO YOUR REFERENCE LIST` over an
+  always-visible entry with **Copy entry**, where the frame draws "View Works
+  Cited". It carried the editor's label for a while over a list it had added
+  nothing to, which is a card that makes a student hand in an essay one
+  reference short and hear about it from a marker.
 - **`Preview` earns its place differently on each surface.** Over another app
   the overlay writes through UIA, and being shown the citation first is the only
   way to see it before it lands. In Tracely's own editor the insert goes through
@@ -86,12 +97,16 @@ its lines.
   so the flow state is owned by the view, and the hit-test stops swapping marks
   while one is open — otherwise reaching across another underline on the way to
   "Insert citation" takes the card with it.
-- **The editor's marks cannot be driven in `npm run preview:ui` from a browser
-  pane that is not displayed.** They are measured inside a
-  `requestAnimationFrame` (deliberately — see the note on that effect), and a
-  hidden page never runs one, so `marks` stays empty and the popover is
-  unreachable. The overlay's equivalent has no rAF gate and drives fine. Reach
-  the editor's card with `npm run dev` instead.
+- **The editor's marks are driveable from a browser pane that is not
+  displayed** — they were not, until `renderer/src/frameScheduler.ts`. They are
+  measured inside a frame callback (deliberately: it batches a keystroke and a
+  ResizeObserver callback that both force layout), and Chromium freezes rAF
+  entirely on a page that is not compositing, so `marks` stayed empty and the
+  popover was unreachable in `npm run preview:ui`. `scheduleFrame` arms a rAF
+  and a 50ms timer and takes whichever fires first: the frame always wins when
+  there is one, so the batching is unchanged in the shipped app, and the timer
+  is the only thing that ever fires in a hidden window. Measured in the
+  harness: 0 marks before, 4 after, with the hover popover opening on them.
 
 ## Commands
 

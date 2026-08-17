@@ -9,9 +9,19 @@ import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
-import type { DocCitationFlowState } from '../components/DocumentMarkLayer'
+import type { DocCitationFlowState, DocFixState } from '../components/DocumentMarkLayer'
 import { sourceInitials } from '../components/citationFlowCopy'
-import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
+import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
+import {
+  addWorksCitedEntry,
+  insertCitationForClaim,
+  markAt,
+  measureMarks,
+  replaceClaimText,
+  revealWorksCited
+} from '../components/documentMarks'
+import type { WorksCitedResult } from '../components/documentMarks'
+import { scheduleFrame } from '../frameScheduler'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
@@ -154,6 +164,22 @@ type Align = 'left' | 'center' | 'right' | 'justify'
 // etc.) still relies on in Chromium. The body is intentionally uncontrolled
 // (DOM-managed, not React state) because a controlled contentEditable would
 // reset the cursor position on every keystroke re-render.
+/**
+ * What one completed citation insert did to the document — both halves of it.
+ *
+ * Returned rather than kept internal because the confirmation card reports on
+ * it ("ADDED TO WORKS CITED" vs "ALREADY IN WORKS CITED") and Undo has to
+ * unwind it, and both used to assume a single edit that only ever touched the
+ * sentence.
+ */
+interface CitationInsert {
+  worksCited: WorksCitedResult
+  /** The bibliography line, as written into the document's reference list. */
+  worksCitedEntry: string
+  /** execCommand steps taken, for Undo. */
+  undoSteps: number
+}
+
 function DocumentEditor({
   docName,
   onDocNameChange,
@@ -281,15 +307,26 @@ function DocumentEditor({
   // While a flow is open its mark is pinned: the hit-test must not swap the
   // popover to another underline the pointer happens to cross on its way to a
   // button, and leaving the card must not close it.
+  /**
+   * "Suggest fix", run in place. Same ownership argument as `citationFlow`, and
+   * the same pinning — a card the pointer can drag out from under itself is
+   * unusable, and this one has an Apply button on it.
+   */
+  const [fixFlow, setFixFlow] = useState<{ claimId: string; state: DocFixState } | null>(null)
+  const [fixBusy, setFixBusy] = useState<'applying' | 'undoing' | null>(null)
   const flowPinnedRef = useRef(false)
   useEffect(() => {
-    flowPinnedRef.current = citationFlow !== null
-  }, [citationFlow])
+    flowPinnedRef.current = citationFlow !== null || fixFlow !== null
+  }, [citationFlow, fixFlow])
   // The `Source` objects behind the current candidate list. Held in a ref
   // rather than in the flow state because they are only ever read to format a
   // citation — putting a full Source per row into state would re-render the
   // popover on every field of a record nothing in it displays.
   const flowSourcesRef = useRef<Map<string, Source>>(new Map())
+  // How many execCommand steps the last insert took, so Undo unwinds exactly
+  // that many — see undoFlowCitation. A ref rather than flow state because it
+  // describes the browser's undo stack, not anything the card draws.
+  const undoStepsRef = useRef(1)
 
   // The style the Find Evidence view formats and labels its pill with. Read
   // once: it is a preference, not something that changes while a document is
@@ -662,20 +699,25 @@ function DocumentEditor({
    * frame every time the text reflows — visible as a flicker on every keystroke
    * in a flagged paragraph.
    *
-   * rAF-batched because a keystroke fires this and a ResizeObserver callback in
-   * the same tick, and getClientRects forces layout each time.
+   * Frame-batched because a keystroke fires this and a ResizeObserver callback
+   * in the same tick, and getClientRects forces layout each time.
+   *
+   * scheduleFrame rather than requestAnimationFrame directly: Chromium freezes
+   * rAF on a page that is not compositing, and a bare rAF here meant the marks
+   * were never measured at all in a hidden window — no underlines drawn, and no
+   * way to reach the hover popover that opens on one from the preview harness.
+   * The batching is unchanged whenever there is a frame to batch against; see
+   * frameScheduler.ts.
    */
   useLayoutEffect(() => {
     const body = editorRef.current
     const wrap = wrapRef.current
     if (!body || !wrap) return
-    let frame = 0
-    frame = requestAnimationFrame(() => {
+    return scheduleFrame(window, () => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
       setMarks(measureMarks(body, wrap, live, articleCounts))
       setWrapWidth(wrap.clientWidth)
     })
-    return () => cancelAnimationFrame(frame)
     // `structureOpen` was a dependency here: opening the rail narrowed the
     // editor, so every mark had to be re-measured. With the rail gone the
     // editor's width no longer changes from inside this component.
@@ -737,14 +779,43 @@ function DocumentEditor({
    * prompted the insertion is still sitting there, still saying the sentence is
    * unattributed, over a sentence that now carries a citation.
    */
-  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<void> {
+  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<CitationInsert> {
     const body = editorRef.current
     if (!body) throw new Error('The editor is not open.')
+
+    // The works-cited entry FIRST, then the marker. Both halves of a citation
+    // are written by every path that can insert one — the popover flow and the
+    // report's per-claim button — because a marker with no reference behind it
+    // is precisely the state the "ADDED TO WORKS CITED" label used to describe.
+    //
+    // The order buys two things, spelled out at addWorksCitedEntry: the list
+    // sits after the claim so writing it does not move the sentence out from
+    // under insertCitationForClaim, and the marker ends up on top of the undo
+    // stack so the first Ctrl+Z removes what the writer is looking at.
+    //
+    // Through IPC because that is where the style formatters live; the result
+    // is cached in the citations table, so the second sentence to cite the same
+    // source does not pay for it again.
+    const { citation } = await tracelyApi.generateCitation(source.id, style)
+    const worksCited = addWorksCitedEntry(body, {
+      entry: citation,
+      sourceTitle: source.title,
+      style
+    })
+
     // Formatted here rather than through an IPC round-trip: formatInTextCitation
     // is a pure function of a Source the renderer already holds (it came back
     // with the evidence), so a channel for it would be a channel that reads
     // nothing main knows and the renderer does not.
     if (!insertCitationForClaim(body, claim, formatInTextCitation(source, style))) {
+      // Roll the reference back out. A works-cited entry for a citation that
+      // never reached the sentence is an orphan, and it would be one the writer
+      // was never told about — the throw below is about the marker.
+      if (worksCited === 'added') {
+        body.focus()
+        document.execCommand('undo')
+        handleInput()
+      }
       throw new Error(
         'Could not find that sentence in the document any more — it may have been edited since the search.'
       )
@@ -752,6 +823,14 @@ function DocumentEditor({
     handleInput()
     const analysisId = analysisIdRef.current
     if (analysisId) await onRefreshClaims(analysisId)
+    return {
+      worksCited,
+      worksCitedEntry: citation,
+      // What Undo has to unwind. One insertText per half, and only one when the
+      // source was already listed — undoing a step that was never taken eats
+      // the writer's previous edit instead.
+      undoSteps: worksCited === 'added' ? 2 : 1
+    }
   }
 
   /**
@@ -876,19 +955,20 @@ function DocumentEditor({
     if (!source) return
     setCitationBusy('inserting')
     try {
-      await insertCitation(claim, source, style)
-      const { citation } = await tracelyApi.generateCitation(selectedId, style)
+      const result = await insertCitation(claim, source, style)
+      undoStepsRef.current = result.undoSteps
       setCitationFlow({
         claimId: claim.id,
         state: {
           step: 'inserted',
-          citation: { inTextCitation: formatInTextCitation(source, style), worksCitedEntry: citation },
+          citation: {
+            inTextCitation: formatInTextCitation(source, style),
+            // The entry as it was actually written, not a second formatting of
+            // the same source — the card is a report of what happened.
+            worksCitedEntry: result.worksCitedEntry
+          },
           style,
-          // Open from the start, as the frame draws it. The entry is the half of
-          // the insert the writer cannot see — the marker is already there in
-          // their sentence — so hiding it behind a button meant the
-          // confirmation confirmed only the part needing no confirmation.
-          showWorksCited: true
+          worksCited: result.worksCited
         }
       })
     } catch (err) {
@@ -907,6 +987,13 @@ function DocumentEditor({
    * `insertCitationForClaim` writes with `execCommand('insertText')` precisely
    * so this is possible — and so that Ctrl+Z does the same thing this button
    * does, rather than the two disagreeing about what the last edit was.
+   *
+   * As many steps as the insert took, which is two once the works-cited entry
+   * is written as its own insertText. A single undo here left the reference
+   * behind — an entry in the list for a citation no longer in the text, which
+   * is the orphan the whole feature is supposed to prevent. (Ctrl+Z is still
+   * one step per press; that is the browser's stack behaving normally, and both
+   * presses land on the same two edits this button unwinds.)
    */
   async function undoFlowCitation(): Promise<void> {
     const body = editorRef.current
@@ -914,7 +1001,8 @@ function DocumentEditor({
     setCitationBusy('undoing')
     try {
       body.focus()
-      document.execCommand('undo')
+      for (let i = 0; i < undoStepsRef.current; i++) document.execCommand('undo')
+      undoStepsRef.current = 1
       handleInput()
       const analysisId = analysisIdRef.current
       if (analysisId) await onRefreshClaims(analysisId)
@@ -923,6 +1011,69 @@ function DocumentEditor({
     } finally {
       setCitationBusy(null)
     }
+  }
+
+  /**
+   * Types the critique's narrowed sentence over the writer's own.
+   *
+   * The one place in this product where Tracely edits a student's prose, and it
+   * is bounded to the same thing the relay is bounded to: `suggestedRevision`
+   * carries the SAME sentence with only its quantifier, scope or hedge moved
+   * (and `normalizeCritique.isNarrowing` drops any revision that introduces a
+   * named thing the original did not contain). It corrects what the sentence
+   * claims, not how it reads — which is why this is allowed to exist beside a
+   * prompt that refuses to write sentences for students.
+   *
+   * Through `replaceClaimText`, i.e. through execCommand, so this lands on the
+   * browser's undo stack as ONE step: Ctrl+Z and the card's Undo are the same
+   * escape hatch rather than two that disagree.
+   */
+  async function applyFixRevision(claim: Claim): Promise<void> {
+    const body = editorRef.current
+    const revision = claim.suggestedRevision
+    if (!body || !revision) return
+    setFixBusy('applying')
+    try {
+      if (!replaceClaimText(body, claim, revision)) {
+        // Refused rather than rewritten at a guessed offset — the draft moved
+        // on since the critique ran, and the sentence this card is about may
+        // not be the sentence sitting at those offsets now.
+        setFixFlow({ claimId: claim.id, state: { step: 'error', message: APPLY_LOST_CLAIM } })
+        return
+      }
+      handleInput()
+      setFixFlow({ claimId: claim.id, state: { step: 'applied' } })
+      // Re-read, for the reason insertCitation re-reads: the underline that
+      // prompted this is drawn from the stored claim, whose text no longer
+      // matches the document. Left alone it keeps accusing a sentence that has
+      // already been narrowed.
+      const analysisId = analysisIdRef.current
+      if (analysisId) await onRefreshClaims(analysisId)
+    } finally {
+      setFixBusy(null)
+    }
+  }
+
+  /** The same undo stack Ctrl+Z uses — see undoFlowCitation. */
+  async function undoFixRevision(): Promise<void> {
+    const body = editorRef.current
+    if (!body) return
+    setFixBusy('undoing')
+    try {
+      body.focus()
+      document.execCommand('undo')
+      handleInput()
+      const analysisId = analysisIdRef.current
+      if (analysisId) await onRefreshClaims(analysisId)
+      setFixFlow(null)
+      setActiveMark(null)
+    } finally {
+      setFixBusy(null)
+    }
+  }
+
+  function closeFixFlow(): void {
+    setFixFlow(null)
   }
 
   function closeCitationFlow(): void {
@@ -1362,12 +1513,16 @@ function DocumentEditor({
                   onInsert: () => void insertFlowCitation(activeMark.mark.claim),
                   onCancel: closeCitationFlow,
                   onDone: closeCitationFlow,
-                  onToggleWorksCited: () =>
-                    setCitationFlow((prev) =>
-                      prev && prev.state.step === 'inserted'
-                        ? { ...prev, state: { ...prev.state, showWorksCited: !prev.state.showWorksCited } }
-                        : prev
-                    ),
+                  // Goes to the list rather than folding a block. Closing the
+                  // flow first is deliberate: the popover is anchored to the
+                  // sentence being cited, and leaving it open while the editor
+                  // scrolls to the end of the document parks the card over
+                  // whatever text happens to be under those coordinates now.
+                  onViewWorksCited: () => {
+                    const body = editorRef.current
+                    closeCitationFlow()
+                    if (body) revealWorksCited(body)
+                  },
                   onUndo: () => void undoFlowCitation()
                 }
               : null
@@ -1376,13 +1531,29 @@ function DocumentEditor({
           // the sentence it is about. It used to open the report modal on the
           // claim instead: a full-screen context switch away from the paragraph
           // being written, to answer a question asked about one of its lines.
+          fix={
+            fixFlow && activeMark
+              ? {
+                  claimId: fixFlow.claimId,
+                  state: fixFlow.state,
+                  applying: fixBusy === 'applying',
+                  undoing: fixBusy === 'undoing',
+                  onApply: () => void applyFixRevision(activeMark.mark.claim),
+                  onUndo: () => void undoFixRevision(),
+                  onCancel: closeFixFlow,
+                  onDone: closeFixFlow
+                }
+              : null
+          }
           onFindSource={(mark) => void startCitationFlow(mark.claim, false)}
-          onSuggestFix={(mark) => {
-            // Reasoning is still the report's job — there is no in-place fix to
-            // offer for it, and the critique it shows is the answer.
-            setScoreOpen(true)
-            void checkClaims([mark.claim.id])
-          }}
+          // Opens the fix in the popover, over the sentence it is about. It used
+          // to call setScoreOpen(true) — the full-screen Argument Score report,
+          // i.e. exactly the context switch away from the paragraph being
+          // written that the citation flow had just stopped doing. Nothing is
+          // fetched: every word the card shows was written onto the claim by the
+          // critique that raised this underline, so opening it cannot spend
+          // anything on the relay.
+          onSuggestFix={(mark) => setFixFlow({ claimId: mark.claim.id, state: { step: 'open' } })}
           onDismiss={(mark) => {
             setDismissed((prev) => new Set(prev).add(mark.claim.id))
             setActiveMark(null)

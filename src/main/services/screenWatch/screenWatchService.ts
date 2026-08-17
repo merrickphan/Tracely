@@ -354,6 +354,10 @@ function synthesizeClaim(detected: {
     searchQuery: detected.searchQuery,
     strengthScore: null,
     scoreBreakdown: null,
+    // Filled by critiqueClaim when the user asks for one — never by detection,
+    // and never automatically here. See the note on the paid relay.
+    suggestedRevision: null,
+    citationFix: null,
     critique: null,
     critiqueVerdict: null,
     createdAt: new Date().toISOString()

@@ -327,7 +327,11 @@ export default function ArgumentScoreModal({
    * caller passes a real function; the null branch stays because "score a
    * claim list nobody can edit" is a shape this modal should keep handling.
    */
-  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
+  // Resolves with a report of what the insert did (see CitationInsert in
+  // AnalyzeView) — unused here, so typed as unknown rather than dragging the
+  // editor's type into the modal. Not Promise<void>: TypeScript does not accept
+  // a Promise<T> where Promise<void> is declared.
+  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<unknown>) | null
   onReanalyze: () => void
   /**
    * A claim's evidence search finished and wrote a strength score to the
@@ -1078,7 +1082,11 @@ function FindEvidenceResult({
 }: {
   claim: Claim | null
   citationStyle: CitationStyle
-  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
+  // Resolves with a report of what the insert did (see CitationInsert in
+  // AnalyzeView) — unused here, so typed as unknown rather than dragging the
+  // editor's type into the modal. Not Promise<void>: TypeScript does not accept
+  // a Promise<T> where Promise<void> is declared.
+  onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<unknown>) | null
   /** See ArgumentScoreModal — this is the only place a first search can start. */
   onEvidenceSearched: () => void
   onBack: () => void
