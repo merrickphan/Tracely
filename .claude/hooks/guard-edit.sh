@@ -21,10 +21,6 @@ path=$(printf '%s' "$payload" | node -e "
 
 [ -z "$path" ] && exit 0
 
-cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
-[ "$branch" = "main" ] || [ "$branch" = "master" ] || exit 0
-
 # Forward slashes so one pattern set matches whatever separator the tool used.
 #
 # tr rather than ${path//\\//}. That substitution looks right and silently does
@@ -33,6 +29,28 @@ branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 # backslashes; a forward-slash-only test would have passed while the guard was
 # inert in practice.
 norm=$(printf '%s' "$path" | tr '\\' '/')
+
+# The branch is resolved from the worktree that OWNS THE FILE, not from
+# CLAUDE_PROJECT_DIR. For a subagent launched with isolation: "worktree",
+# CLAUDE_PROJECT_DIR still points at the shared checkout — normally on main —
+# while the edit is going into .claude/worktrees/<id> on its own feat/* branch.
+# Reading the branch from the shared checkout blocked every src/ edit those
+# agents made, i.e. the whole worktree-parallelism workflow CLAUDE.md
+# recommends, over a working tree the edit never touched.
+#
+# Walk up to the nearest existing directory first: Write creates files, and
+# sometimes their parent directories too, so the path itself need not exist yet.
+dir=${norm%/*}
+[ "$dir" = "$norm" ] && dir=.
+while [ -n "$dir" ] && [ ! -d "$dir" ]; do
+  parent=${dir%/*}
+  [ "$parent" = "$dir" ] && break
+  dir=$parent
+done
+[ -d "$dir" ] || dir="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+branch=$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
+[ "$branch" = "main" ] || [ "$branch" = "master" ] || exit 0
 
 case "$norm" in
   */src/*|*/scripts/*|*/package.json|*/electron-builder.yml|*/electron.vite.config.ts)

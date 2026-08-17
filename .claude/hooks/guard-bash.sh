@@ -14,19 +14,27 @@ payload=$(cat)
 # usual ${x#*\"command\":\"} trick silently truncates any command containing an
 # escaped quote — which would make this guard skip exactly the commands most
 # likely to be doing something unusual.
-field() {
+json() {
   printf '%s' "$payload" | node -e "
     let s=''
     process.stdin.on('data', d => s += d).on('end', () => {
-      try { process.stdout.write(String(JSON.parse(s).tool_input?.$1 ?? '')) } catch { /* allow */ }
+      try { process.stdout.write(String(JSON.parse(s).$1 ?? '')) } catch { /* allow */ }
     })
   " 2>/dev/null
 }
 
-cmd=$(field command)
+cmd=$(json 'tool_input?.command')
 [ -z "$cmd" ] && exit 0
 
-cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
+# The payload's cwd, not CLAUDE_PROJECT_DIR: this is the directory the command
+# will actually run in, and for a subagent in an isolated worktree the two
+# disagree — CLAUDE_PROJECT_DIR stays on the shared checkout, normally main.
+# Same false positive guard-edit.sh had, and it would deny `git commit` on a
+# feature branch in a worktree.
+cwd=$(json cwd)
+[ -n "$cwd" ] && [ -d "$cwd" ] || cwd="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+cd "$cwd" 2>/dev/null || exit 0
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 
 deny() {

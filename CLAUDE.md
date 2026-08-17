@@ -129,6 +129,12 @@ the end of every turn, so work is never left only in a working tree.
   edits to `src/`, `scripts/` and the build config while on `main`, because
   `electron-builder` packages the working tree rather than `HEAD` — an
   uncommitted edit there can reach an installer without ever being committed.
+  Both guards resolve the branch from **the worktree that owns the thing being
+  guarded** — the edited file's directory, or the Bash call's `cwd` — not from
+  `CLAUDE_PROJECT_DIR`, which for a subagent in an isolated worktree still
+  points at the shared checkout on `main`. Reading it from there denied every
+  `src/` edit and every commit those agents made, i.e. exactly the
+  worktree-parallelism workflow described below.
 - **Merge into `main` when a feature is done, not when a release is due.**
   `npm run ship` no longer merges anything; it publishes what is already on
   `main`. Release time should not also be integration time.
