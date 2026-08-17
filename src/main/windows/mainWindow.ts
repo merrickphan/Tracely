@@ -2,6 +2,7 @@ import { join } from 'path'
 import { BrowserWindow, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { FontSize } from '@shared/types'
+import type { ResizeHandle } from '@shared/ipc-contract'
 import {
   clampWindowScale,
   LAYOUT_WIDTH,
@@ -261,4 +262,84 @@ export function showMainWindow(): void {
     mainWindow.show()
     mainWindow.focus()
   }
+}
+
+// -- manual resizing ---------------------------------------------------------
+//
+// The OS will not do this one. A frameless window normally still gets Windows'
+// invisible resize border, but this window is also `transparent: true`, and a
+// transparent frameless window does not receive the non-client hit-test that
+// border depends on — measured by dragging every corner of a real build with
+// `resizable: true` set and nothing catching. So the grips are drawn in the
+// renderer (components/ResizeGrips.tsx) and the movement is applied here.
+//
+// All of the arithmetic is on this side on purpose. The renderer is inside a
+// CSS `zoom` that this very drag is changing, so it cannot convert its own
+// coordinates to screen pixels reliably; the window's real bounds only exist
+// here. The renderer's whole contribution is a compass direction and a pointer
+// delta.
+
+interface ResizeDrag {
+  handle: ResizeHandle
+  /** The window as it was when the drag began. Every frame is computed from
+   *  this, never from the current bounds — see WindowResizeMoveRequest on why
+   *  accumulating per-frame deltas drifts at the clamps. */
+  start: { x: number; y: number; width: number; height: number }
+}
+
+let drag: ResizeDrag | null = null
+
+export function beginWindowResize(handle: ResizeHandle): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { x, y, width, height } = mainWindow.getBounds()
+  drag = { handle, start: { x, y, width, height } }
+}
+
+/**
+ * The width the pointer is asking for, before clamping.
+ *
+ * Every handle resolves to a width because the aspect ratio is locked — there
+ * is only one degree of freedom, so a vertical edge drag has to be converted
+ * through the ratio rather than treated as an independent height.
+ *
+ * The signs are what make each grip pull the way it looks like it should: a
+ * handle on the east side grows with a rightward drag, a west handle grows with
+ * a leftward one.
+ */
+function requestedWidth(handle: ResizeHandle, start: ResizeDrag['start'], dx: number, dy: number): number {
+  switch (handle) {
+    case 'e':
+    case 'ne':
+    case 'se':
+      return start.width + dx
+    case 'w':
+    case 'nw':
+    case 'sw':
+      return start.width - dx
+    case 's':
+      return (start.height + dy) * MAIN_WINDOW_ASPECT
+    case 'n':
+      return (start.height - dy) * MAIN_WINDOW_ASPECT
+  }
+}
+
+export function updateWindowResize(dx: number, dy: number): void {
+  if (!mainWindow || mainWindow.isDestroyed() || !drag) return
+  const { handle, start } = drag
+
+  const { width, height } = sizeForScale(requestedWidth(handle, start, dx, dy) / LAYOUT_WIDTH)
+
+  // The anchor is the opposite corner, held still. Without this every drag
+  // would also move the window: growing from the top-left grip would push the
+  // card down and right rather than up and left, which reads as the window
+  // running away from the cursor.
+  const holdsRight = handle === 'w' || handle === 'nw' || handle === 'sw'
+  const holdsBottom = handle === 'n' || handle === 'nw' || handle === 'ne'
+
+  mainWindow.setBounds({
+    x: Math.round(holdsRight ? start.x + start.width - width : start.x),
+    y: Math.round(holdsBottom ? start.y + start.height - height : start.y),
+    width,
+    height
+  })
 }

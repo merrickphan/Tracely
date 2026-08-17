@@ -1,3 +1,4 @@
+import type { ResizeHandle } from '@shared/ipc-contract'
 export class TracelyApiError extends Error {}
 
 async function call<T>(promise: Promise<T>): Promise<T> {
@@ -62,6 +63,8 @@ export const tracelyApi = {
 
   showWindow: (target: 'main' | 'floating') => call(window.tracely.window.show({ target })),
   hideWindow: (target: 'main' | 'floating') => call(window.tracely.window.hide({ target })),
+  resizeStart: (handle: ResizeHandle) => call(window.tracely.window.resizeStart({ handle })),
+  resizeMove: (dx: number, dy: number) => call(window.tracely.window.resizeMove({ dx, dy })),
 
   openExternal: (url: string) => call(window.tracely.shell.openExternal({ url })),
 

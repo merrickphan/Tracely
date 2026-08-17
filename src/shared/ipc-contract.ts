@@ -216,6 +216,47 @@ export interface WindowTargetResponse {
   ok: true
 }
 
+/**
+ * Which grip is being dragged.
+ *
+ * The compass names are the corner or edge under the pointer, and each one
+ * implies its OPPOSITE as the fixed anchor: dragging 'se' holds the top-left
+ * still, 'nw' holds the bottom-right. Sent as a name rather than as a computed
+ * geometry so every bit of that arithmetic lives main-side, where the window's
+ * real bounds are — the renderer is inside a zoomed document and does not know
+ * its own size in screen pixels.
+ */
+export type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+export interface WindowResizeStartRequest {
+  handle: ResizeHandle
+}
+export interface WindowResizeStartResponse {
+  ok: true
+}
+
+/**
+ * Pointer movement since the drag began, in SCREEN pixels.
+ *
+ * Screen coordinates rather than client ones, deliberately. The document is
+ * under a CSS `zoom` that changes *during* the drag — that is the whole point
+ * of the feature — so a delta measured in client space would be denominated in
+ * units that shift underneath it, and the window would accelerate away from the
+ * cursor. `screenX`/`screenY` are unaffected by zoom.
+ *
+ * A delta from the START, not since the last event. Accumulating per-move
+ * deltas drifts: every clamp at the size limits would be silently folded into
+ * the running total, so a drag that hit the minimum and came back would no
+ * longer track the pointer.
+ */
+export interface WindowResizeMoveRequest {
+  dx: number
+  dy: number
+}
+export interface WindowResizeMoveResponse {
+  ok: true
+}
+
 export interface ShellOpenExternalRequest {
   url: string
 }

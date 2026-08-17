@@ -191,3 +191,132 @@ test('the aspect ratio is locked, so the card can never be letterboxed', async (
   assert.ok(ratio.minW >= 600 && ratio.minW < LAYOUT_WIDTH, `minimum width ${ratio.minW} is out of range`)
   assert.ok(ratio.maxW > LAYOUT_WIDTH, `maximum width ${ratio.maxW} is not above the default`)
 })
+
+test('dragging a grip resizes the real window', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(800)
+
+  // The grips exist because the OS resize border does not reach a transparent
+  // frameless window — `resizable: true` was set and no corner caught, on a
+  // real build. So "is the window resizable" is not the question any more;
+  // "does a pointer drag on this DOM element move the window" is.
+  const grips = await page.locator('.resize-grip').count()
+  assert.equal(grips, 8, `expected 8 resize grips, found ${grips}`)
+
+  // Every grip must opt out of the drag region. One that does not moves the
+  // window instead of resizing it, which is silent and exactly the failure
+  // these replaced.
+  const dragging = await page.evaluate(() =>
+    [...document.querySelectorAll('.resize-grip')]
+      .filter((el) => getComputedStyle(el).webkitAppRegion !== 'no-drag')
+      .map((el) => el.dataset.handle)
+  )
+  assert.deepEqual(dragging, [], `these grips sit inside the drag region: ${dragging.join(', ')}`)
+
+  const sizeOf = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
+      const [width, height] = w.getSize()
+      const [x, y] = w.getPosition()
+      return { width, height, x, y }
+    })
+
+  const before = await sizeOf()
+
+  // A real pointer drag on the south-east grip, through the browser's own input
+  // pipeline — not a synthetic event and not a setSize call, because what is
+  // being tested is precisely whether the DOM handler is reached and whether
+  // its screen-coordinate maths lands.
+  const box = await page.locator('.resize-grip-se').boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  // In steps: one jump gives the handler a single pointermove, which would pass
+  // even if the in-flight coalescing dropped everything after the first.
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(box.x + box.width / 2 + i * 20, box.y + box.height / 2 + i * 14)
+    await page.waitForTimeout(60)
+  }
+  await page.mouse.up()
+  await page.waitForTimeout(400)
+
+  const after = await sizeOf()
+  console.log(`  se drag: ${before.width}x${before.height} -> ${after.width}x${after.height}`)
+
+  assert.ok(after.width > before.width + 40, `the window did not grow: ${before.width} -> ${after.width}`)
+  // The aspect ratio must survive a drag that pulled both axes by different
+  // amounts — 120px across, 84px down.
+  const expected = LAYOUT_WIDTH / LAYOUT_HEIGHT
+  assert.ok(
+    Math.abs(after.width / after.height - expected) < 0.02,
+    `aspect drifted to ${(after.width / after.height).toFixed(3)}, expected ${expected.toFixed(3)}`
+  )
+  // The anchor: dragging the SE corner holds the top-left still. If this moves,
+  // the window crawls away from the cursor across a drag.
+  assert.ok(
+    Math.abs(after.x - before.x) <= 2 && Math.abs(after.y - before.y) <= 2,
+    `the top-left moved from ${before.x},${before.y} to ${after.x},${after.y} during an SE drag`
+  )
+})
+
+test('no control is buried under a grip', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(800)
+
+  // The grips are `position: fixed` at z-index 9999, so anything they overlap
+  // becomes unclickable — silently, and only near the window edge. The CSS
+  // claims the Figma frames' 28-32px internal padding keeps every control
+  // clear; this is that claim being checked rather than repeated.
+  //
+  // Checked by hit-testing the control's own centre, not by intersecting
+  // rectangles: a button whose corner slips under a grip is still perfectly
+  // usable, and failing on that would make this test noise nobody trusts.
+  async function buried(label) {
+    return page.evaluate(() =>
+      [...document.querySelectorAll('button, a, input, textarea, select, [role="button"]')]
+        .filter((el) => {
+          const r = el.getBoundingClientRect()
+          if (r.width === 0 || r.height === 0) return false
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+          return hit?.classList.contains('resize-grip')
+        })
+        .map((el) => (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 40))
+    ).then((found) => ({ label, found }))
+  }
+
+  const views = []
+  views.push(await buried('home'))
+
+  await page.getByRole('button', { name: /Settings/i }).first().click()
+  await page.waitForTimeout(600)
+  views.push(await buried('settings'))
+
+  // At the minimum scale the gutter is under 10 physical px and the grips
+  // overlap the card most — if anything is ever covered, it is here.
+  await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
+    w.setSize(629, 444)
+  })
+  await page.waitForTimeout(500)
+  views.push(await buried('settings @ 0.7'))
+
+  for (const v of views) {
+    console.log(`  ${v.label.padEnd(16)} ${v.found.length === 0 ? 'clear' : v.found.join(' | ')}`)
+  }
+  for (const v of views) {
+    assert.deepEqual(v.found, [], `controls buried under a grip on ${v.label}: ${v.found.join(', ')}`)
+  }
+})

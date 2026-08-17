@@ -90,6 +90,10 @@ import type {
   StructureGetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
+  WindowResizeMoveRequest,
+  WindowResizeMoveResponse,
+  WindowResizeStartRequest,
+  WindowResizeStartResponse,
   WindowTargetRequest,
   WindowTargetResponse
 } from '@shared/ipc-contract'
@@ -185,7 +189,13 @@ const api = {
     hide: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
       ipcRenderer.invoke(IPC.WINDOW_HIDE, req),
     show: (req: WindowTargetRequest): Promise<WindowTargetResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_SHOW, req)
+      ipcRenderer.invoke(IPC.WINDOW_SHOW, req),
+    // Manual resizing, because a transparent frameless window gets no
+    // OS resize border — see windows/mainWindow.ts.
+    resizeStart: (req: WindowResizeStartRequest): Promise<WindowResizeStartResponse> =>
+      ipcRenderer.invoke(IPC.WINDOW_RESIZE_START, req),
+    resizeMove: (req: WindowResizeMoveRequest): Promise<WindowResizeMoveResponse> =>
+      ipcRenderer.invoke(IPC.WINDOW_RESIZE_MOVE, req)
     // No `close`. Its handler was byte-identical to `hide` — both called
     // .hide() — and it had zero callers.
   },

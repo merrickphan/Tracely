@@ -410,7 +410,13 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
     },
     window: {
       hide: () => ok('window.hide', { ok: true as const }),
-      show: () => ok('window.show', { ok: true as const })
+      show: () => ok('window.show', { ok: true as const }),
+      // Logged and otherwise inert. The preview renders each surface in an
+      // iframe at a fixed size, so there is no BrowserWindow to resize — but
+      // the grips are still real DOM in that iframe, and the call log is how a
+      // reviewer sees that a drag is reaching the bridge at all.
+      resizeStart: (req) => ok(`window.resizeStart ${req.handle}`, { ok: true as const }),
+      resizeMove: (req) => ok(`window.resizeMove ${req.dx},${req.dy}`, { ok: true as const })
     },
     shell: {
       // Opening a real browser from a preview is the one side effect worth

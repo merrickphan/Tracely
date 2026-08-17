@@ -4,14 +4,24 @@ import { IPC } from '@shared/ipc-channels'
 import type {
   AppGetBuildInfoResponse,
   ShellOpenExternalResponse,
+  WindowResizeMoveResponse,
+  WindowResizeStartResponse,
   WindowTargetResponse
 } from '@shared/ipc-contract'
 import { isPreviewBuild } from '../appIdentity'
 import { getFloatingWindow, showFloatingWindow } from '../windows/floatingWindow'
-import { getMainWindow, showMainWindow } from '../windows/mainWindow'
+import { beginWindowResize, getMainWindow, showMainWindow, updateWindowResize } from '../windows/mainWindow'
 
 const targetSchema = z.object({ target: z.enum(['main', 'floating']) })
 const urlSchema = z.object({ url: z.string().url() })
+const resizeStartSchema = z.object({ handle: z.enum(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) })
+// Bounded rather than a bare number. These arrive once per pointer frame from a
+// window that is deliberately unprivileged, and a NaN or an Infinity would
+// reach setBounds — which throws, on the main process, during a drag.
+const resizeMoveSchema = z.object({
+  dx: z.number().finite().min(-20000).max(20000),
+  dy: z.number().finite().min(-20000).max(20000)
+})
 
 function resolveWindow(target: 'main' | 'floating') {
   return target === 'main' ? getMainWindow() : getFloatingWindow()
@@ -31,6 +41,17 @@ export function registerWindowHandlers(): void {
     } else {
       showFloatingWindow()
     }
+    return { ok: true }
+  })
+
+  ipcMain.handle(IPC.WINDOW_RESIZE_START, (_event, raw): WindowResizeStartResponse => {
+    beginWindowResize(resizeStartSchema.parse(raw).handle)
+    return { ok: true }
+  })
+
+  ipcMain.handle(IPC.WINDOW_RESIZE_MOVE, (_event, raw): WindowResizeMoveResponse => {
+    const { dx, dy } = resizeMoveSchema.parse(raw)
+    updateWindowResize(dx, dy)
     return { ok: true }
   })
 
