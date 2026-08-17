@@ -22,6 +22,11 @@ HANDOFF.md
 electron.vite.config.*.mjs
 electron.vite.config.*.js
 
+# electron-builder drops this in the repo root when a local build fails. Same
+# story as above: the autocommit hook's `git add -A` swept one into a feature
+# branch and it rode a merge into main.
+builder-error.log
+
 # Model weights that ship in the installer. Binary, 22MB, and reproducible
 # exactly from a pinned model id — scripts/fetch-models.mjs rebuilds them, and
 # the dist/release scripts run it before electron-builder.
