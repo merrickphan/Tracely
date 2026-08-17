@@ -149,6 +149,22 @@ the end of every turn, so work is never left only in a working tree.
   retired in favour of this: the contract needed maintaining, branches drifted
   24 commits behind, and 421 lines once sat uncommitted in two of them because
   each worktree registered the auto-commit hook separately.
+- **A worktree runs the guards it was branched from, not the ones on `main`.**
+  `settings.json` invokes them as `$CLAUDE_PROJECT_DIR/.claude/hooks/*.sh`, and
+  in a worktree session that variable resolves to the worktree — so the hook
+  files are whatever that checkout has, and fixing a guard on `main` does
+  nothing for any worktree already in flight. A live probe of the revised
+  `guard-bash.sh` sailed through a `git commit` aimed at `main` for exactly this
+  reason: the session was four commits behind and running the version with the
+  bug. **Merge `main` before trusting a guard in a long-lived worktree**, and
+  test hook changes from a checkout that actually has them.
+- **Test the guards with real tool calls, not hand-built payloads.** A synthetic
+  payload has no `cwd` field, so it falls through to whatever the fallback is
+  and passes while the real thing fails. Both hook bugs so far were found by
+  running an actual command and neither was caught by a 19-case suite over
+  invented JSON. The suite is still worth having for the branches real probes
+  cannot reach — the deny path needs some checkout to be sitting on `main` —
+  but it confirms nothing on its own.
 
 ### When a release goes wrong
 
