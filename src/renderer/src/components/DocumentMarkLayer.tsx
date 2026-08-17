@@ -649,10 +649,16 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
             <span className="docmark-row-badge">{candidate.initials}</span>
             <span className="docmark-row-meta">
               <span className="docmark-row-title">{candidate.title}</span>
+              {/* The venue is what gives and the match percentage is what does
+                  not — see .docmark-venue / .docmark-match. Ellipsising the
+                  line as a whole would cut the number the card is titled
+                  around. */}
               <span className="docmark-row-sub">
-                {candidate.venue ?? 'Unknown venue'}
-                {candidate.year ? ` · ${candidate.year}` : ''}
-                <span className="docmark-match"> {candidate.matchPercent}% match</span>
+                <span className="docmark-venue">
+                  {candidate.venue ?? 'Unknown venue'}
+                  {candidate.year ? ` · ${candidate.year}` : ''}
+                </span>
+                <span className="docmark-match">{candidate.matchPercent}% match</span>
               </span>
             </span>
             <span

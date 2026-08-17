@@ -3061,11 +3061,45 @@ function CandidateRow({
       }}
     >
       <SourceIcon provider={candidate.provider} faviconDataUrl={candidate.faviconDataUrl} />
-      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: INK }}>{candidate.title}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, whiteSpace: 'nowrap' }}>
-          {meta ? <span style={{ color: DIM }}>{meta}</span> : null}
-          <span style={{ color: POSITIVE, fontWeight: 500 }}>{candidate.matchPercent}% match</span>
+      {/* `overflow: hidden` as well as `minWidth: 0`. The min-width lets this
+          shrink below its content; without the overflow it shrinks and its
+          children paint straight out of it regardless, which pushed the row and
+          the whole 380px card sideways. Measured: card scrollWidth 435 against
+          clientWidth 361, on a real result from the fixture. */}
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+        <div
+          style={{
+            fontSize: 13.5,
+            fontWeight: 500,
+            color: INK,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {candidate.title}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, minWidth: 0 }}>
+          {/* The venue is what gives, and the match percentage is what does not.
+              Ellipsising the line as a whole would cut the number the card is
+              titled around — "Ranked by how directly each source supports…" is
+              a promise that the ranking is legible on every row. */}
+          {meta ? (
+            <span
+              style={{
+                color: DIM,
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {meta}
+            </span>
+          ) : null}
+          <span style={{ color: POSITIVE, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {candidate.matchPercent}% match
+          </span>
         </div>
       </div>
       <Radio selected={selected} />
