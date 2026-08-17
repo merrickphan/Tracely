@@ -22,6 +22,17 @@ files:
   # a reason that one was not: nothing in src/ imports it. verify-packaged-ml.mjs
   # now asserts both its absence and that no foreign relay host is in the asar.
   - '!out/eval/**'
+  # Stray logs written into out/ by hand — `npm run evaluate > out/eval-run.log`
+  # and friends. Small, but they are transcripts of a dev run and have no
+  # business in a user's installer; `out/**/*` sweeps them in because they sit
+  # beside out/eval rather than inside it.
+  #
+  # This blocked v0.3.86 and v0.3.87. An 8KB out/eval-run.log tripped
+  # verify-packaged-ml's `out/eval` expectation, which matched it by SUBSTRING
+  # and reported "114MB of eval harness" — so the build failed for a real reason
+  # while naming the wrong one. The matcher is now boundary-aware; this glob is
+  # what makes the file absent in the first place.
+  - '!out/*.log'
   # The ML stack is INCLUDED as of here, trimmed rather than excluded.
   #
   # It was excluded wholesale through v0.3.76, when nothing called embed().

@@ -50,6 +50,8 @@ if (!existsSync(ASAR)) fail(`no app.asar at ${ASAR} — run \`npm run dist:win\`
 // wrote.
 const asar = createRequire(import.meta.url)('@electron/asar')
 const packed = asar.listPackage(ASAR).map((path) => path.replace(/\\/g, '/'))
+// Plain substring, so a fragment naming a DIRECTORY must end in '/' — see the
+// `out/eval/` expectation below for what happens when it does not.
 const count = (fragment) => packed.filter((path) => path.includes(fragment)).length
 
 // [fragment, must be present?, why it matters]
@@ -64,7 +66,13 @@ const EXPECTATIONS = [
   ['onnxruntime-node/bin/napi-v6/darwin', false, 'wrong platform'],
   ['onnxruntime-node/bin/napi-v6/linux', false, 'wrong platform'],
   ['onnxruntime-web', false, '128MB of browser WASM the node entry never imports'],
-  ['out/eval', false, '114MB of eval harness — dev tooling the app never loads']
+  // Trailing slash is load-bearing. As `out/eval` this also matched
+  // `out/eval-run.log` — a stray 8KB dev log sitting BESIDE the directory — and
+  // then described it with the sentence below, so the build failed for a true
+  // reason ("something that should not ship is in the asar") while naming a
+  // cause that was not there. v0.3.86 and v0.3.87 were both lost to it, and the
+  // diagnosis took far longer than the fix.
+  ['out/eval/', false, '114MB of eval harness — dev tooling the app never loads']
 ]
 
 // The worker must exist as a REAL FILE, not just as an entry in the archive.
