@@ -931,14 +931,14 @@ textarea:disabled {
 }
 
 .source-tile-row {
-  /* Figma 58:189: 620x104, two 304px tiles, 12px gap. This asked for THREE
-     columns and only ever had two tiles, so each rendered at a third of the
-     width — visibly narrower than the frame, which is what "not as big" was. */
+  /* One 304px tile, centred. The frame (58:189) draws a 620px row of two, but
+     the second was Paste text; keeping the 620px box would leave the survivor
+     pinned to the left half with a hole beside it, so the row is now as wide as
+     its tile and the column's `align-items: center` centres it. */
   display: grid;
-  grid-template-columns: repeat(2, 304px);
-  gap: 12px;
+  grid-template-columns: 304px;
+  justify-content: center;
   margin-bottom: 32px;
-  width: 620px;
   max-width: 100%;
 }
 

@@ -81,14 +81,6 @@ export function DocumentIcon({ size = 22, className }: IconProps): JSX.Element {
   )
 }
 
-export function ClipboardIcon({ size = 22, className }: IconProps): JSX.Element {
-  return (
-    <svg {...base(size)} className={className} fill="none" stroke="currentColor" strokeWidth="1.6">
-      <rect x="6" y="4.5" width="12" height="16" rx="2" />
-      <path d="M9.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5" strokeLinejoin="round" />
-    </svg>
-  )
-}
 
 export function SlidersIcon({ size = 15, className }: IconProps): JSX.Element {
   return (

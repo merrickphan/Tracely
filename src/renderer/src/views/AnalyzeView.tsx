@@ -12,37 +12,25 @@ import DocumentMarkLayer from '../components/DocumentMarkLayer'
 import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
-import { DocumentIcon, ClipboardIcon, CloseIcon, BackIcon } from '../components/icons'
+import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
-type SourceType = 'document' | 'text'
-
-// No "URL / Link" tile. It never fetched anything: selecting it only changed
-// the placeholder, and submitting sent the URL *string* to the paid relay as
-// prose — which sentence-splits into one "sentence" of URL characters, finds no
-// checkable claim, and shows "No checkable claims detected in this text." So it
-// cost money to produce a false negative, while the CTA said "Import Link" and
-// the progress bar said "Reading source content".
+// One tile, not a picker. There was a "Paste text" mode beside this one, and a
+// "URL / Link" mode before that; both are gone, and for much the same reason —
+// a document is the only source this app can actually do its work on. Pasted
+// text was a dead end past the first relay call: no editor, so nothing could be
+// rewritten, no marks, no citations inserted, no structure score, nothing
+// saved. It spent a paid detection to print a list of claims you could only
+// read.
 //
-// Building it for real needs an HTML extraction dependency and would widen the
-// "academic APIs + relay only" network promise in CLAUDE.md to arbitrary URLs.
-// That is a design decision, not a bug fix. Screen Watch already reads whatever
-// page you actually have open.
-const SOURCE_TILES: { id: SourceType; label: string; icon: (props: { size?: number }) => JSX.Element }[] = [
-  { id: 'document', label: 'Document', icon: DocumentIcon },
-  { id: 'text', label: 'Paste text', icon: ClipboardIcon }
-]
-
-const SOURCE_PLACEHOLDER: Record<SourceType, string> = {
-  document: 'Name your document…',
-  text: 'Paste your text here…'
-}
-
-const SOURCE_CTA: Record<SourceType, string> = {
-  document: 'Create Document',
-  text: 'Begin analysis'
-}
+// (URL / Link never fetched anything at all: it sent the URL *string* to the
+// relay as prose, which sentence-splits into one "sentence" of URL characters
+// and finds no checkable claim. Building it for real needs HTML extraction and
+// would widen the "academic APIs + relay only" network promise in CLAUDE.md.
+// Screen Watch already reads whatever page you have open.)
+const SOURCE_PLACEHOLDER = 'Name your document…'
+const SOURCE_CTA = 'Create Document'
 
 // The real detectClaims call is a single opaque request with no backend
 // sub-progress to report. Rather than faking fixed percentages on a timer
@@ -1241,7 +1229,6 @@ function DocumentEditor({
 }
 
 export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
-  const [sourceType, setSourceType] = useState<SourceType>('document')
   const sourceInputRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
   const [docEditorOpen, setDocEditorOpen] = useState(false)
@@ -1265,7 +1252,7 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   const [error, setError] = useState<string | null>(null)
 
   // Resolves with the analysis id so the document editor's Structure rail can
-  // chain onto it; the paste-text path ignores the return value.
+  // chain onto it. Called from the editor only, now that pasted text is gone.
   async function runDetection(source: string): Promise<string | null> {
     if (!source.trim()) return null
     setLoading(true)
@@ -1295,28 +1282,13 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
   }
 
   function handleCta(): void {
-    if (sourceType === 'document') {
-      // A typed name starts a new document; an empty box continues the last
-      // one, which is the only way back into previous work.
-      const named = text.trim()
-      setDocName(named || latestDoc?.title || '')
-      setClaims(null)
-      setError(null)
-      setDocEditorOpen(true)
-      return
-    }
-    void runDetection(text)
-  }
-
-  function selectSourceType(next: SourceType): void {
-    setSourceType(next)
+    // A typed name starts a new document; an empty box continues the last one,
+    // which is the only way back into previous work.
+    const named = text.trim()
+    setDocName(named || latestDoc?.title || '')
     setClaims(null)
     setError(null)
-
-    // Move directly into the corresponding input after either a mouse click
-    // or the native button's Enter/Space activation. Besides being convenient,
-    // this makes the state transition unambiguous for keyboard users.
-    requestAnimationFrame(() => sourceInputRef.current?.focus())
+    setDocEditorOpen(true)
   }
 
   if (docEditorOpen) {
@@ -1364,38 +1336,38 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
       <section className="analyze-input">
         <h2 className="analyze-heading">Start a new session</h2>
         <p className="analyze-subheading">Choose a source for Tracely to analyze.</p>
+        {/* Nothing to choose between any more, so this is a label for the
+            field under it rather than a toggle — no `aria-pressed`, since a
+            control that is permanently pressed tells a screen-reader user
+            there is another state to reach. Clicking it still jumps into the
+            name box, which is the one useful thing it did as a tile. */}
         <div className="source-tile-row">
-          {SOURCE_TILES.map((tile) => (
-            <button
-              key={tile.id}
-              type="button"
-              className={`source-tile ${sourceType === tile.id ? 'active' : ''}`}
-              aria-pressed={sourceType === tile.id}
-              aria-controls="analyze-source-input"
-              onClick={() => selectSourceType(tile.id)}
-            >
-              <tile.icon size={22} />
-              {tile.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            className="source-tile active"
+            aria-controls="analyze-source-input"
+            onClick={() => requestAnimationFrame(() => sourceInputRef.current?.focus())}
+          >
+            <DocumentIcon size={22} />
+            Document
+          </button>
         </div>
 
         <TextArea
           id="analyze-source-input"
           ref={sourceInputRef}
           size="lg"
-          placeholder={SOURCE_PLACEHOLDER[sourceType]}
+          placeholder={SOURCE_PLACEHOLDER}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={sourceType === 'document' ? 1 : 6}
-          // Naming a document is a title, not a paragraph — without this the
-          // shared textarea with the paste-text box renders 6 lines tall for
-          // a few words.
-          // Figma 58:223 draws this at the tile row's own 620px, left-aligned
+          // Naming a document is a title, not a paragraph — one row, not the
+          // six the paste-text box used to want out of this shared textarea.
+          rows={1}
+          // Figma 58:223 draws this at the tile row's old 620px, left-aligned
           // with 16px of lead-in — not a narrow centred field. It was 320 and
-          // centred, which under a 620px tile row is the widest single thing on
-          // the screen sitting over a box half its width.
-          style={sourceType === 'document' ? { maxWidth: 620, resize: 'none', textAlign: 'left' } : undefined}
+          // centred, which is the widest single thing on the screen sitting
+          // over a box half its width.
+          style={{ maxWidth: 620, resize: 'none', textAlign: 'left' }}
         />
 
         <div className="analyze-input-actions">
@@ -1403,9 +1375,9 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
             variant="primary"
             className="analyze-cta"
             onClick={handleCta}
-            disabled={loading || (sourceType === "document" ? !latestDocLoaded : !text.trim())}
+            disabled={loading || !latestDocLoaded}
           >
-            {sourceType === 'document' && !latestDocLoaded ? 'Loading…' : SOURCE_CTA[sourceType]}
+            {latestDocLoaded ? SOURCE_CTA : 'Loading…'}
           </Button>
         </div>
 

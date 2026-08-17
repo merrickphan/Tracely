@@ -234,9 +234,11 @@ export default function ArgumentScoreModal({
    * Writes a citation into the document at the end of the claim's sentence.
    *
    * Passed in rather than done here because only the editor owns the
-   * contentEditable, and null on surfaces that have no document to write to
-   * (the paste-text flow) — where the button is not offered at all rather than
-   * offered and inert.
+   * contentEditable. Nullable for a surface with no document to write to —
+   * where the button is not offered at all rather than offered and inert. The
+   * one such surface was the paste-text flow, which is gone, so every current
+   * caller passes a real function; the null branch stays because "score a
+   * claim list nobody can edit" is a shape this modal should keep handling.
    */
   onInsertCitation: ((claim: Claim, source: Source, style: CitationStyle) => Promise<void>) | null
   onReanalyze: () => void
