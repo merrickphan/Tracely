@@ -1695,12 +1695,19 @@ textarea:disabled {
   justify-content: center;
 }
 
+/* `overflow: hidden` as well as `min-width: 0`. The min-width lets this flex
+   item shrink below its content; without the overflow it shrinks and then its
+   nowrap children paint straight out of it anyway, which pushed the row, the
+   list and the whole 380px card sideways. Measured in the harness on a real
+   result: "Proceedings of the National Academy of Sciences · 2022" gave the
+   card scrollWidth 433 against clientWidth 376. */
 .docmark-row-meta {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
 
 .docmark-row-title {
@@ -1713,14 +1720,31 @@ textarea:disabled {
 }
 
 .docmark-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 12px;
   color: #9a9ba1;
-  white-space: nowrap;
 }
 
+/* The venue is the longest thing on a source row and the one line here that had
+   no way to end, so it is what gives. */
+.docmark-venue {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The match percentage never shrinks. "Ranked by how directly each source
+   supports…" is a promise that the ranking is legible on every row, and an
+   ellipsis that ate the number would quietly break it. */
 .docmark-match {
   color: #16a34a;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .docmark-radio {
