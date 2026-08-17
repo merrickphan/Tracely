@@ -357,6 +357,18 @@ export interface CandidateWork {
    * it — an absent list simply falls back to `year`.
    */
   years?: number[]
+  /**
+   * The work's own identifiers and abstract, when the index carried them.
+   *
+   * `corroborate` does not look at either — a match is authors and year, and
+   * adding a content test here would report a misread source as an invented one
+   * (see the note on `corroborate`). They ride along because the CALLER wants
+   * them for a different job: once the cited work is identified, it becomes the
+   * first item in the critique's evidence list, and an abstract is most of what
+   * makes that worth doing. See shared/citedEvidence.ts.
+   */
+  doi?: string | null
+  abstract?: string | null
 }
 
 export interface Corroboration {
@@ -686,7 +698,11 @@ export function crossrefReferenceQueries(
             filter: `from-pub-date:${ref.year - YEAR_TOLERANCE}-01-01,until-pub-date:${ref.year + YEAR_TOLERANCE}-12-31`
           }
         : {}),
-      select: 'title,author,issued,DOI',
+      // `abstract` is asked for because the matched work becomes the critique's
+      // first evidence item — it is not used to decide the match. Crossref
+      // carries one for a minority of records and the field costs nothing when
+      // absent; OpenAlex backfills the rest by DOI (see referenceCheck.ts).
+      select: 'title,author,issued,DOI,abstract',
       rows: String(rows),
       ...(mailto ? { mailto } : {})
     })
