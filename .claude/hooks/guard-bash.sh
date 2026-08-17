@@ -26,7 +26,21 @@ field() {
 cmd=$(field command)
 [ -z "$cmd" ] && exit 0
 
-cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
+# The branch comes from the checkout the command will actually run in. Parallel
+# work happens in throwaway worktrees, where CLAUDE_PROJECT_DIR still names the
+# main workspace — so reading it there judged every worktree agent against
+# whatever branch main happened to be on, and a worktree sitting on main was
+# never stopped from committing. The payload's own cwd is the directory the
+# Bash tool runs in; CLAUDE_PROJECT_DIR is the fallback when it is absent.
+where=$(printf '%s' "$payload" | node -e "
+  let s=''
+  process.stdin.on('data', d => s += d).on('end', () => {
+    try { process.stdout.write(String(JSON.parse(s).cwd ?? '')) } catch { /* allow */ }
+  })
+" 2>/dev/null)
+[ -d "$where" ] || where=${CLAUDE_PROJECT_DIR:-$PWD}
+
+cd "$where" 2>/dev/null || exit 0
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 
 deny() {
