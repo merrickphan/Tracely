@@ -4025,7 +4025,10 @@ textarea:disabled {
   left: 43px;
   top: 380px;
   width: 372px;
-  height: 174px;
+  /* No height. The frame draws 174px, which is taller than this content needs
+     — the slack all collects below the buttons and reads as a bottom padding
+     twice the size of the top one. Hugging the content is what makes the 16px
+     padding actually look like 16px on all four sides. */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -4068,10 +4071,17 @@ textarea:disabled {
 .home-popover-actions {
   display: flex;
   gap: 8px;
+  /* Drawn, not clickable — see the note in HomeView.tsx. */
+  pointer-events: none;
+  user-select: none;
 }
 
 /* No width. The frame's buttons hug their text — see 361:335/361:337. */
 .home-popover-btn {
+  /* A span, not a button — inline-flex restores the button box these were
+     drawn as. */
+  display: inline-flex;
+  align-items: center;
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid #d9d9d9;
@@ -4079,8 +4089,8 @@ textarea:disabled {
   color: #1c1c1c;
   font-size: 13px;
   font-weight: 400;
+  line-height: 1.25;
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .home-popover-btn.primary {
@@ -4088,10 +4098,6 @@ textarea:disabled {
   background: #1c1c1c;
   color: #fff;
   font-weight: 600;
-}
-
-.home-popover-btn:hover {
-  filter: brightness(0.97);
 }
 
 /* The one line that says why a Figma-accurate settings page cannot be used. */

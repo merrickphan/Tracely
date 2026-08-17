@@ -21,9 +21,6 @@ export default function HomeView({
   firstName: string | null
 }): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
-  // The frame's sample popover. Dismissible, because a card with a Dismiss
-  // button that does not dismiss is worse than no button.
-  const [sampleOpen, setSampleOpen] = useState(true)
 
   useEffect(() => {
     tracelyApi.getScreenWatchStatus().then(setScreenWatch)
@@ -101,30 +98,27 @@ export default function HomeView({
         generic copy — it asserts nothing about any document and invents no
         figure, which is the whole difference.
 
-        Both buttons do something real rather than being drawn on. Dismiss
-        hides the card; Find a source opens New Session, which is where you
-        would go looking for one. Neither needs data that does not exist.
+        The buttons are part of the picture, not controls: this card is an
+        illustration of the popover, and clicking its Dismiss made the one
+        thing explaining the empty home screen disappear for good, while Find
+        a source jumped to a tab the reader had not asked for. They are inert
+        by design — `pointer-events: none` plus `aria-hidden` on the row, so
+        neither the mouse nor a screen reader offers them as actions.
       */}
-      {sampleOpen ? (
-        <div className="home-el home-popover">
-          <div className="home-popover-head">
-            <span className="home-popover-dot" />
-            <span className="home-popover-title">Unverified statistic</span>
-          </div>
-          <p className="home-popover-body">
-            This figure doesn&rsquo;t appear in any of your uploaded sources yet. Add a citation or
-            double-check the number.
-          </p>
-          <div className="home-popover-actions">
-            <button className="home-popover-btn primary" onClick={() => onNavigate('analyze')}>
-              Find a source
-            </button>
-            <button className="home-popover-btn" onClick={() => setSampleOpen(false)}>
-              Dismiss
-            </button>
-          </div>
+      <div className="home-el home-popover">
+        <div className="home-popover-head">
+          <span className="home-popover-dot" />
+          <span className="home-popover-title">Unverified statistic</span>
         </div>
-      ) : null}
+        <p className="home-popover-body">
+          This figure doesn&rsquo;t appear in any of your uploaded sources yet. Add a citation or
+          double-check the number.
+        </p>
+        <div className="home-popover-actions" aria-hidden="true">
+          <span className="home-popover-btn primary">Find a source</span>
+          <span className="home-popover-btn">Dismiss</span>
+        </div>
+      </div>
 
       <span className="home-el home-worktext">You choose where Tracely works</span>
       <svg className="home-el home-worktext-arrow" viewBox="0 0 18.3007 23.2268" fill="none">
