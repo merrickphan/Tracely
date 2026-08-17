@@ -714,6 +714,11 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
     claimCount: screenWatchClaims.length,
     claims: screenWatchClaims,
     totalInfoCount: screenWatchClaims.length + 10,
+    // Hand-traced, not derived: the `underlines` array above carries three
+    // entries (c1, c2, c3). Written as a literal so adding a fourth shows up
+    // here as a disagreement instead of quietly following along — which is the
+    // whole point of the badge counting marks rather than claims or sources.
+    underlineCount: 3,
     structure: screenWatchStructure,
     // False alongside a non-null `structure`, because those are the only two
     // states main ever pushes together — see ScreenWatchWidget.analyzing. The
