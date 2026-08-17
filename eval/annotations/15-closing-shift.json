@@ -1,0 +1,50 @@
+{
+  "essay": "15-closing-shift.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["unknown", "unknown", "unknown", "unknown", "conclusion"]
+  },
+  "note": "Two gaps, and the second one is about a surface the eval set has never pointed at. (1) FALSE POSITIVES ON NUMBERS. 06-frankenstein is the set's only fixture for staying quiet, and everything it asks the tool to leave alone is interpretive prose — a reading of a novel, phrased as a reading. Nothing in the set asks the tool to leave a NUMBER alone, and numbers are what it reacts to: problemKind.ts routes `claimType === 'statistic'` with no inline citation and no relevant source straight to `unverified-statistic`, which is the highest-frequency problem kind in the product and has no negative fixture anywhere. This essay is four sentences of first-person quantity — a hundred and eighty covers, four racks, fourteen minutes, twenty-two hours, six of us — none of it citation-worthy, all of it exactly the shape that fires. Retrieval will find nothing for any of them, correctly, and 'searched and found nothing' is the input that produces the flag. So the essay measures the claim DETECTOR rather than retrieval: the only thing standing between this draft and five underlines is detection declining to call an autobiographical number a claim. As with 09, the contrast is inside one draft on purpose — C3 is a real national statistic, unattributed, in the same voice and the same paragraph style, and it SHOULD be flagged. An essay where the right answer is 'flag nothing' measures a tool that has been switched off just as well as one that is working. (2) STRUCTURE, AND WHO GETS SCORED. Screen Watch reads whatever is in the focused control, and the thing a student in October is typing into a text box is a college application essay. This is one. Four of its five paragraphs are honestly `unknown` — narrative doing no argumentative work — so scoreDraft.ts's thesis, governing-claims, warrant, counterargument and significance components all score at or near zero and the widget will show a number in the twenties for a piece of writing that is not bad and is not an argument. 12-apprenticeships has two unknown paragraphs; this has four of five, which is the first draft in the set where `complete: false` is the dominant state rather than an edge, and where weaknesses.ts withholding every whole-draft finding is the only thing preventing a list of accusations about a personal essay. The right product behaviour is probably not a better score. It is noticing that this is not an argumentative draft at all, which nothing currently does.",
+  "claims": [
+    {
+      "text": "A Friday is about a hundred and eighty covers.",
+      "paragraph": 2,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "A number about one restaurant on one night of the week, and the most statistic-shaped sentence in the essay: a round figure, a hedge, a unit of measurement. Nothing could settle it and nothing should look. If any single claim in this file gets an underline, it will be this one."
+    },
+    {
+      "text": "The dish pit runs four racks behind by seven o'clock and stays there until nine, and the walk home takes fourteen minutes, which is the only part of the night I get to myself.",
+      "paragraph": 2,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Three quantities in one sentence, none of them assertions about the world. Included because compound sentences are already a known weak spot — RUBRIC.md leaves the compound rule provisional — and this is the benign version of it: a sentence with several checkable-looking parts and no checkable content at all. The query built from it will be about dishwashing and commute times, and whatever comes back is `irr` by question 1."
+    },
+    {
+      "text": "I read somewhere that about a third of American teenagers work during the school year, which surprised me, because at my school it feels like nobody does.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The positive control, and the reason this essay measures discrimination rather than silence. A real national statistic, in the same first-person register as everything around it, introduced with 'I read somewhere' — which is how a student signals an uncited source and is not a form of citation any parser recognises. Teen employment is a well-covered labour statistic (US BLS publishes the 16-to-19 employment-population ratio monthly), and the figure sits near a third, so `supported` is right but the margin is loose and the exact share moves with the season and the year. This is the claim worth Merrick's check before it is trusted as ground truth. Routing note: this should classify `statistical` and reach the World Bank route, where the indicator that exists is a modelled ILO youth employment series rather than the BLS school-year figure the sentence is about — near-miss territory of the kind 12-apprenticeships C2 was built for."
+    },
+    {
+      "text": "Twenty-two hours a week is what I average, and the number matters more than it sounds like it should, because it is also four hours of homework I do not do.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Autobiographical, and the sentence where the essay comes closest to an argument without making one — 'the number matters' is the writer telling you it is significant, which is the cue a role classifier is most likely to over-read. The paragraph is still `unknown`: it asserts nothing general and evidences nothing."
+    },
+    {
+      "text": "My chemistry grade went from an A to a B minus over one grading period and nobody in my family noticed, including me.",
+      "paragraph": 4,
+      "verdict": "unverifiable",
+      "citationWorthy": "no",
+      "sources": [],
+      "note": "Private and unfalsifiable, like 12's counselors and 09's council anecdote — but note the difference from 09, which is unindexed rather than unverifiable: a council vote is on the record somewhere the providers do not reach, while nobody anywhere holds this. Kept in the file because the literature on adolescent work hours and academic performance is real and adjacent, so a retrieval pass will happily return it, and returning good sources about teenagers' grades for a sentence about THIS teenager's grade is precisely the substitution failure with the personal stakes turned up."
+    }
+  ]
+}

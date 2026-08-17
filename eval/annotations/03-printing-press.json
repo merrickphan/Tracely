@@ -4,8 +4,9 @@
   "report": "report-2026-08-08T02-37-26-088Z.json",
   "imported": true,
   "draft": {
-    "roles": null
+    "roles": ["thesis", "evidence", "significance"]
   },
+  "note": "draft.roles backfilled 2026-08-17 (claude — DRAFT, unreviewed). See the note on 01-school-start-times for why roles and not verdicts. P3 is the most arguable label in the backfill and worth a second read: it makes a new claim, evidences it with the Reformation and the witch-hunting literature, and then extends the argument to the present century — which is `significance` by function and `evidence` by bulk. Labelled `significance` because that closing move is why the paragraph is in the essay; say so if you disagree.",
   "claims": [
     {
       "text": "Johannes Gutenberg introduced movable-type printing to Europe around 1450, and within fifty years printing presses were operating in more than two hundred European cities.",

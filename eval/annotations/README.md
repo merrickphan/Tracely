@@ -128,3 +128,35 @@ Two things worth knowing before you start:
 - **One annotator means one idiolect.** A model fitted only to your judgements
   learns *you*. That's fine for a tool you're building for yourself, and worth
   knowing before calling it general.
+
+### Item 1 cannot be done from a cloud run — measured 2026-08-17
+
+`sources[].label` is ranked first and has been at **0** since the format
+existed, and the reason is not that nobody got to it. Labelling a source means
+having a candidate list, which means running retrieval, and the scheduled cloud
+runs that do most of the writing here **cannot reach any of the four
+providers**. Their egress proxy answers `403` to the CONNECT for
+`api.openalex.org`, `api.crossref.org`, `api.semanticscholar.org` and
+`eutils.ncbi.nlm.nih.gov` — a policy denial, not a transient failure and not
+something a retry or a different client fixes.
+
+Two consequences worth writing down rather than rediscovering:
+
+- **A cloud run can only add essays, roles, verdicts and rubric.** That is real
+  work — it is what everything from `04-energy-access` onward is — but it moves
+  items 2 and 3, never item 1. An overnight run reporting progress on the
+  retrieval blocker is reporting progress on the half of it that was never the
+  blocker.
+- **The 102 prose labels in `eval/baseline.md` are still the cheapest 200-source
+  start, and they need no network at all** — they are already written, against
+  a report already on disk. Re-labelling those is the one piece of item 1 that
+  does not require a machine with provider access.
+
+Everything else in item 1 has to happen where the network does: a local run on
+Merrick's PC, where `npm run evaluate` can retrieve (`EVAL_SKIP_CRITIQUE=1`
+keeps the paid detection call in and the paid critique call out — read that
+script's header before assuming any of it is free). What comes back can then be
+labelled anywhere, since the report is what labelling reads. Note that the
+recorded provider responses are not the thing to carry across: `paths.mjs`
+keeps the abstract cache out of the repo deliberately, on the grounds that it
+is other people's text rather than source, and the same applies to cassettes.

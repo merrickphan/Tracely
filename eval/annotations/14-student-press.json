@@ -1,0 +1,50 @@
+{
+  "essay": "14-student-press.txt",
+  "labelledBy": "claude — DRAFT, unreviewed by merrick",
+  "draft": {
+    "roles": ["unknown", "evidence", "evidence", "evidence", "claim", "conclusion"]
+  },
+  "note": "The set has an essay whose sources are books (12), one whose sources are municipal records (09), one whose sources are in German (12 again) and one whose source does not exist at all (08). It has none whose sources are LAW, and law is the gap with the most structure to it, because a court opinion is the opposite of an obscure source: famous, authoritative, precisely citable, permanently public, and in none of the four indexes the product queries. That combination is what makes it dangerous rather than merely uncovered — a source that is unfindable AND obviously real is the exact input a source-not-found check turns into an accusation. 12-apprenticeships is the regression guard one notch easier (books have ISBNs and an Open Library index behind them); a case has neither. I measured the reference parsing rather than guessing at it, because guessing is what this fixture exists to stop. Three facts, all reproducible against src/shared/citedReference.ts as it stands: (1) `Tinker v. Des Moines (1969)` parses as an author-year reference with the single surname `Moines`, so MIN_CHECKABLE_SURNAMES refuses it and it is never looked up — the right outcome, reached for a reason that has nothing to do with law; (2) the full citation form a teacher would actually require, `Tinker v. Des Moines Independent Community School District, 393 U.S. 503 (1969)`, parses to no reference at all, because the year is too far from the names; (3) UNDER_INDEXED_VENUE, the list that rescues conference papers and preprints from being reported absent, contains no law-reporter vocabulary — no `U.S.`, no `F.3d`, no `Cal. Educ. Code`. So legal citations are currently invisible rather than misjudged. That is the safe failure and it is not a bug, but isCheckable's own comment insists that excluded means UNCHECKED and never 'fine', and nothing in eval/ has ever held it to that. This essay does. Second gap, on the retrieval side rather than the citation side: the law-review literature IS well indexed, so every claim here will retrieve on-topic scholarship that discusses the cases without being the cases. That is 09-parking-minimums' substitution failure in a new costume, and a sharper one, because a law review article about Tinker is a genuinely excellent source for an essay ABOUT Tinker and still is not the holding.",
+  "claims": [
+    {
+      "text": "In Tinker v. Des Moines (1969) the Supreme Court held that students do not shed their constitutional rights to freedom of speech at the schoolhouse gate, and that a school may only censor speech it can show would materially disrupt the school.",
+      "paragraph": 2,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "True, famous, and settleable only by a document no provider holds. The correct source is the opinion itself; the best thing retrieval can return is commentary on it. Under the ladder a law review article analysing Tinker is on topic at the claim's specificity and does address the proposition — the holding is what it is about — so `rel` is defensible for the good ones, and the labeller should expect the marginal column to fill with articles about Tinker's LATER application, which is question 2's classic miss. Watch the second half of the sentence: 'materially disrupt' is the substantial-disruption test as usually paraphrased, and a paraphrase of a legal standard is the kind of half-right sentence a tool should hedge rather than confirm."
+    },
+    {
+      "text": "Hazelwood v. Kuhlmeier narrowed that in 1988 by letting administrators exercise editorial control over a school-sponsored newspaper whenever they have a legitimate educational reason for doing so.",
+      "paragraph": 3,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The same shape as C1 with one deliberate difference: the case name and the year are in separate clauses, so the reference parser sees `Kuhlmeier (1988)` — a single surname again, refused again, for the same accidental reason. Two instances rather than one because a single fixture cannot distinguish 'the parser handles legal citations safely' from 'this one legal citation happened to land safely'. If someone later widens the surname rules or the venue list, these two are what will tell them what it did to case law."
+    },
+    {
+      "text": "California is one of a minority of states that has written student journalists back out from under Hazelwood.",
+      "paragraph": 4,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The one claim in the essay that scholarly retrieval should be able to answer well, and it is here for the same reason 09-parking-minimums includes a claim the urban-economics literature squarely serves: an essay where everything is unretrievable measures only one behaviour. Counting which states have student free expression statutes is a survey question, and journalism-education research and law reviews both publish it. The figure is roughly a third of states and moving — several have passed New Voices laws in the last decade — which makes 'a minority' the sort of loose quantifier that is true now, may not be later, and that no retrieval result will ever pin down exactly."
+    },
+    {
+      "text": "Education Code section 48907 protects student expression unless it is obscene, libelous or slanderous, or incites students to break the law or substantially disrupt the school.",
+      "paragraph": 4,
+      "verdict": "supported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "A statute, paraphrased closely, and the hardest case in the file for a reason worth stating: it names its source precisely and completely, so a reader can verify it in thirty seconds, and yet nothing in the pipeline can. There is no author, no year, no DOI and no title in the shape any of the four providers or either reference index can take, and the sentence carries no inline citation the parser would recognise either. The correct product behaviour is silence — not `no-sources`, not `unverified-statistic`, nothing. This is the claim to watch if the fabrication check is ever loosened."
+    },
+    {
+      "text": "Because California has that statute, student newspapers here publish more investigative reporting than papers in states that rely on Hazelwood alone.",
+      "paragraph": 5,
+      "verdict": "unsupported",
+      "citationWorthy": "yes",
+      "sources": [],
+      "note": "The draft's real flaw, and the only sentence in it that a marker would circle. It is a causal empirical claim asserted flatly, in an essay that has just spent three paragraphs being careful, and the student has no evidence for it — they have a statute and an inference. `unsupported` rather than `contradicted`: some journalism-education work does compare coverage under state student-press laws, and I have not read it, so the honest label is that nothing here settles it. This is the claim in the file most worth re-labelling after a real retrieval run, and the one where I would expect a labeller who finds one on-topic study to be tempted into `supported` on a single result. Note it sits in the only paragraph labelled `claim` rather than `evidence`, which is what a role classifier should be able to see: the sentence does no evidentiary work and rests on the paragraph above it."
+    }
+  ]
+}
