@@ -21,10 +21,6 @@ path=$(printf '%s' "$payload" | node -e "
 
 [ -z "$path" ] && exit 0
 
-cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
-[ "$branch" = "main" ] || [ "$branch" = "master" ] || exit 0
-
 # Forward slashes so one pattern set matches whatever separator the tool used.
 #
 # tr rather than ${path//\\//}. That substitution looks right and silently does
@@ -33,6 +29,27 @@ branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 # backslashes; a forward-slash-only test would have passed while the guard was
 # inert in practice.
 norm=$(printf '%s' "$path" | tr '\\' '/')
+
+# The branch is read from the checkout the edit LANDS IN, not from
+# CLAUDE_PROJECT_DIR. Parallel work happens in throwaway worktrees (see
+# CLAUDE.md), where CLAUDE_PROJECT_DIR still points at the main workspace — so
+# reading it there reported "main" for every edit and blocked worktree agents
+# from using Edit/Write at all, while a worktree that really was on main went
+# unguarded. Both failures came from asking the wrong checkout.
+dir=${norm%/*}
+[ "$dir" = "$norm" ] && dir=.
+# Walk up to the nearest existing directory: a Write can name a path whose
+# parent does not exist yet.
+while [ ! -d "$dir" ] && [ "$dir" != "${dir%/*}" ]; do
+  dir=${dir%/*}
+  [ -z "$dir" ] && dir=/
+done
+[ -d "$dir" ] || dir=${CLAUDE_PROJECT_DIR:-$PWD}
+
+branch=$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null) ||
+  branch=$(git -C "${CLAUDE_PROJECT_DIR:-$PWD}" rev-parse --abbrev-ref HEAD 2>/dev/null) ||
+  exit 0
+[ "$branch" = "main" ] || [ "$branch" = "master" ] || exit 0
 
 case "$norm" in
   */src/*|*/scripts/*|*/package.json|*/electron-builder.yml|*/electron.vite.config.ts)
