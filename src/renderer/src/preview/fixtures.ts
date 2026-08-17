@@ -289,6 +289,22 @@ export const documentOutline: DocumentOutline = {
   complete: false,
   applicable: true,
   rolesFrom: 'heuristic',
+  // Six paragraphs, so five boundaries, one of which is flagged. A real value
+  // rather than the `null` the type also allows: null is what a row written
+  // before cohesion existed restores as, and a fixture standing in for that
+  // would leave the harness with no way to look at the feature at all.
+  cohesion: {
+    score: 72,
+    boundaries: 5,
+    findings: [
+      {
+        kind: 'no-transition',
+        fromIndex: 2,
+        toIndex: 3,
+        message: 'Paragraph 3 opens without connecting back to the point paragraph 2 made.'
+      }
+    ]
+  },
   // Matches the `claims` fixture: c1 and c2 searched and sourced, c3 never
   // searched. Kept consistent deliberately — an outline claiming 2 detected
   // beside a list of 3 is the kind of quiet mismatch the preview exists to
