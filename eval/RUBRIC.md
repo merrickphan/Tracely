@@ -104,6 +104,43 @@ These are lexical collisions. They fail question 1, so they never reach the
 adjacent is what inflates the marginal column while strict precision stays
 flat — visible in the re-run, where marginal rose 11 points as strict fell 7.
 
+### When the claim is about a document, commentary is `marg`
+
+*Added 2026-08-17 with essay 14, and not yet reviewed. Like the scale rule
+above it is an extension of an existing question rather than a new one — it is
+question 2 applied to a case where the source that settles the claim is not a
+paper at all — but say so if you disagree, because it decides every label in
+`14-student-press`.*
+
+The ladder quietly assumes the candidate and the correct answer are the same
+kind of object: a paper, judged against a claim a paper could settle. Some
+claims are about a **document** — a court opinion, a statute, a treaty, a
+company's own filing — and for those the correct source is the document, which
+none of the four providers index. Everything that *can* come back is commentary
+on it.
+
+Commentary sails through question 1: a law review article about *Tinker v. Des
+Moines* is squarely on topic at exactly the claim's specificity. So the whole
+decision falls to question 2, and the test there is the one already written —
+does this source address the proposition the sentence asserts?
+
+| the claim | the source | label | why |
+|---|---|---|---|
+| *in Tinker the Court held that students do not shed their rights at the schoolhouse gate* | a law review article stating that holding and analysing it | `rel` | it addresses the proposition; that it quotes rather than *is* the opinion does not change what it establishes |
+| the same claim | an article on how lower courts have applied *Tinker* since | `marg` | same topic, different proposition — the classic question 2 miss, in its usual costume |
+| *section 48907 protects student expression unless it is obscene, libelous, or incites disruption* | any article about California student press law | `marg` at best | the sentence asserts what the text SAYS; a source that characterises the statute is not the statute |
+
+The rule of thumb: **commentary can be `rel` for a claim about what a document
+*held or established*, and is `marg` for a claim about what it *says*.** The
+first is a proposition anyone competent can restate; the second is a quotation,
+and only the document is the source for a quotation.
+
+The failure this is written to prevent is the generous one. These claims
+retrieve well — the law-review literature is thoroughly indexed — so an essay
+whose sources are all unfindable will look, in the labels, like an essay that
+was well served. That is the `09-parking-minimums` substitution failure with a
+much better disguise, because here the substitute is genuinely excellent.
+
 ## The cases this rubric does not settle
 
 **A citation to a source that does not exist. — SETTLED 2026-08-15.** A
@@ -206,6 +243,36 @@ Three things are tangled here and only the first is a labelling question:
 
 Adjacent and not the same: a source that is merely *old*. Recency is already a
 scoring factor. This is about a specific published disagreement, not about age.
+
+**Still open, and now split in two — extended 2026-08-17 with essay 13.** The
+third bullet above guesses that this may not be a labelling problem at all,
+because Crossref publishes retraction relationships. That guess is right for
+half the cases and cannot be right for the other half, and the corpus now holds
+one of each:
+
+| | `11-debt-threshold` | `13-peer-review` |
+|---|---|---|
+| what happened to the source | reanalysed and disputed in print | formally **retracted** |
+| where that fact lives | in the literature, readable only by reading it | in Crossref's `relation.is-retracted-by`, and in PubMed's `Retracted Publication` type |
+| could a metadata signal catch it | **no** — Reinhart and Rogoff (2010) was never retracted and carries no flag | **yes** — free, machine-readable, on providers already queried |
+
+Both label `rel` under the ladder, for the same reason, and both score *high*.
+Keeping only one of them made "add retraction checking" look like an answer to
+the whole problem when it is an answer to one column of it.
+
+Nothing here changes what to write in the file today: label the source `rel`
+and record the trouble in the claim's note, exactly as `11-debt-threshold`
+does. **Do not add a verdict for this on an agent's say-so** — the bullet above
+already says whose call that is, and `fabricated` is the worked example of how
+it gets made.
+
+One consequence for labelling that does not need a decision from anyone: **the
+retraction notice is itself a retrievable source**, with its own DOI, no
+abstract, and a title that begins "Retraction:". Against a claim about the
+retraction it is `rel` and is the best possible answer; against the original
+claim it is `marg` — it addresses the source, not the proposition. If a run
+ever returns a notice and the labels have no room for it, that is this
+paragraph being needed.
 
 **Non-English sources, and the title-only demotion. — Extends an existing rule,
 added 2026-08-15 with essay 12.** `12-apprenticeships` asks about the German
