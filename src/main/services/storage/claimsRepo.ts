@@ -47,6 +47,46 @@ export interface NewClaim {
   searchQuery: string
 }
 
+/**
+ * The most recent already-searched claim with exactly this text.
+ *
+ * Exported for the test, not for callers — `insertClaims` is the only path that
+ * should be reaching for this.
+ */
+export function findSearchedClaimByText(text: string): ClaimRow | null {
+  return (
+    queryOne<ClaimRow>(
+      `SELECT * FROM claims
+        WHERE text = $text AND strength_score IS NOT NULL
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT 1`,
+      { $text: text }
+    ) ?? null
+  )
+}
+
+/**
+ * Inserts a run's claims, carrying forward what an identical sentence already
+ * has behind it.
+ *
+ * Re-analysing a document makes a NEW analysis with a NEW set of claim rows,
+ * and every search result, score and critique stays attached to the OLD ids. So
+ * the second time you pressed AI Insights on the same essay, every claim came
+ * back with `strength_score = null` — and the editor draws no underline at all
+ * for a claim nothing has been searched for (see documentMarks.ts, which is
+ * right to: an unsearched claim has no verdict to report). Every underline
+ * vanished, on the most ordinary action there is: edit a bit, run it again.
+ *
+ * Found on Merrick's draft, which had been analysed six times: 48 claim rows,
+ * one run of 8 scored, and the newest run — the one on screen — scored none.
+ *
+ * Matching is on EXACT text. A sentence the writer has since edited is a
+ * different claim and must be searched again; only a sentence that survived the
+ * edit untouched inherits, which is exactly when the old evidence still applies.
+ * The evidence rows are copied too, not just the score: the editor reads its
+ * article count from `claim_evidence` by claim id, and a score with no rows
+ * beneath it is the same "nothing known" from the renderer's point of view.
+ */
 export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
   const createdAt = new Date().toISOString()
   // Batched: up to 8 claims per analysis, each of which was its own
@@ -54,9 +94,17 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
   return transaction(() =>
     claims.map((c) => {
       const id = randomUUID()
+      const prior = findSearchedClaimByText(c.text)
+
       run(
-        `INSERT INTO claims (id, analysis_id, text, claim_type, confidence, search_query, created_at)
-         VALUES ($id, $analysisId, $text, $type, $confidence, $query, $createdAt)`,
+        `INSERT INTO claims (
+           id, analysis_id, text, claim_type, confidence, search_query, created_at,
+           strength_score, score_breakdown, critique, critique_verdict,
+           suggested_revision, citation_fix
+         ) VALUES (
+           $id, $analysisId, $text, $type, $confidence, $query, $createdAt,
+           $score, $breakdown, $critique, $verdict, $revision, $citationFix
+         )`,
         {
           $id: id,
           $analysisId: analysisId,
@@ -64,9 +112,28 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
           $type: c.claimType,
           $confidence: c.confidence,
           $query: c.searchQuery,
-          $createdAt: createdAt
+          $createdAt: createdAt,
+          $score: prior?.strength_score ?? null,
+          $breakdown: prior?.score_breakdown ?? null,
+          $critique: prior?.critique ?? null,
+          $verdict: prior?.critique_verdict ?? null,
+          $revision: prior?.suggested_revision ?? null,
+          $citationFix: prior?.citation_fix ?? null
         }
       )
+
+      // The rows the score was computed from. Without these the new claim has a
+      // number and an empty source list, which reads as "searched, found
+      // nothing" — a worse lie than "not searched yet".
+      if (prior) {
+        run(
+          `INSERT INTO claim_evidence (id, claim_id, source_id, relevance_score, rank, created_at, stance, stance_confidence)
+           SELECT lower(hex(randomblob(16))), $newId, source_id, relevance_score, rank, created_at, stance, stance_confidence
+             FROM claim_evidence WHERE claim_id = $oldId`,
+          { $newId: id, $oldId: prior.id }
+        )
+      }
+
       return {
         id,
         analysisId,
@@ -74,12 +141,14 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         claimType: c.claimType,
         confidence: c.confidence,
         searchQuery: c.searchQuery,
-        strengthScore: null,
-        scoreBreakdown: null,
-        critique: null,
-        critiqueVerdict: null,
-        suggestedRevision: null,
-        citationFix: null,
+        strengthScore: prior?.strength_score ?? null,
+        scoreBreakdown: prior?.score_breakdown
+          ? (JSON.parse(prior.score_breakdown) as ScoreBreakdown)
+          : null,
+        critique: prior?.critique ?? null,
+        critiqueVerdict: (prior?.critique_verdict as CritiqueVerdict | null) ?? null,
+        suggestedRevision: prior?.suggested_revision ?? null,
+        citationFix: prior?.citation_fix ?? null,
         createdAt
       }
     })
