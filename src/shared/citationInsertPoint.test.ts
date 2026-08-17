@@ -168,3 +168,85 @@ describe('findCitationInsertPoint — reported fields', () => {
     strictEqual(insert('See Smith (2020).'), 'See Smith (2020) (Smith, 2020).')
   })
 })
+
+describe('findCitationInsertPoint — non-ASCII text', () => {
+  // The offsets are JS string indices, so anything that mis-handles a surrogate
+  // pair or a non-ASCII letter lands the citation inside a word. These are the
+  // characters a real essay actually contains.
+  it('leaves a smart closing quote alone', () => {
+    strictEqual(insert('He said “it works.”'), 'He said “it works.” (Smith, 2020)')
+  })
+
+  it('steps over a period outside a smart closing quote', () => {
+    strictEqual(insert('It works”.'), 'It works” (Smith, 2020).')
+  })
+
+  it('moves inside a sentence with accented letters', () => {
+    strictEqual(insert('La tasa subió rápidamente.'), 'La tasa subió rápidamente (Smith, 2020).')
+  })
+
+  it('still recognises "et al." after a non-ASCII surname', () => {
+    // tokenBefore is \p{L}-based, not [a-z]: "Müller et al." must read as the
+    // abbreviation, not as the end of a sentence.
+    strictEqual(insert('Reported by Müller et al.'), 'Reported by Müller et al. (Smith, 2020)')
+  })
+
+  it('still recognises a non-ASCII initial', () => {
+    strictEqual(insert('Reported by É.'), 'Reported by É. (Smith, 2020)')
+  })
+
+  it('handles an inverted-question sentence', () => {
+    strictEqual(insert('¿Subieron las tasas?'), '¿Subieron las tasas (Smith, 2020)?')
+  })
+
+  it('handles an astral-plane character before the terminator', () => {
+    // An emoji is two code units. `text[runStart - 1]` reads half of one, which
+    // is safe here only because that half is neither a letter nor an uppercase,
+    // so the initial check declines and the period is treated as the
+    // sentence's. Pinned so a move to code-point iteration is a visible change.
+    strictEqual(insert('Rates fell 📉.'), 'Rates fell 📉 (Smith, 2020).')
+  })
+
+  it('leaves an ideographic full stop alone', () => {
+    // Not in isTerminator, so the run is empty and refusal (1) declines. The
+    // conservative answer for a script this heuristic was not written for.
+    strictEqual(insert('比率は下がった。'), '比率は下がった。 (Smith, 2020)')
+  })
+
+  it('treats a non-breaking space as whitespace', () => {
+    // JS \s matches U+00A0, so a trailing NBSP is skipped like any other
+    // whitespace and the citation still lands inside the sentence rather than
+    // after the period.
+    strictEqual(insert('Weight is low.\u00A0'), 'Weight is low (Smith, 2020).\u00A0')
+  })
+})
+
+describe('findCitationInsertPoint — a claim that ends mid-sentence', () => {
+  it('inserts where the claim ends, not where the sentence does', () => {
+    // The relay returns the assertion and stops; the rest of the sentence is
+    // not part of the claim. There is no terminator at the claim's end, so
+    // refusal (1) applies and the citation goes exactly where the claim ended —
+    // scanning forward to the sentence's period would attach the source to a
+    // clause it says nothing about.
+    strictEqual(
+      insert('Rates fell sharply in 2020 and then rose.', 26),
+      'Rates fell sharply in 2020 (Smith, 2020) and then rose.'
+    )
+  })
+
+  it('does not step back over a comma', () => {
+    // Only .!? are terminators. A comma is inside the sentence, so the citation
+    // follows it rather than displacing it.
+    strictEqual(
+      insert('Rates fell in 2020, though not everywhere.', 19),
+      'Rates fell in 2020, (Smith, 2020) though not everywhere.'
+    )
+  })
+
+  it('steps back over the period of a sentence containing em-dashes', () => {
+    strictEqual(
+      insert('Rates fell — sharply — in 2020.'),
+      'Rates fell — sharply — in 2020 (Smith, 2020).'
+    )
+  })
+})
