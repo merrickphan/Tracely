@@ -9,6 +9,8 @@ import {
   type CitedReference
 } from '@shared/citedReference'
 import { bibliographyReferences } from '@shared/bibliography'
+import type { CritiqueSource } from '@shared/citedEvidence'
+import { enrichByDoi, normalizeDoi } from './openalex'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import { politePoolMailto } from '../storage/settingsRepo'
 
@@ -58,6 +60,25 @@ export interface ReferenceCheck {
   corroborated: boolean
   /** The work that matched, when one did. */
   matchedTitle: string | null
+  /**
+   * The matched work's year, DOI and abstract — everything needed to hand it to
+   * the critique as evidence in its own right.
+   *
+   * A resolved citation is the ONE source the writer actually pointed at, and
+   * until this was carried out of the lookup the critique never saw it: it
+   * judged the sentence against a topical search that had no idea a citation
+   * existed. See shared/citedEvidence.ts for what happens with it, and for the
+   * limit that does not go away — an abstract is not a full text, so this can
+   * establish that the cited work exists and is on the subject, never that a
+   * specific figure appears in it.
+   *
+   * Null for an uncorroborated check, and null on `index === 'openlibrary'` as
+   * a matter of course: the book index carries no abstract and a book's
+   * contents are exactly what nothing here can read.
+   */
+  matchedYear: number | null
+  matchedDoi: string | null
+  matchedAbstract: string | null
   /** How many works the targeted queries returned in total. */
   candidatesConsidered: number
   /**
@@ -72,6 +93,13 @@ export interface ReferenceCheck {
 }
 
 const CROSSREF_TIMEOUT_MS = 4000
+
+/** Crossref abstracts are JATS XML. Same one-liner crossref.ts uses. */
+function stripTags(text: string | undefined): string | null {
+  if (!text) return null
+  const stripped = text.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+  return stripped || null
+}
 
 /**
  * At most this many references per claim.
@@ -91,12 +119,25 @@ async function fetchWorks(url: string): Promise<CandidateWork[] | null> {
       return null
     }
     const data = (await res.json()) as {
-      message?: { items?: Array<{ title?: string[]; author?: Array<{ family?: string }>; issued?: { 'date-parts'?: number[][] } }> }
+      message?: {
+        items?: Array<{
+          title?: string[]
+          author?: Array<{ family?: string }>
+          issued?: { 'date-parts'?: number[][] }
+          DOI?: string
+          abstract?: string
+        }>
+      }
     }
     return (data.message?.items ?? []).map((item) => ({
       title: item.title?.[0] ?? '(untitled)',
       authorSurnames: (item.author ?? []).map((a) => a.family ?? '').filter(Boolean),
-      year: item.issued?.['date-parts']?.[0]?.[0] ?? null
+      year: item.issued?.['date-parts']?.[0]?.[0] ?? null,
+      doi: item.DOI ?? null,
+      // Crossref serves abstracts as JATS XML — same strip crossref.ts applies
+      // to its own search results, for the same reason: the tags are noise the
+      // model would be charged for.
+      abstract: stripTags(item.abstract)
     }))
   } catch (error) {
     console.warn(`[referenceCheck] crossref lookup failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -164,13 +205,16 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
   let considered = 0
   let answered = false
 
-  const hit = (title: string | null, index: ReferenceCheck['index']): ReferenceCheck => ({
+  const hit = (work: CandidateWork | null, index: ReferenceCheck['index']): ReferenceCheck => ({
     raw: ref.raw,
     surnames: ref.surnames,
     year: ref.year,
     title: ref.title,
     corroborated: true,
-    matchedTitle: title,
+    matchedTitle: work?.title ?? null,
+    matchedYear: work?.year ?? null,
+    matchedDoi: work?.doi ?? null,
+    matchedAbstract: work?.abstract ?? null,
     candidatesConsidered: considered,
     index,
     entry: ref.entry
@@ -182,7 +226,7 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
     answered = true
     considered += works.length
     const result = corroborate(ref, works)
-    if (result.found) return hit(result.match?.title ?? null, 'crossref')
+    if (result.found) return hit(result.match, 'crossref')
   }
 
   // Only now, and only because Crossref came up empty. Every reference this
@@ -196,7 +240,7 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
       answered = true
       considered += books.length
       const result = corroborate(ref, books)
-      if (result.found) return hit(result.match?.title ?? null, 'openlibrary')
+      if (result.found) return hit(result.match, 'openlibrary')
     }
   }
 
@@ -218,6 +262,9 @@ async function checkOne(ref: CitedReference, context: string): Promise<Reference
     title: ref.title,
     corroborated: false,
     matchedTitle: null,
+    matchedYear: null,
+    matchedDoi: null,
+    matchedAbstract: null,
     candidatesConsidered: considered,
     index: null,
     entry: ref.entry
@@ -281,6 +328,54 @@ export async function checkReferences(
     if (check) checks.push(check)
   }
   return checks
+}
+
+/**
+ * The work the writer cited, ready to be handed to the critique as evidence.
+ *
+ * Only ever built from a CORROBORATED check. An empty lookup is reported in the
+ * reference section as an empty lookup and must never arrive as an evidence
+ * item — "the source you cited" pointing at nothing is exactly the confusion
+ * `corroborated: false` exists to prevent.
+ *
+ * The first corroborated reference wins when a sentence names two. Sentences
+ * that cite two works and attach a figure to only one are rare enough that
+ * picking is better than sending both: the second would take a slot from the
+ * searched evidence (see searchedSlots), and the reference section still tells
+ * the critique that both were found.
+ *
+ * One OpenAlex request, and only when Crossref matched a DOI it had no abstract
+ * for. Crossref carried an abstract for 24% of the labelled baseline where
+ * OpenAlex had 90% (see aggregator's enrichFromOpenAlex), so without this the
+ * cited source usually arrives as a bare title — which the model can only use
+ * to say the work exists, a thing the reference section already told it.
+ */
+export async function citedWorkEvidence(checks: ReferenceCheck[]): Promise<CritiqueSource | null> {
+  const match = checks.find((check) => check.corroborated && check.matchedTitle)
+  if (!match) return null
+
+  let abstract = match.matchedAbstract
+  if (!abstract && match.matchedDoi) {
+    try {
+      const enrichments = await enrichByDoi([match.matchedDoi])
+      abstract = enrichments.get(normalizeDoi(match.matchedDoi))?.abstract ?? null
+    } catch (error) {
+      // A missing abstract degrades this to a title, which is still the right
+      // source in the right slot. Nothing here is worth failing a critique for.
+      console.warn(
+        `[referenceCheck] abstract enrichment failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  return {
+    title: match.matchedTitle as string,
+    // The year the INDEX holds, not the year the writer typed — they differ by
+    // one routinely (see YEAR_TOLERANCE), and the point of this line is to
+    // identify the work that was found rather than to echo the citation back.
+    year: match.matchedYear ?? match.year,
+    abstract
+  }
 }
 
 /**

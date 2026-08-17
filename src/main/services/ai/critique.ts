@@ -3,7 +3,8 @@ import type { Claim, CritiqueVerdict, EvidenceItem } from '@shared/types'
 import { getCached, setCached } from '../storage/cacheRepo'
 import { callRelay } from './client'
 import { normalizeCritique } from './normalizeCritique'
-import { checkReferences, describeReferenceChecks } from '../search/referenceCheck'
+import { checkReferences, citedWorkEvidence, describeReferenceChecks } from '../search/referenceCheck'
+import { buildEvidenceSummary, searchedSlots, type CritiqueSource } from '@shared/citedEvidence'
 import {
   MAX_CRITIQUE_ABSTRACT_CHARS,
   MAX_CRITIQUE_EVIDENCE_ITEMS,
@@ -37,17 +38,6 @@ export interface CritiqueResult {
   citationFix: string | null
 }
 
-// A hard slice(0, N) can land mid-word or mid-fact ("...reduced mortality
-// by 4" instead of "...by 47%"), feeding the model a truncated number right
-// before asking it to fact-check numbers — cutting at the last whitespace
-// before the limit costs a few characters but never severs a word.
-function truncateAtWordBoundary(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text
-  const cut = text.slice(0, maxChars)
-  const lastSpace = cut.lastIndexOf(' ')
-  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim() + '…'
-}
-
 // Critique is the app's single most expensive call — it runs once per
 // claim, on the reasoning model, while detection runs once per document on
 // the cheap one. Eight claims means eight of these, so what goes into them
@@ -72,19 +62,29 @@ function truncateAtWordBoundary(text: string, maxChars: number): string {
 // rank: a claim with exactly one relevant source sitting at rank 5 had that
 // source dropped and four off-topic ones sent in its place. The one case the
 // fallback exists for is the one case it broke.
-function selectCritiqueEvidence(evidence: EvidenceItem[]): EvidenceItem[] {
+//
+// `slots` is what the cited source takes one of when the sentence named a work
+// the lookup found — see shared/citedEvidence.ts. Passing it in rather than
+// reading the constant directly is what keeps the cost of reading a citation at
+// zero: the list does not grow, its last searched item is displaced.
+function selectCritiqueEvidence(evidence: EvidenceItem[], slots = MAX_CRITIQUE_EVIDENCE_ITEMS): EvidenceItem[] {
   const relevant = evidence.filter((e) => e.relevanceScore >= MIN_CRITIQUE_RELEVANCE)
-  if (relevant.length >= MIN_CRITIQUE_EVIDENCE_ITEMS) return relevant.slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
+  if (relevant.length >= MIN_CRITIQUE_EVIDENCE_ITEMS) return relevant.slice(0, slots)
 
   const padding = evidence.filter((e) => e.relevanceScore < MIN_CRITIQUE_RELEVANCE)
-  return [...relevant, ...padding].slice(0, MAX_CRITIQUE_EVIDENCE_ITEMS)
+  return [...relevant, ...padding].slice(0, slots)
 }
 
-function cacheKey(claim: Claim, evidence: EvidenceItem[], referenceCheck: string | null): string {
+function cacheKey(
+  claim: Claim,
+  evidence: EvidenceItem[],
+  referenceCheck: string | null,
+  citedWork: CritiqueSource | null
+): string {
   // Keyed on the evidence actually sent, not the first N of the raw list —
   // otherwise two different evidence sets that happen to share their first
   // few entries would collide on one cached critique.
-  const evidenceIds = selectCritiqueEvidence(evidence)
+  const evidenceIds = selectCritiqueEvidence(evidence, searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS))
     .map((e) => e.source.id)
     .sort()
     .join(',')
@@ -111,10 +111,18 @@ function cacheKey(claim: Claim, evidence: EvidenceItem[], referenceCheck: string
   // same claim over the same evidence — Crossref is a live index and the
   // check can time out — and a critique reasoned over "no work by these authors
   // was found" must not be served for a request that says the opposite.
+  // v9: the cited work now occupies slot 1 of the evidence list when a
+  // reference resolved. It is IN the key rather than merely bumping the
+  // version, for the same reason `referenceCheck` is: whether Crossref answered,
+  // and whether OpenAlex had an abstract for what it returned, can differ
+  // between two runs of an unchanged claim over an unchanged evidence set — and
+  // a critique reasoned over the writer's own source must not be served for a
+  // request that never saw it, nor the reverse.
+  const cited = citedWork ? `${citedWork.title}|${citedWork.year ?? ''}|${citedWork.abstract ? 'abs' : 'noabs'}` : 'none'
   const normalizedText = claim.text.trim().replace(/\s+/g, ' ').toLowerCase()
   return createHash('sha256')
     .update(
-      `ai:critique::v8::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}::${referenceCheck ?? 'none'}`
+      `ai:critique::v9::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}::${referenceCheck ?? 'none'}::${cited}`
     )
     .digest('hex')
 }
@@ -145,20 +153,26 @@ export async function generateCritique(
   const references = await checkReferences(sentence ?? claim.text, document)
   const referenceCheck = describeReferenceChecks(references)
 
-  const key = cacheKey(claim, evidence, referenceCheck)
+  // The source the writer actually pointed at, when they pointed at one that
+  // exists. Checking a cited claim against a topical search while never looking
+  // at the citation is the failure this closes — see shared/citedEvidence.ts.
+  // Null costs nothing: no corroborated reference means no extra request.
+  const citedWork = await citedWorkEvidence(references)
+
+  const key = cacheKey(claim, evidence, referenceCheck, citedWork)
 
   const cached = getCached<CritiqueResult>(key)
   if (cached) return cached
 
-  const topEvidence = selectCritiqueEvidence(evidence)
-  const evidenceSummary = topEvidence.length
-    ? topEvidence
-        .map(
-          (e, i) =>
-            `${i + 1}. ${e.source.title}${e.source.abstract ? ` — ${truncateAtWordBoundary(e.source.abstract, MAX_CRITIQUE_ABSTRACT_CHARS)}` : ''}`
-        )
-        .join('\n')
-    : 'No supporting evidence was found.'
+  const topEvidence = selectCritiqueEvidence(
+    evidence,
+    searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS)
+  )
+  const evidenceSummary = buildEvidenceSummary(
+    citedWork,
+    topEvidence.map((e) => ({ title: e.source.title, abstract: e.source.abstract })),
+    { maxItems: MAX_CRITIQUE_EVIDENCE_ITEMS, maxAbstractChars: MAX_CRITIQUE_ABSTRACT_CHARS }
+  )
 
   const raw = await callRelay<CritiqueResult>('critique', {
     claimText: claim.text,
