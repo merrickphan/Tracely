@@ -3833,7 +3833,7 @@ textarea:disabled {
    the collapsible row lives. They used to be declared here too and the two
    disagreed about padding — the wrapper carried the closed row's padding into
    the open one, so an expanded row had a 10px gap above its body. */
-.argscore-para-role { flex: 1; font-size: 12.5px; font-weight: 650; color: var(--text); }
+.argscore-para-name { flex: 1; font-size: 12.5px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
 .argscore-para-claims { font-size: 10.5px; color: var(--muted); }
 
 .argscore-para-preview {
@@ -4080,7 +4080,13 @@ textarea:disabled {
 
 .argscore-para[data-open='true'] .argscore-para-chevron { transform: rotate(90deg); }
 
-.argscore-para-num {
+/* The ROLE now sits in the chip the paragraph index used to occupy, and the
+   paragraph's name takes the bold slot the role had. The swap is the whole
+   point of the change: a writer refers to "the introduction" and "paragraph 2",
+   not to "the thesis paragraph", so position leads and the rubric's own
+   vocabulary follows it. `.argscore-para-num` is gone with the index it
+   styled. */
+.argscore-para-role {
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 5px;
@@ -4088,7 +4094,6 @@ textarea:disabled {
   font-size: 10.5px;
   font-weight: 650;
   color: var(--muted-2);
-  font-variant-numeric: tabular-nums;
 }
 
 /* One dot per finding on a closed row. Same amber the weakness wash uses, so a

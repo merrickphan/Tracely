@@ -157,6 +157,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     // Measured over the same spans the roles were computed from, so a boundary
     // finding and the role labels either side of it can never describe
     // different splits of the text.
+    titleParagraph,
     cohesion: measureCohesion(
       spans.map((span, i) => ({ index: span.index, role: paragraphs[i].role, text: span.text }))
     ),

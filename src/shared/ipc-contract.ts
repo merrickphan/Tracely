@@ -487,6 +487,12 @@ export interface ScreenWatchStructure {
   weaknesses: StructureWeakness[]
   paragraphs: ParagraphOutline[]
   /**
+   * Whether `paragraphs[0]` is the document's title. Carried so the overlay
+   * names paragraphs exactly as the in-app report does — see
+   * `DocumentOutline.titleParagraph` and `components/paragraphNames.ts`.
+   */
+  titleParagraph?: boolean
+  /**
    * First line of each paragraph, index-aligned so `previews[p.index - 1]`
    * belongs to `p`.
    *

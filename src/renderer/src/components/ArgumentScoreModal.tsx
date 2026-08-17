@@ -17,6 +17,7 @@ import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
 import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
 import { sourceInitials } from './citationFlowCopy'
+import { paragraphNames } from './paragraphNames'
 
 /**
  * What the document editor's "AI Insights" button opens.
@@ -509,6 +510,11 @@ function ScoreReport({
   const grade = gradeFor(outline.score)
 
   const claimed = new Set<keyof StructureComponents>()
+  // Named by position, and the title dropped entirely — see paragraphNames.
+  // Computed over the FULL list so the names stay aligned with the outline's
+  // own indices, then filtered, rather than naming a pre-filtered list and
+  // having every index off by one.
+  const names = paragraphNames(outline.paragraphs, outline.titleParagraph)
   const rows = outline.paragraphs.map((paragraph) => {
     const keys = (ROLE_COMPONENTS[paragraph.role] ?? []).filter((key) => !claimed.has(key))
     keys.forEach((key) => claimed.add(key))
@@ -518,11 +524,12 @@ function ScoreReport({
     })
     return {
       paragraph,
+      name: names[paragraph.index - 1] ?? null,
       keys,
       verdict: pcts.length > 0 ? verdictFor(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
       weaknesses: outline.weaknesses.filter((w) => w.paragraphIndex === paragraph.index)
     }
-  })
+  }).filter((row) => row.name !== null)
   const missing = COMPONENT_LABEL.filter(([key]) => !claimed.has(key))
   const draftWeaknesses = outline.weaknesses.filter((w) => w.paragraphIndex === null)
   // Unchecked claims, in draft order. `strengthScore === null` is the same test
@@ -675,7 +682,7 @@ function ScoreReport({
             buttons of its own, and a button inside a button is invalid HTML
             that Chromium silently un-nests.
           */}
-          {rows.map(({ paragraph, keys, verdict, weaknesses }) => {
+          {rows.map(({ paragraph, name, keys, verdict, weaknesses }) => {
             const open = expanded === paragraph.index
             return (
               <div
@@ -691,8 +698,19 @@ function ScoreReport({
                   onClick={() => setExpanded(open ? null : paragraph.index)}
                 >
                   <span className="argscore-para-chevron" aria-hidden="true" />
-                  <span className="argscore-para-num">P{paragraph.index}</span>
-                  <span className="argscore-para-role">{ROLE_LABEL[paragraph.role]}</span>
+                  <span className="argscore-para-name">{name}</span>
+                  {/* The role stays, demoted to the chip the index used to
+                      occupy. It is what the whole /100 is computed from, so
+                      showing it is what makes a wrong label visibly wrong
+                      rather than mysteriously costly — but the writer's own
+                      way of referring to the paragraph leads.
+
+                      Dropped when it would only repeat the name: the closing
+                      paragraph rendered "Conclusion  Conclusion", which reads
+                      as a rendering fault rather than as two facts. */}
+                  {ROLE_LABEL[paragraph.role] === name ? null : (
+                    <span className="argscore-para-role">{ROLE_LABEL[paragraph.role]}</span>
+                  )}
                   {/* Collapsed only: one dot per finding, so a closed row still
                       says it has something in it. Open, the findings themselves
                       are right there and the dots would be a second count of the
@@ -998,8 +1016,12 @@ function ParagraphDetail({
     <>
       <ModalHead title="" onBack={onBack} onClose={onClose} />
       <div className="argscore-scroll argscore-detail">
+        {/* Same naming as the list it was opened from — see paragraphNames.
+            "Paragraph 4 — Evidence" and "Paragraph 2" for the same paragraph
+            would be two names for one thing. */}
         <h2 className="argscore-detail-title">
-          Paragraph {index} — {paragraph ? ROLE_LABEL[paragraph.role] : 'Unlabelled'}
+          {paragraphNames(outline.paragraphs, outline.titleParagraph)[index - 1] ?? `Paragraph ${index}`}
+          {paragraph ? ` — ${ROLE_LABEL[paragraph.role]}` : ''}
         </h2>
         <div className="argscore-detail-meta">
           {verdict ? (
