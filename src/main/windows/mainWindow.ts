@@ -1,10 +1,18 @@
 import { join } from 'path'
-import { BrowserWindow, shell } from 'electron'
+import { BrowserWindow, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { FontSize } from '@shared/types'
-import { mainWindowSize } from '@shared/windowSize'
+import {
+  clampWindowScale,
+  LAYOUT_WIDTH,
+  MAIN_WINDOW_ASPECT,
+  MAX_WINDOW_SCALE,
+  MIN_WINDOW_SCALE,
+  sizeForScale,
+  WINDOW_FONT_SCALE
+} from '@shared/windowSize'
 import { windowTitle } from '../appIdentity'
-import { getSetting } from '../services/storage/settingsRepo'
+import { getSetting, setSetting } from '../services/storage/settingsRepo'
 import { getAppIconPath } from '../icon'
 import { hideFloatingWindow } from './floatingWindow'
 import { hideOverlay } from './overlayWindow'
@@ -22,22 +30,101 @@ function currentFontSize(): FontSize {
   return raw === 'small' || raw === 'large' ? raw : 'medium'
 }
 
+/** Where the user last left the window. A plain key rather than an AppSettings
+ *  field: this is window state, not a preference anyone sets, and it has no
+ *  business in the Settings IPC contract. */
+const SCALE_KEY = 'mainWindowScale'
+const POSITION_KEY = 'mainWindowPosition'
+
+function savedScale(): number | null {
+  const raw = Number(getSetting(SCALE_KEY))
+  return Number.isFinite(raw) && raw > 0 ? clampWindowScale(raw) : null
+}
+
 /**
- * Resizes the window to fit the current font size, keeping it centred.
+ * The scale the window should open at.
  *
- * Font size is applied as CSS `zoom` on the document root, so at `large`
- * everything renders 12% bigger — which a fixed 870x606 window can only clip.
- * Called on boot and whenever the setting changes.
+ * The user's dragged size wins over the font-size setting, because it is the
+ * more recent and more deliberate statement of the same thing — and being
+ * handed back a window you already resized is the whole point of remembering
+ * it. Font size still moves it (see applyMainWindowFontSize), which is what
+ * keeps that setting meaningful rather than dead.
+ */
+function startingScale(fontSize: FontSize): number {
+  return savedScale() ?? WINDOW_FONT_SCALE[fontSize] ?? 1
+}
+
+/**
+ * Resizes the window when the font-size setting changes.
+ *
+ * RELATIVE, not absolute. Snapping to `mainWindowSize(fontSize)` would throw
+ * away a size the user had dragged to every time they touched the setting, and
+ * the two controls would fight: one says "make everything bigger", the other
+ * says "make the window bigger", and on this UI those are the same operation.
+ * Multiplying by the ratio composes them instead, so a user on a large monitor
+ * who scaled the window up and then chose `large` gets a proportionally larger
+ * window rather than being yanked back to 1006px.
  */
 export function applyMainWindowFontSize(fontSize: FontSize): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  const { width, height } = mainWindowSize(fontSize)
-  const [current] = mainWindow.getSize()
-  if (current === width) return
-  // setSize before center: centring reads the size it is given, and a
-  // resizable:false window still accepts a programmatic resize.
+  const previous = savedScale() ?? 1
+  const previousFont = lastFontScale
+  lastFontScale = WINDOW_FONT_SCALE[fontSize] ?? 1
+  const next = clampWindowScale((previous * lastFontScale) / previousFont)
+  if (Math.abs(next - previous) < 0.001) return
+  resizeToScale(next)
+}
+
+function resizeToScale(scale: number): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { width, height } = sizeForScale(scale)
+  // setSize before center: centring reads the size it is given.
   mainWindow.setSize(width, height)
   mainWindow.center()
+  persistScale(scale)
+}
+
+/** The font scale the current window size already has baked into it. */
+let lastFontScale = 1
+
+function persistScale(scale: number): void {
+  setSetting(SCALE_KEY, String(clampWindowScale(scale)))
+}
+
+/**
+ * The remembered position, but only if it is still on a screen.
+ *
+ * A window restored onto a monitor that has since been unplugged is invisible
+ * and — because this app has no taskbar minimize and no window menu — genuinely
+ * unrecoverable without clearing settings. The test is that the window's own
+ * rectangle overlaps some display's work area by a usable amount, not that its
+ * origin is inside one: a window whose top-left sits just off the left edge is
+ * fine and common, one that is entirely off is not.
+ *
+ * Returns null to mean "centre it", which is what the window did before this
+ * existed.
+ */
+function savedPosition(width: number, height: number): { x: number; y: number } | null {
+  const raw = getSetting(POSITION_KEY)
+  const [x, y] = raw.split(',').map(Number)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+
+  // Enough of the window to grab and drag back. The card is the drag handle and
+  // its top edge is where a user reaches for, so this is deliberately generous.
+  const VISIBLE_MARGIN = 120
+  const onScreen = screen.getAllDisplays().some((display) => {
+    const a = display.workArea
+    return (
+      x + width - VISIBLE_MARGIN > a.x &&
+      x + VISIBLE_MARGIN < a.x + a.width &&
+      y + height - VISIBLE_MARGIN > a.y &&
+      // The TOP edge specifically: a window dragged below the bottom of the
+      // screen leaves nothing draggable above the taskbar.
+      y >= a.y - 8 &&
+      y < a.y + a.height - VISIBLE_MARGIN
+    )
+  })
+  return onScreen ? { x: Math.round(x), y: Math.round(y) } : null
 }
 
 export function createMainWindow(): BrowserWindow {
@@ -45,16 +132,27 @@ export function createMainWindow(): BrowserWindow {
   // the app IS the frame, not a resizable OS window with the frame floating
   // inside it. No minimize/maximize either: the design has no such chrome, only
   // its own in-content close button (see HomeView/AnalyzeView).
-  const { width, height } = mainWindowSize(currentFontSize())
+  const fontSize = currentFontSize()
+  lastFontScale = WINDOW_FONT_SCALE[fontSize] ?? 1
+  const scale = startingScale(fontSize)
+  const { width, height } = sizeForScale(scale)
+  const position = savedPosition(width, height)
   const win = new BrowserWindow({
     width,
     height,
+    ...(position ?? {}),
     // Without this, Electron falls back to OS default placement (often
     // hugging a screen edge rather than the middle) since no x/y is given.
-    center: true,
-    // Still not user-resizable; `applyMainWindowFontSize` resizes it
-    // programmatically, which Electron allows regardless of this flag.
-    resizable: false,
+    // Skipped when a remembered position is being restored.
+    center: position === null,
+    // Resizes by SCALING, not by reflowing — the layout is a fixed-coordinate
+    // Figma transcription, so the aspect ratio is locked below and the renderer
+    // derives its zoom from the width. See shared/windowSize.ts.
+    resizable: true,
+    // Still no maximize. With the aspect ratio locked, maximizing can only
+    // letterbox the card inside a screen-shaped window, and the design has no
+    // chrome to restore it from — the tray and the in-content close button are
+    // the whole vocabulary.
     maximizable: false,
     minimizable: false,
     show: false,
@@ -75,6 +173,32 @@ export function createMainWindow(): BrowserWindow {
     }
   })
 
+
+  // Locked so the layout box keeps its one shape at every size. Set after
+  // construction rather than passed in: `aspectRatio` is not a constructor
+  // option, and on Windows it governs the frame rather than the content area —
+  // which for a frameless window are the same rectangle.
+  win.setAspectRatio(MAIN_WINDOW_ASPECT)
+  win.setMinimumSize(...Object.values(sizeForScale(MIN_WINDOW_SCALE)) as [number, number])
+  win.setMaximumSize(...Object.values(sizeForScale(MAX_WINDOW_SCALE)) as [number, number])
+
+  // Remember where the user put it, and how big. Debounced because `resize`
+  // fires continuously through a drag and `setSetting` writes the whole SQLite
+  // database to disk on every call (see storage/db.ts persist) — one write per
+  // frame of a resize would be the most expensive thing in the app.
+  let saveTimer: NodeJS.Timeout | undefined
+  const remember = (): void => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      if (win.isDestroyed()) return
+      const [w] = win.getSize()
+      const [x, y] = win.getPosition()
+      persistScale(w / LAYOUT_WIDTH)
+      setSetting(POSITION_KEY, `${Math.round(x)},${Math.round(y)}`)
+    }, 400)
+  }
+  win.on('resize', remember)
+  win.on('move', remember)
 
   // A page's <title> replaces the window title the moment it loads, so the
   // `title` option above was being silently overwritten by 'Tracely' from the

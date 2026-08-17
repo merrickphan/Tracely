@@ -204,6 +204,14 @@ test('the Edit role that carries Ctrl+Z is actually installed', async (t) => {
     await teardown(app, userData)
   })
 
+  // Wait for the window before asking the main process anything. Without this
+  // the evaluate below races the app's own startup, and Playwright reports the
+  // loss as "Resulting promise was garbage collected" — which reads like a
+  // broken assertion rather than a test that asked too early. It only started
+  // failing when resize.spec.mjs made this the fifth Electron launch in a run.
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+
   // Read in the MAIN process: the accelerator lives on the application menu,
   // which the renderer cannot see. This fails loudly the day someone calls
   // Menu.setApplicationMenu(null) to hide the default menu bar — a change that

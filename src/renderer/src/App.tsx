@@ -7,7 +7,7 @@ import LoginView from './views/LoginView'
 import NamePromptView from './views/NamePromptView'
 import SettingsView from './views/SettingsView'
 import { applyTheme } from './lib/theme'
-import { applyAccentColor, applyDensity, applyFontSize } from './lib/appearance'
+import { applyAccentColor, applyDensity, applyFontSize, trackWindowZoom } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 
 export type Tab = 'home' | 'analyze' | 'library' | 'settings'
@@ -26,15 +26,25 @@ function gateFor(user: AuthUser | null, configured: boolean): AuthGateState {
   return 'ready'
 }
 
-// No window-level chrome at all — the BrowserWindow itself is fixed to the
-// Figma frame's own size and isn't resizable/minimizable/maximizable (see
-// createMainWindow), so there's nothing here to control beyond what each
-// view already draws itself (Home's close-X, Analyze's close-X, Settings'
-// Back link) — exactly what the Figma design shows and nothing else.
+// No window-level chrome at all. The window is resizable and draggable now, but
+// neither needs a control here: the card itself is the drag handle (index.css's
+// `.home-canvas`/`.analyze-view`/`.settings-shell`, with every interactive
+// element opting back out), and resizing is the OS edge grab against a locked
+// aspect ratio. Minimize and maximize are still off — see createMainWindow.
+//
+// So there is nothing to draw beyond what each view already has (Home's
+// close-X, Analyze's close-X, Settings' Back link), which is exactly what the
+// Figma design shows and nothing else.
 export default function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('home')
   const [gate, setGate] = useState<AuthGateState>('checking')
   const [user, setUser] = useState<AuthUser | null>(null)
+
+  // Before the settings round-trip, not after: the window opens at whatever
+  // size it was last left at, and until the zoom matches that width the card
+  // renders at the wrong scale. Waiting on an IPC call to fix it is a visible
+  // flash of a mis-sized UI on every launch.
+  useEffect(() => trackWindowZoom(), [])
 
   useEffect(() => {
     tracelyApi.getSettings().then((s) => {
