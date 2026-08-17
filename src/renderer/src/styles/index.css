@@ -5036,3 +5036,59 @@ textarea:disabled {
   white-space: nowrap;
   border: 0;
 }
+
+/* Window resize handles — see components/ResizeGrips.tsx for why these exist at
+   all (a transparent frameless window gets no OS resize border).
+
+   Invisible by design: they sit over the transparent gutter between the card
+   and the window edge, where there is nothing to cover, and the cursor is the
+   affordance exactly as it is on any OS window.
+
+   `no-drag` is the load-bearing declaration. The card is the window's drag
+   region, and a drag region eats the pointer events these need — without it
+   every grip moves the window instead of resizing it, which is the bug they
+   were added to fix. */
+.resize-grip {
+  position: fixed;
+  z-index: 9999;
+  -webkit-app-region: no-drag;
+}
+
+/* Wider than the 14px gutter, and deliberately so: at the 0.7 minimum scale the
+   gutter renders under 10 physical pixels, which is below what anyone can hit
+   reliably with a mouse. Overlapping the card's edge by a few px costs nothing
+   — there is no interactive element within 20px of the card border on any view,
+   because the Figma frames all carry 28-32px of internal padding. */
+.resize-grip-n,
+.resize-grip-s {
+  left: 18px;
+  right: 18px;
+  height: 18px;
+  cursor: ns-resize;
+}
+.resize-grip-e,
+.resize-grip-w {
+  top: 18px;
+  bottom: 18px;
+  width: 18px;
+  cursor: ew-resize;
+}
+.resize-grip-n { top: 0; }
+.resize-grip-s { bottom: 0; }
+.resize-grip-w { left: 0; }
+.resize-grip-e { right: 0; }
+
+/* Corners last so they win the overlap against the edges — a diagonal drag is
+   the natural gesture on an aspect-locked window, and a corner that lost to an
+   edge would be unreachable. */
+.resize-grip-nw,
+.resize-grip-ne,
+.resize-grip-sw,
+.resize-grip-se {
+  width: 22px;
+  height: 22px;
+}
+.resize-grip-nw { top: 0; left: 0; cursor: nwse-resize; }
+.resize-grip-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.resize-grip-ne { top: 0; right: 0; cursor: nesw-resize; }
+.resize-grip-sw { bottom: 0; left: 0; cursor: nesw-resize; }

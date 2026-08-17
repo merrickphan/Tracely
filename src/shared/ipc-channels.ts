@@ -40,6 +40,10 @@ export const IPC = {
   WINDOW_HIDE: 'window:hide',
   WINDOW_SHOW: 'window:show',
   WINDOW_CLOSE: 'window:close',
+  // Manual window resizing. The OS cannot do this one for us — see
+  // renderer/src/components/ResizeGrips.tsx.
+  WINDOW_RESIZE_START: 'window:resizeStart',
+  WINDOW_RESIZE_MOVE: 'window:resizeMove',
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
