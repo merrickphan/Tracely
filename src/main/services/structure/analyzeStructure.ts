@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
 import { hasInlineCitation } from '@shared/inlineCitation'
+import { measureCohesion } from './cohesion'
 import { hasSignificanceMarker, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
@@ -25,7 +26,11 @@ import { findWeaknesses } from './weaknesses'
  * extensionless relative imports this codebase uses.
  */
 
-export const STRUCTURE_SCHEMA_VERSION = 1
+// v2 adds `cohesion`. Bumped rather than left at 1 so stored outlines from
+// before it are recomputed instead of restored with the field missing —
+// `getStoredOutline` filters on this, and the alternative is a report that
+// shows no flow score for every document opened after an update.
+export const STRUCTURE_SCHEMA_VERSION = 2
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -123,6 +128,12 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
       claimsWithoutEvidence: input.claimsWithoutEvidence,
       soWhatInConclusion
     }),
+    // Measured over the same spans the roles were computed from, so a boundary
+    // finding and the role labels either side of it can never describe
+    // different splits of the text.
+    cohesion: measureCohesion(
+      spans.map((span, i) => ({ index: span.index, role: paragraphs[i].role, text: span.text }))
+    ),
     analyzedAt: input.analyzedAt
   }
 }

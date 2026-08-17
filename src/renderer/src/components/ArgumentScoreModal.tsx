@@ -79,6 +79,24 @@ const ROLE_LABEL: Record<ParagraphRole, string> = {
   unknown: 'Unlabelled'
 }
 
+/**
+ * The headline on a paragraph's problem card.
+ *
+ * A short NAME for the finding, above the rubric's own full sentence — the
+ * card in the frame leads with one ("Overreaching claim") and explains
+ * underneath. These name the same seven kinds `weaknesses.ts` produces and add
+ * no judgement of their own; the sentence under each one is still that module's.
+ */
+const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
+  'no-thesis': 'No thesis',
+  'unsupported-claim': 'Unsupported claim',
+  'warrant-gap': 'Evidence left unexplained',
+  'new-claim-in-conclusion': 'New claim in the conclusion',
+  'evidence-stacking': 'Stacked evidence',
+  'no-counterargument': 'No counterargument',
+  'no-significance': 'No significance'
+}
+
 const COMPONENT_LABEL: Array<[keyof StructureComponents, string, number]> = [
   ['thesis', 'Thesis', 20],
   ['governingClaims', 'Governing claims', 20],
@@ -442,9 +460,15 @@ function ScoreReport({
   // "N not checked yet" line above it can never disagree.
   const pending = claims.filter((claim) => claim.strengthScore === null).map((claim) => claim.id)
 
+  // Which paragraph row is expanded. One at a time, and the first row carrying
+  // a finding opens by default — the report is read top-down and an all-collapsed
+  // list makes the reader hunt for the paragraph that needs them.
+  const firstProblem = rows.find((row) => row.weaknesses.length > 0)?.paragraph.index ?? null
+  const [expanded, setExpanded] = useState<number | null>(firstProblem)
+
   return (
     <>
-      <ModalHead title="Essay Grade" onClose={onClose} />
+      <ModalHead title={compact ? 'Writing Grade' : 'Writing Grade — Full Report'} onClose={onClose} />
 
       <div className="argscore-summary">
         {/*

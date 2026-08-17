@@ -292,6 +292,33 @@ export interface StructureWeakness {
   tracerPrompt: string
 }
 
+export type CohesionFindingKind = 'no-transition' | 'topic-jump' | 'unanswered-counterargument'
+
+export interface CohesionFinding {
+  kind: CohesionFindingKind
+  /** 1-based paragraph the boundary runs FROM. */
+  fromIndex: number
+  /** 1-based paragraph the boundary runs TO. */
+  toIndex: number
+  /** Local template. Never model prose, and never the draft's own words. */
+  message: string
+}
+
+/**
+ * How well the draft's paragraphs join up — see structure/cohesion.ts.
+ *
+ * Reported BESIDE the /100 rather than inside it, the same call
+ * `evidenceCoverage.ts` makes: the rubric's six components are about whether
+ * the argument's parts exist, and folding a seventh number in would silently
+ * re-weight a score whose breakdown is shown to the student.
+ */
+export interface DraftCohesion {
+  /** 0-100, the mean of every paragraph boundary. 100 when there is only one. */
+  score: number
+  boundaries: number
+  findings: CohesionFinding[]
+}
+
 export interface EvidenceCoverage {
   detected: number
   /**
@@ -357,5 +384,12 @@ export interface DocumentOutline {
   rolesFrom: 'heuristic' | 'model'
   coverage: EvidenceCoverage
   weaknesses: StructureWeakness[]
+  /**
+   * Null on outlines computed before cohesion existed. Restored rows are
+   * filtered by `schemaVersion` so this is only ever null for an outline built
+   * by an older client, but the UI must still tolerate it rather than render a
+   * flow score of zero for a draft nothing measured.
+   */
+  cohesion: DraftCohesion | null
   analyzedAt: string
 }
