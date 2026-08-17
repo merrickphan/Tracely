@@ -1219,6 +1219,34 @@ function ArgumentCheck({
   const score = weakest?.strengthScore ?? 0
   const tone = toneFor(score)
 
+  /**
+   * How many sources this claim actually has, read from the stored evidence.
+   *
+   * NOT `scoreBreakdown.sourceCount`, which is the 0..1 fraction of the
+   * six-source cap that cleared the relevance floor — printing that as a count
+   * renders "0.5 sources cited for this claim". `shared/claimEvidence.ts`
+   * exists because the same field was mistaken for a count once already, and
+   * multiplying it back out cannot recover a number above the cap anyway.
+   *
+   * Null until it resolves, and the line is simply not drawn then: an unread
+   * list is not zero sources.
+   */
+  const [sourceCount, setSourceCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!weakest) return
+    let cancelled = false
+    setSourceCount(null)
+    void tracelyApi
+      .getEvidenceForClaim(weakest.id)
+      .then((res) => {
+        if (!cancelled) setSourceCount(res.evidence.length)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [weakest?.id])
+
   return (
     <>
       <header className="argscore-head">
@@ -1269,11 +1297,12 @@ function ArgumentCheck({
                   <ComponentBar value={weakest.scoreBreakdown.quality * 100} max={100} label="Quality" />
                   <ComponentBar value={weakest.scoreBreakdown.recency * 100} max={100} label="Recency" />
                 </div>
-                <p className="argscore-check-sources">
-                  <span className="argscore-check-bullet" />
-                  {weakest.scoreBreakdown.sourceCount} source
-                  {weakest.scoreBreakdown.sourceCount === 1 ? '' : 's'} cited for this claim
-                </p>
+                {sourceCount !== null ? (
+                  <p className="argscore-check-sources">
+                    <span className="argscore-check-bullet" />
+                    {sourceCount} source{sourceCount === 1 ? '' : 's'} cited for this claim
+                  </p>
+                ) : null}
               </>
             ) : null}
 
