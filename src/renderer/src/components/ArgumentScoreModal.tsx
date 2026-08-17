@@ -477,7 +477,7 @@ function ScoreReport({
           used to suppress and why that was dropped. A short draft now scores
           low rather than going ungraded.
         */}
-        <ScoreRing score={outline.score} size={compact ? 132 : 96} />
+        <ScoreRing score={outline.score} size={compact ? 132 : 116} />
         <div className="argscore-summary-text">
           <span className="argscore-eyebrow">Overall score</span>
           <span className={`argscore-grade tone-${toneFor(outline.score)}`}>{grade.letter}</span>
@@ -577,6 +577,8 @@ function ScoreReport({
             </div>
           </div>
 
+          <CohesionCard cohesion={outline.cohesion} onSelect={setExpanded} />
+
           <div className="argscore-section-row">
             <h3 className="argscore-section">Breakdown by paragraph</h3>
             {/* The ONLY route to the argument check, per the spec. It is a
@@ -590,41 +592,96 @@ function ScoreReport({
 
           <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} />
 
-          {rows.map(({ paragraph, keys, verdict, weaknesses }) => (
-            <button
-              type="button"
-              className="argscore-para"
-              key={paragraph.index}
-              data-role={paragraph.role}
-              onClick={() => onView({ name: 'paragraph', index: paragraph.index })}
-            >
-              <div className="argscore-para-head">
-                <span className="argscore-para-num">¶{paragraph.index}</span>
-                <span className="argscore-para-role">{ROLE_LABEL[paragraph.role]}</span>
-                {verdict ? (
-                  <span className={`argscore-verdict-pill tone-${verdict === 'Strong' ? 'good' : verdict === 'Developing' ? 'mid' : 'low'}`}>
-                    {verdict}
-                  </span>
+          {/*
+            One row per paragraph, collapsed to a header until opened. The row
+            used to be a single button that jumped straight to the paragraph
+            detail, which meant the report could not be READ — every component
+            bar and every finding for every paragraph was stacked in the list at
+            once, and the only way to see one paragraph's was to leave the
+            report. Expanding in place keeps the reader on the page they are
+            reading; the detail view is still one click further in.
+
+            A div wrapping a header button, not a button: the open body holds
+            buttons of its own, and a button inside a button is invalid HTML
+            that Chromium silently un-nests.
+          */}
+          {rows.map(({ paragraph, keys, verdict, weaknesses }) => {
+            const open = expanded === paragraph.index
+            return (
+              <div
+                className="argscore-para"
+                key={paragraph.index}
+                data-role={paragraph.role}
+                data-open={open ? 'true' : undefined}
+              >
+                <button
+                  type="button"
+                  className="argscore-para-head"
+                  aria-expanded={open}
+                  onClick={() => setExpanded(open ? null : paragraph.index)}
+                >
+                  <span className="argscore-para-chevron" aria-hidden="true" />
+                  <span className="argscore-para-num">P{paragraph.index}</span>
+                  <span className="argscore-para-role">{ROLE_LABEL[paragraph.role]}</span>
+                  {/* Collapsed only: one dot per finding, so a closed row still
+                      says it has something in it. Open, the findings themselves
+                      are right there and the dots would be a second count of the
+                      same thing. */}
+                  {!open && weaknesses.length > 0 ? (
+                    <span
+                      className="argscore-para-dots"
+                      aria-label={`${weaknesses.length} ${weaknesses.length === 1 ? 'finding' : 'findings'}`}
+                    >
+                      {weaknesses.map((weakness, i) => (
+                        <span className="argscore-para-dot" key={`${weakness.kind}-${i}`} />
+                      ))}
+                    </span>
+                  ) : null}
+                  {verdict ? (
+                    <span className={`argscore-verdict-pill tone-${verdict === 'Strong' ? 'good' : verdict === 'Developing' ? 'mid' : 'low'}`}>
+                      {verdict}
+                    </span>
+                  ) : null}
+                </button>
+
+                {open ? (
+                  <div className="argscore-para-body">
+                    <p className="argscore-para-preview">{paragraphTexts[paragraph.index - 1] ?? ''}</p>
+                    {/* Shown unconditionally now that the grade always is. On a
+                        short draft these are the explanation for the low number —
+                        which components were reachable at all — so hiding them
+                        would leave the letter unaccounted for. */}
+                    {keys.map((key) => {
+                      const meta = COMPONENT_LABEL.find(([k]) => k === key)!
+                      return (
+                        <ComponentBar
+                          key={key}
+                          value={outline.components[key]}
+                          max={meta[2]}
+                          label={meta[1]}
+                        />
+                      )
+                    })}
+                    {weaknesses.map((weakness, i) => (
+                      <ParagraphProblem
+                        key={`${weakness.kind}-${i}`}
+                        weakness={weakness}
+                        claim={claims.find((claim) => claim.id === weakness.claimId) ?? null}
+                        onView={onView}
+                        paragraphIndex={paragraph.index}
+                      />
+                    ))}
+                    <button
+                      className="argscore-link argscore-para-open"
+                      onClick={() => onView({ name: 'paragraph', index: paragraph.index })}
+                    >
+                      Open paragraph {paragraph.index} →
+                    </button>
+                  </div>
                 ) : null}
               </div>
-              <p className="argscore-para-preview">{paragraphTexts[paragraph.index - 1] ?? ''}</p>
-              {/* Shown unconditionally now that the grade always is. On a short
-                  draft these are the explanation for the low number — which
-                  components were reachable at all — so hiding them would leave
-                  the letter unaccounted for. */}
-              {keys.map((key) => {
-                const meta = COMPONENT_LABEL.find(([k]) => k === key)!
-                return (
-                  <ComponentBar key={key} value={outline.components[key]} max={meta[2]} label={meta[1]} />
-                )
-              })}
-              {weaknesses.map((weakness, i) => (
-                <span className="argscore-weakness" key={`${weakness.kind}-${i}`}>
-                  {weakness.message}
-                </span>
-              ))}
-            </button>
-          ))}
+            )
+          })}
 
           {missing.length > 0 ? (
             <>
@@ -635,7 +692,7 @@ function ScoreReport({
 
           {draftWeaknesses.length > 0 ? (
             <>
-              <h3 className="argscore-section">Summary</h3>
+              <h3 className="argscore-section argscore-section-dot">Summary</h3>
               {draftWeaknesses.map((weakness, i) => (
                 <p className="argscore-weakness-block" key={`${weakness.kind}-${i}`}>
                   {weakness.message}
@@ -659,10 +716,122 @@ function ScoreReport({
           </button>
         )}
         <button className="argscore-btn secondary" onClick={onReanalyze}>
-          Re-grade Essay
+          Re-grade Writing
         </button>
       </footer>
     </>
+  )
+}
+
+/**
+ * Cohesion & flow — the lavender block above the paragraph breakdown.
+ *
+ * Deliberately NOT part of the /100. The rubric's six components ask whether
+ * the argument's parts exist; this asks whether they are joined, and folding a
+ * seventh number into a score whose breakdown is shown would silently re-weight
+ * every component beside it. Same call `evidenceCoverage.ts` makes, for the
+ * same reason.
+ *
+ * Renders nothing for a one-paragraph draft: there is no boundary to measure,
+ * and `measureCohesion` returns 100 there so that an absent boundary cannot
+ * read as a failed one — printing "100%, strong flow" over a single paragraph
+ * would turn that safe default into a compliment nothing earned.
+ */
+function CohesionCard({
+  cohesion,
+  onSelect
+}: {
+  cohesion: DraftCohesion | null
+  /** Opens the paragraph a finding is about, in the breakdown below. */
+  onSelect: (index: number) => void
+}): JSX.Element | null {
+  if (!cohesion || cohesion.boundaries === 0) return null
+  const verdict = verdictFor(cohesion.score)
+  const tone = toneFor(cohesion.score)
+
+  return (
+    <section className="argscore-flow">
+      <div className="argscore-flow-head">
+        <h3 className="argscore-section">Cohesion &amp; flow</h3>
+        <span className={`argscore-verdict-pill tone-${tone}`}>{verdict}</span>
+      </div>
+      <ComponentBar value={cohesion.score} max={100} label="Flow score" />
+      {cohesion.findings.length > 0 ? (
+        <ul className="argscore-flow-list">
+          {cohesion.findings.map((finding, i) => (
+            <li key={`${finding.kind}-${i}`}>
+              <button className="argscore-flow-item" onClick={() => onSelect(finding.toIndex)}>
+                {finding.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="argscore-flow-clear">
+          Every paragraph picks up where the last one left off.
+        </p>
+      )}
+    </section>
+  )
+}
+
+/**
+ * One finding inside an expanded paragraph — the card the frame draws with a
+ * coloured dot, a name, and a quote.
+ *
+ * The quote is the CLAIM the finding is about, when it has one, and nothing
+ * else: no suggested rewrite. Every message here is a local template
+ * (weaknesses.ts) precisely so that Tracely names what is missing and the
+ * student writes what goes there — a proposed sentence in someone's own essay
+ * is the line this app does not cross.
+ *
+ * "Fix →" routes by what the finding actually needs: a claim with no source
+ * needs a search, so it opens Find Evidence on that claim; anything structural
+ * opens the paragraph detail, which is where the rubric's reasoning is.
+ */
+function ParagraphProblem({
+  weakness,
+  claim,
+  paragraphIndex,
+  onView
+}: {
+  weakness: StructureWeakness
+  claim: Claim | null
+  paragraphIndex: number
+  onView: (view: View) => void
+}): JSX.Element {
+  const searchable = weakness.kind === 'unsupported-claim' && claim !== null
+
+  return (
+    <div className="argscore-problem" data-kind={weakness.kind}>
+      <div className="argscore-problem-head">
+        <span className="argscore-problem-dot" aria-hidden="true" />
+        <span className="argscore-problem-title">
+          {WEAKNESS_LABEL[weakness.kind]}
+          {claim?.strengthScore !== null && claim?.strengthScore !== undefined ? (
+            <span className="argscore-problem-score"> · {claim.strengthScore}/100 evidence</span>
+          ) : null}
+        </span>
+        <button
+          className="argscore-link"
+          onClick={() =>
+            onView(
+              searchable
+                ? {
+                    name: 'evidence',
+                    claimId: claim.id,
+                    from: { name: 'paragraph', index: paragraphIndex }
+                  }
+                : { name: 'paragraph', index: paragraphIndex }
+            )
+          }
+        >
+          {searchable ? 'Find evidence →' : 'Fix →'}
+        </button>
+      </div>
+      {claim ? <p className="argscore-problem-quote">“{claim.text}”</p> : null}
+      <p className="argscore-problem-body">{weakness.message}</p>
+    </div>
   )
 }
 
