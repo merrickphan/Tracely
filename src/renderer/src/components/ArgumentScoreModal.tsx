@@ -149,6 +149,69 @@ function readingStats(paragraphTexts: string[]): { words: number; sentences: num
   }
 }
 
+/**
+ * What "AI Insights" shows while the rubric runs — Figma 391:540, the
+ * "Analyzing Card" on frame 391:342.
+ *
+ * The spinner is an SVG arc rather than a bordered div, for the same reason
+ * ScoreRing below is: the design's arc has round caps, which a `border-top-color`
+ * spinner cannot draw. Same 56px box and same green as the score ring, so the
+ * thing that spins here is recognisably the thing that fills in a moment later.
+ *
+ * Only the arc rotates, via `transform` on the <svg>, so the animation is
+ * composited rather than re-laying out the card 60 times a second. And the arc
+ * is drawn at full opacity with the rotation as the *only* animated property —
+ * if the compositor never runs the animation, this degrades to a static
+ * three-quarter ring, which still reads as "working". That is the lesson from
+ * the overlay's entrance fade, which gated visibility on a frame callback and
+ * could end up invisible.
+ */
+const SPINNER_SIZE = 56
+const SPINNER_STROKE = 5
+
+function GradingCard(): JSX.Element {
+  const radius = SPINNER_SIZE / 2 - SPINNER_STROKE
+  const circumference = 2 * Math.PI * radius
+  // 28% of the ring, read off the design's arc.
+  const arc = circumference * 0.28
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Grading your writing">
+      {/* aria-live, so a screen reader hears that work started rather than
+          silence until the grade lands. */}
+      <div className="gradeload-card" role="status" aria-live="polite">
+        <svg
+          className="gradeload-spinner"
+          width={SPINNER_SIZE}
+          height={SPINNER_SIZE}
+          viewBox={`0 0 ${SPINNER_SIZE} ${SPINNER_SIZE}`}
+          aria-hidden="true"
+        >
+          <circle
+            className="gradeload-spinner-track"
+            cx={SPINNER_SIZE / 2}
+            cy={SPINNER_SIZE / 2}
+            r={radius}
+            strokeWidth={SPINNER_STROKE}
+          />
+          <circle
+            className="gradeload-spinner-arc"
+            cx={SPINNER_SIZE / 2}
+            cy={SPINNER_SIZE / 2}
+            r={radius}
+            strokeWidth={SPINNER_STROKE}
+            strokeDasharray={`${arc} ${circumference - arc}`}
+          />
+        </svg>
+        <p className="gradeload-title">Grading your writing…</p>
+        <p className="gradeload-sub">
+          Checking thesis strength, evidence, and citations across each paragraph
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function ScoreRing({ score, size }: { score: number; size: number }): JSX.Element {
   const stroke = size >= 120 ? 9 : 7
   const radius = size / 2 - stroke
@@ -289,15 +352,17 @@ export default function ArgumentScoreModal({
   // Check", which is where the design puts it.
   const [view, setView] = useState<View>({ name: 'summary' })
 
+  // Its own card, not a state inside the report's card — Figma 391:540
+  // ("Analyzing Card") is 340 wide against the report's full width, with its own
+  // 24px radius and 32px padding. Rendering it inside `.argscore-card` would
+  // draw the design's small card at the report's size, which is the drift that
+  // made four earlier PRs "fix" this modal without the screen changing.
+  if (loading) return <GradingCard />
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Argument score">
       <div className="modal-card argscore-card">
-        {loading ? (
-          <div className="argscore-state">
-            <Spinner />
-            <p>Reading the draft…</p>
-          </div>
-        ) : error ? (
+        {error ? (
           <div className="argscore-state">
             <p className="error-text">{error}</p>
             <button className="argscore-btn secondary" onClick={onReanalyze}>

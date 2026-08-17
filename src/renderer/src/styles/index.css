@@ -3292,6 +3292,96 @@ textarea:disabled {
 
 .argscore-close:hover { background: var(--border); }
 
+/* The grading loader — Figma 391:540 "Analyzing Card", values read off the node
+   rather than estimated: 340 wide, 32 padding, 24 radius, 16 gap, 1px black
+   border, and that drop shadow. It is deliberately NOT .modal-card, whose 300px
+   / 14px radius belongs to the small dialogs. */
+.gradeload-card {
+  width: 340px;
+  padding: 32px;
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid #000;
+  box-shadow: 0 10px 28px -4px rgba(15, 26, 20, 0.14);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  /* Same entrance every other modal card in this window uses, so opening this
+     does not feel like a different app.
+     Unlike the spinner below, this one is NOT safe under a compositor that never
+     runs it: modal-card-in starts at opacity 0, so a frozen animation renders an
+     invisible card. Measured in the preview harness, where the pane does not
+     composite — playState "running", currentTime 0, computed opacity 0.
+     Kept anyway, because this modal only opens from a click in the focused main
+     window, which is compositing by definition at that moment; and because
+     changing it here would leave this one card entering differently from every
+     other. If modals ever open on an unfocused window, this is the line that
+     breaks, and animating transform alone is the fix. */
+  animation: modal-card-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+}
+
+.gradeload-spinner {
+  display: block;
+  /* The only animated property, and a composited one. 900ms is fast enough to
+     read as active without becoming a distraction on a card that can sit there
+     for the length of a relay call. */
+  animation: gradeload-spin 0.9s linear infinite;
+}
+
+/* No fill-mode and full base opacity: if the compositor never runs this — the
+   case the overlay's underlines were caught by — the arc still paints, and a
+   static three-quarter ring still reads as "working". Degrading to "not
+   spinning" is acceptable; degrading to "invisible" is not. */
+@keyframes gradeload-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gradeload-spinner-track {
+  fill: none;
+  stroke: var(--surface-2);
+}
+
+/* Round caps are why this is an SVG arc and not a bordered box, and the green is
+   --score-good — the same one the score ring fills with a moment later. */
+.gradeload-spinner-arc {
+  fill: none;
+  stroke: var(--score-good);
+  stroke-linecap: round;
+}
+
+.gradeload-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1f;
+}
+
+.gradeload-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #7e7f84;
+  text-align: center;
+}
+
+/* A writer who has asked the OS to stop moving things gets a still ring rather
+   than no feedback: the arc is already visible, so removing the spin costs
+   nothing but the motion. */
+@media (prefers-reduced-motion: reduce) {
+  .gradeload-spinner {
+    animation: none;
+  }
+  .gradeload-card {
+    animation: none;
+  }
+}
+
 .argscore-state {
   padding: 34px 24px;
   display: flex;
