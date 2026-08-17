@@ -12,6 +12,7 @@ import DocumentMarkLayer from '../components/DocumentMarkLayer'
 import type { DocCitationFlowState } from '../components/DocumentMarkLayer'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
+import { scheduleFrame } from '../frameScheduler'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
@@ -662,20 +663,25 @@ function DocumentEditor({
    * frame every time the text reflows — visible as a flicker on every keystroke
    * in a flagged paragraph.
    *
-   * rAF-batched because a keystroke fires this and a ResizeObserver callback in
-   * the same tick, and getClientRects forces layout each time.
+   * Frame-batched because a keystroke fires this and a ResizeObserver callback
+   * in the same tick, and getClientRects forces layout each time.
+   *
+   * scheduleFrame rather than requestAnimationFrame directly: Chromium freezes
+   * rAF on a page that is not compositing, and a bare rAF here meant the marks
+   * were never measured at all in a hidden window — no underlines drawn, and no
+   * way to reach the hover popover that opens on one from the preview harness.
+   * The batching is unchanged whenever there is a frame to batch against; see
+   * frameScheduler.ts.
    */
   useLayoutEffect(() => {
     const body = editorRef.current
     const wrap = wrapRef.current
     if (!body || !wrap) return
-    let frame = 0
-    frame = requestAnimationFrame(() => {
+    return scheduleFrame(window, () => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
       setMarks(measureMarks(body, wrap, live, articleCounts))
       setWrapWidth(wrap.clientWidth)
     })
-    return () => cancelAnimationFrame(frame)
     // `structureOpen` was a dependency here: opening the rail narrowed the
     // editor, so every mark had to be re-measured. With the rail gone the
     // editor's width no longer changes from inside this component.
