@@ -78,6 +78,27 @@ export function insertedBody(style: CitationStyle): string {
   return `This claim is now backed by a source in your document. ${CITATION_STYLE_LABEL[style]} in-text citation inserted.`
 }
 
+/**
+ * The monogram tile's letters: an acronym for a multi-word venue, else the
+ * first two letters of whatever name there is.
+ *
+ * A tile rather than a favicon, and only on this surface. The overlay can show
+ * the real site icon because main fetches one (search/favicon.ts) and hands it
+ * over as a data: URI; nothing on the persisted `Source` the editor holds
+ * carries one, and adding a fetch here would widen this window's network
+ * surface for decoration.
+ */
+export function sourceInitials(name: string): string {
+  const words = name.split(/\s+/).filter((w) => /[A-Za-z]/.test(w))
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('')
+  }
+  return (words[0] ?? name).slice(0, 2).toUpperCase()
+}
+
 /** The "Claim resolved · N flags left" line's second half. */
 export function flagsLeft(count: number): string {
   return `${count} flag${count === 1 ? '' : 's'} left in this document`

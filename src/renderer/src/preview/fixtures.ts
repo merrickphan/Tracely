@@ -481,7 +481,15 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     claimType: 'opinion',
     confidence: 0.55,
     hasInlineCitation: false,
-    problemKinds: ['missing-citation'],
+    // 'searching', not 'missing-citation'. The pair below is what main
+    // produces for an unresolved claim — problemKindsFor answers a null
+    // `evidence` with exactly ['searching'] — and the two have to agree,
+    // because every card downstream reads the KIND and trusts that a
+    // non-'searching' one came with evidence attached. Named
+    // 'missing-citation' beside a null evidence, this fixture pushed a payload
+    // main cannot produce and crashed ProblemCard on `evidence.breakdown`,
+    // which is the harness inventing a bug rather than finding one.
+    problemKinds: ['searching'],
     // null evidence exercises the "search still running" state, which is
     // otherwise only visible for the second or two after detection.
     evidence: null,

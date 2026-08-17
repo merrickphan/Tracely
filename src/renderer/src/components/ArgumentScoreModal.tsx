@@ -16,6 +16,7 @@ import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
 import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
+import { sourceInitials } from './citationFlowCopy'
 
 /**
  * What the document editor's "AI Insights" button opens.
@@ -1157,17 +1158,11 @@ function FindEvidenceResult({
   )
 }
 
-/** The badge monogram: an acronym for a multi-word venue, else its first two letters. */
+/** The badge monogram: an acronym for a multi-word venue, else its first two
+ *  letters. The rule itself lives in citationFlowCopy.ts, because the hover
+ *  popover's results list draws the same tile from the same sources. */
 function initialsFor(source: Source): string {
-  const name = source.venue ?? source.title
-  const words = name.split(/\s+/).filter((w) => /[A-Za-z]/.test(w))
-  if (words.length >= 2) {
-    return words
-      .slice(0, 3)
-      .map((w) => w[0]?.toUpperCase() ?? '')
-      .join('')
-  }
-  return (words[0] ?? name).slice(0, 2).toUpperCase()
+  return sourceInitials(source.venue ?? source.title)
 }
 
 /** The band beside the score, in the design's own word for 34/100. */

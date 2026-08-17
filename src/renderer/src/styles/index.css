@@ -1549,6 +1549,276 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.04);
 }
 
+.docmark-btn-primary:disabled,
+.docmark-btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- The citation flow inside the same card (Figma "Find a Source" /
+   "Add Citation") -------------------------------------------------------
+   The Screen Watch overlay draws these three frames too, in its own window with
+   inline styles. The wording is shared (components/citationFlowCopy.ts); the
+   markup deliberately is not, because that window loads no stylesheet. Keep the
+   two looking alike by changing both, not by reaching for one from the other. */
+
+/* The style stated opposite the title, e.g. "MLA 9". */
+.docmark-chip {
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #f2f2f2;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #737373;
+}
+
+.docmark-hint {
+  font-size: 12px;
+  color: #9a9ba1;
+}
+
+.docmark-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #ededed;
+  overflow: hidden;
+}
+
+.docmark-progress-fill {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: #ff5900;
+  animation: docmark-progress 1.1s ease-in-out infinite;
+}
+
+@keyframes docmark-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.docmark-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.docmark-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.docmark-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Two greys, not one at two opacities: the design's second bar is a genuinely
+   lighter fill, which is what makes a row read as a title over a subtitle. */
+.docmark-skeleton {
+  display: block;
+  height: 9px;
+  border-radius: 999px;
+  background: #ebebeb;
+  animation: docmark-skeleton-pulse 1.1s ease-in-out infinite;
+}
+
+.docmark-skeleton.faint {
+  height: 8px;
+  background: #f4f4f4;
+}
+
+.docmark-skeleton.tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+@keyframes docmark-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.docmark-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docmark-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 10px;
+  /* The unselected row keeps a transparent border of the same width, so
+     selecting one does not shift its contents by a pixel. */
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.docmark-row.selected {
+  border-color: #e5e5e5;
+  background: #f8f8f8;
+}
+
+.docmark-row-badge {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #1a56db;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docmark-row-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docmark-row-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #1c1c1c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docmark-row-sub {
+  font-size: 12px;
+  color: #9a9ba1;
+  white-space: nowrap;
+}
+
+.docmark-match {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.docmark-radio {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid #d1d1d1;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* Filled ink with a 6px white centre, drawn as an inset ring so the outer
+   size does not change between the two states. */
+.docmark-radio.on {
+  border: none;
+  background: #1c1c1c;
+  box-shadow: inset 0 0 0 6px #1c1c1c, inset 0 0 0 3px #fff;
+}
+
+.docmark-styles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.docmark-styles-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #737373;
+}
+
+.docmark-style-pill {
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  color: #737373;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  cursor: pointer;
+}
+
+.docmark-style-pill.on {
+  font-weight: 600;
+  color: #fff;
+  background: #1c1c1c;
+  border-color: #1c1c1c;
+}
+
+.docmark-block {
+  width: 100%;
+  box-sizing: border-box;
+  background: #f8f8f8;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.docmark-block-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #9a9ba1;
+  letter-spacing: 0.6px;
+}
+
+.docmark-block-marker {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1c1c1c;
+}
+
+.docmark-block-body {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #737373;
+}
+
+.docmark-resolved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.docmark-resolved-yes {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.docmark-btn-wide {
+  width: 100%;
+}
+
 .docedit-body:empty::before {
   content: attr(data-placeholder);
   color: #a1a1a1;

@@ -9,6 +9,8 @@ import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
+import type { DocCitationFlowState } from '../components/DocumentMarkLayer'
+import { sourceInitials } from '../components/citationFlowCopy'
 import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
@@ -259,6 +261,35 @@ function DocumentEditor({
   // The pointer is inside the popover, so leaving the underline must not close
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
+
+  // ---- The popover's citation flow ---------------------------------------
+  //
+  // "Find a Source" -> "Add Citation", the same three frames Screen Watch draws
+  // over other applications. Owned here rather than inside the popover because
+  // the popover unmounts the instant the pointer leaves the sentence, and this
+  // flow takes seconds of reading and two or three clicks — state living in the
+  // card would be destroyed by the first mouse movement after starting it.
+  //
+  // One at a time, unlike the overlay's per-claim map: only one sentence's
+  // popover is ever open here, and a flow left running on a sentence nobody is
+  // looking at is a card that can never be reached again.
+  const [citationFlow, setCitationFlow] = useState<{
+    claimId: string
+    state: DocCitationFlowState
+  } | null>(null)
+  const [citationBusy, setCitationBusy] = useState<'inserting' | 'previewing' | 'undoing' | null>(null)
+  // While a flow is open its mark is pinned: the hit-test must not swap the
+  // popover to another underline the pointer happens to cross on its way to a
+  // button, and leaving the card must not close it.
+  const flowPinnedRef = useRef(false)
+  useEffect(() => {
+    flowPinnedRef.current = citationFlow !== null
+  }, [citationFlow])
+  // The `Source` objects behind the current candidate list. Held in a ref
+  // rather than in the flow state because they are only ever read to format a
+  // citation — putting a full Source per row into state would re-render the
+  // popover on every field of a record nothing in it displays.
+  const flowSourcesRef = useRef<Map<string, Source>>(new Map())
 
   // The style the Find Evidence view formats and labels its pill with. Read
   // once: it is a preference, not something that changes while a document is
@@ -675,6 +706,10 @@ function DocumentEditor({
       return
     }
     if (insidePopoverRef.current) return
+    // A running citation flow owns the popover until it is finished or
+    // cancelled. Without this, reaching across another underline on the way to
+    // "Insert citation" swaps the card out from under the cursor.
+    if (flowPinnedRef.current) return
     const rect = wrap.getBoundingClientRect()
     const x = event.clientX - rect.left + wrap.scrollLeft
     const y = event.clientY - rect.top + wrap.scrollTop
@@ -717,6 +752,182 @@ function DocumentEditor({
     handleInput()
     const analysisId = analysisIdRef.current
     if (analysisId) await onRefreshClaims(analysisId)
+  }
+
+  /**
+   * "Add citation" / "Find a source" on the hover popover — the four frames
+   * from Figma, run in place over the sentence rather than by opening a modal.
+   *
+   * Reads what is already stored before searching anything. A marked claim has
+   * been checked by definition (measureMarks refuses to draw one that has not),
+   * so re-running the four academic APIs to redraw a list already in the
+   * database would make pressing the button cost a 15-45 second wait for a
+   * result we hold. "Search again" is the button that spends that.
+   */
+  async function startCitationFlow(claim: Claim, fresh: boolean): Promise<void> {
+    setCitationFlow({ claimId: claim.id, state: { step: 'searching' } })
+    try {
+      const res = fresh ? await tracelyApi.findEvidence(claim.id) : await tracelyApi.getEvidenceForClaim(claim.id)
+      const evidence = res.evidence
+      flowSourcesRef.current = new Map(evidence.map((item) => [item.source.id, item.source]))
+      // A stored read that comes back empty means nothing has been searched for
+      // this claim yet, not that nothing exists — fall through to a real search
+      // rather than printing "No sources found" over an unasked question.
+      if (!fresh && evidence.length === 0) {
+        await startCitationFlow(claim, true)
+        return
+      }
+      if (fresh) {
+        // The claim now has a new strength score in the database; the marks are
+        // drawn from it, so they have to be re-read or the underline that
+        // prompted this still reports the old search.
+        const analysisId = analysisIdRef.current
+        if (analysisId) await onRefreshClaims(analysisId)
+      }
+      setCitationFlow((prev) =>
+        prev?.claimId !== claim.id
+          ? prev
+          : {
+              claimId: claim.id,
+              state: {
+                step: 'picking',
+                candidates: evidence.map((item) => ({
+                  sourceId: item.source.id,
+                  title: item.source.title,
+                  venue: item.source.venue,
+                  year: item.source.year,
+                  matchPercent: Math.round(item.relevanceScore * 100),
+                  initials: sourceInitials(item.source.venue ?? item.source.title)
+                })),
+                selectedId: evidence[0]?.source.id ?? null,
+                style: citationStyle,
+                preview: null
+              }
+            }
+      )
+    } catch (err) {
+      setCitationFlow((prev) =>
+        prev?.claimId !== claim.id
+          ? prev
+          : { claimId: claim.id, state: { step: 'error', message: err instanceof Error ? err.message : String(err) } }
+      )
+    }
+  }
+
+  /**
+   * Both drop `preview`: it was formatted from the source and style being
+   * replaced, so keeping it would show a citation for something other than what
+   * "Insert citation" is now about to write.
+   */
+  function updatePicking(
+    change: (state: Extract<DocCitationFlowState, { step: 'picking' }>) => DocCitationFlowState
+  ): void {
+    setCitationFlow((prev) =>
+      prev && prev.state.step === 'picking' ? { ...prev, state: change(prev.state) } : prev
+    )
+  }
+
+  /**
+   * Formats the selection without writing it.
+   *
+   * The in-text marker is a pure function of a `Source` the renderer already
+   * holds, so it is formatted here; the works-cited entry goes through
+   * `generateCitation`, which is where the style formatters live (and which
+   * caches its result in the citations table).
+   */
+  async function previewFlowCitation(): Promise<void> {
+    const flow = citationFlow
+    if (flow?.state.step !== 'picking' || !flow.state.selectedId) return
+    const { selectedId, style } = flow.state
+    const source = flowSourcesRef.current.get(selectedId)
+    if (!source) return
+    setCitationBusy('previewing')
+    try {
+      const { citation } = await tracelyApi.generateCitation(selectedId, style)
+      // Re-read rather than closing over `flow`: the selection or the style may
+      // have moved on while this was in flight, and a preview of the previous
+      // pair is exactly the stale block the `preview: null` resets prevent.
+      updatePicking((state) =>
+        state.selectedId !== selectedId || state.style !== style
+          ? state
+          : {
+              ...state,
+              preview: {
+                inTextCitation: formatInTextCitation(source, style),
+                worksCitedEntry: citation
+              }
+            }
+      )
+    } catch (err) {
+      setCitationFlow({
+        claimId: flow.claimId,
+        state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
+      })
+    } finally {
+      setCitationBusy(null)
+    }
+  }
+
+  async function insertFlowCitation(claim: Claim): Promise<void> {
+    const flow = citationFlow
+    if (flow?.state.step !== 'picking' || !flow.state.selectedId) return
+    const { selectedId, style } = flow.state
+    const source = flowSourcesRef.current.get(selectedId)
+    if (!source) return
+    setCitationBusy('inserting')
+    try {
+      await insertCitation(claim, source, style)
+      const { citation } = await tracelyApi.generateCitation(selectedId, style)
+      setCitationFlow({
+        claimId: claim.id,
+        state: {
+          step: 'inserted',
+          citation: { inTextCitation: formatInTextCitation(source, style), worksCitedEntry: citation },
+          style,
+          // Open from the start, as the frame draws it. The entry is the half of
+          // the insert the writer cannot see — the marker is already there in
+          // their sentence — so hiding it behind a button meant the
+          // confirmation confirmed only the part needing no confirmation.
+          showWorksCited: true
+        }
+      })
+    } catch (err) {
+      setCitationFlow({
+        claimId: claim.id,
+        state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
+      })
+    } finally {
+      setCitationBusy(null)
+    }
+  }
+
+  /**
+   * Takes the citation back out through the browser's own undo stack.
+   *
+   * `insertCitationForClaim` writes with `execCommand('insertText')` precisely
+   * so this is possible — and so that Ctrl+Z does the same thing this button
+   * does, rather than the two disagreeing about what the last edit was.
+   */
+  async function undoFlowCitation(): Promise<void> {
+    const body = editorRef.current
+    if (!body) return
+    setCitationBusy('undoing')
+    try {
+      body.focus()
+      document.execCommand('undo')
+      handleInput()
+      const analysisId = analysisIdRef.current
+      if (analysisId) await onRefreshClaims(analysisId)
+      setCitationFlow(null)
+      setActiveMark(null)
+    } finally {
+      setCitationBusy(null)
+    }
+  }
+
+  function closeCitationFlow(): void {
+    setCitationFlow(null)
+    setActiveMark(null)
   }
 
   /**
@@ -1099,7 +1310,7 @@ function DocumentEditor({
         ref={wrapRef}
         onMouseMove={handleBodyMouseMove}
         onMouseLeave={() => {
-          if (!insidePopoverRef.current) setActiveMark(null)
+          if (!insidePopoverRef.current && !flowPinnedRef.current) setActiveMark(null)
         }}
       >
         <div
@@ -1122,14 +1333,53 @@ function DocumentEditor({
           wrapWidth={wrapWidth}
           wrapHeight={wrapView.height}
           wrapScrollTop={wrapView.scrollTop}
-          onFindSource={(mark) => {
-            // The claim's own evidence search, then the report opened on it —
-            // the same "Find Evidence" destination the design reaches from the
-            // paragraph detail, so both routes land in one place.
-            setScoreOpen(true)
-            void checkClaims([mark.claim.id])
-          }}
+          flow={
+            citationFlow && activeMark
+              ? {
+                  claimId: citationFlow.claimId,
+                  state: citationFlow.state,
+                  inserting: citationBusy === 'inserting',
+                  previewing: citationBusy === 'previewing',
+                  undoing: citationBusy === 'undoing',
+                  // The other flagged sentences. `marks` already excludes
+                  // dismissed and resolved claims, so this is the number the
+                  // writer would see underlined if they closed the card now.
+                  flagsRemaining: Math.max(0, marks.length - 1),
+                  onSelect: (sourceId) =>
+                    setCitationFlow((prev) =>
+                      prev && prev.state.step === 'picking'
+                        ? { ...prev, state: { ...prev.state, selectedId: sourceId, preview: null } }
+                        : prev
+                    ),
+                  onSetStyle: (style) =>
+                    setCitationFlow((prev) =>
+                      prev && prev.state.step === 'picking'
+                        ? { ...prev, state: { ...prev.state, style, preview: null } }
+                        : prev
+                    ),
+                  onSearchAgain: () => void startCitationFlow(activeMark.mark.claim, true),
+                  onPreview: () => void previewFlowCitation(),
+                  onInsert: () => void insertFlowCitation(activeMark.mark.claim),
+                  onCancel: closeCitationFlow,
+                  onDone: closeCitationFlow,
+                  onToggleWorksCited: () =>
+                    setCitationFlow((prev) =>
+                      prev && prev.state.step === 'inserted'
+                        ? { ...prev, state: { ...prev.state, showWorksCited: !prev.state.showWorksCited } }
+                        : prev
+                    ),
+                  onUndo: () => void undoFlowCitation()
+                }
+              : null
+          }
+          // "Add citation" / "Find a source" now runs the flow in place, over
+          // the sentence it is about. It used to open the report modal on the
+          // claim instead: a full-screen context switch away from the paragraph
+          // being written, to answer a question asked about one of its lines.
+          onFindSource={(mark) => void startCitationFlow(mark.claim, false)}
           onSuggestFix={(mark) => {
+            // Reasoning is still the report's job — there is no in-place fix to
+            // offer for it, and the critique it shows is the answer.
             setScoreOpen(true)
             void checkClaims([mark.claim.id])
           }}
@@ -1142,7 +1392,7 @@ function DocumentEditor({
           }}
           onPopoverLeave={() => {
             insidePopoverRef.current = false
-            setActiveMark(null)
+            if (!flowPinnedRef.current) setActiveMark(null)
           }}
         />
       </div>

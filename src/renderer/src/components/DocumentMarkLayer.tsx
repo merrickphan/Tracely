@@ -1,8 +1,20 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { placePopover } from '@shared/popoverPlacement'
+import type { CitationStyle } from '@shared/types'
 import type { DocumentMark, MarkRect } from './documentMarks'
 import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, isReasoningProblem, popoverCopyFor } from './problemCopy'
+// The flow's wording is shared with the Screen Watch overlay, which draws the
+// same four frames over other applications — see citationFlowCopy.ts.
+import {
+  CITATION_STYLE_LABEL,
+  emptyResultsBody,
+  flagsLeft,
+  insertedBody,
+  resultsBody,
+  resultsTitle,
+  searchingBody
+} from './citationFlowCopy'
 
 /**
  * The underlines drawn over the document editor, and the popover that opens on
@@ -20,10 +32,87 @@ import { PROBLEM_COLOR, PROBLEM_LABEL, isReasoningProblem, popoverCopyFor } from
  * position in the parent, not by putting elements under the cursor.
  */
 
+// Two widths, because the design uses two. The inline-detection card is 320 — a
+// glance over the sentence, sized to be read without moving your eyes far. The
+// citation flow is 380, because a list of candidate sources with titles, venues
+// and match percentages does not fit in 320. The same pair the overlay uses.
 const POPOVER_WIDTH = 320
+const POPOVER_WIDTH_FLOW = 380
 const POPOVER_GAP = 10
 const TAIL_WIDTH = 16
 const TAIL_HEIGHT = 10
+
+/** Skeleton bar widths, from the design — the uneven pair is what makes a
+ *  loading row read as two lines of a citation rather than a progress widget. */
+const SKELETON_ROWS: Array<[number, number]> = [
+  [214, 122],
+  [186, 96]
+]
+
+const CITATION_STYLES: CitationStyle[] = ['MLA', 'APA', 'Chicago']
+
+/** Both halves of a formatted citation: the marker, and the bibliography line. */
+export interface DocCitation {
+  inTextCitation: string
+  worksCitedEntry: string
+}
+
+/** One row of "Find a Source (Results)" — flattened from an `EvidenceItem`. */
+export interface DocSourceCandidate {
+  sourceId: string
+  title: string
+  venue: string | null
+  year: number | null
+  /** `relevanceScore` as a percentage — how directly it bears on the sentence. */
+  matchPercent: number
+  /** The monogram tile's letters, when no favicon is available (they never are
+   *  here: these come from academic indexes, not publisher sites). */
+  initials: string
+}
+
+export type DocCitationFlowState =
+  | { step: 'searching' }
+  | {
+      step: 'picking'
+      candidates: DocSourceCandidate[]
+      selectedId: string | null
+      style: CitationStyle
+      /**
+       * What "Insert citation" would write, once Preview has been pressed.
+       * Cleared by every change to the selection or the style, so a block left
+       * standing can never describe something other than what Insert will do.
+       */
+      preview: DocCitation | null
+    }
+  | { step: 'inserted'; citation: DocCitation; style: CitationStyle; showWorksCited: boolean }
+  | { step: 'error'; message: string }
+
+/**
+ * The citation flow for one claim, owned by AnalyzeView.
+ *
+ * State and handlers arrive together as one object rather than as a dozen
+ * props, and the state lives above this component because the popover unmounts
+ * the moment the pointer leaves the sentence — a flow that lived here would be
+ * destroyed by the first mouse movement after pressing "Add citation".
+ */
+export interface DocCitationFlow {
+  claimId: string
+  state: DocCitationFlowState
+  inserting: boolean
+  previewing: boolean
+  undoing: boolean
+  /** Flags left on OTHER sentences — the confirmation's "N flags left" line. */
+  flagsRemaining: number
+  onSelect: (sourceId: string) => void
+  onSetStyle: (style: CitationStyle) => void
+  onSearchAgain: () => void
+  onPreview: () => void
+  onInsert: () => void
+  onCancel: () => void
+  onDone: () => void
+  onToggleWorksCited: () => void
+  onUndo: () => void
+}
 
 export interface DocumentMarkLayerProps {
   marks: DocumentMark[]
@@ -39,6 +128,11 @@ export interface DocumentMarkLayerProps {
    */
   wrapHeight: number
   wrapScrollTop: number
+  /**
+   * The citation flow, when one is open for the active mark's claim. Null on
+   * every other mark, so the card falls back to the problem statement.
+   */
+  flow: DocCitationFlow | null
   onFindSource: (mark: DocumentMark) => void
   onSuggestFix: (mark: DocumentMark) => void
   onDismiss: (mark: DocumentMark) => void
@@ -53,12 +147,14 @@ export default function DocumentMarkLayer({
   wrapWidth,
   wrapHeight,
   wrapScrollTop,
+  flow,
   onFindSource,
   onSuggestFix,
   onDismiss,
   onPopoverEnter,
   onPopoverLeave
 }: DocumentMarkLayerProps): JSX.Element {
+  const activeFlow = flow && active && flow.claimId === active.mark.claim.id ? flow : null
   return (
     <div className="docmark-layer" aria-hidden="true">
       {marks.map((mark) =>
@@ -91,6 +187,7 @@ export default function DocumentMarkLayer({
           wrapWidth={wrapWidth}
           wrapHeight={wrapHeight}
           wrapScrollTop={wrapScrollTop}
+          flow={activeFlow}
           onFindSource={() => onFindSource(active.mark)}
           onSuggestFix={() => onSuggestFix(active.mark)}
           onDismiss={() => onDismiss(active.mark)}
@@ -108,6 +205,7 @@ function MarkPopover({
   wrapWidth,
   wrapHeight,
   wrapScrollTop,
+  flow,
   onFindSource,
   onSuggestFix,
   onDismiss,
@@ -119,6 +217,7 @@ function MarkPopover({
   wrapWidth: number
   wrapHeight: number
   wrapScrollTop: number
+  flow: DocCitationFlow | null
   onFindSource: () => void
   onSuggestFix: () => void
   onDismiss: () => void
@@ -127,18 +226,24 @@ function MarkPopover({
 }): JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(0)
+  // Re-measured on the step as well as the claim: the flow's cards are three to
+  // five times the height of the problem statement they replace, and a stale
+  // measurement is what decides above-vs-below.
+  const step = flow?.state.step ?? null
   useLayoutEffect(() => {
     setHeight(cardRef.current?.offsetHeight ?? 0)
-  }, [mark.claim.id])
+  }, [mark.claim.id, step])
 
   const kind = mark.problemKinds[0]
+
+  const width = flow ? POPOVER_WIDTH_FLOW : POPOVER_WIDTH
 
   // Centred on the line it points at, then pulled back inside the editor. The
   // tail stays on the sentence when the card moves, which is the whole reason
   // it is offset separately rather than pinned to the card's centre.
-  const idealLeft = rect.left + rect.width / 2 - POPOVER_WIDTH / 2
-  const left = Math.max(8, Math.min(idealLeft, wrapWidth - POPOVER_WIDTH - 8))
-  const tailLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - left - TAIL_WIDTH / 2, POPOVER_WIDTH - 28))
+  const idealLeft = rect.left + rect.width / 2 - width / 2
+  const left = Math.max(8, Math.min(idealLeft, wrapWidth - width - 8))
+  const tailLeft = Math.max(12, Math.min(rect.left + rect.width / 2 - left - TAIL_WIDTH / 2, width - 28))
 
   // Above the line only when there is genuinely no room below and there is room
   // above. Decided in `shared/popoverPlacement.ts`, which is where the tests for
@@ -153,10 +258,6 @@ function MarkPopover({
     scrollTop: wrapScrollTop
   })
 
-  // No 'searching' variant here, unlike the overlay's card. A mark is only ever
-  // drawn for a claim whose search has resolved — see measureMarks — so there is
-  // no spinner state to render, and adding one would be a state the editor
-  // cannot actually reach.
   const { title, description, action } = popoverCopyFor(
     { claimType: mark.claim.claimType, hasInlineCitation: mark.hasInlineCitation, critique: mark.claim.critique },
     mark.evidence,
@@ -167,12 +268,16 @@ function MarkPopover({
   return (
     <div
       className="docmark-popover"
-      style={{ left, top, width: POPOVER_WIDTH }}
+      style={{ left, top, width }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
       {!wantsAbove ? <Tail left={tailLeft} pointing="up" above={false} /> : null}
       <div ref={cardRef} className="docmark-card">
+        {flow ? (
+          <CitationFlowCard flow={flow} claimText={mark.claim.text} />
+        ) : (
+          <>
         <div className="docmark-head">
           <span className="docmark-dot" style={{ background: PROBLEM_COLOR[kind] }} />
           <span className="docmark-title">{title}</span>
@@ -203,9 +308,219 @@ function MarkPopover({
             Dismiss
           </button>
         </div>
+          </>
+        )}
       </div>
       {wantsAbove ? <Tail left={tailLeft} pointing="down" above /> : null}
     </div>
+  )
+}
+
+/**
+ * The citation flow, drawn inside the same bordered card the problem statement
+ * uses — Figma "Find a Source (Searching)" (294:343), "Find a Source (Results)"
+ * (295:349) and "Add Citation (Inserted)" (298:130).
+ *
+ * The same three frames the Screen Watch overlay draws, and deliberately not a
+ * shared component with it: that surface is inline styles in a window with no
+ * stylesheet of its own, this one is `.docmark-*` classes from index.css. What
+ * they share is the wording (citationFlowCopy.ts) and the shape.
+ *
+ * The one real difference between the surfaces is Preview, and it is a
+ * difference in what each surface CAN do rather than in taste. Over another
+ * app's window the overlay writes through UIA and the writer cannot see the
+ * result until it lands, so being shown it first is the safeguard. Here the
+ * insert goes into Tracely's own editor, on the browser's undo stack — the
+ * citation appears in the sentence a few pixels away, and Ctrl+Z takes it back
+ * out. Preview is offered anyway, because the works-cited entry is the half
+ * that does NOT appear in the sentence.
+ */
+function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimText: string }): JSX.Element {
+  const { state } = flow
+
+  if (state.step === 'searching') {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#ff5900' }} />
+          <span className="docmark-title">Searching for a source</span>
+        </div>
+        <p className="docmark-body">{searchingBody(claimText)}</p>
+        <div className="docmark-progress">
+          <div className="docmark-progress-fill" />
+        </div>
+        <div className="docmark-skeletons">
+          {SKELETON_ROWS.map(([wide, narrow], i) => (
+            <div className="docmark-skeleton-row" key={i}>
+              <span className="docmark-skeleton tile" />
+              <span className="docmark-skeleton-lines">
+                <span className="docmark-skeleton" style={{ width: wide }} />
+                <span className="docmark-skeleton faint" style={{ width: narrow }} />
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="docmark-actions">
+          <button className="docmark-btn-secondary" onClick={flow.onCancel}>
+            Cancel
+          </button>
+          <span className="docmark-hint">Usually 3–5 seconds</span>
+        </div>
+      </>
+    )
+  }
+
+  if (state.step === 'error') {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#d93636' }} />
+          <span className="docmark-title">Search failed</span>
+        </div>
+        <p className="docmark-body">{state.message}</p>
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={flow.onSearchAgain}>
+            Search again
+          </button>
+          <button className="docmark-btn-secondary" onClick={flow.onCancel}>
+            Cancel
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  if (state.step === 'inserted') {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#16a34a' }} />
+          <span className="docmark-title">Citation added</span>
+        </div>
+        <p className="docmark-body">{insertedBody(state.style)}</p>
+        {state.showWorksCited ? (
+          <div className="docmark-block">
+            <div className="docmark-block-label">ADDED TO WORKS CITED</div>
+            <div className="docmark-block-body">{state.citation.worksCitedEntry}</div>
+          </div>
+        ) : null}
+        <div className="docmark-resolved">
+          <span className="docmark-resolved-yes">Claim resolved</span>
+          <span className="docmark-hint">· {flagsLeft(flow.flagsRemaining)}</span>
+        </div>
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={flow.onDone}>
+            Done
+          </button>
+          <button className="docmark-btn-secondary" onClick={flow.onToggleWorksCited}>
+            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+          </button>
+          <button className="docmark-btn-secondary" onClick={flow.onUndo} disabled={flow.undoing}>
+            {flow.undoing ? 'Undoing…' : 'Undo'}
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  const { candidates, selectedId, style, preview } = state
+
+  if (candidates.length === 0) {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#ffb800' }} />
+          <span className="docmark-title">No sources found</span>
+        </div>
+        <p className="docmark-body">{emptyResultsBody(claimText)}</p>
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={flow.onSearchAgain}>
+            Search again
+          </button>
+          <button className="docmark-btn-secondary" onClick={flow.onCancel}>
+            Dismiss
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <div className="docmark-head">
+        <span className="docmark-dot" style={{ background: '#16a34a' }} />
+        <span className="docmark-title">{resultsTitle(candidates.length)}</span>
+        <span className="docmark-chip">{CITATION_STYLE_LABEL[style]}</span>
+      </div>
+      <p className="docmark-body">{resultsBody(claimText)}</p>
+      <div className="docmark-rows">
+        {candidates.map((candidate) => (
+          <button
+            type="button"
+            key={candidate.sourceId}
+            className={`docmark-row${candidate.sourceId === selectedId ? ' selected' : ''}`}
+            onClick={() => flow.onSelect(candidate.sourceId)}
+          >
+            <span className="docmark-row-badge">{candidate.initials}</span>
+            <span className="docmark-row-meta">
+              <span className="docmark-row-title">{candidate.title}</span>
+              <span className="docmark-row-sub">
+                {candidate.venue ?? 'Unknown venue'}
+                {candidate.year ? ` · ${candidate.year}` : ''}
+                <span className="docmark-match"> {candidate.matchPercent}% match</span>
+              </span>
+            </span>
+            <span
+              className={`docmark-radio${candidate.sourceId === selectedId ? ' on' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+        ))}
+      </div>
+      {/* Every option at once, as the frame draws them — not one cycling
+          button, which hid two thirds of the control behind a second click. */}
+      <div className="docmark-styles">
+        <span className="docmark-styles-label">Style</span>
+        {CITATION_STYLES.map((option) => (
+          <button
+            type="button"
+            key={option}
+            className={`docmark-style-pill${option === style ? ' on' : ''}`}
+            onClick={() => flow.onSetStyle(option)}
+          >
+            {CITATION_STYLE_LABEL[option]}
+          </button>
+        ))}
+      </div>
+      {preview ? (
+        <div className="docmark-block">
+          <div className="docmark-block-label">WILL BE INSERTED</div>
+          <div className="docmark-block-marker">{preview.inTextCitation}</div>
+          <div className="docmark-block-body">{preview.worksCitedEntry}</div>
+        </div>
+      ) : null}
+      <div className="docmark-actions">
+        <button
+          className="docmark-btn-primary"
+          onClick={flow.onInsert}
+          disabled={flow.inserting || !selectedId}
+        >
+          {flow.inserting ? 'Inserting…' : 'Insert citation'}
+        </button>
+        <button
+          className="docmark-btn-secondary"
+          onClick={flow.onPreview}
+          disabled={flow.previewing || !selectedId}
+        >
+          {flow.previewing ? 'Formatting…' : 'Preview'}
+        </button>
+      </div>
+      {/* Full-width under the pair — the frame's own third row. Re-runs the
+          four academic searches rather than filtering what came back. */}
+      <button className="docmark-btn-secondary docmark-btn-wide" onClick={flow.onSearchAgain}>
+        Search again
+      </button>
+    </>
   )
 }
 

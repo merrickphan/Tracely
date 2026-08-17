@@ -56,7 +56,42 @@ flagged sentences a card floating nearby is genuinely ambiguous.
 - `Add Citation (Choose Source)`'s library list and text search field are not
   built. Screen Watch persists nothing, so there is no per-document library to
   list, and `overlayWindow.ts` sets `focusable: false` — this window can never
-  host a real text input. Its style pills ARE used, in the Results step.
+  host a real text input. Its style pills ARE used, in the Results step. (A
+  filter box over the results list was built once anyway; it could not be typed
+  into, for that same reason, and the frame's full-width **"Search again"** is
+  what stands in that slot.)
+
+**The hover popover runs the whole flow, on both surfaces.** `Inline Detection`
+→ `Find a Source (Searching)` → `Find a Source (Results)` → `Add Citation
+(Inserted)` are four states of one card, and Screen Watch's overlay
+(`CitationFlowCard` in `OverlayApp.tsx`) and the document editor's marks
+(`DocumentMarkLayer.tsx`) both draw all four. The editor used to answer "Add
+citation" by opening the report modal instead — a full-screen context switch
+away from the paragraph being written, to answer a question asked about one of
+its lines.
+
+- **The wording is shared (`components/citationFlowCopy.ts`), the markup is
+  not.** Same rule as `problemCopy.ts`, and for the same reason: the overlay is
+  inline styles in a window that loads no stylesheet, the editor is `.docmark-*`
+  classes from `index.css`. Two copies of the strings would be two products.
+- **`Preview` earns its place differently on each surface.** Over another app
+  the overlay writes through UIA, and being shown the citation first is the only
+  way to see it before it lands. In Tracely's own editor the insert goes through
+  `execCommand('insertText')` — it appears in the sentence a few pixels away and
+  Ctrl+Z (or the card's own Undo, which is that same undo stack) takes it back
+  out. It is offered there anyway, because the works-cited entry is the half
+  that does *not* appear in the sentence.
+- **A running flow pins the editor's popover** (`flowPinnedRef` in
+  `AnalyzeView`). The card unmounts the instant the pointer leaves the sentence,
+  so the flow state is owned by the view, and the hit-test stops swapping marks
+  while one is open — otherwise reaching across another underline on the way to
+  "Insert citation" takes the card with it.
+- **The editor's marks cannot be driven in `npm run preview:ui` from a browser
+  pane that is not displayed.** They are measured inside a
+  `requestAnimationFrame` (deliberately — see the note on that effect), and a
+  hidden page never runs one, so `marks` stays empty and the popover is
+  unreachable. The overlay's equivalent has no rAF gate and drives fine. Reach
+  the editor's card with `npm run dev` instead.
 
 ## Commands
 
