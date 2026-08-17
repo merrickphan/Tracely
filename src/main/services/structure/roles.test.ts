@@ -1,6 +1,14 @@
 import { deepStrictEqual, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { hasSignificanceMarker, hasWarrantMarker, heuristicRoles } from './roles.ts'
+import {
+  hasClosingSignificance,
+  hasSignificanceMarker,
+  hasWarrantMarker,
+  heuristicRoles,
+  looksLikeClosing,
+  looksLikeThesis,
+  looksLikeTopicClaim
+} from './roles.ts'
 
 /** Minimal ParagraphSpan builder — only `index` and `text` are read. */
 function paras(...texts: string[]): Array<{ index: number; start: number; end: number; text: string }> {
@@ -271,5 +279,107 @@ describe('hasWarrantMarker — causal connectives, not just signposts', () => {
 
   it('still rejects a bare temporal "as", which is not causal', () => {
     strictEqual(hasWarrantMarker('Costs rose. As many as 20% of tenants moved away.'), false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The four heuristics added after a competent 4-paragraph essay scored 20/100.
+//
+// Its whole loss traced to labelling: the conclusion opened with a quotation
+// rather than "In conclusion", its "so what" was phrased as legacy rather than
+// as implications, and its topic sentences were evaluative — which is exactly
+// the kind of sentence claim detection has every reason to pass over, since it
+// cannot be checked against a source. The component measuring whether body
+// paragraphs are governed by claims was keyed to fact-detection, so the better
+// the topic sentence, the less likely it was to count.
+// ---------------------------------------------------------------------------
+
+describe('looksLikeClosing', () => {
+  it('accepts a conclusion that opens on a quotation and then looks back', () => {
+    strictEqual(
+      looksLikeClosing(
+        '"As you grow older, you will discover that you have two hands." The legacy she left behind resides in film, but she was more than just a pretty face.'
+      ),
+      true
+    )
+  })
+
+  it('still accepts the announced form', () => {
+    strictEqual(looksLikeClosing('In conclusion, the policy failed on its own terms.'), true)
+  })
+
+  // The reason position alone was never enough, and still is not.
+  it('rejects a draft that simply stops mid-argument', () => {
+    strictEqual(
+      looksLikeClosing('The second factor is housing supply. Permits fell by a third between 2019 and 2023.'),
+      false
+    )
+  })
+
+  // These four words were in the marker list for one draft. Each of them alone
+  // would have bought a body paragraph ten points.
+  it('is not triggered by ordinary words that merely sound retrospective', () => {
+    strictEqual(looksLikeClosing('Critics still argue the measure was premature.'), false)
+    strictEqual(looksLikeClosing('Today the plant employs four hundred people.'), false)
+    strictEqual(looksLikeClosing('He died before the results were published.'), false)
+  })
+})
+
+describe('hasClosingSignificance', () => {
+  it('reads legacy vocabulary as answering "so what?"', () => {
+    strictEqual(hasClosingSignificance('The legacy she left behind reshaped how the charity works.'), true)
+    strictEqual(hasClosingSignificance('Her name lives on in the fund that carries it.'), true)
+  })
+
+  it('still accepts the social-science register', () => {
+    strictEqual(hasClosingSignificance('The implications for turnout are considerable.'), true)
+  })
+
+  it('does not widen the ROLE-assigning list', () => {
+    // Same sentence, different question. Mid-essay this is narration, and
+    // hasSignificanceMarker is what roleFor consults — so a body paragraph
+    // mentioning a legacy keeps its claim credit instead of being relabelled.
+    strictEqual(hasSignificanceMarker('The legacy she left behind reshaped how the charity works.'), false)
+  })
+})
+
+describe('looksLikeThesis', () => {
+  it('accepts a concessive thesis stated as the last sentence of the intro', () => {
+    strictEqual(
+      looksLikeThesis(
+        "Whilst helping others is typically a moral obligation, Hepburn's early struggles sparked a passion that set her apart from celebrities in her time."
+      ),
+      true
+    )
+  })
+
+  it('accepts a not-only/but frame', () => {
+    strictEqual(looksLikeThesis('The reform was not only late but actively counterproductive.'), true)
+  })
+
+  it('rejects a narrative sentence that happens to be long', () => {
+    strictEqual(
+      looksLikeThesis('She was born to an English father and a Dutch mother in Brussels, Belgium, in 1929.'),
+      false
+    )
+  })
+})
+
+describe('looksLikeTopicClaim', () => {
+  const noCitations = () => false
+
+  it('accepts an evaluative topic sentence that no fact-check could verify', () => {
+    strictEqual(looksLikeTopicClaim('Audrey Hepburn was always naturally inclined to help others.', noCitations), true)
+  })
+
+  it('rejects a first sentence that is an attribution', () => {
+    strictEqual(
+      looksLikeTopicClaim('Smith (2020) was among the first to measure the effect.', (s) => /\(\d{4}\)/.test(s)),
+      false
+    )
+  })
+
+  it('rejects a fragment too short to be governing anything', () => {
+    strictEqual(looksLikeTopicClaim('It was late.', noCitations), false)
   })
 })

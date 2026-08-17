@@ -348,6 +348,13 @@ export function hasClosingSignificance(text: string): boolean {
  * stops mid-flight contains none of this vocabulary — while letting a real
  * conclusion be recognised without announcing itself in rubric language.
  */
+// Retrospective PHRASES only. 'still', 'today', 'died' and 'no longer' were in
+// this list for one draft and are not worth the reach: they are ordinary words
+// in ordinary prose, and a final body paragraph reading "critics still argue"
+// would have been relabelled a conclusion by one of them. The rubric's own
+// standard is that a wrong label should be visibly wrong rather than
+// mysteriously costly, and a single common adverb silently buying ten points
+// fails it. Everything below names the act of looking back.
 const CLOSING_MARKERS = [
   ...CLOSING_SIGNIFICANCE_MARKERS,
   'in the years since',
@@ -355,10 +362,7 @@ const CLOSING_MARKERS = [
   'in his final',
   'in their final',
   'came to an end',
-  'died',
-  'today',
-  'still',
-  'no longer'
+  'in the end'
 ]
 
 export function looksLikeClosing(text: string): boolean {
