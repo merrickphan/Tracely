@@ -13,6 +13,8 @@ interface ClaimRow {
   score_breakdown: string | null
   critique: string | null
   critique_verdict: string | null
+  suggested_revision: string | null
+  citation_fix: string | null
   created_at: string
 }
 
@@ -28,6 +30,12 @@ function toDomain(row: ClaimRow): Claim {
     scoreBreakdown: row.score_breakdown ? (JSON.parse(row.score_breakdown) as ScoreBreakdown) : null,
     critique: row.critique,
     critiqueVerdict: row.critique_verdict as CritiqueVerdict | null,
+    // `?? null` rather than a bare read: these columns arrive by migration, and
+    // sql.js hands back `undefined` for a column a row predates. `undefined`
+    // would then travel to the renderer as a MISSING key, where every check on
+    // them is `!== null`.
+    suggestedRevision: row.suggested_revision ?? null,
+    citationFix: row.citation_fix ?? null,
     createdAt: row.created_at
   }
 }
@@ -70,6 +78,8 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         scoreBreakdown: null,
         critique: null,
         critiqueVerdict: null,
+        suggestedRevision: null,
+        citationFix: null,
         createdAt
       }
     })
@@ -96,10 +106,32 @@ export function updateClaimScore(claimId: string, score: number, breakdown: Scor
   })
 }
 
-export function updateClaimCritique(claimId: string, critique: string, verdict: CritiqueVerdict): void {
-  run('UPDATE claims SET critique = $critique, critique_verdict = $verdict WHERE id = $id', {
-    $id: claimId,
-    $critique: critique,
-    $verdict: verdict
-  })
+/**
+ * Writes the whole critique, not just its prose.
+ *
+ * `suggestedRevision` and `citationFix` are passed explicitly rather than
+ * defaulted, so a caller that has them cannot forget to persist them — and so
+ * one that genuinely has neither says so. They are NULLed on every write rather
+ * than left alone: a re-critique of an edited claim that no longer needs
+ * narrowing must not leave the previous run's replacement sentence sitting
+ * under a verdict that no longer asks for it.
+ */
+export function updateClaimCritique(
+  claimId: string,
+  critique: string,
+  verdict: CritiqueVerdict,
+  suggestedRevision: string | null,
+  citationFix: string | null
+): void {
+  run(
+    `UPDATE claims SET critique = $critique, critique_verdict = $verdict,
+     suggested_revision = $revision, citation_fix = $fix WHERE id = $id`,
+    {
+      $id: claimId,
+      $critique: critique,
+      $verdict: verdict,
+      $revision: suggestedRevision,
+      $fix: citationFix
+    }
+  )
 }

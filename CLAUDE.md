@@ -86,12 +86,16 @@ its lines.
   so the flow state is owned by the view, and the hit-test stops swapping marks
   while one is open — otherwise reaching across another underline on the way to
   "Insert citation" takes the card with it.
-- **The editor's marks cannot be driven in `npm run preview:ui` from a browser
-  pane that is not displayed.** They are measured inside a
-  `requestAnimationFrame` (deliberately — see the note on that effect), and a
-  hidden page never runs one, so `marks` stays empty and the popover is
-  unreachable. The overlay's equivalent has no rAF gate and drives fine. Reach
-  the editor's card with `npm run dev` instead.
+- **The editor's marks are driveable from a browser pane that is not
+  displayed** — they were not, until `renderer/src/frameScheduler.ts`. They are
+  measured inside a frame callback (deliberately: it batches a keystroke and a
+  ResizeObserver callback that both force layout), and Chromium freezes rAF
+  entirely on a page that is not compositing, so `marks` stayed empty and the
+  popover was unreachable in `npm run preview:ui`. `scheduleFrame` arms a rAF
+  and a 50ms timer and takes whichever fires first: the frame always wins when
+  there is one, so the batching is unchanged in the shipped app, and the timer
+  is the only thing that ever fires in a hidden window. Measured in the
+  harness: 0 marks before, 4 after, with the hover popover opening on them.
 
 ## Commands
 

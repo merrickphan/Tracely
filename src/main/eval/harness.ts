@@ -137,6 +137,10 @@ function asClaim(detected: DetectedClaim, strengthScore: number, id: string): Cl
     scoreBreakdown: null,
     critique: null,
     critiqueVerdict: null,
+    // The harness is the caller that PRODUCES these; nothing reads them off the
+    // synthesized input.
+    suggestedRevision: null,
+    citationFix: null,
     createdAt: new Date().toISOString()
   }
 }

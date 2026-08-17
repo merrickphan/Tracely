@@ -140,7 +140,7 @@ export const evidence: EvidenceItem[] = sources.map((source, i) => ({
 export const analysis: Analysis = {
   id: 'a1',
   sourceText:
-    'Screen time causes depression in teenagers. Studies show that 70% of adolescents who use social media for more than three hours a day report symptoms of anxiety. This is the clearest public-health crisis of our generation.',
+    'Screen time causes depression in teenagers. Studies show that 70% of adolescents who use social media for more than three hours a day report symptoms of anxiety. Studies prove that later school start times always improve student outcomes (Wahlstrom 2014). This is the clearest public-health crisis of our generation.',
   origin: 'main',
   createdAt: T0
 }
@@ -170,6 +170,13 @@ export const claims: Claim[] = [
     critique:
       'The cited work is **cross-sectional**, so it cannot separate "screen time causes depression" from "depressed teenagers use their phones more."\n\nTwo ways forward:\n\n- State the *association* rather than the cause.\n- Find a longitudinal source that measures screen time first.',
     critiqueVerdict: 'weak',
+    // Null on purpose, and not an oversight: the relay sets suggestedRevision
+    // for overstatement and for nothing else — "softening a false claim into a
+    // vague one is not a fix" — so a 'weak' verdict is the case where the fix
+    // card has no replacement text to offer and falls back to the critique's
+    // own points. That is the branch this claim exercises.
+    suggestedRevision: null,
+    citationFix: null,
     createdAt: T0
   },
   {
@@ -184,6 +191,31 @@ export const claims: Claim[] = [
     scoreBreakdown: { sourceCount: 1 / 3, quality: 0.7, recency: 0.8, relevance: 0.75, support: 0.33 },
     critique: null,
     critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
+    createdAt: T0
+  },
+  // The editor's counterpart to the overlay's c4 — an 'overstated' verdict with
+  // a narrowed sentence attached, which is the only state where the fix card
+  // has something to APPLY. Mirrors the Screen Watch fixture deliberately: the
+  // two surfaces draw the same card from the same claim state, and a difference
+  // between them should be visible side by side in the harness.
+  {
+    id: 'c4',
+    analysisId: 'a1',
+    text: 'Studies prove that later school start times always improve student outcomes (Wahlstrom 2014).',
+    claimType: 'causal',
+    confidence: 0.81,
+    searchQuery: 'later school start times student outcomes',
+    strengthScore: 68,
+    scoreBreakdown: { sourceCount: 0.9, quality: 0.81, recency: 0.6, relevance: 0.74, support: 0.66 },
+    critique:
+      '**Overstated, not wrong.** Evidence 2 and 4 report improved attendance and sleep duration, but neither supports "always" — both note effects varying by district and grade level.',
+    critiqueVerdict: 'overstated',
+    suggestedRevision:
+      'Studies indicate that later school start times generally improve student outcomes (Wahlstrom 2014).',
+    citationFix:
+      'Wahlstrom, Kyla. "Later Start Time for Teens Improves Grades, Mood, and Safety." Phi Delta Kappan, 2014, p. 12.',
     createdAt: T0
   },
   {
@@ -197,6 +229,8 @@ export const claims: Claim[] = [
     scoreBreakdown: null,
     critique: null,
     critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
     createdAt: T0
   }
 ]
@@ -421,8 +455,19 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
         }
       ]
     },
-    critique: null,
-    critiqueVerdict: null,
+    // A verdict and its prose, together. This carried `problemKinds:
+    // ['weak-reasoning']` with a NULL critique — a pair main cannot produce
+    // (problemKindsFor only reaches 'weak-reasoning' from a critiqueVerdict, and
+    // screenWatchService writes the two in one step), so the harness showed the
+    // popover's no-critique fallback sentence and the fix card had nothing at
+    // all to open onto. Same class of fixture bug as the one c3's comment
+    // records. The markdown is deliberate: it is what the relay actually emits,
+    // and it is what critiqueIssues splits into the card's rows.
+    critique:
+      'The cited work is **cross-sectional**, so it cannot separate "screen time causes depression" from "depressed teenagers use their phones more."\n\n- State the *association* rather than the cause.\n- Find a longitudinal source that measures screen time first.',
+    critiqueVerdict: 'weak',
+    // Null, as the relay leaves it for every verdict but 'overstated' — so this
+    // claim is the fix card's no-revision branch, and c4 below is its other one.
     suggestedRevision: null,
     citationFix: null,
     citation: null

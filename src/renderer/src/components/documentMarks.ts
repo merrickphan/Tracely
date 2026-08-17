@@ -7,6 +7,12 @@ import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
 import type { CitationStyle, Claim } from '@shared/types'
 
+// `buildTextMap`/`locate` live in their own file so `npm test` can load them:
+// this module's five `@shared/*` imports are exactly what Node's type stripping
+// refuses to resolve, and the boundary rule inside `locate` is the piece worth
+// pinning (see textMap.test.ts).
+import { buildTextMap, locate } from './textMap'
+
 /**
  * Where to draw the underlines over the document editor, and what each one
  * means.
@@ -51,98 +57,6 @@ export interface DocumentMark {
    * underlined on each line it occupies rather than boxed across all of them.
    */
   rects: MarkRect[]
-}
-
-interface TextNodePos {
-  node: Text
-  /** Offset of this node's text within the reconstructed string. */
-  start: number
-}
-
-const BLOCK_TAGS = new Set([
-  'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DD', 'DIV', 'DL', 'DT',
-  'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3',
-  'H4', 'H5', 'H6', 'HEADER', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE',
-  'SECTION', 'TABLE', 'TD', 'TH', 'TR', 'UL'
-])
-
-/**
- * Rebuilds the editor's text alongside a map back to the text nodes it came
- * from, inserting the same newlines `innerText` renders at block boundaries.
- *
- * Claim offsets cannot come from `innerText` directly: it reports newlines that
- * exist nowhere in any text node, so every offset after the first paragraph
- * break would be shifted by the number of breaks before it and every underline
- * would sit a few characters to the left of its sentence, drifting further down
- * the page. Building the string and the map in one pass is what keeps them
- * honest — the offsets are of *this* string, and this string knows which node
- * each character came from.
- *
- * It does not have to match innerText exactly, and does not try to. Claims are
- * located with `computeClaimSpans`, which falls back to a whitespace-insensitive
- * search precisely for near-misses like this one.
- */
-function buildTextMap(root: HTMLElement): { text: string; nodes: TextNodePos[] } {
-  const nodes: TextNodePos[] = []
-  let text = ''
-
-  const walk = (parent: Node): void => {
-    for (const child of Array.from(parent.childNodes)) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        const node = child as Text
-        if (node.data.length === 0) continue
-        nodes.push({ node, start: text.length })
-        text += node.data
-        continue
-      }
-      if (child.nodeType !== Node.ELEMENT_NODE) continue
-
-      const element = child as HTMLElement
-      if (element.tagName === 'BR') {
-        text += '\n'
-        continue
-      }
-      const isBlock = BLOCK_TAGS.has(element.tagName)
-      if (isBlock && text.length > 0 && !text.endsWith('\n')) text += '\n'
-      walk(element)
-      if (isBlock && text.length > 0 && !text.endsWith('\n')) text += '\n'
-    }
-  }
-
-  walk(root)
-  return { text, nodes }
-}
-
-/**
- * The text node and in-node offset holding character `offset`.
- *
- * No node contains an offset that lands exactly ON a boundary, and a claim's
- * END offset is a boundary every time the claim ends its paragraph — which is
- * most of them. That case used to be special-cased for the LAST node only, so
- * every earlier paragraph's final sentence resolved to null and
- * `measureMarks` skipped it. Measured in the preview harness against the
- * fixture document: both flagged claims ended at a node boundary (43 of a
- * 43-char node, 162 of a node ending at 162) and the editor drew no underlines
- * at all.
- *
- * A boundary now resolves to the end of the node that precedes it, which is
- * the same character position expressed as a place a Range can actually
- * address. Null is kept for an offset past every node — there the text really
- * has moved on, and a guessed position would underline the wrong sentence.
- */
-function locate(nodes: TextNodePos[], offset: number): { node: Text; offset: number } | null {
-  let before: TextNodePos | null = null
-  for (const entry of nodes) {
-    const end = entry.start + entry.node.data.length
-    if (offset >= entry.start && offset < end) {
-      return { node: entry.node, offset: offset - entry.start }
-    }
-    if (offset >= end) before = entry
-  }
-  if (before) {
-    return { node: before.node, offset: before.node.data.length }
-  }
-  return null
 }
 
 /**
@@ -300,10 +214,34 @@ export function insertCitationForClaim(body: HTMLElement, claim: Claim, inTextCi
  * invisible to undo, and would leave a reference behind after the citation that
  * created it had been undone.
  *
+ * Measured rather than assumed (2026-08-17, Chromium, against a live
+ * contentEditable holding two paragraphs): `insertText` over a NON-COLLAPSED
+ * selection deletes the selection and inserts in a single undoable step, and
+ * one `execCommand('undo')` restored the original text exactly while leaving
+ * the following paragraph untouched. That is why the range is selected and
+ * typed over rather than deleted and then filled, which would cost two presses
+ * of Ctrl+Z and leave the sentence gone after the first.
+ *
  * Newlines in `replacement` become real block breaks — this is the same path a
  * multi-line paste takes.
  */
-function replaceRange(body: HTMLElement, start: number, end: number, replacement: string): boolean {
+function replaceRange(
+  body: HTMLElement,
+  start: number,
+  end: number,
+  replacement: string,
+  /**
+   * Refuse a collapsed range.
+   *
+   * The caller's choice because both answers are right somewhere here. Writing
+   * a narrowed sentence over an overstated one MUST replace: an empty range
+   * would make this an insertion and leave the original in place with the
+   * replacement wedged in front of it. Adding a works-cited section to a draft
+   * that has none is legitimately an insertion at the end of the document, and
+   * a blanket guard would reject exactly that.
+   */
+  mustReplace = false
+): boolean {
   const { nodes } = buildTextMap(body)
   const from = locate(nodes, start)
   const to = locate(nodes, end)
@@ -318,10 +256,37 @@ function replaceRange(body: HTMLElement, start: number, end: number, replacement
   } catch {
     return false
   }
+  if (mustReplace && range.collapsed) return false
+
   selection.removeAllRanges()
   selection.addRange(range)
   body.focus()
   return document.execCommand('insertText', false, replacement)
+}
+
+/**
+ * Replaces the sentence a claim occupies with the critique's narrowed version.
+ *
+ * A thin caller of `replaceRange` — the undo argument that makes this safe is
+ * written out there, and the two paths that write into the writer's document
+ * share it rather than each doing their own range surgery.
+ *
+ * Returns false when the claim can no longer be located, exactly as
+ * `insertCitationForClaim` does and for the same reason: the draft has moved on
+ * since the critique ran, and rewriting at a guessed offset would replace a
+ * sentence the writer never asked about. The caller says so rather than
+ * silently doing nothing.
+ *
+ * What it will and will not put in the document is not this function's
+ * judgement — see `normalizeCritique.isNarrowing`, which drops any revision that
+ * introduces a named thing the original sentence does not contain. This writes
+ * whatever survived that.
+ */
+export function replaceClaimText(body: HTMLElement, claim: Claim, replacement: string): boolean {
+  const { text } = buildTextMap(body)
+  const span = computeClaimSpans(text, [claim])[0]
+  if (!span) return false
+  return replaceRange(body, span.start, span.end, replacement, true)
 }
 
 export type WorksCitedResult = 'added' | 'already-listed' | 'failed'

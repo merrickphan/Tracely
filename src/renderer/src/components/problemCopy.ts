@@ -230,6 +230,22 @@ export function popoverCopyFor(
   evidence: ScreenWatchClaimEvidence,
   kind: Exclude<ScreenWatchProblemKind, 'searching'>
 ): ProblemCopy {
+  if (kind === 'overstated-claim') {
+    // Was falling through to problemCopyFor, i.e. to the retrieval copy — and
+    // that is the one outcome problemKind.ts says this kind exists to prevent.
+    // On the preview fixture (c4: an 'overstated' verdict, a narrowed sentence
+    // already in hand, evidence scoring 68) the card read "Partially supported
+    // … Add citation": a sentence one quantifier away from being fine, sent off
+    // to find sources that cannot exist for "always". The verdict is the
+    // critique's, so the copy belongs beside the other two critique verdicts.
+    return {
+      title: 'Overstated — narrow this',
+      description:
+        claim.critique ??
+        'The substance here is defensible; the phrasing is not. No evidence could support it as strongly as it is stated.',
+      action: 'Suggest fix'
+    }
+  }
   if (kind === 'contradicted-claim') {
     // The fact-check verdict, not the rigor one. The critique text is
     // instructed to state the correct fact plainly when it fires, so it is the
@@ -254,7 +270,29 @@ export function popoverCopyFor(
   return problemCopyFor(claim, evidence, kind)
 }
 
-/** Whether the primary button fixes prose or goes looking for a source. */
+/**
+ * Verdicts the critique reached about the sentence, as opposed to findings
+ * retrieval reached about the literature.
+ *
+ * Kept as its own predicate — rather than folded into `opensFixFlow` below —
+ * because it is the question `popoverCopyFor` answers: these are the kinds
+ * whose description is the critique text verbatim.
+ */
 export function isReasoningProblem(kind: ScreenWatchProblemKind): boolean {
   return kind === 'weak-reasoning' || kind === 'contradicted-claim'
+}
+
+/**
+ * Whether the popover's primary button opens the fix card or the citation flow.
+ *
+ * 'overstated-claim' is here and NOT in `isReasoningProblem`, and the split is
+ * deliberate: it is not a finding about reasoning (see problemKind.ts, which
+ * ranks it apart from both truth and support findings), but it is the one kind
+ * that reliably arrives WITH a replacement sentence attached — the relay sets
+ * `suggestedRevision` for overstatement and for nothing else. Routing it to
+ * retrieval, which is what happened before, sent the writer looking for
+ * evidence for "always" while the narrowed sentence sat unread on the claim.
+ */
+export function opensFixFlow(kind: ScreenWatchProblemKind): boolean {
+  return isReasoningProblem(kind) || kind === 'overstated-claim'
 }

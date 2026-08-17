@@ -3,7 +3,18 @@ import { placePopover } from '@shared/popoverPlacement'
 import type { CitationStyle } from '@shared/types'
 import type { DocumentMark, MarkRect } from './documentMarks'
 import MarkdownText from './MarkdownText'
-import { PROBLEM_COLOR, PROBLEM_LABEL, isReasoningProblem, popoverCopyFor } from './problemCopy'
+import { PROBLEM_COLOR, PROBLEM_LABEL, opensFixFlow, popoverCopyFor } from './problemCopy'
+import { critiqueIssues } from '../critiqueIssues'
+// Shared with the overlay, which draws the same card over other applications.
+import {
+  APPLIED_BODY,
+  APPLIED_TITLE,
+  CITATION_FIX_LABEL,
+  NO_REVISION_BODY,
+  REVISION_LABEL,
+  REVISION_RULE,
+  fixTitle
+} from './fixFlowCopy'
 // The flow's wording is shared with the Screen Watch overlay, which draws the
 // same four frames over other applications — see citationFlowCopy.ts.
 import {
@@ -130,6 +141,31 @@ export interface DocCitationFlow {
   onUndo: () => void
 }
 
+/**
+ * The "Suggest fix" card's state, owned by AnalyzeView for the same reason
+ * `DocCitationFlow` is: the popover unmounts the instant the pointer leaves the
+ * sentence, so anything that survives a button press has to live above it.
+ *
+ * Two steps only. There is no searching step and no relay call — everything the
+ * card shows was already written onto the claim by the critique that produced
+ * the underline, so opening it costs nothing and cannot bill the user.
+ */
+export type DocFixState =
+  | { step: 'open' }
+  | { step: 'applied' }
+  | { step: 'error'; message: string }
+
+export interface DocFixFlow {
+  claimId: string
+  state: DocFixState
+  applying: boolean
+  undoing: boolean
+  onApply: () => void
+  onUndo: () => void
+  onCancel: () => void
+  onDone: () => void
+}
+
 export interface DocumentMarkLayerProps {
   marks: DocumentMark[]
   /** The claim the pointer is over, or the one whose popover is pinned open. */
@@ -149,6 +185,8 @@ export interface DocumentMarkLayerProps {
    * every other mark, so the card falls back to the problem statement.
    */
   flow: DocCitationFlow | null
+  /** The fix card, when one is open for the active mark's claim. */
+  fix: DocFixFlow | null
   onFindSource: (mark: DocumentMark) => void
   onSuggestFix: (mark: DocumentMark) => void
   onDismiss: (mark: DocumentMark) => void
@@ -164,6 +202,7 @@ export default function DocumentMarkLayer({
   wrapHeight,
   wrapScrollTop,
   flow,
+  fix,
   onFindSource,
   onSuggestFix,
   onDismiss,
@@ -171,6 +210,7 @@ export default function DocumentMarkLayer({
   onPopoverLeave
 }: DocumentMarkLayerProps): JSX.Element {
   const activeFlow = flow && active && flow.claimId === active.mark.claim.id ? flow : null
+  const activeFix = fix && active && fix.claimId === active.mark.claim.id ? fix : null
   return (
     <div className="docmark-layer" aria-hidden="true">
       {marks.map((mark) =>
@@ -204,6 +244,7 @@ export default function DocumentMarkLayer({
           wrapHeight={wrapHeight}
           wrapScrollTop={wrapScrollTop}
           flow={activeFlow}
+          fix={activeFix}
           onFindSource={() => onFindSource(active.mark)}
           onSuggestFix={() => onSuggestFix(active.mark)}
           onDismiss={() => onDismiss(active.mark)}
@@ -222,6 +263,7 @@ function MarkPopover({
   wrapHeight,
   wrapScrollTop,
   flow,
+  fix,
   onFindSource,
   onSuggestFix,
   onDismiss,
@@ -234,6 +276,7 @@ function MarkPopover({
   wrapHeight: number
   wrapScrollTop: number
   flow: DocCitationFlow | null
+  fix: DocFixFlow | null
   onFindSource: () => void
   onSuggestFix: () => void
   onDismiss: () => void
@@ -245,7 +288,7 @@ function MarkPopover({
   // Re-measured on the step as well as the claim: the flow's cards are three to
   // five times the height of the problem statement they replace, and a stale
   // measurement is what decides above-vs-below.
-  const step = flow?.state.step ?? null
+  const step = flow?.state.step ?? fix?.state.step ?? null
   useLayoutEffect(() => {
     setHeight(cardRef.current?.offsetHeight ?? 0)
   }, [mark.claim.id, step])
@@ -292,6 +335,14 @@ function MarkPopover({
       <div ref={cardRef} className="docmark-card">
         {flow ? (
           <CitationFlowCard flow={flow} claimText={mark.claim.text} />
+        ) : fix ? (
+          <FixCard
+            fix={fix}
+            claim={mark.claim}
+            kind={kind}
+            color={PROBLEM_COLOR[kind]}
+            fallbackDetail={description}
+          />
         ) : (
           <>
         <div className="docmark-head">
@@ -316,7 +367,7 @@ function MarkPopover({
         <div className="docmark-actions">
           <button
             className="docmark-btn-primary"
-            onClick={isReasoningProblem(kind) ? onSuggestFix : onFindSource}
+            onClick={opensFixFlow(kind) ? onSuggestFix : onFindSource}
           >
             {action}
           </button>
@@ -329,6 +380,140 @@ function MarkPopover({
       </div>
       {wantsAbove ? <Tail left={tailLeft} pointing="down" above /> : null}
     </div>
+  )
+}
+
+/**
+ * "Suggest fix", answered in the popover instead of by navigating away.
+ *
+ * There is no Figma frame for this card — the design has the button and nothing
+ * behind it (see fixFlowCopy.ts). It is built out of the pieces the popover
+ * already has: the header dot in the mark's colour, `.docmark-body` prose, a
+ * `.docmark-block` for proposed text exactly as the citation flow's preview
+ * uses one, and the same two-button action row.
+ *
+ * What it shows is what the critique already produced and nothing else. No
+ * relay call is made when it opens — the critique that raised the underline is
+ * where every word here came from — which is what keeps this button honest on a
+ * paid endpoint the user cannot watch being called.
+ *
+ * The one thing this surface does that the overlay does not is APPLY. This
+ * editor owns its text: `replaceClaimText` types the narrowed sentence over the
+ * old one through `execCommand`, so it lands on the browser's undo stack and
+ * Ctrl+Z — or the card's own Undo, which is that same stack — takes it back
+ * out. The overlay is reading someone else's window over UI Automation and
+ * offers Copy instead. Same asymmetry as `Preview` in the citation flow, and
+ * the same reason: each surface does what it can actually reach.
+ */
+function FixCard({
+  fix,
+  claim,
+  kind,
+  color,
+  fallbackDetail
+}: {
+  fix: DocFixFlow
+  claim: DocumentMark['claim']
+  kind: DocumentMark['problemKinds'][number]
+  color: string
+  /** The problem card's own sentence, for a claim with no critique text — see
+   *  the overlay's FixCard, where this case was found. */
+  fallbackDetail: string
+}): JSX.Element {
+  const { state } = fix
+
+  if (state.step === 'applied') {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#16a34a' }} />
+          <span className="docmark-title">{APPLIED_TITLE}</span>
+        </div>
+        <p className="docmark-body">{APPLIED_BODY}</p>
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={fix.onDone}>
+            Done
+          </button>
+          <button className="docmark-btn-secondary" onClick={fix.onUndo} disabled={fix.undoing}>
+            {fix.undoing ? 'Undoing…' : 'Undo'}
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  if (state.step === 'error') {
+    return (
+      <>
+        <div className="docmark-head">
+          <span className="docmark-dot" style={{ background: '#d93636' }} />
+          <span className="docmark-title">Could not apply</span>
+        </div>
+        <p className="docmark-body">{state.message}</p>
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={fix.onCancel}>
+            Back
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  const revision = claim.suggestedRevision
+  const citationFix = claim.citationFix
+  // Only when there is nothing to apply. Where a revision exists the critique
+  // prose has already been read on the card behind this one, and repeating it
+  // above the sentence it produced buries the one thing worth looking at.
+  const issues = revision || citationFix ? [] : critiqueIssues(claim.critique || fallbackDetail)
+
+  return (
+    <>
+      <div className="docmark-head">
+        <span className="docmark-dot" style={{ background: color }} />
+        <span className="docmark-title">{fixTitle(kind)}</span>
+      </div>
+      {revision ? (
+        <>
+          <p className="docmark-body">{REVISION_RULE}</p>
+          <div className="docmark-block">
+            <div className="docmark-block-label">{REVISION_LABEL.toUpperCase()}</div>
+            <div className="docmark-fix-quote">{revision}</div>
+          </div>
+        </>
+      ) : null}
+      {citationFix ? (
+        <div className="docmark-block">
+          <div className="docmark-block-label">{CITATION_FIX_LABEL.toUpperCase()}</div>
+          {/* Monospaced, unlike the revision: a reference is read character by
+              character, and whether the year sits where a page number belongs
+              is the entire point of showing it. */}
+          <div className="docmark-fix-quote mono">{citationFix}</div>
+        </div>
+      ) : null}
+      {issues.length ? (
+        <>
+          <p className="docmark-body">{NO_REVISION_BODY}</p>
+          <div className="docmark-fix-issues">
+            {issues.map((issue, i) => (
+              <div className="docmark-fix-issue" key={i}>
+                {issue.title ? <div className="docmark-fix-issue-title">{issue.title}</div> : null}
+                <MarkdownText className="docmark-body">{issue.detail}</MarkdownText>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      <div className="docmark-actions">
+        {revision ? (
+          <button className="docmark-btn-primary" onClick={fix.onApply} disabled={fix.applying}>
+            {fix.applying ? 'Applying…' : 'Apply revision'}
+          </button>
+        ) : null}
+        <button className="docmark-btn-secondary" onClick={fix.onCancel}>
+          Back
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -491,10 +676,16 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
             <span className="docmark-row-badge">{candidate.initials}</span>
             <span className="docmark-row-meta">
               <span className="docmark-row-title">{candidate.title}</span>
+              {/* The venue is what gives and the match percentage is what does
+                  not — see .docmark-venue / .docmark-match. Ellipsising the
+                  line as a whole would cut the number the card is titled
+                  around. */}
               <span className="docmark-row-sub">
-                {candidate.venue ?? 'Unknown venue'}
-                {candidate.year ? ` · ${candidate.year}` : ''}
-                <span className="docmark-match"> {candidate.matchPercent}% match</span>
+                <span className="docmark-venue">
+                  {candidate.venue ?? 'Unknown venue'}
+                  {candidate.year ? ` · ${candidate.year}` : ''}
+                </span>
+                <span className="docmark-match">{candidate.matchPercent}% match</span>
               </span>
             </span>
             <span
