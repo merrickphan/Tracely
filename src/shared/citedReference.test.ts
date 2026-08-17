@@ -162,6 +162,58 @@ describe('corroborate — did the index return the work that was named?', () => 
     strictEqual(corroborate(ref, []).found, false)
     strictEqual(corroborate(ref, []).candidatesConsidered, 0)
   })
+
+  // Measured live 2026-08-17: the invented pair "Ramirez and Doyle, 2021" was
+  // corroborated by Open Library's *Believe Me*, a thirty-contributor anthology
+  // carrying a Mónica Ramírez and a Jude Ellison S. Doyle, with a 2020 edition
+  // inside YEAR_TOLERANCE. Both real people; the cited study is not.
+  it('refuses a multi-contributor volume, where carrying both names proves nothing', () => {
+    const anthology = [
+      {
+        title: 'Believe Me',
+        authorSurnames: [
+          'Valenti', 'Friedman', 'Chemaly', 'Donegan', 'Pressley', 'Serano', 'Lithwick',
+          'Irby', 'Doyle', 'Smith', 'Maslany', 'Deer', 'Clairmont', 'Cross', 'McDonald',
+          'Horn', 'Patterdale', 'Lubchansky', 'Bhagwati', 'Malone', 'Ross', 'Pino-Silva',
+          'Scott', 'Duckett', 'Ramirez', 'Susskind', 'Mohammed', 'Brigida', 'Issa', 'Ikeda'
+        ],
+        year: 2017,
+        years: [2017, 2020]
+      }
+    ]
+    strictEqual(corroborate(first('Ramirez and Doyle (2021) found this.'), anthology).found, false)
+  })
+
+  // The ceiling is double the largest author list on any of the 36 corroborated
+  // real references in eval/fabrication — Banting & Best 1922 and Press &
+  // Teukolsky 1986, at five. A five-author paper must keep corroborating.
+  it('still corroborates a paper with a normal-sized author list', () => {
+    const paper = [
+      {
+        title: 'The effects of insulin on experimental hyperglycemia',
+        authorSurnames: ['Banting', 'Best', 'Collip', 'Campbell', 'Fletcher'],
+        year: 1922
+      }
+    ]
+    strictEqual(corroborate(first('Banting and Best (1922) found this.'), paper).found, true)
+  })
+
+  // A reference resolved from a bibliography entry carries every author of a
+  // large paper, and there the long list is evidence FOR the match. The ceiling
+  // scales so it cannot punish that.
+  it('lets a many-named reference match a many-authored work', () => {
+    const many = Array.from({ length: 14 }, (_, i) => `Author${i}`)
+    const ref14 = {
+      raw: 'entry',
+      kind: 'bibliographic' as const,
+      surnames: many,
+      year: 2020,
+      title: null,
+      etAl: false,
+      entry: 'a reference list entry'
+    }
+    strictEqual(corroborate(ref14, [{ title: 'A big collaboration', authorSurnames: many, year: 2020 }]).found, true)
+  })
 })
 
 describe('crossrefReferenceQueries — two queries that fail in opposite directions', () => {
