@@ -108,8 +108,60 @@ try {
 console.log('\n2/4  Bumping version')
 run('npm version patch --no-git-tag-version')
 const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+
+// The bump reaches main through a PR, because main no longer accepts anything
+// else — branch protection requires a pull request and enforces it on admins,
+// so the `git push origin main` this used to do now fails outright.
+//
+// Zero approvals are required, which is what keeps this automatic: the PR is
+// opened, its `check` run has to go green, and it merges itself. The rule is
+// "everything on main was a reviewed PR", not "a human clicks a button at 2am
+// mid-release".
+//
+// Deliberately NOT solved by giving the release an admin bypass. A bypass that
+// exists is a bypass that gets used for the thing that is urgent, which is
+// exactly when the check matters most.
+const releaseBranch = `release/v${version}`
+run(`git checkout -b ${releaseBranch}`)
 run(`git commit -am "Release v${version}"`)
-run('git push origin main')
+run(`git push -u origin ${releaseBranch}`)
+run(
+  `gh pr create --base main --head ${releaseBranch} ` +
+    `--title "Release v${version}" ` +
+    `--body "Version bump for v${version}. Opened by npm run ship; merges itself once check passes."`
+)
+
+// --auto rather than a plain merge: `check` has not started yet at this point,
+// and an immediate merge attempt is refused for a pending required check.
+run(`gh pr merge ${releaseBranch} --merge --auto --delete-branch`)
+
+console.log('     waiting for the release PR to merge…')
+const MERGE_TIMEOUT_MS = 15 * 60_000
+const startedAt = Date.now()
+for (;;) {
+  const state = out(`gh pr view ${releaseBranch} --json state --jq .state`)
+  if (state === 'MERGED') break
+  if (state === 'CLOSED') die(`The release PR for v${version} was closed without merging.`)
+  if (Date.now() - startedAt > MERGE_TIMEOUT_MS) {
+    // Nothing is published at this point and the bump is only on a branch, so
+    // stopping here costs a version number and nothing else.
+    die(
+      `The release PR for v${version} has not merged in 15 minutes.\n\n` +
+        `  gh pr view ${releaseBranch} --web\n\n` +
+        'Nothing has been built or published. Merge it and run npm run ship again.'
+    )
+  }
+  // A blocking sleep, in a script that is otherwise entirely synchronous.
+  // Atomics.wait rather than a shell sleep so this does not depend on which
+  // shell is behind execSync — `sleep` is not a command on Windows.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_000)
+}
+
+// Back onto main at the merge commit, because that is what gets built and
+// tagged. Building the release branch would tag a commit that is no longer
+// what main says v<version> is.
+run('git checkout main')
+run('git pull --ff-only origin main')
 console.log(`     v${version}`)
 
 console.log('\n3/4  Loading GH_TOKEN')
