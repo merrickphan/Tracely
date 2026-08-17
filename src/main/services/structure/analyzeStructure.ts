@@ -11,7 +11,7 @@ import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
-import { hasClosingSignificance, heuristicRoles } from './roles'
+import { hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
 
@@ -126,7 +126,15 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // the wider list is confined to this one position.
   const soWhatInConclusion = closing ? hasClosingSignificance(closing.text) : false
 
-  const { score, components, complete, applicable } = scoreDraft(paragraphs, { soWhatInConclusion })
+  // A titled essay puts its title in paragraph 1. It is labelled 'unknown' by
+  // rights and must not be counted as a paragraph nothing could read — see
+  // ScoreSignals.titleParagraph.
+  const titleParagraph = spans.length > 1 && looksLikeTitle(spans[0].text)
+
+  const { score, components, complete, applicable } = scoreDraft(paragraphs, {
+    soWhatInConclusion,
+    titleParagraph
+  })
 
   return {
     documentId: input.documentId,
@@ -143,7 +151,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     weaknesses: findWeaknesses({
       paragraphs,
       claimsWithoutEvidence: input.claimsWithoutEvidence,
-      soWhatInConclusion
+      soWhatInConclusion,
+      titleParagraph
     }),
     // Measured over the same spans the roles were computed from, so a boundary
     // finding and the role labels either side of it can never describe

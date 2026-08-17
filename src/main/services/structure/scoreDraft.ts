@@ -42,6 +42,13 @@ export interface ScoreSignals {
    * devoting a paragraph to them.
    */
   soWhatInConclusion: boolean
+  /**
+   * Whether paragraph 1 is the essay's title. It is 'unknown' by rights — a
+   * title states no claim — but counting it as unlabelled made every titled
+   * essay's reading "provisional", which is the panel telling the writer it
+   * could not read a paragraph when the paragraph was a heading.
+   */
+  titleParagraph?: boolean
 }
 
 export interface DraftScore {
@@ -102,7 +109,9 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   }
 
   const roles = paragraphs.map((p) => p.role)
-  const complete = roles.every((role) => role !== 'unknown')
+  const complete = roles.every(
+    (role, i) => role !== 'unknown' || (signals.titleParagraph === true && i === 0)
+  )
 
   // --- Thesis (20) -------------------------------------------------------
   // Position matters, so it is scored rather than merely detected. A thesis
