@@ -465,3 +465,57 @@ and that books break it; not enough for a rate. The invented pairs were
 constructed by the same person who chose the query strategy, which is the
 weakest part of this: a fabrication that happens to share a surname pair with a
 real indexed work would be corroborated, and nothing here samples that.
+
+## The caveat came true — 2026-08-17
+
+> a fabrication that happens to share a surname pair with a real indexed work
+> would be corroborated, and nothing here samples that
+
+It does, and now it is sampled. Found by accident while checking the
+cited-source-first change against the staging relay, not by this harness:
+
+```
+(Ramirez and Doyle, 2021)   -> openlibrary: 1 book, found=TRUE
+  "Believe Me" — 30 authors, editions [2017, 2020]
+  ...Jude Ellison S. Doyle... Mónica Ramírez...
+```
+
+A thirty-contributor essay anthology. `corroborate` requires every cited surname
+to appear among a work's authors, and across thirty contributors two common
+surnames co-occur almost for free; `2020` then sits inside `YEAR_TOLERANCE` of
+2021. The labelled set's own invented pair is **2024**, whose distance from both
+editions is what kept this hidden — the same names one year earlier walk
+straight through.
+
+`MIN_CHECKABLE_SURNAMES` rests on "a work carrying both cited names is not a
+coincidence". That is true of a two-author paper and false of an edited volume,
+and nothing measured the difference because every real reference in the set is a
+paper or a single-authored book.
+
+**Why it had become expensive.** A wrong corroboration used to be one line in
+the reference section. Since the cited work is now handed to the critique as
+evidence item 1, it also displaced a real searched paper and made an invented
+reference read as PLACED — which disarms the prompt's rule against offering a
+rewrite that carries an unverified citation forward. Measured on that sentence,
+the model duly proposed one keeping the invented 34% figure and dropping the
+citation, which is the output the prompt names as the worst available.
+
+**The fix, calibrated rather than chosen.** `MAX_CANDIDATE_AUTHORS`: a candidate
+whose author list exceeds `max(10, cited surnames x 4)` cannot corroborate.
+Across all 36 corroborated real references here the largest matched author list
+is **five** — Banting & Best 1922, Press & Teukolsky 1986 — so ten is double the
+worst real case observed. Scaled by the number of cited names because a
+bibliography-resolved reference legitimately carries every author of a large
+paper, and there a long list is evidence FOR the match.
+
+```
+  DETECTION   11/11 invented references not corroborated
+  FALSE ALARM  0/36 real references not corroborated
+                 article  0/16   book     0/8
+                 pre-doi  0/6    textbook 0/6
+```
+
+The 2021 pair is now in `references.json` so this cannot regress silently. What
+is still unsampled: a fabrication colliding with a real SMALL work — two
+invented names that happen to be a real two-author paper in the right year.
+Nothing here can rule that out, and no author ceiling would.

@@ -457,6 +457,51 @@ function titleMatches(refTitle: string, workTitle: string): boolean {
   return hits / wanted.length >= TITLE_MATCH_RATIO
 }
 
+/**
+ * How large a candidate's author list may be before carrying every cited
+ * surname stops meaning anything.
+ *
+ * MIN_CHECKABLE_SURNAMES rests on one assumption: a work carrying BOTH cited
+ * names is not something a common surname produces by chance. That assumption
+ * holds for a two-author paper and collapses completely for a multi-contributor
+ * volume. Measured 2026-08-17 against the live indexes — the invented pair
+ * "Ramirez and Doyle, 2021" was corroborated by *Believe Me*, a thirty-author
+ * essay anthology, on the strength of a Mónica Ramírez and a Jude Ellison S.
+ * Doyle appearing among its contributors, with a 2020 edition inside
+ * YEAR_TOLERANCE of 2021. Both are real people; the cited STUDY is not, and the
+ * check said it was.
+ *
+ * That was already wrong before the cited work was handed to the critique as
+ * evidence, but promoting it to "the source the writer cited" is what made it
+ * expensive: it displaced a real searched paper, and it made an invented
+ * reference read as PLACED — which disarms the relay prompt's rule against
+ * offering a rewrite that carries an unverified citation forward. Measured on
+ * the same sentence, the model duly proposed one that kept the invented figure
+ * and dropped the citation.
+ *
+ * Ten, from measurement rather than taste. Across all 36 corroborated real
+ * references in eval/fabrication's labelled set — articles, pre-DOI articles,
+ * books and textbooks — the largest author list on a matched work is FIVE
+ * (Banting & Best 1922; Press & Teukolsky 1986). Ten is double the worst real
+ * case observed and loses none of the 36.
+ *
+ * Scaled by how many names were cited, not fixed, because a reference resolved
+ * from a bibliography entry legitimately carries every author of a large paper
+ * — and there the long author list is evidence FOR the match rather than
+ * against it. The floor is what does the work for the two-surname case this
+ * exists for.
+ *
+ * It fails in the safe direction: a rejected candidate is an uncorroborated
+ * reference, which the whole design already treats as evidence rather than a
+ * verdict, and `absenceIsInformative` still governs whether it may be reported
+ * at all.
+ */
+export const MAX_CANDIDATE_AUTHORS = 10
+
+function authorListTooBroad(ref: CitedReference, work: CandidateWork): boolean {
+  return work.authorSurnames.length > Math.max(MAX_CANDIDATE_AUTHORS, ref.surnames.length * 4)
+}
+
 export function corroborate(ref: CitedReference, candidates: CandidateWork[]): Corroboration {
   const wanted = ref.surnames.map(normalizeName).filter(Boolean)
   if (wanted.length === 0) {
@@ -481,6 +526,9 @@ export function corroborate(ref: CitedReference, candidates: CandidateWork[]): C
       // decides, which is the coincidence problem MIN_CHECKABLE_SURNAMES exists
       // to prevent for author-year references.
       if (titleGates(ref) && !titleMatches(ref.title!, work.title)) return false
+      // And the work has to be small enough for "carries both names" to be
+      // improbable at all. See MAX_CANDIDATE_AUTHORS.
+      if (authorListTooBroad(ref, work)) return false
       const have = work.authorSurnames.map(normalizeName)
       // `endsWith` rather than equality: indexes carry compound and hyphenated
       // surnames a citation shortens, and a citation's "Dijk" should meet the
