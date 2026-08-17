@@ -11,7 +11,7 @@ import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
-import { hasSignificanceMarker, heuristicRoles } from './roles'
+import { hasClosingSignificance, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
 
@@ -120,7 +120,11 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // requiring the label first would mean the partial significance credit could
   // essentially never be earned.
   const closing = spans.find((span) => paragraphs[span.index - 1]?.role === 'conclusion') ?? spans.at(-1)
-  const soWhatInConclusion = closing ? hasSignificanceMarker(closing.text) : false
+  // hasClosingSignificance, not hasSignificanceMarker: this is the CLOSING
+  // paragraph, where "the legacy she left behind" is answering "so what?" and
+  // not merely narrating. See the note on CLOSING_SIGNIFICANCE_MARKERS for why
+  // the wider list is confined to this one position.
+  const soWhatInConclusion = closing ? hasClosingSignificance(closing.text) : false
 
   const { score, components, complete, applicable } = scoreDraft(paragraphs, { soWhatInConclusion })
 

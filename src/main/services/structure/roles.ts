@@ -148,6 +148,20 @@ function firstSentence(text: string): string {
   return match ? text.slice(0, match.index + match[0].length) : text
 }
 
+/**
+ * The paragraph's final sentence, for the thesis shape test.
+ *
+ * Same three-lines-of-duplication trade as `firstSentence` — see the note on
+ * `afterFirstSentence` for why these do not import the better splitter.
+ * Trailing whitespace and a trailing terminator are both tolerated, because a
+ * paragraph that ends without punctuation is a draft mid-sentence rather than
+ * an error worth refusing.
+ */
+function lastSentence(text: string): string {
+  const parts = text.trim().split(/(?<=[.!?]["'’”)\]]*)\s+/)
+  return parts[parts.length - 1] ?? text
+}
+
 function startsWithMarker(text: string, markers: string[]): boolean {
   // Anchored at the OPENING of the first sentence, which is what the name says
   // and what the markers are: sentence-openers announcing a turn in the
@@ -278,6 +292,131 @@ export function hasSignificanceMarker(text: string): boolean {
 }
 
 /**
+ * "So what?", asked the way a humanities essay asks it.
+ *
+ * SIGNIFICANCE_MARKERS is social-science register — "the implications", "at
+ * stake", "going forward". A literature or history essay answers the same
+ * question in the vocabulary of legacy and consequence: what someone left
+ * behind, what endures, what they are remembered for. Judged by the first list
+ * alone, an essay closing on "the legacy she left behind tends to reside in the
+ * film industry, but she was more than just a pretty face" scores zero for
+ * significance, which is not a reading of that sentence anybody would defend.
+ *
+ * Deliberately a SECOND list rather than an extension of the first, and
+ * consulted only for the closing paragraph. These phrases are ordinary
+ * narration in the middle of an essay — a body paragraph mentioning a legacy is
+ * telling the story, not stepping back from it — and `roleFor` consults
+ * SIGNIFICANCE_MARKERS before it considers position, so widening that list
+ * would relabel body paragraphs as 'significance' and take their claim credit
+ * away. Same words, different meaning depending on where they sit.
+ */
+export const CLOSING_SIGNIFICANCE_MARKERS = [
+  'legacy',
+  'lives on',
+  'live on',
+  'remembered',
+  'endures',
+  'continues to',
+  'more than just',
+  'set apart',
+  'reminds us',
+  'left behind',
+  'for generations',
+  'to this day'
+]
+
+export function hasClosingSignificance(text: string): boolean {
+  return hasSignificanceMarker(text) || containsMarker(text, CLOSING_SIGNIFICANCE_MARKERS)
+}
+
+/**
+ * Whether a FINAL paragraph is actually concluding, rather than the draft
+ * simply stopping.
+ *
+ * `roleFor` deliberately refuses to call the last paragraph a conclusion on
+ * position alone — a draft abandoned mid-argument would collect ten free points
+ * for a conclusion it does not have, and that reasoning still holds. But the
+ * rule it shipped with was stricter than the reason required: it demanded the
+ * paragraph OPEN with "In conclusion" or "Ultimately", and a great many essays
+ * close on a quotation, a return to the opening image, or a date. This essay's
+ * final paragraph opens with a quote and then restates the thesis in so many
+ * words; it was labelled `unknown`, and the writer lost the ten points for the
+ * one component they had unambiguously satisfied.
+ *
+ * So position is necessary and still not sufficient: the paragraph must also
+ * look retrospective. That keeps the abandoned draft at zero — an argument that
+ * stops mid-flight contains none of this vocabulary — while letting a real
+ * conclusion be recognised without announcing itself in rubric language.
+ */
+const CLOSING_MARKERS = [
+  ...CLOSING_SIGNIFICANCE_MARKERS,
+  'in the years since',
+  'in her final',
+  'in his final',
+  'in their final',
+  'came to an end',
+  'died',
+  'today',
+  'still',
+  'no longer'
+]
+
+export function looksLikeClosing(text: string): boolean {
+  return startsWithMarker(text, CONCLUSION_MARKERS) || containsMarker(text, CLOSING_MARKERS)
+}
+
+/**
+ * Whether a sentence has the SHAPE of a thesis.
+ *
+ * Used only for the last sentence of the opening paragraph, and only when claim
+ * detection found nothing there. The intro is the paragraph most likely to be
+ * dense with checkable facts — dates, places, names — so it is the paragraph
+ * where detection is most likely to fire on biography rather than on argument,
+ * and, when the relay is unavailable or returns nothing, where its silence
+ * costs the most: twenty points, the single largest component.
+ *
+ * The pattern is a concessive or contrastive frame ("Whilst X, Y"; "Although
+ * X, Y"; "not only X but Y") or an explicit differentiating verb — the
+ * constructions a thesis uses to say "here is the position I am taking against
+ * the obvious one". It is a shape test, not a quality test: it cannot tell a
+ * good thesis from a bad one, only a sentence making an argumentative move from
+ * a sentence continuing a narrative.
+ */
+const THESIS_SHAPE =
+  /\b(whilst|while|although|though|despite|rather than|not only)\b.{0,200}?\b(but|yet|however|set (?:her|him|them|it) apart|sparked|distinguish\w*|argues?|demonstrates?|reveals?|proves?)\b/i
+
+export function looksLikeThesis(sentence: string): boolean {
+  return THESIS_SHAPE.test(sentence)
+}
+
+/**
+ * Whether a body paragraph OPENS by asserting something about its subject.
+ *
+ * The rubric's `governingClaims` asks whether body paragraphs are governed by
+ * claims, and `roleFor` answered it entirely from claim detection: a paragraph
+ * counted only if the relay happened to flag a checkable assertion inside it.
+ * Those are different questions, and the gap between them is where a real essay
+ * loses its marks. The paragraph that opens "Audrey Hepburn was always
+ * naturally inclined to help others" is governed by a claim in the only sense
+ * the rubric means; it is also unverifiable, so claim detection — which looks
+ * for statements that could be checked against a source — has every reason to
+ * pass over it. An evaluative topic sentence is precisely the kind of assertion
+ * that CANNOT be fact-checked, so keying the component to fact-detection scored
+ * the strongest paragraph openings lowest.
+ *
+ * A citation in the first sentence disqualifies it: a paragraph opening with an
+ * attribution is presenting evidence, and `roleFor` should keep reaching its
+ * evidence branch for those.
+ */
+const TOPIC_CLAIM_SHAPE = /\b(?:was|were|is|are|remains?|remained|became|stood out|proved|represents?)\b/i
+
+export function looksLikeTopicClaim(firstSentenceText: string, hasCitationIn: CitationPredicate): boolean {
+  if (hasCitationIn(firstSentenceText)) return false
+  if (firstSentenceText.trim().split(/\s+/).length < 5) return false
+  return TOPIC_CLAIM_SHAPE.test(firstSentenceText)
+}
+
+/**
  * Everything after the paragraph's first sentence, or '' if it has only one.
  *
  * `firstSentence`/`afterFirstSentence` are deliberately NOT `splitSentences`
@@ -373,13 +512,29 @@ function roleFor(
   // An opening paragraph that asserts nothing is a hook or scene-setting, and
   // this heuristic cannot tell those apart from a missing thesis — so it says
   // 'unknown' rather than inventing either answer.
-  if (index === 1) return hasClaim ? 'thesis' : 'unknown'
+  //
+  // The shape test is the second way in, for the case that turns out to be
+  // common: an intro whose thesis is its LAST sentence, after a paragraph of
+  // biography. Claim detection fires on the biography — dates and places are
+  // checkable — and, when it returns nothing at all for the paragraph, the
+  // thesis went unrecognised entirely. See looksLikeThesis.
+  if (index === 1) {
+    if (hasClaim) return 'thesis'
+    return looksLikeThesis(lastSentence(text)) ? 'thesis' : 'unknown'
+  }
 
-  // Deliberately NOT "the last paragraph is the conclusion". A draft that stops
-  // mid-argument would score a free 10 points for a conclusion it doesn't have.
-  // A real conclusion almost always announces itself, and the marker branch
-  // above catches that.
-  if (index === lastIndex && !hasClaim) return 'unknown'
+  // Deliberately NOT "the last paragraph is the conclusion" — a draft that
+  // stops mid-argument would score a free 10 points for a conclusion it does
+  // not have. But position plus retrospective vocabulary is not position
+  // alone, and requiring the paragraph to OPEN with "In conclusion" missed
+  // every essay that closes on a quotation or an image. See looksLikeClosing.
+  if (index === lastIndex) {
+    if (looksLikeClosing(text)) return 'conclusion'
+    // Unchanged from before otherwise: no claim and nothing retrospective is
+    // 'unknown', and a final paragraph carrying a claim falls through to the
+    // branches below exactly as it always did.
+    if (!hasClaim) return 'unknown'
+  }
 
   // Before the claim branch, because a run of attributions is evidence even
   // when claim detection flags the findings inside it as assertions — which it
@@ -390,5 +545,10 @@ function roleFor(
   // heuristic path. Found by tracing a draft written to trigger it.
   if (citationCount(text, hasCitation) >= MIN_CITATIONS_FOR_EVIDENCE) return 'evidence'
 
-  return hasClaim ? 'claim' : 'unknown'
+  if (hasClaim) return 'claim'
+
+  // A topic sentence the relay had no reason to flag. Last, so every stronger
+  // signal — markers, citations, detected claims — still decides first, and
+  // this only ever turns an 'unknown' into a 'claim'. See looksLikeTopicClaim.
+  return looksLikeTopicClaim(firstSentence(text), hasCitation) ? 'claim' : 'unknown'
 }
