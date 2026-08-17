@@ -386,11 +386,40 @@ export function looksLikeClosing(text: string): boolean {
  * good thesis from a bad one, only a sentence making an argumentative move from
  * a sentence continuing a narrative.
  */
+// The "set X apart" arm takes any object, not the four pronouns it started
+// with. Written against one essay's "set her apart", it then failed on "sets
+// this decade apart" — the same construction with a noun in it, which is how
+// the move is written whenever the subject is not a person.
 const THESIS_SHAPE =
-  /\b(whilst|while|although|though|despite|rather than|not only)\b.{0,200}?\b(but|yet|however|set (?:her|him|them|it) apart|sparked|distinguish\w*|argues?|demonstrates?|reveals?|proves?)\b/i
+  /\b(?:whilst|while|although|though|despite|rather than|not only)\b[^]{0,200}?\b(?:but|yet|however|sparked|distinguish\w*|argues?|demonstrates?|reveals?|proves?|set\w*\b[^.]{0,30}?\bapart)\b/i
 
 export function looksLikeThesis(sentence: string): boolean {
   return THESIS_SHAPE.test(sentence)
+}
+
+/**
+ * Whether the opening "paragraph" is really the essay's title.
+ *
+ * `splitParagraphs` treats any newline run as a boundary, so a titled essay
+ * arrives with its title as paragraph 1 and its introduction as paragraph 2.
+ * Every position rule downstream then reads one paragraph too early — and the
+ * thesis rule only ever looks at paragraph 1, so the whole 20-point component
+ * became unreachable for any student who titled their work. A four-paragraph
+ * essay scored 78 hand-split without its title and 48 as actually written,
+ * which is a thirty-point penalty for a heading.
+ *
+ * Two conditions together, because either alone is wrong. Short: a title is a
+ * noun phrase, not a paragraph. Unterminated: an opening line ending in a full
+ * stop is a first sentence, however brief. "In conclusion." would satisfy the
+ * length test on its own and is plainly not a title.
+ */
+const TITLE_MAX_WORDS = 12
+
+export function looksLikeTitle(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length === 0) return false
+  if (/[.!?]["'’”)\]]*$/.test(trimmed)) return false
+  return trimmed.split(/\s+/).length <= TITLE_MAX_WORDS
 }
 
 /**
@@ -491,9 +520,14 @@ export function heuristicRoles({
   const warranted: boolean[] = []
   const lastIndex = paragraphs.length
 
+  // Where the argument actually starts. A titled essay puts its title in
+  // paragraph 1 and its introduction in paragraph 2, and every position rule
+  // below would otherwise read one paragraph too early — see looksLikeTitle.
+  const thesisIndex = paragraphs.length > 1 && looksLikeTitle(paragraphs[0].text) ? 2 : 1
+
   for (const paragraph of paragraphs) {
     const hasClaim = (claimsByParagraph.get(paragraph.index) ?? []).length > 0
-    roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation))
+    roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation, thesisIndex))
     warranted.push(hasWarrantMarker(paragraph.text))
   }
 
@@ -504,7 +538,9 @@ function roleFor(
   paragraph: ParagraphSpan,
   hasClaim: boolean,
   lastIndex: number,
-  hasCitation: CitationPredicate
+  hasCitation: CitationPredicate,
+  /** The paragraph the thesis is expected in — 2 when paragraph 1 is a title. */
+  thesisIndex: number
 ): ParagraphRole {
   const { text, index } = paragraph
 
@@ -522,10 +558,15 @@ function roleFor(
   // biography. Claim detection fires on the biography — dates and places are
   // checkable — and, when it returns nothing at all for the paragraph, the
   // thesis went unrecognised entirely. See looksLikeThesis.
-  if (index === 1) {
+  if (index === thesisIndex) {
     if (hasClaim) return 'thesis'
     return looksLikeThesis(lastSentence(text)) ? 'thesis' : 'unknown'
   }
+
+  // The title itself. Not 'unknown' by accident but by fact: it is not a
+  // paragraph of the argument, and labelling it anything else would let it
+  // collect credit for a component it cannot satisfy.
+  if (index < thesisIndex) return 'unknown'
 
   // Deliberately NOT "the last paragraph is the conclusion" — a draft that
   // stops mid-argument would score a free 10 points for a conclusion it does

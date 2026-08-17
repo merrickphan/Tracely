@@ -7,6 +7,7 @@ import {
   heuristicRoles,
   looksLikeClosing,
   looksLikeThesis,
+  looksLikeTitle,
   looksLikeTopicClaim
 } from './roles.ts'
 
@@ -381,5 +382,56 @@ describe('looksLikeTopicClaim', () => {
 
   it('rejects a fragment too short to be governing anything', () => {
     strictEqual(looksLikeTopicClaim('It was late.', noCitations), false)
+  })
+})
+
+describe('looksLikeTitle', () => {
+  // A titled essay puts its title in paragraph 1 and its introduction in
+  // paragraph 2, so every position rule read one paragraph too early and the
+  // thesis component became unreachable. This essay scored 48 as written and
+  // 78 hand-split without its title.
+  it('accepts a real essay title', () => {
+    strictEqual(looksLikeTitle('More Than a Pretty Face: Audrey Hepburn'), true)
+  })
+
+  it('rejects an opening line that ends in a full stop, however short', () => {
+    strictEqual(looksLikeTitle('In conclusion.'), false)
+    strictEqual(looksLikeTitle('The policy failed.'), false)
+  })
+
+  it('rejects a full opening sentence that merely lacks a terminator', () => {
+    strictEqual(
+      looksLikeTitle(
+        'Renewable energy sources now account for nearly a third of global electricity generation and continue to grow'
+      ),
+      false
+    )
+  })
+})
+
+describe('a titled essay is labelled as though the title were not there', () => {
+  it('puts the thesis in paragraph 2 and does not spend it on the title', () => {
+    const roles = heuristicRoles({
+      paragraphs: paras(
+        'More Than a Pretty Face: Audrey Hepburn',
+        'She was born in Brussels in 1929. Whilst helping others is a moral obligation, her early struggles sparked a passion that set her apart from her peers.',
+        'Hepburn was always naturally inclined to help others. She raised money for the resistance because she had seen the cost of occupation.',
+        'The legacy she left behind lives on in the fund that carries her name.'
+      ),
+      claimsByParagraph: new Map()
+    }).roles
+    deepStrictEqual(roles, ['unknown', 'thesis', 'claim', 'conclusion'])
+  })
+
+  it('still reads an untitled essay from paragraph 1', () => {
+    const roles = heuristicRoles({
+      paragraphs: paras(
+        'Whilst the transition is often framed as inevitable, its pace was set by policy rather than technology, which sets this decade apart.',
+        'Storage was always the binding constraint. Costs fell because manufacturing scaled.',
+        'In conclusion, the decade will be measured by what was built.'
+      ),
+      claimsByParagraph: new Map()
+    }).roles
+    deepStrictEqual(roles, ['thesis', 'claim', 'conclusion'])
   })
 })
