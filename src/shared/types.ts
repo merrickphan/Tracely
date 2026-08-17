@@ -407,5 +407,19 @@ export interface DocumentOutline {
    * flow score of zero for a draft nothing measured.
    */
   cohesion: DraftCohesion | null
+  /**
+   * Whether `paragraphs[0]` is the document's TITLE rather than a paragraph of
+   * the argument.
+   *
+   * `splitParagraphs` breaks on any newline run, so a titled essay arrives with
+   * its heading as paragraph 1. Main already has to know this — the thesis is
+   * read from the paragraph after it, and it must not count as a paragraph
+   * nothing could read — and the surfaces need the same answer to avoid listing
+   * a heading as "P1 · Unlabelled" in a breakdown of the argument.
+   *
+   * Optional because outlines persisted before this existed do not carry it;
+   * absent reads as false, which is the old behaviour.
+   */
+  titleParagraph?: boolean
   analyzedAt: string
 }

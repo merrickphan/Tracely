@@ -51,6 +51,8 @@ import type { Bucket } from './components/problemCopy'
 // Same band, same score, both surfaces — see the note in essayGrade.ts.
 import { gradeFor } from './components/essayGrade'
 import { CLAIM_TYPE_LABEL } from './components/claimTypeLabel'
+// Position-first paragraph naming, shared with the in-app report.
+import { paragraphNames } from './components/paragraphNames'
 // The citation flow's wording, shared with the document editor's popover — see
 // the note at the top of that file.
 import {
@@ -2123,7 +2125,8 @@ function ParagraphDetailPanel({
       </div>
 
       <div style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1f' }}>
-        Paragraph {index}
+        {paragraphNames(structure?.paragraphs ?? [], structure?.titleParagraph)[index - 1] ??
+          `Paragraph ${index}`}
         {paragraph ? ` — ${ROLE_LABEL[paragraph.role]}` : ''}
       </div>
 

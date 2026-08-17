@@ -107,6 +107,10 @@ export function computeWatchOutline({
     coverage: outline.coverage,
     weaknesses: outline.weaknesses,
     paragraphs: outline.paragraphs,
+    // Carried through so the overlay names paragraphs the way the in-app report
+    // does. Recomputing it here from `spans` would be a second answer to a
+    // question analyzeStructure has already answered, free to disagree.
+    titleParagraph: outline.titleParagraph,
     previews: paragraphPreviews(spans.map((s) => s.text)),
     // Over `text`, not `analyzedText`: the truncated copy is what every other
     // figure here was computed from, and a word count that disagreed with the
