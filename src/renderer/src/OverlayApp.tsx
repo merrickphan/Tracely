@@ -57,7 +57,8 @@ import {
   CITATION_STYLE_LABEL,
   emptyResultsBody,
   flagsLeft,
-  insertedBody,
+  insertedBodyExternal,
+  EXTERNAL_REFERENCE_LABEL,
   resultsBody,
   resultsTitle,
   searchingBody
@@ -2990,7 +2991,15 @@ type CitationFlowState =
        * in the document rather than merely that something was.
        */
       style: CitationStyle
-      showWorksCited: boolean
+      /**
+       * Whether the reference entry has been copied to the clipboard.
+       *
+       * Was `showWorksCited`, a toggle over a block this surface drew as
+       * "ADDED TO WORKS CITED" — over a list it had added nothing to. The block
+       * is now always visible and the button copies, so the flag records the
+       * copy rather than the disclosure.
+       */
+      entryCopied: boolean
     }
   | { step: 'error'; message: string }
 
@@ -3118,7 +3127,7 @@ function CitationFlowCard({
   onPreview,
   onCancel,
   onDone,
-  onToggleWorksCited,
+  onEntryCopied,
   onUndo,
   inserting,
   previewing,
@@ -3137,7 +3146,8 @@ function CitationFlowCard({
   onPreview: () => void
   onCancel: () => void
   onDone: () => void
-  onToggleWorksCited: () => void
+  /** Records that the reference entry reached the clipboard. */
+  onEntryCopied: () => void
   onUndo: () => void
   inserting: boolean
   previewing: boolean
@@ -3213,30 +3223,42 @@ function CitationFlowCard({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
           <div style={POPOVER_TITLE}>Citation added</div>
         </div>
-        {/* Names the STYLE, not the marker. The frame reads "MLA 9 in-text
-            citation inserted" — the marker itself is already visible in the
-            sentence behind this card, so printing it here says nothing the
-            document does not, while the style is the one decision the writer
-            made whose result they cannot see. */}
-        <div style={POPOVER_BODY}>{insertedBody(state.style)}</div>
-        {state.showWorksCited ? (
+        {/* Names the STYLE, not the marker: the marker is already visible in
+            the sentence behind this card. The second half is what separates
+            this surface from the editor — see insertedBodyExternal. */}
+        <div style={POPOVER_BODY}>{insertedBodyExternal(state.style)}</div>
+        {/* Always drawn, never behind a toggle. This entry is the one piece of
+            work the card is handing back to the writer, and a task hidden
+            behind a button labelled "View" is a task most people never see. */}
+        <div
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            background: SELECTED_BG,
+            borderRadius: 10,
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
+            {EXTERNAL_REFERENCE_LABEL}
+          </div>
           <div
             style={{
-              width: '100%',
-              background: SELECTED_BG,
-              borderRadius: 10,
-              padding: 12,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: MUTED,
+              // Selectable, so a refused clipboard write is inconvenient rather
+              // than a dead end — the same fallback CritiqueFixRow relies on.
+              userSelect: 'text',
+              wordBreak: 'break-word'
             }}
           >
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>
-              ADDED TO WORKS CITED
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.4, color: MUTED }}>{state.citation.worksCitedEntry}</div>
+            {state.citation.worksCitedEntry}
           </div>
-        ) : null}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, whiteSpace: 'nowrap' }}>
           <span style={{ color: POSITIVE, fontWeight: 500 }}>Claim resolved</span>
           <span style={{ color: DIM }}>· {flagsLeft(remaining)}</span>
@@ -3245,8 +3267,23 @@ function CitationFlowCard({
           <button className="tracely-btn-primary" onClick={onDone} style={PRIMARY_BTN_STYLE}>
             Done
           </button>
-          <button className="tracely-btn-secondary" onClick={onToggleWorksCited} style={SECONDARY_BTN_STYLE}>
-            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
+          {/* "Copy entry", not "View Works Cited". The frame's button opens a
+              list this surface does not have; the useful action here is to put
+              the reference somewhere the writer can paste it. */}
+          <button
+            className="tracely-btn-secondary"
+            onClick={() => {
+              // No error surfaced on failure: a clipboard write can be refused
+              // and there is nothing useful to say about it here. The entry
+              // above is selectable, which is the fallback.
+              void navigator.clipboard?.writeText(state.citation.worksCitedEntry).then(
+                () => onEntryCopied(),
+                () => undefined
+              )
+            }}
+            style={SECONDARY_BTN_STYLE}
+          >
+            {state.entryCopied ? '✓ Copied' : 'Copy entry'}
           </button>
           <button
             className="tracely-btn-secondary"
@@ -3890,7 +3927,7 @@ export default function OverlayApp(): JSX.Element {
       // the half of the insert the writer cannot see — the in-text marker is
       // already visible in their sentence — so hiding it behind a button meant
       // the confirmation confirmed only the part that needed no confirming.
-      setFlow(claimId, { step: 'inserted', citation, style: flow.style, showWorksCited: true })
+      setFlow(claimId, { step: 'inserted', citation, style: flow.style, entryCopied: false })
     } catch (err) {
       setFlow(claimId, { step: 'error', message: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -3902,9 +3939,9 @@ export default function OverlayApp(): JSX.Element {
     }
   }
 
-  function toggleWorksCited(claimId: string): void {
+  function markEntryCopied(claimId: string): void {
     const flow = citationFlowByClaimId.get(claimId)
-    if (flow?.step === 'inserted') setFlow(claimId, { ...flow, showWorksCited: !flow.showWorksCited })
+    if (flow?.step === 'inserted') setFlow(claimId, { ...flow, entryCopied: true })
   }
 
   async function undoCitation(claimId: string): Promise<void> {
@@ -4432,7 +4469,7 @@ export default function OverlayApp(): JSX.Element {
                       onPreview={() => void previewCitation(gradeFlowClaim.id)}
                       onCancel={() => closeGradeSourceFinder(gradeFlowClaim.id)}
                       onDone={() => closeGradeSourceFinder(gradeFlowClaim.id)}
-                      onToggleWorksCited={() => toggleWorksCited(gradeFlowClaim.id)}
+                      onEntryCopied={() => markEntryCopied(gradeFlowClaim.id)}
                       onUndo={() => void undoCitation(gradeFlowClaim.id)}
                       inserting={citationBusyIds.has(gradeFlowClaim.id)}
                       previewing={previewBusyIds.has(gradeFlowClaim.id)}
@@ -4724,7 +4761,7 @@ export default function OverlayApp(): JSX.Element {
                     onPreview={() => void previewCitation(claimHoveredSummary.id)}
                     onCancel={() => setFlow(claimHoveredSummary.id, null)}
                     onDone={() => setFlow(claimHoveredSummary.id, null)}
-                    onToggleWorksCited={() => toggleWorksCited(claimHoveredSummary.id)}
+                    onEntryCopied={() => markEntryCopied(claimHoveredSummary.id)}
                     onUndo={() => void undoCitation(claimHoveredSummary.id)}
                     inserting={citationBusyIds.has(claimHoveredSummary.id)}
                     previewing={previewBusyIds.has(claimHoveredSummary.id)}
