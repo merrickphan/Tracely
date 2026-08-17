@@ -206,6 +206,23 @@ so publishing without bumping produces a release nobody is ever shown.
 `GH_TOKEN` lives in `.env.release` and must be in the environment for
 `--publish` to work; electron-builder does not read that file on its own.
 
+**`main` requires a pull request, enforced on admins**, so nothing — including
+`npm run ship` — can push to it directly. The release bump therefore goes to
+`release/vX.Y.Z`, opens a PR and auto-merges once `check` is green (zero
+approvals required, which is what keeps it automatic); ship then returns to main
+at the merge commit, which is what gets built and tagged. `ship:preview`'s local
+path used to push to main too and now derives its version without committing at
+all, the same way CI always has.
+
+**`npm run ship:dry`** runs all of that and stops before building. It is not
+side-effect free and pretending otherwise would make it useless: it really bumps
+the version and really merges the release PR, because that sequence is the thing
+worth testing. It publishes nothing. The cost is one skipped patch number — main
+sits a version above the latest release, and the next real ship bumps past it.
+Written because the release path was otherwise the least-tested code here, for
+the worst possible reason: the only way to test it was to publish, and
+electron-updater cannot downgrade.
+
 ### How updates reach each build (`updater.ts`, `updatePolicy.ts`)
 
 **Preview updates itself; production asks first.** The two channels are not

@@ -115,6 +115,12 @@ fi
 case "$cmd" in
   *EVAL_ALLOW_SPEND*|*EVAL_REFRESH*|*"npm run evaluate"*)
     ask "This runs the eval against the live relay: paid OpenAI calls plus OpenAlex credits (10 per claim, 1000/day free)." ;;
+  # A dry run publishes nothing, and saying it does would be worse than saying
+  # nothing: a prompt that cries wolf on the safe form is what teaches people to
+  # click through the dangerous one. It still asks, because it does bump the
+  # version and merge a PR to main.
+  *"ship:dry"*|*"--dry-run"*)
+    ask "Dry run: bumps the version and merges the release PR to main, then stops. Nothing is built or published." ;;
   *"run ship"*|*release:win*|*preview:win*)
     ask "This publishes a release. Installed copies pick it up within 6 hours and electron-updater cannot downgrade them." ;;
   *"vercel --prod"*|*"vercel deploy --prod"*|*"vercel promote"*)

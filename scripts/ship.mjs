@@ -37,6 +37,36 @@ const die = (msg) => {
   process.exit(1)
 }
 
+/**
+ * SHIP_DRY_RUN=1 — everything except the part that reaches users.
+ *
+ * Exists because the only way to find out whether a release works was to
+ * publish one, and a production release cannot be taken back: electron-updater
+ * will not downgrade, so a bad build is in front of everyone until a good one
+ * replaces it (see ROLLBACK.md). That made the release path the least-tested
+ * code in the repo, which is the wrong way round.
+ *
+ * It is NOT side-effect free, and pretending otherwise would make it useless.
+ * It really bumps the version, really opens the release PR and really merges it
+ * to main — that sequence is the thing worth testing, and a version number is
+ * cheap. What it does not do is build an installer or publish a release, so
+ * nothing reaches a user.
+ *
+ * The cost is one skipped patch number: main ends up a version ahead of the
+ * latest release, and the next real ship bumps past it. preflight is happy
+ * either way — it requires the version to be strictly above the last published
+ * release, which stays true.
+ */
+// Both forms, because the env-var one does not work everywhere. `FOO=1 npm run
+// ship` is a bash-ism; through cmd.exe it silently sets nothing and you get a
+// real release — the same trap CLAUDE.md records for TRACELY_ENV. The flag is
+// shell-agnostic, and `npm run ship:dry` is the form worth remembering.
+const DRY_RUN = process.env.SHIP_DRY_RUN === '1' || process.argv.includes('--dry-run')
+if (DRY_RUN) {
+  console.log('\nDRY RUN — will bump, open and merge the release PR, then stop before building.')
+  console.log('          Nothing will be published. One version number will be used up.\n')
+}
+
 if (out('git status --porcelain')) die('Uncommitted work. Commit or stash it first.')
 
 // Ship releases what is already on main; it does not gather anything.
@@ -163,6 +193,23 @@ for (;;) {
 run('git checkout main')
 run('git pull --ff-only origin main')
 console.log(`     v${version}`)
+
+if (DRY_RUN) {
+  const head = out('git rev-parse --short HEAD')
+  console.log(`
+DRY RUN COMPLETE — v${version} is on main at ${head}, nothing was published.
+
+  Verified:   preflight, the version bump, the release PR, its auto-merge,
+              and returning to main at the merge commit.
+  Not run:    GH_TOKEN load, electron-builder, the GitHub release.
+  Cost:       v${version} is now on main with no release behind it. The next
+              real ship bumps past it; preflight still passes, since it asks
+              for a version above the last PUBLISHED release.
+
+Run npm run ship without SHIP_DRY_RUN to publish for real.
+`)
+  process.exit(0)
+}
 
 console.log('\n3/4  Loading GH_TOKEN')
 // electron-builder does not read .env.release itself; --publish silently
