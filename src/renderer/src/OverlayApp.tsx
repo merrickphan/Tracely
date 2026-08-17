@@ -41,6 +41,17 @@ import type { Bucket } from './components/problemCopy'
 // Same band, same score, both surfaces — see the note in essayGrade.ts.
 import { gradeFor } from './components/essayGrade'
 import { CLAIM_TYPE_LABEL } from './components/claimTypeLabel'
+// The citation flow's wording, shared with the document editor's popover — see
+// the note at the top of that file.
+import {
+  CITATION_STYLE_LABEL,
+  emptyResultsBody,
+  flagsLeft,
+  insertedBody,
+  resultsBody,
+  resultsTitle,
+  searchingBody
+} from './components/citationFlowCopy'
 
 const FONT_STACK = "'Instrument Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif"
 
@@ -2832,27 +2843,9 @@ const SKELETON_ROWS: Array<[number, number]> = [
   [186, 96]
 ]
 
-/** The design labels the style with its edition, not just its name. */
-const STYLE_LABEL: Record<CitationStyle, string> = {
-  APA: 'APA 7',
-  MLA: 'MLA 9',
-  Chicago: 'Chicago 17'
-}
-
-/**
- * Enough of the claim to recognise it, cut on a word boundary.
- *
- * Trailing sentence punctuation always comes off, because every use here nests
- * the result inside quotes in a sentence of our own — leaving it produces
- * `supports "the claim.".`, which is what the first version rendered.
- */
-function truncate(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '')
-  if (clean.length <= max) return clean
-  const cut = clean.slice(0, max)
-  const space = cut.lastIndexOf(' ')
-  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[.,;:]$/, '')}…`
-}
+// STYLE_LABEL and the flow's step copy live in components/citationFlowCopy.ts:
+// the document editor now runs the same four-step flow over Tracely's own
+// writing surface, and the two must not drift on what each step says.
 
 // -- Hover popup: CitationFlowCard -------------------------------------
 //
@@ -3034,10 +3027,7 @@ function CitationFlowCard({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_ORANGE, flexShrink: 0 }} />
           <div style={POPOVER_TITLE}>Searching for a source</div>
         </div>
-        <div style={POPOVER_BODY}>
-          Scanning open-access journals and databases for a source that supports &ldquo;
-          {truncate(claimText, 70)}.&rdquo;
-        </div>
+        <div style={POPOVER_BODY}>{searchingBody(claimText)}</div>
         <div className="tracely-progress-track">
           <div className="tracely-progress-fill" />
         </div>
@@ -3096,10 +3086,7 @@ function CitationFlowCard({
             sentence behind this card, so printing it here says nothing the
             document does not, while the style is the one decision the writer
             made whose result they cannot see. */}
-        <div style={POPOVER_BODY}>
-          This claim is now backed by a source in your document. {STYLE_LABEL[state.style]} in-text citation
-          inserted.
-        </div>
+        <div style={POPOVER_BODY}>{insertedBody(state.style)}</div>
         {state.showWorksCited ? (
           <div
             style={{
@@ -3120,9 +3107,7 @@ function CitationFlowCard({
         ) : null}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, whiteSpace: 'nowrap' }}>
           <span style={{ color: POSITIVE, fontWeight: 500 }}>Claim resolved</span>
-          <span style={{ color: DIM }}>
-            · {remaining} flag{remaining === 1 ? '' : 's'} left in this document
-          </span>
+          <span style={{ color: DIM }}>· {flagsLeft(remaining)}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="tracely-btn-primary" onClick={onDone} style={PRIMARY_BTN_STYLE}>
@@ -3153,10 +3138,7 @@ function CitationFlowCard({
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: DESIGN_AMBER, flexShrink: 0 }} />
           <div style={POPOVER_TITLE}>No sources found</div>
         </div>
-        <div style={POPOVER_BODY}>
-          Nothing in the open-access databases came back for &ldquo;{truncate(claimText, 70)}.&rdquo; That does not
-          make the claim wrong — it means there is nothing here to cite for it yet.
-        </div>
+        <div style={POPOVER_BODY}>{emptyResultsBody(claimText)}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="tracely-btn-primary" onClick={onSearchAgain} style={PRIMARY_BTN_STYLE}>
             Search again
@@ -3176,9 +3158,7 @@ function CitationFlowCard({
           found, this many, and it will be written in this style. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: POSITIVE, flexShrink: 0 }} />
-        <div style={POPOVER_TITLE}>
-          {candidates.length} source{candidates.length === 1 ? '' : 's'} found
-        </div>
+        <div style={POPOVER_TITLE}>{resultsTitle(candidates.length)}</div>
         <span
           style={{
             flexShrink: 0,
@@ -3190,15 +3170,10 @@ function CitationFlowCard({
             padding: '3px 9px'
           }}
         >
-          {STYLE_LABEL[style]}
+          {CITATION_STYLE_LABEL[style]}
         </span>
       </div>
-      {/* "supports", never "proves". The percentage beside each row is
-          `relevanceScore`, which ranks how directly a source bears on the
-          sentence — it is not a probability that it establishes it. */}
-      <div style={POPOVER_BODY}>
-        Ranked by how directly each source supports &ldquo;{truncate(claimText, 70)}.&rdquo;
-      </div>
+      <div style={POPOVER_BODY}>{resultsBody(claimText)}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
         {candidates.map((candidate) => (
           <CandidateRow
@@ -3233,7 +3208,7 @@ function CitationFlowCard({
                 cursor: 'pointer'
               }}
             >
-              {STYLE_LABEL[option]}
+              {CITATION_STYLE_LABEL[option]}
             </button>
           )
         })}
