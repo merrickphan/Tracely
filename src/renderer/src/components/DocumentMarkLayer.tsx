@@ -8,13 +8,16 @@ import { PROBLEM_COLOR, PROBLEM_LABEL, isReasoningProblem, popoverCopyFor } from
 // same four frames over other applications — see citationFlowCopy.ts.
 import {
   CITATION_STYLE_LABEL,
+  WORKS_CITED_FAILED_NOTE,
   emptyResultsBody,
   flagsLeft,
   insertedBody,
   resultsBody,
   resultsTitle,
-  searchingBody
+  searchingBody,
+  worksCitedLabel
 } from './citationFlowCopy'
+import type { WorksCitedResult } from './documentMarks'
 
 /**
  * The underlines drawn over the document editor, and the popover that opens on
@@ -84,7 +87,19 @@ export type DocCitationFlowState =
        */
       preview: DocCitation | null
     }
-  | { step: 'inserted'; citation: DocCitation; style: CitationStyle; showWorksCited: boolean }
+  | {
+      step: 'inserted'
+      citation: DocCitation
+      style: CitationStyle
+      /**
+       * What actually happened to the document's works-cited list. Replaced the
+       * old `showWorksCited` toggle, which was the whole bug: the card said
+       * "ADDED TO WORKS CITED" and the button it offered only folded that grey
+       * block away and back, so the one thing the label asserted was the one
+       * thing nothing did.
+       */
+      worksCited: WorksCitedResult
+    }
   | { step: 'error'; message: string }
 
 /**
@@ -110,7 +125,8 @@ export interface DocCitationFlow {
   onInsert: () => void
   onCancel: () => void
   onDone: () => void
-  onToggleWorksCited: () => void
+  /** Scrolls the editor to the reference list. */
+  onViewWorksCited: () => void
   onUndo: () => void
 }
 
@@ -398,12 +414,18 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
           <span className="docmark-title">Citation added</span>
         </div>
         <p className="docmark-body">{insertedBody(state.style)}</p>
-        {state.showWorksCited ? (
-          <div className="docmark-block">
-            <div className="docmark-block-label">ADDED TO WORKS CITED</div>
-            <div className="docmark-block-body">{state.citation.worksCitedEntry}</div>
-          </div>
-        ) : null}
+        {/* Always shown, never a toggle. The entry is the half of the insert
+            the writer cannot see from here — the marker is already sitting in
+            their sentence — so folding it away hid the only part that needed
+            confirming, and the button that folded it was the one claiming to
+            take you to a list that did not exist. */}
+        <div className="docmark-block">
+          <div className="docmark-block-label">{worksCitedLabel(state.worksCited)}</div>
+          <div className="docmark-block-body">{state.citation.worksCitedEntry}</div>
+          {state.worksCited === 'failed' ? (
+            <div className="docmark-block-body">{WORKS_CITED_FAILED_NOTE}</div>
+          ) : null}
+        </div>
         <div className="docmark-resolved">
           <span className="docmark-resolved-yes">Claim resolved</span>
           <span className="docmark-hint">· {flagsLeft(flow.flagsRemaining)}</span>
@@ -412,9 +434,14 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
           <button className="docmark-btn-primary" onClick={flow.onDone}>
             Done
           </button>
-          <button className="docmark-btn-secondary" onClick={flow.onToggleWorksCited}>
-            {state.showWorksCited ? 'Hide Works Cited' : 'View Works Cited'}
-          </button>
+          {/* Offered only when there is somewhere to go. On 'failed' the
+              document has no entry to scroll to, and a button that scrolls
+              nowhere is the same empty gesture this replaced. */}
+          {state.worksCited === 'failed' ? null : (
+            <button className="docmark-btn-secondary" onClick={flow.onViewWorksCited}>
+              View Works Cited
+            </button>
+          )}
           <button className="docmark-btn-secondary" onClick={flow.onUndo} disabled={flow.undoing}>
             {flow.undoing ? 'Undoing…' : 'Undo'}
           </button>

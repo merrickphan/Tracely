@@ -11,7 +11,14 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
 import type { DocCitationFlowState } from '../components/DocumentMarkLayer'
 import { sourceInitials } from '../components/citationFlowCopy'
-import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
+import {
+  addWorksCitedEntry,
+  insertCitationForClaim,
+  markAt,
+  measureMarks,
+  revealWorksCited
+} from '../components/documentMarks'
+import type { WorksCitedResult } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
@@ -154,6 +161,22 @@ type Align = 'left' | 'center' | 'right' | 'justify'
 // etc.) still relies on in Chromium. The body is intentionally uncontrolled
 // (DOM-managed, not React state) because a controlled contentEditable would
 // reset the cursor position on every keystroke re-render.
+/**
+ * What one completed citation insert did to the document — both halves of it.
+ *
+ * Returned rather than kept internal because the confirmation card reports on
+ * it ("ADDED TO WORKS CITED" vs "ALREADY IN WORKS CITED") and Undo has to
+ * unwind it, and both used to assume a single edit that only ever touched the
+ * sentence.
+ */
+interface CitationInsert {
+  worksCited: WorksCitedResult
+  /** The bibliography line, as written into the document's reference list. */
+  worksCitedEntry: string
+  /** execCommand steps taken, for Undo. */
+  undoSteps: number
+}
+
 function DocumentEditor({
   docName,
   onDocNameChange,
@@ -290,6 +313,10 @@ function DocumentEditor({
   // citation — putting a full Source per row into state would re-render the
   // popover on every field of a record nothing in it displays.
   const flowSourcesRef = useRef<Map<string, Source>>(new Map())
+  // How many execCommand steps the last insert took, so Undo unwinds exactly
+  // that many — see undoFlowCitation. A ref rather than flow state because it
+  // describes the browser's undo stack, not anything the card draws.
+  const undoStepsRef = useRef(1)
 
   // The style the Find Evidence view formats and labels its pill with. Read
   // once: it is a preference, not something that changes while a document is
@@ -737,14 +764,43 @@ function DocumentEditor({
    * prompted the insertion is still sitting there, still saying the sentence is
    * unattributed, over a sentence that now carries a citation.
    */
-  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<void> {
+  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<CitationInsert> {
     const body = editorRef.current
     if (!body) throw new Error('The editor is not open.')
+
+    // The works-cited entry FIRST, then the marker. Both halves of a citation
+    // are written by every path that can insert one — the popover flow and the
+    // report's per-claim button — because a marker with no reference behind it
+    // is precisely the state the "ADDED TO WORKS CITED" label used to describe.
+    //
+    // The order buys two things, spelled out at addWorksCitedEntry: the list
+    // sits after the claim so writing it does not move the sentence out from
+    // under insertCitationForClaim, and the marker ends up on top of the undo
+    // stack so the first Ctrl+Z removes what the writer is looking at.
+    //
+    // Through IPC because that is where the style formatters live; the result
+    // is cached in the citations table, so the second sentence to cite the same
+    // source does not pay for it again.
+    const { citation } = await tracelyApi.generateCitation(source.id, style)
+    const worksCited = addWorksCitedEntry(body, {
+      entry: citation,
+      sourceTitle: source.title,
+      style
+    })
+
     // Formatted here rather than through an IPC round-trip: formatInTextCitation
     // is a pure function of a Source the renderer already holds (it came back
     // with the evidence), so a channel for it would be a channel that reads
     // nothing main knows and the renderer does not.
     if (!insertCitationForClaim(body, claim, formatInTextCitation(source, style))) {
+      // Roll the reference back out. A works-cited entry for a citation that
+      // never reached the sentence is an orphan, and it would be one the writer
+      // was never told about — the throw below is about the marker.
+      if (worksCited === 'added') {
+        body.focus()
+        document.execCommand('undo')
+        handleInput()
+      }
       throw new Error(
         'Could not find that sentence in the document any more — it may have been edited since the search.'
       )
@@ -752,6 +808,14 @@ function DocumentEditor({
     handleInput()
     const analysisId = analysisIdRef.current
     if (analysisId) await onRefreshClaims(analysisId)
+    return {
+      worksCited,
+      worksCitedEntry: citation,
+      // What Undo has to unwind. One insertText per half, and only one when the
+      // source was already listed — undoing a step that was never taken eats
+      // the writer's previous edit instead.
+      undoSteps: worksCited === 'added' ? 2 : 1
+    }
   }
 
   /**
@@ -876,19 +940,20 @@ function DocumentEditor({
     if (!source) return
     setCitationBusy('inserting')
     try {
-      await insertCitation(claim, source, style)
-      const { citation } = await tracelyApi.generateCitation(selectedId, style)
+      const result = await insertCitation(claim, source, style)
+      undoStepsRef.current = result.undoSteps
       setCitationFlow({
         claimId: claim.id,
         state: {
           step: 'inserted',
-          citation: { inTextCitation: formatInTextCitation(source, style), worksCitedEntry: citation },
+          citation: {
+            inTextCitation: formatInTextCitation(source, style),
+            // The entry as it was actually written, not a second formatting of
+            // the same source — the card is a report of what happened.
+            worksCitedEntry: result.worksCitedEntry
+          },
           style,
-          // Open from the start, as the frame draws it. The entry is the half of
-          // the insert the writer cannot see — the marker is already there in
-          // their sentence — so hiding it behind a button meant the
-          // confirmation confirmed only the part needing no confirmation.
-          showWorksCited: true
+          worksCited: result.worksCited
         }
       })
     } catch (err) {
@@ -907,6 +972,13 @@ function DocumentEditor({
    * `insertCitationForClaim` writes with `execCommand('insertText')` precisely
    * so this is possible — and so that Ctrl+Z does the same thing this button
    * does, rather than the two disagreeing about what the last edit was.
+   *
+   * As many steps as the insert took, which is two once the works-cited entry
+   * is written as its own insertText. A single undo here left the reference
+   * behind — an entry in the list for a citation no longer in the text, which
+   * is the orphan the whole feature is supposed to prevent. (Ctrl+Z is still
+   * one step per press; that is the browser's stack behaving normally, and both
+   * presses land on the same two edits this button unwinds.)
    */
   async function undoFlowCitation(): Promise<void> {
     const body = editorRef.current
@@ -914,7 +986,8 @@ function DocumentEditor({
     setCitationBusy('undoing')
     try {
       body.focus()
-      document.execCommand('undo')
+      for (let i = 0; i < undoStepsRef.current; i++) document.execCommand('undo')
+      undoStepsRef.current = 1
       handleInput()
       const analysisId = analysisIdRef.current
       if (analysisId) await onRefreshClaims(analysisId)
@@ -1362,12 +1435,16 @@ function DocumentEditor({
                   onInsert: () => void insertFlowCitation(activeMark.mark.claim),
                   onCancel: closeCitationFlow,
                   onDone: closeCitationFlow,
-                  onToggleWorksCited: () =>
-                    setCitationFlow((prev) =>
-                      prev && prev.state.step === 'inserted'
-                        ? { ...prev, state: { ...prev.state, showWorksCited: !prev.state.showWorksCited } }
-                        : prev
-                    ),
+                  // Goes to the list rather than folding a block. Closing the
+                  // flow first is deliberate: the popover is anchored to the
+                  // sentence being cited, and leaving it open while the editor
+                  // scrolls to the end of the document parks the card over
+                  // whatever text happens to be under those coordinates now.
+                  onViewWorksCited: () => {
+                    const body = editorRef.current
+                    closeCitationFlow()
+                    if (body) revealWorksCited(body)
+                  },
                   onUndo: () => void undoFlowCitation()
                 }
               : null

@@ -3,8 +3,9 @@ import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { hasInlineCitationNear } from '@shared/inlineCitation'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
+import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
-import type { Claim } from '@shared/types'
+import type { CitationStyle, Claim } from '@shared/types'
 
 /**
  * Where to draw the underlines over the document editor, and what each one
@@ -285,6 +286,96 @@ export function insertCitationForClaim(body: HTMLElement, claim: Claim, inTextCi
   selection.addRange(range)
   body.focus()
   return document.execCommand('insertText', false, `${prefix}${inTextCitation}`)
+}
+
+/**
+ * Selects [start, end) of the reconstructed text and writes `replacement` over
+ * it with the browser's own insert.
+ *
+ * `execCommand('insertText')` for the same reason `insertCitationForClaim` uses
+ * it, and it is the whole reason the works-cited section is written as text
+ * rather than assembled as markup: it is ONE undo step over a collapsed or
+ * spanning selection, so Ctrl+Z (and the card's Undo, which is that same stack)
+ * takes the entry back out. Rebuilding the section by DOM surgery would be
+ * invisible to undo, and would leave a reference behind after the citation that
+ * created it had been undone.
+ *
+ * Newlines in `replacement` become real block breaks — this is the same path a
+ * multi-line paste takes.
+ */
+function replaceRange(body: HTMLElement, start: number, end: number, replacement: string): boolean {
+  const { nodes } = buildTextMap(body)
+  const from = locate(nodes, start)
+  const to = locate(nodes, end)
+  if (!from || !to) return false
+
+  const selection = window.getSelection()
+  if (!selection) return false
+  const range = document.createRange()
+  try {
+    range.setStart(from.node, from.offset)
+    range.setEnd(to.node, to.offset)
+  } catch {
+    return false
+  }
+  selection.removeAllRanges()
+  selection.addRange(range)
+  body.focus()
+  return document.execCommand('insertText', false, replacement)
+}
+
+export type WorksCitedResult = 'added' | 'already-listed' | 'failed'
+
+/**
+ * Adds one entry to the document's own works-cited list, creating the section
+ * if the document has none.
+ *
+ * Called BEFORE the in-text marker is written, which is not an accident. The
+ * list sits after every sentence in the draft, so writing it first leaves the
+ * claim's offsets untouched for `insertCitationForClaim` to locate against; and
+ * it puts the marker on top of the undo stack, so the first Ctrl+Z removes the
+ * thing the writer is looking at rather than a list off the bottom of the
+ * screen. The caller has to undo TWICE to unwind the pair — see
+ * `undoFlowCitation`, which knows how many steps its insert took.
+ *
+ * 'already-listed' is a real answer, not a failure: citing one source for two
+ * sentences is normal, and every style lists a work once. The card says so
+ * rather than reporting an add that did not happen.
+ */
+export function addWorksCitedEntry(
+  body: HTMLElement,
+  { entry, sourceTitle, style }: { entry: string; sourceTitle: string | null; style: CitationStyle }
+): WorksCitedResult {
+  const { text } = buildTextMap(body)
+  const { edit } = planWorksCited({ text, entry, sourceTitle, style })
+  if (!edit) return 'already-listed'
+  return replaceRange(body, edit.start, edit.end, edit.replacement) ? 'added' : 'failed'
+}
+
+/**
+ * Scrolls the works-cited section into view — what "View Works Cited" on the
+ * confirmation card does, now that there is one to view.
+ *
+ * `behavior: 'auto'`, never 'smooth', for the reason written out at
+ * `selectParagraph` in AnalyzeView: smooth scrolling is compositor-driven and
+ * silently does nothing when the window is not compositing frames.
+ *
+ * Returns false when the document has no section, which the caller should treat
+ * as "say nothing" rather than as an error — it means the entry was never
+ * written, and that has already been reported by `addWorksCitedEntry`.
+ */
+export function revealWorksCited(body: HTMLElement): boolean {
+  const { text, nodes } = buildTextMap(body)
+  const section = findWorksCitedSection(text)
+  if (!section) return false
+  const at = locate(nodes, section.start)
+  if (!at) return false
+  // The heading's own block element, not the text node — Text has no
+  // scrollIntoView, and the block is what the reader is being shown.
+  const target = at.node.parentElement
+  if (!target) return false
+  target.scrollIntoView({ block: 'center', behavior: 'auto' })
+  return true
 }
 
 /** The mark under a point in `wrap`'s coordinate space, if any. */

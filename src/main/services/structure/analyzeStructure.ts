@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
 import { hasInlineCitation } from '@shared/inlineCitation'
+import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
 import { hasSignificanceMarker, heuristicRoles } from './roles'
 import { scoreDraft } from './scoreDraft'
@@ -69,7 +70,19 @@ export interface AnalyzeStructureInput {
 }
 
 export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline {
-  const spans = splitParagraphs(input.text)
+  // The reference list is not an argument, and reading it as one breaks the
+  // score twice over: `heuristicRoles` labels its lines 'unknown', which sets
+  // `complete: false` and makes `findWeaknesses` withhold every whole-draft
+  // finding — and the conclusion is found as the LAST paragraph, which in a
+  // document with a works-cited section is a citation. So a draft got quietly
+  // worse the moment the writer accepted one.
+  //
+  // A suffix trim (see withoutWorksCited), so the claim spans below — computed
+  // against the untrimmed text on purpose — still line up with these
+  // paragraphs. Claims that fall inside the list simply bucket past the last
+  // paragraph and are dropped, which is the same thing bucketClaimsByParagraph
+  // already does for a claim between paragraphs.
+  const spans = splitParagraphs(withoutWorksCited(input.text))
 
   // computeClaimSpans drops claims it cannot locate in the text, and
   // bucketClaimsByParagraph drops any whose start falls between paragraphs.

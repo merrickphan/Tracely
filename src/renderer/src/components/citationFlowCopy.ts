@@ -79,6 +79,32 @@ export function insertedBody(style: CitationStyle): string {
 }
 
 /**
+ * The label over the entry in the confirmation card — Figma 298:136 reads
+ * "ADDED TO WORKS CITED", and until the editor grew a real works-cited section
+ * that was the card asserting something the document could not back up.
+ *
+ * Three answers rather than one, because there are three outcomes and the frame
+ * only drew the happy one. Citing a source for a second sentence is ordinary —
+ * every style lists a work once — and saying "added" there would report a
+ * second entry that is deliberately not written. `failed` is the honest read of
+ * a document whose text moved on between the search and the insert: the marker
+ * went in, the list did not, and a card claiming otherwise sends the writer to
+ * hand in an essay whose references are short by one.
+ *
+ * Only the editor uses this. Screen Watch writes into another application's
+ * window through UIA, owns no document, and cannot add anything to a list.
+ */
+export function worksCitedLabel(status: 'added' | 'already-listed' | 'failed'): string {
+  if (status === 'added') return 'ADDED TO WORKS CITED'
+  if (status === 'already-listed') return 'ALREADY IN WORKS CITED'
+  return 'NOT ADDED TO WORKS CITED'
+}
+
+/** Said under the entry only when it could not be written — never silently. */
+export const WORKS_CITED_FAILED_NOTE =
+  'The in-text citation went in, but the reference list could not be updated — add this line to it yourself.'
+
+/**
  * The monogram tile's letters: an acronym for a multi-word venue, else the
  * first two letters of whatever name there is.
  *
