@@ -4,7 +4,8 @@
 // `import type` only. The alias form fails at require() time with
 // MODULE_NOT_FOUND. (analyzeStructure.ts value-imports '@shared/claimSpans'
 // with the alias and pays for it by having no test of its own.)
-import { hasInlineCitation, hasInlineCitationNear } from '../../../shared/inlineCitation.ts'
+import { hasInlineCitation } from '../../../shared/inlineCitation.ts'
+import { isCitedInScope } from '../../../shared/citationScope.ts'
 // Relative + `.ts` for the same reason as the line above — a RUNTIME import in
 // a module `node --test` loads directly. claimSpans.ts itself only type-imports,
 // so it is safe to pull in here.
@@ -59,7 +60,7 @@ export function computeEvidenceCoverage(claims: Claim[], documentText?: string):
   const citedById = documentText
     ? new Map(
         computeClaimSpans(documentText, claims).map(
-          (span) => [span.claim.id, hasInlineCitationNear(documentText, span.start, span.end)] as const
+          (span) => [span.claim.id, isCitedInScope(documentText, span.start, span.end)] as const
         )
       )
     : null

@@ -1,7 +1,7 @@
 import { claimEvidenceFor } from '@shared/claimEvidence'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
-import { hasInlineCitationNear } from '@shared/inlineCitation'
+import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
@@ -93,7 +93,9 @@ export function measureMarks(
     // that follows it — so testing `span.claim.text` reported a properly cited
     // sentence as uncited. `span` already carries offsets into `text`, so the
     // sentence is right there.
-    const cited = hasInlineCitationNear(text, span.start, span.end)
+    // Paragraph scope, not sentence scope — a sentence carrying an earlier
+    // citation forward does not need one of its own. See citationScope.ts.
+    const cited = isCitedInScope(text, span.start, span.end)
     const evidence = claimEvidenceFor(span.claim, articleCounts.get(span.claim.id))
 
     // A claim nothing has been searched for yet gets no mark at all.
