@@ -1,6 +1,7 @@
 import { screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import type { ScreenWatchHoverEvent } from '@shared/ipc-contract'
+import { shouldCaptureMouse } from '@shared/overlayCapture'
 import { focusedShieldableWindow } from '../../windows/overlayShield'
 import { getOverlayWindow, setOverlayMouseEventsCaptured } from '../../windows/overlayWindow'
 import { getActivePopoverRect, getHoverTargets } from './screenWatchService'
@@ -145,6 +146,12 @@ function poll(): void {
           clearTimeout(leaveTimer)
           leaveTimer = null
         }
+        // Re-decided every tick rather than latched at hover time: this is the
+        // path the cursor takes when it moves from an underline onto the card,
+        // and back off again.
+        setCaptureMouseEvents(
+          shouldCaptureMouse({ dragActive, hovering: activeTarget.kind, inPopover })
+        )
         return
       }
     }
@@ -179,13 +186,17 @@ function poll(): void {
       clearTimeout(leaveTimer)
       leaveTimer = null
     }
+    // Outside the hoverKey check below: that only fires when the target
+    // CHANGES, and the capture state has to be correct on every tick — a claim
+    // whose popover closed under a stationary cursor would otherwise hold the
+    // mouse indefinitely.
+    setCaptureMouseEvents(shouldCaptureMouse({ dragActive, hovering: match.kind, inPopover: false }))
     // Only re-send on an actual target (or matched line, for a claim that
     // wraps multiple lines) change — the tooltip is anchored to that rect,
     // not the cursor, so it has no reason to move on every tick.
     const hoverKey = `${match.claimId}:${matchedRectIndex}`
     if (hoveredKey !== hoverKey) {
       hoveredKey = hoverKey
-      setCaptureMouseEvents(true)
       sendHover({
         claimId: match.claimId,
         kind: match.kind,
