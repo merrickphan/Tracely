@@ -34,9 +34,19 @@ import {
   PROBLEM_COLOR,
   PROBLEM_LABEL,
   bucketFor,
-  isReasoningProblem,
+  opensFixFlow,
   popoverCopyFor
 } from './components/problemCopy'
+// The fix card's wording, shared with the editor's DocumentMarkLayer for the
+// same reason citationFlowCopy.ts is.
+import {
+  CITATION_FIX_LABEL,
+  NO_REVISION_BODY,
+  OVERLAY_APPLY_NOTE,
+  REVISION_LABEL,
+  REVISION_RULE,
+  fixTitle
+} from './components/fixFlowCopy'
 import type { Bucket } from './components/problemCopy'
 // Same band, same score, both surfaces — see the note in essayGrade.ts.
 import { gradeFor } from './components/essayGrade'
@@ -2738,6 +2748,94 @@ function NoReadingView(): JSX.Element {
 // what these say. The wording above is the reasoning behind them and stays
 // here with the card that shows it.
 
+/**
+ * "Suggest fix", answered inside the popover instead of by navigating.
+ *
+ * Pressing it used to select the claim, drop the hover card and expand the
+ * widget panel in the corner — a jump to the other side of the screen, away
+ * from the sentence the question was asked about, to read something the panel
+ * was already able to show. The citation flow stopped doing that; this is the
+ * same correction for the other button.
+ *
+ * There is no Figma frame for it (see components/fixFlowCopy.ts). It is
+ * assembled from what this popover already draws: the header dot in the mark's
+ * colour, POPOVER_BODY prose, and — for the two blocks of proposed text — the
+ * widget panel's own CritiqueFixRow, unchanged, which is what has been showing
+ * a suggested revision since before this card existed.
+ *
+ * Nothing is fetched. Every word here came off the claim, written by the
+ * critique that raised the underline, so opening this cannot make the relay
+ * call that Screen Watch deliberately never makes on its own.
+ *
+ * Copy, not Apply, and that is not taste: this window is drawn over another
+ * application it reads through UI Automation. It can write a short citation at
+ * a located offset, which is a different proposition from selecting a whole
+ * sentence in someone else's editor and typing over it — a button that appeared
+ * to rewrite the paragraph underneath would be claiming a reach this window
+ * does not have. Tracely's own editor, which owns its text, does apply it.
+ */
+function FixCard({
+  claim,
+  kind,
+  fallbackDetail,
+  onBack
+}: {
+  claim: ScreenWatchClaimSummary
+  kind: ScreenWatchProblemKind
+  /**
+   * What the problem card said, for a claim carrying no critique text.
+   *
+   * `popoverCopyFor` already keeps a sentence for that case, and this card
+   * needs the same one: `critiqueIssues('')` returns an empty array, so without
+   * a fallback "Suggest fix" opened onto a header and a Back button. Reached in
+   * the preview harness against a claim flagged 'weak-reasoning' with a null
+   * critique.
+   */
+  fallbackDetail: string
+  onBack: () => void
+}): JSX.Element {
+  const revision = claim.suggestedRevision
+  const citationFix = claim.citationFix
+  // Only when there is nothing to hand over. Where a revision exists the
+  // critique prose was already read on the card behind this one, and repeating
+  // it above the sentence it produced buries the one thing worth looking at.
+  const issues = revision || citationFix ? [] : critiqueIssues(claim.critique || fallbackDetail)
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{ width: 8, height: 8, borderRadius: '50%', background: PROBLEM_COLOR[kind], flexShrink: 0 }}
+        />
+        <div style={POPOVER_TITLE}>{fixTitle(kind)}</div>
+      </div>
+      {revision ? (
+        <>
+          <div style={POPOVER_BODY}>{REVISION_RULE}</div>
+          <CritiqueFixRow label={REVISION_LABEL} text={revision} />
+          <div style={{ ...POPOVER_BODY, fontSize: 11.5 }}>{OVERLAY_APPLY_NOTE}</div>
+        </>
+      ) : null}
+      {citationFix ? <CritiqueFixRow label={CITATION_FIX_LABEL} text={citationFix} monospace /> : null}
+      {issues.length ? (
+        <>
+          <div style={POPOVER_BODY}>{NO_REVISION_BODY}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            {issues.map((issue, i) => (
+              <CritiqueIssueRow key={i} title={issue.title} detail={issue.detail} />
+            ))}
+          </div>
+        </>
+      ) : null}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="tracely-btn-secondary" onClick={onBack} style={SECONDARY_BTN_STYLE}>
+          Back
+        </button>
+      </div>
+    </>
+  )
+}
+
 function ProblemCard({
   claim,
   activeKind,
@@ -2786,7 +2884,7 @@ function ProblemCard({
     claim.evidence as ScreenWatchClaimEvidence,
     kind
   )
-  const onPrimary = isReasoningProblem(kind) ? onSuggestFix : onStartCitationFlow
+  const onPrimary = opensFixFlow(kind) ? onSuggestFix : onStartCitationFlow
 
   return (
     <>
@@ -3407,6 +3505,15 @@ export default function OverlayApp(): JSX.Element {
   // The hover popup's citation flow (Find a source / Add citation), keyed
   // by claim id — absent means "just showing ProblemCard," not started.
   const [citationFlowByClaimId, setCitationFlowByClaimId] = useState<Map<string, CitationFlowState>>(new Map())
+  /**
+   * Claims whose hover popover is currently showing the fix card.
+   *
+   * A set of ids rather than a single id, to match citationFlowByClaimId: the
+   * hover moves between sentences freely here (nothing pins it, unlike the
+   * editor), and a single slot would silently retarget the open card at
+   * whichever claim the pointer crossed last.
+   */
+  const [fixOpenIds, setFixOpenIds] = useState<Set<string>>(new Set())
   const [citationBusyIds, setCitationBusyIds] = useState<Set<string>>(new Set())
   const [previewBusyIds, setPreviewBusyIds] = useState<Set<string>>(new Set())
   const [undoBusyIds, setUndoBusyIds] = useState<Set<string>>(new Set())
@@ -3625,6 +3732,18 @@ export default function OverlayApp(): JSX.Element {
   function closeGradeSourceFinder(claimId: string): void {
     setGradeFlowClaimId(null)
     setFlow(claimId, null)
+  }
+
+  function openFix(claimId: string): void {
+    setFixOpenIds((prev) => new Set(prev).add(claimId))
+  }
+
+  function closeFix(claimId: string): void {
+    setFixOpenIds((prev) => {
+      const next = new Set(prev)
+      next.delete(claimId)
+      return next
+    })
   }
 
   function setFlow(claimId: string, state: CitationFlowState | null): void {
@@ -4578,14 +4697,23 @@ export default function OverlayApp(): JSX.Element {
                     undoing={undoBusyIds.has(claimHoveredSummary.id)}
                     showCancel={false}
                   />
+                ) : fixOpenIds.has(claimHoveredSummary.id) ? (
+                  <FixCard
+                    claim={claimHoveredSummary}
+                    kind={hoveredActiveKind}
+                    fallbackDetail={
+                      popoverCopyFor(
+                        claimHoveredSummary,
+                        claimHoveredSummary.evidence as ScreenWatchClaimEvidence,
+                        hoveredActiveKind as Exclude<ScreenWatchProblemKind, 'searching'>
+                      ).description
+                    }
+                    onBack={() => closeFix(claimHoveredSummary.id)}
+                  />
                 ) : (
                   <ProblemCard
                     claim={claimHoveredSummary}
-                    onSuggestFix={() => {
-                      selectClaim(claimHoveredSummary.id)
-                      setHover(null)
-                      void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
-                    }}
+                    onSuggestFix={() => openFix(claimHoveredSummary.id)}
                     onStartCitationFlow={() => void startCitationFlow(claimHoveredSummary.id)}
                     activeKind={hoveredActiveKind}
                     remaining={hoveredRemaining}

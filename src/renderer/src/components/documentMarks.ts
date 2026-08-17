@@ -287,6 +287,60 @@ export function insertCitationForClaim(body: HTMLElement, claim: Claim, inTextCi
   return document.execCommand('insertText', false, `${prefix}${inTextCitation}`)
 }
 
+/**
+ * Replaces the sentence a claim occupies with the critique's narrowed version.
+ *
+ * The same `execCommand` argument `insertCitationForClaim` makes, and it matters
+ * more here: this one replaces a whole sentence rather than adding four words to
+ * the end of it, so a writer who dislikes the result needs Ctrl+Z to be the
+ * thing that undoes it. `insertText` over a NON-COLLAPSED selection deletes the
+ * selection and inserts in a single undoable step — the reason the range is
+ * selected and typed over rather than deleted and then filled, which would cost
+ * two presses of Ctrl+Z and leave the sentence gone after the first. Measured
+ * rather than assumed (2026-08-17, Chromium, against a live contentEditable
+ * holding two paragraphs): one execCommand('undo') restored the original text
+ * exactly and left the following paragraph untouched.
+ *
+ * Returns false when the claim can no longer be located, exactly as
+ * `insertCitationForClaim` does and for the same reason: the draft has moved on
+ * since the critique ran, and rewriting at a guessed offset would replace a
+ * sentence the writer never asked about. The caller says so rather than
+ * silently doing nothing.
+ *
+ * What it will and will not put in the document is not this function's
+ * judgement — see `normalizeCritique.isNarrowing`, which drops any revision that
+ * introduces a named thing the original sentence does not contain. This writes
+ * whatever survived that.
+ */
+export function replaceClaimText(body: HTMLElement, claim: Claim, replacement: string): boolean {
+  const { text, nodes } = buildTextMap(body)
+  const span = computeClaimSpans(text, [claim])[0]
+  if (!span) return false
+
+  const from = locate(nodes, span.start)
+  const to = locate(nodes, span.end)
+  if (!from || !to) return false
+
+  const selection = window.getSelection()
+  if (!selection) return false
+  const range = document.createRange()
+  try {
+    range.setStart(from.node, from.offset)
+    range.setEnd(to.node, to.offset)
+  } catch {
+    return false
+  }
+  // An empty range would make insertText an insertion rather than a
+  // replacement, leaving the overstated sentence in place with the narrowed one
+  // wedged in front of it.
+  if (range.collapsed) return false
+
+  selection.removeAllRanges()
+  selection.addRange(range)
+  body.focus()
+  return document.execCommand('insertText', false, replacement)
+}
+
 /** The mark under a point in `wrap`'s coordinate space, if any. */
 export function markAt(marks: DocumentMark[], x: number, y: number): { mark: DocumentMark; rect: MarkRect } | null {
   for (const mark of marks) {

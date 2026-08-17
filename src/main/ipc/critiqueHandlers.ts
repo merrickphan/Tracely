@@ -31,7 +31,13 @@ export function registerCritiqueHandlers(): void {
     // resolved against the reference list at its end, which no amount of
     // widening around the claim would ever reach.
     const result = await generateCritique(claim, evidence, sentence, analysis?.sourceText)
-    updateClaimCritique(claimId, result.critique, result.verdict)
+    updateClaimCritique(
+      claimId,
+      result.critique,
+      result.verdict,
+      result.suggestedRevision,
+      result.citationFix
+    )
 
     // Only sources the local model flagged as contradicting, and only ones
     // that cleared the relevance bar to have been asked in the first place.

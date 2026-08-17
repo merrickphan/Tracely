@@ -99,6 +99,22 @@ export interface Claim {
   scoreBreakdown: ScoreBreakdown | null
   critique: string | null
   critiqueVerdict: CritiqueVerdict | null
+  /**
+   * The two halves of a critique that are a FIX rather than a finding — the
+   * narrowed sentence and the corrected reference. `CritiqueResult`'s fields of
+   * the same names, written down.
+   *
+   * Persisted because the popover over a marked sentence needs them and has only
+   * a stored `Claim` to read. They have been on the critique IPC *response*
+   * since the relay learned to produce them, so `ClaimCard` — which fires the
+   * critique itself and holds the response — could show them; nothing wrote them
+   * down. Hovering the underline that same critique produced found a verdict of
+   * "overstated" with the narrowed sentence that gives it its meaning already
+   * gone. Screen Watch never hit this: it keeps its claims in memory and never
+   * reads them back out of SQLite.
+   */
+  suggestedRevision: string | null
+  citationFix: string | null
   createdAt: string
 }
 

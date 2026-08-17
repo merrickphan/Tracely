@@ -9,9 +9,10 @@ import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer from '../components/DocumentMarkLayer'
-import type { DocCitationFlowState } from '../components/DocumentMarkLayer'
+import type { DocCitationFlowState, DocFixState } from '../components/DocumentMarkLayer'
 import { sourceInitials } from '../components/citationFlowCopy'
-import { insertCitationForClaim, markAt, measureMarks } from '../components/documentMarks'
+import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
+import { insertCitationForClaim, markAt, measureMarks, replaceClaimText } from '../components/documentMarks'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
@@ -281,10 +282,17 @@ function DocumentEditor({
   // While a flow is open its mark is pinned: the hit-test must not swap the
   // popover to another underline the pointer happens to cross on its way to a
   // button, and leaving the card must not close it.
+  /**
+   * "Suggest fix", run in place. Same ownership argument as `citationFlow`, and
+   * the same pinning — a card the pointer can drag out from under itself is
+   * unusable, and this one has an Apply button on it.
+   */
+  const [fixFlow, setFixFlow] = useState<{ claimId: string; state: DocFixState } | null>(null)
+  const [fixBusy, setFixBusy] = useState<'applying' | 'undoing' | null>(null)
   const flowPinnedRef = useRef(false)
   useEffect(() => {
-    flowPinnedRef.current = citationFlow !== null
-  }, [citationFlow])
+    flowPinnedRef.current = citationFlow !== null || fixFlow !== null
+  }, [citationFlow, fixFlow])
   // The `Source` objects behind the current candidate list. Held in a ref
   // rather than in the flow state because they are only ever read to format a
   // citation — putting a full Source per row into state would re-render the
@@ -925,6 +933,69 @@ function DocumentEditor({
     }
   }
 
+  /**
+   * Types the critique's narrowed sentence over the writer's own.
+   *
+   * The one place in this product where Tracely edits a student's prose, and it
+   * is bounded to the same thing the relay is bounded to: `suggestedRevision`
+   * carries the SAME sentence with only its quantifier, scope or hedge moved
+   * (and `normalizeCritique.isNarrowing` drops any revision that introduces a
+   * named thing the original did not contain). It corrects what the sentence
+   * claims, not how it reads — which is why this is allowed to exist beside a
+   * prompt that refuses to write sentences for students.
+   *
+   * Through `replaceClaimText`, i.e. through execCommand, so this lands on the
+   * browser's undo stack as ONE step: Ctrl+Z and the card's Undo are the same
+   * escape hatch rather than two that disagree.
+   */
+  async function applyFixRevision(claim: Claim): Promise<void> {
+    const body = editorRef.current
+    const revision = claim.suggestedRevision
+    if (!body || !revision) return
+    setFixBusy('applying')
+    try {
+      if (!replaceClaimText(body, claim, revision)) {
+        // Refused rather than rewritten at a guessed offset — the draft moved
+        // on since the critique ran, and the sentence this card is about may
+        // not be the sentence sitting at those offsets now.
+        setFixFlow({ claimId: claim.id, state: { step: 'error', message: APPLY_LOST_CLAIM } })
+        return
+      }
+      handleInput()
+      setFixFlow({ claimId: claim.id, state: { step: 'applied' } })
+      // Re-read, for the reason insertCitation re-reads: the underline that
+      // prompted this is drawn from the stored claim, whose text no longer
+      // matches the document. Left alone it keeps accusing a sentence that has
+      // already been narrowed.
+      const analysisId = analysisIdRef.current
+      if (analysisId) await onRefreshClaims(analysisId)
+    } finally {
+      setFixBusy(null)
+    }
+  }
+
+  /** The same undo stack Ctrl+Z uses — see undoFlowCitation. */
+  async function undoFixRevision(): Promise<void> {
+    const body = editorRef.current
+    if (!body) return
+    setFixBusy('undoing')
+    try {
+      body.focus()
+      document.execCommand('undo')
+      handleInput()
+      const analysisId = analysisIdRef.current
+      if (analysisId) await onRefreshClaims(analysisId)
+      setFixFlow(null)
+      setActiveMark(null)
+    } finally {
+      setFixBusy(null)
+    }
+  }
+
+  function closeFixFlow(): void {
+    setFixFlow(null)
+  }
+
   function closeCitationFlow(): void {
     setCitationFlow(null)
     setActiveMark(null)
@@ -1376,13 +1447,29 @@ function DocumentEditor({
           // the sentence it is about. It used to open the report modal on the
           // claim instead: a full-screen context switch away from the paragraph
           // being written, to answer a question asked about one of its lines.
+          fix={
+            fixFlow && activeMark
+              ? {
+                  claimId: fixFlow.claimId,
+                  state: fixFlow.state,
+                  applying: fixBusy === 'applying',
+                  undoing: fixBusy === 'undoing',
+                  onApply: () => void applyFixRevision(activeMark.mark.claim),
+                  onUndo: () => void undoFixRevision(),
+                  onCancel: closeFixFlow,
+                  onDone: closeFixFlow
+                }
+              : null
+          }
           onFindSource={(mark) => void startCitationFlow(mark.claim, false)}
-          onSuggestFix={(mark) => {
-            // Reasoning is still the report's job — there is no in-place fix to
-            // offer for it, and the critique it shows is the answer.
-            setScoreOpen(true)
-            void checkClaims([mark.claim.id])
-          }}
+          // Opens the fix in the popover, over the sentence it is about. It used
+          // to call setScoreOpen(true) — the full-screen Argument Score report,
+          // i.e. exactly the context switch away from the paragraph being
+          // written that the citation flow had just stopped doing. Nothing is
+          // fetched: every word the card shows was written onto the claim by the
+          // critique that raised this underline, so opening it cannot spend
+          // anything on the relay.
+          onSuggestFix={(mark) => setFixFlow({ claimId: mark.claim.id, state: { step: 'open' } })}
           onDismiss={(mark) => {
             setDismissed((prev) => new Set(prev).add(mark.claim.id))
             setActiveMark(null)

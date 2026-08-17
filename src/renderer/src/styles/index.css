@@ -1819,6 +1819,44 @@ textarea:disabled {
   width: 100%;
 }
 
+/* ---- The "Suggest fix" card ------------------------------------------
+   No Figma frame behind this one — the design has the button and nothing it
+   opens (see components/fixFlowCopy.ts). Everything here reuses the popover's
+   existing scale rather than introducing a new one: the proposed sentence sits
+   in a .docmark-block exactly as the citation preview does, one step darker
+   than .docmark-block-body because it is text the writer is about to put in
+   their document rather than commentary about it. */
+.docmark-fix-quote {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1c1c1c;
+  /* Selectable, so a writer who wants to paste it somewhere else can, and so
+     Apply failing is inconvenient rather than a dead end. */
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Citations only: a reference is read character by character, and whether the
+   year is sitting where a page number belongs is the point of showing it. */
+.docmark-fix-quote.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.docmark-fix-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.docmark-fix-issue-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1c1c1c;
+  margin-bottom: 2px;
+}
+
 .docedit-body:empty::before {
   content: attr(data-placeholder);
   color: #a1a1a1;
