@@ -260,3 +260,25 @@ describe('scoreDraft — always returns a grade', () => {
     strictEqual(result.score, 0)
   })
 })
+
+describe('a title is not an unread paragraph', () => {
+  // The title is 'unknown' by rights - it states no claim. Counting it as
+  // unlabelled made every titled essay "provisional", and weaknesses.ts
+  // withholds all whole-draft findings while anything is unlabelled: a student
+  // who titled their work got a score and no feedback at all, including no
+  // "this draft has no counterargument".
+  const titled = outline('unknown', 'thesis', 'claim+', 'evidence+', 'conclusion')
+
+  it('reads as complete when the leading unknown is the title', () => {
+    strictEqual(scoreDraft(titled, { soWhatInConclusion: true, titleParagraph: true }).complete, true)
+  })
+
+  it('still reads as provisional when it is a genuinely unlabelled paragraph', () => {
+    strictEqual(scoreDraft(titled, { soWhatInConclusion: true, titleParagraph: false }).complete, false)
+  })
+
+  it('does not excuse an unknown anywhere else', () => {
+    const midGap = outline('unknown', 'thesis', 'unknown', 'conclusion')
+    strictEqual(scoreDraft(midGap, { soWhatInConclusion: true, titleParagraph: true }).complete, false)
+  })
+})

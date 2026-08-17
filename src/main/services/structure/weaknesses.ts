@@ -32,6 +32,15 @@ export interface WeaknessInput {
   /** Ids of detected claims for which no relevant source was found. */
   claimsWithoutEvidence: string[]
   soWhatInConclusion: boolean
+  /**
+   * Whether paragraph 1 is the essay's title rather than a paragraph of the
+   * argument. It is labelled 'unknown' — correctly, it states no claim — and
+   * without this it counted as an unread paragraph and suppressed every
+   * whole-draft finding. A student who titled their work got a score and no
+   * feedback at all, including no "this draft has no counterargument", which is
+   * the most useful thing this module says.
+   */
+  titleParagraph?: boolean
 }
 
 function ordinal(index: number): string {
@@ -42,13 +51,15 @@ function ordinal(index: number): string {
 export function findWeaknesses({
   paragraphs,
   claimsWithoutEvidence,
-  soWhatInConclusion
+  soWhatInConclusion,
+  titleParagraph = false
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
   const found: StructureWeakness[] = []
   const roles = paragraphs.map((p) => p.role)
-  const unlabelled = roles.filter((role) => role === 'unknown').length
+  // The title is not an unread paragraph — see `titleParagraph`.
+  const unlabelled = roles.filter((role, i) => role === 'unknown' && !(titleParagraph && i === 0)).length
 
   // Whole-draft findings are suppressed while paragraphs are unlabelled. "This
   // draft has no counterargument" is a claim about paragraphs that were never
