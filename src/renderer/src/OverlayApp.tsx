@@ -1823,7 +1823,14 @@ function EssayGradeReportPanel({
           })}
         </div>
 
-        {(structure?.paragraphs ?? []).map((paragraph) => {
+        {/* Named by position, and the title dropped — the same rule and the same
+            function as the in-app report, so the two surfaces cannot describe
+            one draft differently. See components/paragraphNames.ts. */}
+        {(structure?.paragraphs ?? []).map((paragraph, i) => {
+          const name = paragraphNames(structure?.paragraphs ?? [], structure?.titleParagraph)[i]
+          // null is the title: not part of the argument, and listing it as a
+          // paragraph of one is what produced a row reading "P1 · Unlabelled".
+          if (name === null) return null
           const issues = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === paragraph.index)
           const strong = issues.length === 0
           const preview = structure?.previews[paragraph.index - 1] ?? ''
@@ -1837,7 +1844,7 @@ function EssayGradeReportPanel({
               key={paragraph.index}
               className="tracely-list-row"
               onClick={() => onOpenParagraph(paragraph.index)}
-              title={`Open paragraph ${paragraph.index}`}
+              title={`Open ${name}`}
               style={{
                 background: '#f8f9f8',
                 border: 'none',
@@ -1869,9 +1876,9 @@ function EssayGradeReportPanel({
                     flexShrink: 0
                   }}
                 >
-                  P{paragraph.index}
+                  {ROLE_LABEL[paragraph.role]}
                 </span>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a1f' }}>{ROLE_LABEL[paragraph.role]}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a1f' }}>{name}</span>
                 <span style={{ flex: 1 }} />
                 <span
                   style={{
@@ -2447,7 +2454,11 @@ function ArgumentScoreView({
   // again against ¶5. What is left over at the end is the genuinely useful
   // signal: a rubric component whose role never appears in the draft at all.
   const claimed = new Set<keyof StructureComponents>()
-  const rows = structure.paragraphs.map((paragraph) => {
+  // Same naming as every other breakdown of this draft — see paragraphNames.
+  // The title is filtered out AFTER the names are computed, because the
+  // numbering is a function of the whole list.
+  const names = paragraphNames(structure.paragraphs, structure.titleParagraph)
+  const rows = structure.paragraphs.map((paragraph, i) => {
     const keys = (ROLE_COMPONENTS[paragraph.role] ?? []).filter((key) => !claimed.has(key))
     keys.forEach((key) => claimed.add(key))
     const pcts = keys.map((key) => {
@@ -2456,11 +2467,12 @@ function ArgumentScoreView({
     })
     return {
       paragraph,
+      name: names[i],
       keys,
       verdict: pcts.length > 0 ? verdictFor(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
       weaknesses: structure.weaknesses.filter((w) => w.paragraphIndex === paragraph.index)
     }
-  })
+  }).filter((row) => row.name !== null)
   const missing = COMPONENT_ROWS.filter(([key]) => !claimed.has(key))
   const draftWeaknesses = structure.weaknesses.filter((w) => w.paragraphIndex === null)
 
@@ -2536,7 +2548,7 @@ function ArgumentScoreView({
         <div style={{ fontSize: 10, fontWeight: 700, color: DIM, letterSpacing: 0.4 }}>
           BREAKDOWN BY PARAGRAPH
         </div>
-        {rows.map(({ paragraph, keys, verdict, weaknesses }) => (
+        {rows.map(({ paragraph, name, keys, verdict, weaknesses }) => (
           <div
             key={paragraph.index}
             data-paragraph={paragraph.index}
@@ -2551,14 +2563,27 @@ function ArgumentScoreView({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-              <span style={{ fontSize: 10.5, color: DIM, flexShrink: 0 }}>¶{paragraph.index}</span>
               <span
                 style={{
                   flex: 1,
                   minWidth: 0,
                   fontSize: 12,
                   fontWeight: 700,
-                  color: paragraph.role === 'unknown' ? DIM : INK
+                  color: INK
+                }}
+              >
+                {name}
+              </span>
+              {/* The role stays, quieter. It is not decoration: scoreDraft
+                  computes the whole /100 from the role vector, so showing it is
+                  what makes a wrong label visibly wrong rather than
+                  mysteriously costly. */}
+              <span
+                style={{
+                  fontSize: 10.5,
+                  color: DIM,
+                  flexShrink: 0,
+                  fontStyle: paragraph.role === 'unknown' ? 'italic' : 'normal'
                 }}
               >
                 {ROLE_LABEL[paragraph.role]}
