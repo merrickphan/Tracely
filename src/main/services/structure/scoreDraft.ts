@@ -122,7 +122,18 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // evidence, reasoning and transition paragraphs are supposed to exist, and
   // an essay where every paragraph opens a new claim is a list, not an
   // argument.
-  const body = roles.slice(1, -1)
+  // The body starts after the THESIS, not after the first paragraph.
+  //
+  // `slice(1, -1)` assumed paragraph 1 is always the introduction. A titled
+  // essay breaks that: `splitParagraphs` makes the title paragraph 1 and the
+  // introduction paragraph 2, so the intro was counted as a body paragraph and
+  // diluted the ratio — it carries the thesis, never a governing claim, so it
+  // could only ever drag the fraction down. A real four-paragraph essay lost
+  // half this component for having a heading.
+  //
+  // Falls back to the old slice when no thesis was labelled, which is the case
+  // the original was written for and still correct there.
+  const body = roles.slice(thesisAt === -1 ? 1 : thesisAt + 1, -1)
   const claimBearing = body.filter((role) => role === 'claim').length
   const expectedClaims = Math.max(1, Math.ceil(body.length * 0.5))
   const governingClaims = COMPONENT_MAX.governingClaims * clamp01(claimBearing / expectedClaims)
