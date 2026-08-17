@@ -32,12 +32,39 @@ cmd=$(field command)
 # whatever branch main happened to be on, and a worktree sitting on main was
 # never stopped from committing. The payload's own cwd is the directory the
 # Bash tool runs in; CLAUDE_PROJECT_DIR is the fallback when it is absent.
-where=$(printf '%s' "$payload" | node -e "
+#
+# A LEADING `cd` WINS over the payload's `cwd`, and the order is the whole
+# point. `cwd` is the session's directory as it stands BEFORE the command runs;
+# `cd <worktree> && git commit` runs somewhere else entirely, and reading `cwd`
+# there judges a worktree commit against whatever branch the main checkout
+# happens to be on. That denied every commit inside a worktree with "On main" —
+# the original bug with its sign flipped, worktree agents going from unable to
+# Edit to unable to commit.
+#
+# Worth recording how that was found, because it was invisible twice over: a
+# hand-built payload has no `cwd`, so the synthetic test fell through to the
+# `cd` parse and passed while the real thing failed. Only running an actual
+# commit inside a worktree showed it. Test this hook with real commands, not
+# with payloads written by hand.
+where=$(printf '%s' "$cmd" | node -e "
   let s=''
   process.stdin.on('data', d => s += d).on('end', () => {
-    try { process.stdout.write(String(JSON.parse(s).cwd ?? '')) } catch { /* allow */ }
+    try {
+      const m = /^\s*cd\s+(\"([^\"]+)\"|'([^']+)'|([^\s&;|]+))/.exec(s)
+      process.stdout.write(m ? (m[2] || m[3] || m[4] || '') : '')
+    } catch { /* allow */ }
   })
 " 2>/dev/null)
+
+if [ ! -d "$where" ]; then
+  where=$(printf '%s' "$payload" | node -e "
+    let s=''
+    process.stdin.on('data', d => s += d).on('end', () => {
+      try { process.stdout.write(String(JSON.parse(s).cwd ?? '')) } catch { /* allow */ }
+    })
+  " 2>/dev/null)
+fi
+
 [ -d "$where" ] || where=${CLAUDE_PROJECT_DIR:-$PWD}
 
 cd "$where" 2>/dev/null || exit 0
