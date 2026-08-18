@@ -968,7 +968,8 @@ function DocumentEditor({
                   venue: item.source.venue,
                   year: item.source.year,
                   matchPercent: Math.round(item.relevanceScore * 100),
-                  initials: sourceInitials(item.source.venue ?? item.source.title)
+                  initials: sourceInitials(item.source.venue ?? item.source.title),
+                  url: item.source.url
                 })),
                 selectedId: evidence[0]?.source.id ?? null,
                 style: citationStyle,

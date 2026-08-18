@@ -22,6 +22,8 @@ import type { CitationStyle } from '@shared/types'
 import type { DocumentMark, MarkRect, ProseMark } from './documentMarks'
 import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, opensFixFlow, popoverCopyFor } from './problemCopy'
+import SourceIconBox from './SourceIconBox'
+import { useFavicons } from '../lib/useFavicons'
 import { critiqueIssues } from '../critiqueIssues'
 // Shared with the overlay, which draws the same card over other applications.
 import {
@@ -97,9 +99,19 @@ export interface DocSourceCandidate {
   year: number | null
   /** `relevanceScore` as a percentage — how directly it bears on the sentence. */
   matchPercent: number
-  /** The monogram tile's letters, when no favicon is available (they never are
-   *  here: these come from academic indexes, not publisher sites). */
+  /** The monogram tile's letters, shown until a favicon resolves and for good
+   *  on a publisher with no icon. */
   initials: string
+  /**
+   * The publisher's site, for the icon lookup.
+   *
+   * These rows drew the monogram forever — not because academic sources have no
+   * site, which the comment here used to claim, but because nothing on the
+   * persisted `Source` carried an icon and the renderer could not fetch one
+   * without loosening index.html's CSP. Main fetches it now and hands over a
+   * data: URI (see ipc/sourcesHandlers.ts), which that CSP already allows.
+   */
+  url: string | null
 }
 
 export type DocCitationFlowState =
@@ -839,6 +851,15 @@ function FixCard({
  * that does NOT appear in the sentence.
  */
 function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimText: string }): JSX.Element {
+  // Hooks run before any of the early returns below, which is why this is here
+  // rather than beside the rows it feeds: the card returns a different tree per
+  // step, and a hook inside one of those branches would change hook order
+  // between renders. Reads an empty list on every step except 'picking', which
+  // costs nothing — useFavicons asks for what it has not already got.
+  const favicons = useFavicons(
+    flow.state.step === 'picking' ? flow.state.candidates.map((c) => c.url) : []
+  )
+
   const { state } = flow
 
   if (state.step === 'searching') {
@@ -975,7 +996,11 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
             className={`docmark-row${candidate.sourceId === selectedId ? ' selected' : ''}`}
             onClick={() => flow.onSelect(candidate.sourceId)}
           >
-            <span className="docmark-row-badge">{candidate.initials}</span>
+            <SourceIconBox
+              className="docmark-row-badge"
+              initials={candidate.initials}
+              faviconDataUrl={candidate.url ? favicons.get(candidate.url) : null}
+            />
             <span className="docmark-row-meta">
               <span className="docmark-row-title">{candidate.title}</span>
               {/* The venue is what gives and the match percentage is what does

@@ -82,7 +82,8 @@ export const IPC = {
   AUTH_SIGN_IN_WITH_GOOGLE: 'auth:signInWithGoogle',
   AUTH_UPDATE_NAME: 'auth:updateName',
   AUTH_UPDATE_USERNAME: 'auth:updateUsername',
-  AUTH_DELETE_ACCOUNT: 'auth:deleteAccount'
+  AUTH_DELETE_ACCOUNT: 'auth:deleteAccount',
+  SOURCES_FAVICONS: 'sources:favicons'
 } as const
 
 export const IPC_EVENTS = {

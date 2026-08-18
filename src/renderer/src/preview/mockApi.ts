@@ -251,6 +251,36 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       getResult: () =>
         ok('analyze.getResult', { analysis: fx.analysis, claims: previewClaims, evidenceByClaimId: {} })
     },
+    sources: {
+      /**
+       * A real data: URI, not null.
+       *
+       * Returning null everywhere would make every row fall back to the
+       * monogram, which is precisely the state the favicon work exists to
+       * replace — the harness would then be unable to show, or catch a
+       * regression in, the only path that matters. A flat orange square is
+       * obviously synthetic to anyone looking, and it exercises the <img>
+       * branch, the CSP, the sizing box and the fallback swap for real.
+       *
+       * The preprint fixture (psyarxiv) deliberately gets null. A domain the
+       * favicon service has nothing for is the common real case, not an edge
+       * one, and without it every row in the harness has an icon and the
+       * monogram fallback — the thing every row looked like until now — is
+       * unreachable here. Both branches are on screen at once this way.
+       */
+      favicons: (req) =>
+        relay('sources.favicons', {
+          icons: Object.fromEntries(
+            req.urls.map((url) => [
+              url,
+              url.includes('psyarxiv')
+                ? null
+                : 'data:image/svg+xml;base64,' +
+                  btoa('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" rx="3" fill="#ff5900"/></svg>')
+            ])
+          )
+        })
+    },
     evidence: {
       // Records the result against the claim, so the Structure rail's
       // "Check if supportable" flow can actually be reviewed: without this the

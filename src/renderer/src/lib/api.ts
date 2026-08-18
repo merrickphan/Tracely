@@ -64,6 +64,9 @@ export const tracelyApi = {
   showWindow: (target: 'main' | 'floating') => call(window.tracely.window.show({ target })),
   hideWindow: (target: 'main' | 'floating') => call(window.tracely.window.hide({ target })),
   resizeStart: (handle: ResizeHandle) => call(window.tracely.window.resizeStart({ handle })),
+  /** Real site icons, by URL. Missing or null means "draw the monogram". */
+  sourceFavicons: (urls: string[]) =>
+    call(window.tracely.sources.favicons({ urls })).then((res) => res.icons),
   resizeMove: (dx: number, dy: number) => call(window.tracely.window.resizeMove({ dx, dy })),
   minimizeWindow: () => call(window.tracely.window.minimize()),
   toggleMaximizeWindow: () => call(window.tracely.window.toggleMaximize()),
