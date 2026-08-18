@@ -545,19 +545,9 @@ input[type='range']::-webkit-slider-runnable-track {
   cursor: pointer;
 }
 
-.home-closeicon {
-  left: 833px;
-  top: 16px;
-  width: 21px;
-  height: 21px;
-  opacity: 0.85;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
+/* .home-closeicon and its hover rule were deleted with the element — the
+   close button is .winctl-close now. */
 
-.home-closeicon:hover {
-  opacity: 1;
-}
 
 .home-logo {
   left: -1px;
@@ -5325,18 +5315,26 @@ textarea:disabled {
    every scale. 833px is where Home's close icon sits; these clear it. */
 .winctl {
   position: fixed;
+  /* Where Home's X used to sit, so the corner did not move: `.app-main` insets
+     everything by the 14px window margin and the icon was at left 833 / top 16
+     inside an 870-wide canvas, putting its right edge 30px from the window's.
+     Measured in design units, which is the space `.app-shell` is always
+     LAYOUT_WIDTH of — see shared/windowSize.ts — so this holds at every scale. */
   top: 27px;
-  right: 66px;
+  right: 27px;
   z-index: 40;
   display: flex;
-  gap: 4px;
+  gap: 2px;
   -webkit-app-region: no-drag;
 }
 
 .winctl-btn {
   -webkit-app-region: no-drag;
-  width: 22px;
-  height: 22px;
+  /* One size for all three. The X was a 21px image and the other two were 10px
+     glyphs in 22px boxes, which is what "make them the same size and the same
+     type of button" was about. */
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -5355,9 +5353,67 @@ textarea:disabled {
   background: rgba(0, 0, 0, 0.06);
 }
 
+/* The close is the one destructive-looking control of the three, and the
+   design draws its X heavier than the rest of its thin-line set. */
+.winctl-close {
+  opacity: 0.72;
+}
+
 [data-theme='dark'] .winctl-btn {
   color: var(--text);
 }
 [data-theme='dark'] .winctl-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Per-card delete. Hidden until the card is hovered or the control has focus:
+   the grid is a list of things to OPEN, and a delete visible on every card at
+   rest makes destruction the most eye-catching thing on the page. Focus is in
+   the selector so it stays reachable by keyboard, where there is no hover. */
+.docs-card-delete {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d1d4db;
+  color: #737880;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.docs-card:hover .docs-card-delete,
+.docs-card-delete:focus-visible,
+.docs-card-delete.confirming {
+  opacity: 1;
+}
+
+.docs-card-delete:hover {
+  color: #cb3232;
+  border-color: #cb3232;
+}
+
+/* Armed. Red, and wider because it says a word — a second click here destroys
+   work that exists nowhere else, so it should not look like the resting state. */
+.docs-card-delete.confirming {
+  background: #cb3232;
+  border-color: #cb3232;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+/* The thumbnail is the positioning context for both the grade chip and this. */
+.docs-card-thumb {
+  position: relative;
 }
