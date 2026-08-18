@@ -28,118 +28,6 @@ import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
-// One tile, not a picker. There was a "Paste text" mode beside this one, and a
-// "URL / Link" mode before that; both are gone, and for much the same reason —
-// a document is the only source this app can actually do its work on. Pasted
-// text was a dead end past the first relay call: no editor, so nothing could be
-// rewritten, no marks, no citations inserted, no structure score, nothing
-// saved. It spent a paid detection to print a list of claims you could only
-// read.
-//
-// (URL / Link never fetched anything at all: it sent the URL *string* to the
-// relay as prose, which sentence-splits into one "sentence" of URL characters
-// and finds no checkable claim. Building it for real needs HTML extraction and
-// would widen the "academic APIs + relay only" network promise in CLAUDE.md.
-// Screen Watch already reads whatever page you have open.)
-const SOURCE_PLACEHOLDER = 'Name your document…'
-const SOURCE_CTA = 'Create Document'
-
-// The real detectClaims call is a single opaque request with no backend
-// sub-progress to report. Rather than faking fixed percentages on a timer
-// (which either stalls at "100% complete" while still waiting, or finishes
-// before the real call does), the bar's percent tracks actual elapsed time
-// with an asymptotic curve that approaches but never reaches 100% — it only
-// ever disappears when the real response has actually landed.
-const ANALYZING_EXPECTED_MS = 6000
-const ANALYZING_TICK_MS = 200
-const ANALYZING_MAX_PERCENT = 96
-
-function AnalyzingPanel({ onClose }: { onClose: () => void }): JSX.Element {
-  const [elapsedMs, setElapsedMs] = useState(0)
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setElapsedMs((ms) => ms + ANALYZING_TICK_MS)
-    }, ANALYZING_TICK_MS)
-    return () => clearInterval(id)
-  }, [])
-
-  const percent = Math.round((1 - Math.exp(-elapsedMs / ANALYZING_EXPECTED_MS)) * ANALYZING_MAX_PERCENT)
-
-  return (
-    <>
-      <button className="analyze-close" onClick={onClose} aria-label="Close">
-        <CloseIcon size={16} />
-      </button>
-      <div className="analyzing-panel">
-        <div className="analyzing-spinner-ring" />
-        <h3>Analyzing your source</h3>
-        {/*
-          The design's sentence is "Tracely is scanning claims and gathering
-          credible evidence." The first half is true here and the second is not:
-          this stage is one relay call that finds claims. Evidence search and
-          citations run later and on demand, so under a live progress bar that
-          clause describes work that is not happening. Same position, same
-          length, second half dropped.
-        */}
-        <p>Tracely is scanning your text for checkable claims.</p>
-        <div className="analyzing-progress-track">
-          <div className="analyzing-progress-fill" style={{ width: `${percent}%` }} />
-        </div>
-        <p className="analyzing-progress-label">{percent}% complete</p>
-
-        {/*
-          The four-step list from 127:40, in the design's own three states:
-          done is a filled orange check, active an orange ring with orange text,
-          pending a grey ring with grey text.
-
-          The last two NEVER leave pending, and that is the point. This screen
-          previously had this exact checklist and it was deleted, because
-          "Cross-referencing credible sources" and "Generating citations"
-          describe work this stage does not do — ticking them would be the app
-          narrating a search it has not run, on the one screen where a student
-          is watching to see what it found. Drawing them greyed is the design's
-          own way of saying "not yet", so the frame is matched and nothing is
-          claimed. They light up in the flows that really do them.
-        */}
-        <ul className="analyzing-steps">
-          {ANALYZING_STEPS.map((step) => {
-            const state = !step.runsHere ? 'pending' : percent >= step.doneAt ? 'done' : 'active'
-            return (
-              <li key={step.label} className={`analyzing-step is-${state}`}>
-                <span className="analyzing-step-mark" aria-hidden="true">
-                  {state === 'done' ? '✓' : ''}
-                </span>
-                {step.label}
-                {!step.runsHere ? <span className="sr-only"> — runs later, on demand</span> : null}
-              </li>
-            )
-          })}
-        </ul>
-      </div>
-    </>
-  )
-}
-
-// Figma 226:95 and 234:46 — the design's own lists, not a superset of them.
-// The families were Georgia/Times/Courier/Verdana, which appear in no frame;
-// Inter and Instrument Sans are the two the app actually ships and renders in.
-/**
- * Figma 127:40. `runsHere` is what keeps this honest: only the first two
- * happen during claim detection, so the other two are drawn in the design's
- * pending state and never advance out of it.
- *
- * `doneAt` are points on the same asymptotic elapsed-time curve the bar uses —
- * they are not milestones the backend reports, because it reports none. A step
- * ticking is therefore "enough time has passed that this is finished", which is
- * true of reading and extracting in a single round trip.
- */
-const ANALYZING_STEPS: Array<{ label: string; runsHere: boolean; doneAt: number }> = [
-  { label: 'Reading source content', runsHere: true, doneAt: 25 },
-  { label: 'Extracting key claims', runsHere: true, doneAt: 96 },
-  { label: 'Cross-referencing credible sources', runsHere: false, doneAt: 0 },
-  { label: 'Generating citations', runsHere: false, doneAt: 0 }
-]
 
 const FONT_FAMILIES = ['Arial', 'Inter', 'Instrument Sans', 'Roboto']
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24]
@@ -1160,8 +1048,10 @@ function DocumentEditor({
    * `aggregator.ts` gives each provider a 6s timeout and `rateLimiter.ts`
    * serialises Semantic Scholar at roughly a second a call, so eight claims at
    * once is a 15-45 second wait — and this codebase already refuses to show
-   * progress it cannot back (see AnalyzingPanel). One claim at a time means the
-   * count is real and partial results land as they arrive.
+   * progress it cannot back. (The reference here used to be AnalyzingPanel,
+   * the old landing's fake progress bar; it and the landing are gone, but the
+   * rule it stood for is the reason this loop is serial.) One claim at a time
+   * means the count is real and partial results land as they arrive.
    *
    * These are the four free academic APIs, not the paid relay, which is why
    * this can be offered as a button per claim at all.
