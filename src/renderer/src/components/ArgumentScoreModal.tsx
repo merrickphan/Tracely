@@ -591,6 +591,22 @@ function ScoreReport({
           <span className={`argscore-grade tone-${toneFor(outline.score)}`}>{grade.letter}</span>
           <p className="argscore-grade-line">{grade.line}</p>
           {!outline.complete ? <span className="argscore-provisional">Provisional</span> : null}
+          {/* Which reader produced the labels this score is computed from.
+              Roles normally come from the model now; 'heuristic' here means the
+              relay call failed or is not configured and the local patterns
+              answered instead. That is a real difference in how much the number
+              is worth — the patterns leave anything they cannot justify
+              unlabelled — and a score that silently changed its basis would be
+              the least honest thing this panel could do. Shown only in the
+              degraded case: a badge on every normal run is noise. */}
+          {outline.rolesFrom === 'heuristic' ? (
+            <span
+              className="argscore-provisional"
+              title="The paragraph roles behind this score came from local pattern rules rather than the model — they leave anything they cannot justify unlabelled."
+            >
+              Local rules
+            </span>
+          ) : null}
           {/*
             THREE different facts, never one number. This line said "0 of 7
             claims have a source" about drafts that were fully cited, which is

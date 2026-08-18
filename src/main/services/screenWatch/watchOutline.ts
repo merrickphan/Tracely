@@ -85,6 +85,25 @@ export function computeWatchOutline({
   }
 
   const coverage = computeEvidenceCoverage(claims, text)
+  /**
+   * NO `classified` HERE, AND THAT IS THE POINT.
+   *
+   * `structureHandlers` passes model-assigned roles from
+   * /api/classify-structure; this caller deliberately does not, so Screen
+   * Watch labels paragraphs with the local heuristics and pays nothing.
+   *
+   * Screen Watch is passive and always-on: it runs on a 1200ms poll over
+   * whatever window has focus, so a paid call on this path is a bill the user
+   * did not ask for and cannot watch being run up. That is the same line
+   * `screenWatchService.ts` holds for critique — evidence search gets to stay
+   * automatic precisely because it only hits the four free public APIs — and
+   * it is the line to hold when this comes up again.
+   *
+   * The cost is real and is not a bug: the draft score that follows the writer
+   * into Word is computed from regex roles, so it can differ from the one the
+   * editor shows for the same text. If that becomes the complaint, the answer
+   * is an opt-in Settings toggle, not quietly adding the call here.
+   */
   const outline: DocumentOutline = analyzeStructure({
     documentId: null,
     analysisId: null,

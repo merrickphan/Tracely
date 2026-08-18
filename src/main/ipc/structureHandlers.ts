@@ -10,6 +10,8 @@ import {
   STRUCTURE_SCHEMA_VERSION
 } from '../services/structure/analyzeStructure'
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
+import { classifyStructure } from '../services/ai/structureClassifier'
+import { splitParagraphs } from '@shared/paragraphSplit'
 
 // Matches documentsHandlers' MAX_BODY_CHARS. The analysis is linear in the
 // document, but the database is fully re-serialized on every write, so a
@@ -28,13 +30,44 @@ const getSchema = z.object({
 })
 
 export function registerStructureHandlers(): void {
-  ipcMain.handle(IPC.STRUCTURE_ANALYZE, (_event, raw): StructureAnalyzeResponse => {
+  ipcMain.handle(IPC.STRUCTURE_ANALYZE, async (_event, raw): Promise<StructureAnalyzeResponse> => {
     const input = analyzeSchema.parse(raw)
 
     // Claims come from the store rather than over the wire so the renderer
     // cannot hand main a claim it never detected, and so the strength scores
     // and breakdowns coverage reads are the persisted ones.
     const claims = input.analysisId ? getClaimsByAnalysis(input.analysisId) : []
+
+    /**
+     * What each paragraph is DOING, from the model rather than from regexes.
+     *
+     * This is the one relay call the structural read makes, and it is the
+     * reason the read is worth trusting: `structure/roles.ts` decides thesis
+     * vs claim vs counterargument from hand-written patterns, and those labels
+     * drive all six score components, every weakness, and everything the
+     * report says. A pattern list needs a new pattern for every essay shape it
+     * has not seen — adding five thesis shapes moved one real draft from 45 to
+     * 83, which is the measurement of how brittle the approach is rather than
+     * a fix for it.
+     *
+     * Cost is one CHEAP_MODEL call per analysis, capped at 8k input chars and
+     * 600 output tokens, and cached in SQLite on a hash of the assembled
+     * prompt — so re-analysing an unchanged draft is free, which is what keeps
+     * an always-available "Re-grade" button honest.
+     *
+     * Null on any failure, and null is a supported answer: analyzeStructure
+     * falls back to the local heuristics and reports `rolesFrom: 'heuristic'`.
+     * A structural read that degrades to the old behaviour beats one that
+     * fails the whole analysis because a network call did.
+     *
+     * The paragraphs are split here with the SAME function analyzeStructure
+     * uses. Splitting them differently would label paragraph 4 and score
+     * paragraph 5.
+     */
+    const classified = await classifyStructure(
+      'classify-structure',
+      splitParagraphs(input.text).map((p) => p.text)
+    )
 
     const outline = analyzeStructure({
       documentId: input.documentId ?? null,
@@ -43,6 +76,7 @@ export function registerStructureHandlers(): void {
       claims,
       claimsWithoutEvidence: claimsWithoutEvidence(claims),
       coverage: computeEvidenceCoverage(claims, input.text),
+      classified,
       analyzedAt: new Date().toISOString()
     })
 
