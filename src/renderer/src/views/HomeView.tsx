@@ -6,6 +6,9 @@ import { greetingFor } from '@shared/greeting'
 import type { Tab } from '../App'
 import figmaLogo from '../assets/figma-logo.png'
 import tracerBadge from '../assets/tracer-badge.png'
+import iconPersuasive from '../assets/resource-persuasive.svg'
+import iconSources from '../assets/resource-sources.svg'
+import homeArrow from '../assets/home-arrow.svg'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
 
@@ -31,43 +34,46 @@ const RESOURCES: Array<{ id: string; title: string; blurb: string; icon: JSX.Ele
     id: 'persuasive',
     title: 'Persuasive Writing 101',
     blurb: 'Build arguments that hold up.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 20l3-1 11-11a2 2 0 00-3-3L4 16l-1 3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    )
+    // Exported from the frame (525:142). The pencil is a rotated rect plus a
+    // tip path — reproducing it by hand would be a redrawing of brand art, the
+    // mistake already made once with the mascot.
+    icon: <img src={iconPersuasive} alt="" width={32} height={32} />
   },
   {
     id: 'rubric',
     title: 'Standard Grading Rubric',
     blurb: 'See how Tracely scores essays.',
+    // Drawn, not exported: the frame builds this one from three plain rects
+    // (528:143-145) whose geometry is given exactly — 2.4px tall, 1.2 radius,
+    // 16/12/14 wide, at y 10/16/22 inside a 32px box.
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M5 7h14M5 12h14M5 17h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      </svg>
+      <span className="home-resource-bars" aria-hidden="true">
+        <i style={{ width: 16, top: 10 }} />
+        <i style={{ width: 12, top: 16 }} />
+        <i style={{ width: 14, top: 22 }} />
+      </span>
     )
   },
   {
     id: 'research',
     title: 'Research Paper Tips',
     blurb: 'Structure, sourcing, citations.',
+    // Also drawn from its own rects (528:146-149): a 16x20 outlined body at
+    // 8,6 with three 9px lines at y 12 / 16.2 / 20.4.
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M6 3h9l4 4v14H6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-        <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
+      <span className="home-resource-doc" aria-hidden="true">
+        <b />
+        <i style={{ top: 12 }} />
+        <i style={{ top: 16.2 }} />
+        <i style={{ top: 20.4 }} />
+      </span>
     )
   },
   {
     id: 'sources',
     title: 'Finding Credible Sources',
     blurb: 'Spot reliable evidence fast.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      </svg>
-    )
+    icon: <img src={iconSources} alt="" width={32} height={32} />
   }
 ]
 
@@ -132,6 +138,16 @@ export default function HomeView({
               its own close now, sitting directly above where this would be, and
               two closes stacked in one corner is what the window-controls work
               removed in the first place. */}
+          <button
+            className="home-close"
+            aria-label="Hide Tracely"
+            title="Hide Tracely"
+            onClick={() => tracelyApi.hideWindow('main')}
+          >
+            <svg viewBox="0 0 21 21" fill="none" aria-hidden="true">
+              <path d="M4 4l13 13M17 4L4 17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
           <h1 className="home-greeting">
             {greetingFor(now.getHours())}
             {/* The FIRST word only. `firstName` holds whatever was typed at
@@ -260,7 +276,7 @@ export default function HomeView({
           )}
         </section>
 
-        <section className="home-section">
+        <section className="home-section home-section--resources">
           <div className="home-section-head">
             <h2>Resources</h2>
           </div>
@@ -316,9 +332,7 @@ export default function HomeView({
           </div>
           <button className="home-worklink" onClick={() => onNavigate('settings')}>
             You choose where Tracely works
-            <svg viewBox="0 0 18 23" fill="none" aria-hidden="true">
-              <path d="M0.82 22.65L15.82 1.15M17.32 8.65L15.82 1.15L7.32 2.65" stroke="currentColor" strokeWidth="2" />
-            </svg>
+            <img src={homeArrow} alt="" width={17} height={22} />
           </button>
         </footer>
       </div>

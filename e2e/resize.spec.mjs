@@ -77,11 +77,15 @@ test('the card fills the window at every size, and keeps its design units', asyn
 
   // A real element from the Figma transcription, authored at a fixed px size.
   // Its share of the window is what must not move.
-  // Home's brand lockup: a fixed-size logo beside fixed-size type, present on
-  // every render of the screen. The old probe was `.home-el`, one of sixteen
-  // absolutely-positioned children of a Figma transcription that the Home
-  // rebuild replaced with ordinary flow and grid.
-  const probe = '.home-brand'
+  // A resource card's icon box: 32x32 in the Figma frame and 32x32 at every
+  // window size, with no breakpoint touching it.
+  //
+  // It was `.home-brand` for one build, and that was wrong for a subtle reason
+  // worth keeping: the brand lockup's font-size DOES change, at the narrow
+  // breakpoint, which is responsive design working — not the zoom-scaling this
+  // test exists to catch. A probe has to be something no media query moves, or
+  // it cannot tell the two apart.
+  const probe = '.home-resource-icon'
   assert.ok(
     await page.locator(probe).first().isVisible().catch(() => false),
     `${probe} is not on screen — this test measures nothing without it`
