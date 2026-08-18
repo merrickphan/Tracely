@@ -312,17 +312,58 @@ input[type='range']::-webkit-slider-runnable-track {
      the top of the card must reserve this or it renders underneath them — the
      document editor's toolbar did, putting the window's X on top of "AI
      Insights". See components/WindowControls.tsx. */
-  /* Zero now. This reserved the top-right corner for the app's own minimize /
-     maximize / close cluster; the OS title bar owns that corner, so every view
-     gets the space back. Kept as a variable because several views subtract it
-     and one number in one place is why they agreed. */
-  --winctl-reserve: 0px;
+  /* Non-zero again, and this time it is not the app's own cluster it clears.
+     The title bar is hidden with a transparent overlay (see mainWindow.ts), so
+     Windows draws the REAL minimize / maximize / close over the page's
+     top-right corner — three ~46px buttons. Any view with content along the top
+     must subtract this or it renders underneath them, which is what put the
+     window's X on top of "AI Insights" the last time buttons sat over the page.
+     WINDOW_CONTROLS_WIDTH in shared/windowSize.ts is 138 — the buttons
+     themselves. This is 4 more, so a control that shrinks to exactly fill the
+     reserve still lands a few pixels clear of them rather than touching. */
+  --winctl-reserve: 142px;
+  /* Mirrors TITLEBAR_HEIGHT in shared/windowSize.ts — the band those buttons
+     live in, and the height of the drag strip below. */
+  --titlebar-h: 34px;
   /* The Figma frame's own size — MAIN_CARD_WIDTH/HEIGHT in
      shared/windowSize.ts. Only `.home-canvas` caps itself to these: it is the
      one view laid out at literal design coordinates, so it must not stretch.
      Everything else fills the window. */
   --card-width: 870px;
   --card-height: 606px;
+}
+
+/*
+  The strip that replaces the caption area.
+
+  A hidden title bar leaves the window with nothing to drag by, so this puts the
+  drag region back where the caption was — full width except the corner Windows'
+  own buttons occupy, which must NOT be marked draggable or the OS stops
+  receiving clicks on them.
+
+  Fixed rather than a flow element so it costs the layout nothing: every view
+  still starts at the top of the window and simply has 34px of grab-area over
+  its own padding. It sits under nothing interactive — `.home-top`'s brand and
+  the editor's toolbar both begin below it — and anything that ever does need to
+  live up there can opt out with `-webkit-app-region: no-drag`.
+*/
+.app-dragbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: var(--winctl-reserve);
+  height: var(--titlebar-h);
+  -webkit-app-region: drag;
+  /* BEHIND the content, and that is the whole trick.
+     Chromium builds the draggable region by walking the paint order, adding
+     `drag` rects and subtracting `no-drag` ones — and line 175 of this file
+     already marks every button, input, select and link `no-drag`. So with the
+     strip underneath, each control punches its own hole in it and keeps its
+     clicks, while the gaps between them drag the window.
+     At z-index 40 it sat on top instead and swallowed everything in the first
+     34px: the editor's Back button, Documents' back link, Settings' back link.
+     Two e2e tests caught it — "app-dragbar intercepts pointer events". */
+  z-index: -1;
 }
 
 .app-main {
@@ -334,7 +375,13 @@ input[type='range']::-webkit-slider-runnable-track {
 }
 
 .app-main-fixed {
-  overflow-y: auto;
+  /* `hidden`, not `auto`. Home is `height: 100%` and scrolls itself, so this
+     never had anything to scroll — but a nested pair of `auto` scrollers is a
+     feedback loop: the inner one taking a scrollbar changes the content width,
+     which changes the content height, which can add or remove the outer one.
+     Home in its empty state sat exactly on that threshold and never settled
+     (see the note on `.home`). One scroller, one answer. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1109,9 +1156,21 @@ textarea:disabled {
      A title field is the right something: it is a text input, it scrolls, and
      every editor truncates the document name before it squashes the formatting
      controls. Letting those shrink instead was tried and measured — the font
-     family and size dropped 96->74 and 52->40, visibly squashed. */
-  flex-shrink: 1;
-  min-width: 92px;
+     family and size dropped 96->74 and 52->40, visibly squashed.
+
+     92px once, when the reserve was the app's own 26px buttons. The OS's are
+     wider, the row needed 9px more than the floor allowed, and an overflowing
+     flex row spills its LAST child — so "AI Insights" sat 9px under the
+     minimize button. Measured at 898 (the default width): insights ended at
+     769 against a 760 edge; at 76 it ends at 756, four clear of the edge. */
+  /* 1000, not 1, and the number is doing one specific job: it makes the title
+     give way BEFORE `.docedit-tools` does. Flex distributes shrink in
+     proportion to basis x factor, so at 1 the two shared the shortfall and the
+     formatting group started scrolling — clipping "Share" mid-word — while the
+     title still sat at 134px of its 150. There is no ordering primitive in
+     flexbox; a lopsided weight is how you say "this one first". */
+  flex-shrink: 1000;
+  min-width: 76px;
 }
 
 .docedit-name::placeholder {
@@ -1248,8 +1307,26 @@ textarea:disabled {
   font-weight: 600;
 }
 
-.docedit-spacer {
-  flex: 1;
+/* Replaced by `.docedit-tools`, which takes the free space AND holds the
+   formatting controls, so there is nothing left for a bare spacer to push. */
+.docedit-tools {
+  flex: 1 1 auto;
+  /* Without this a flex item refuses to shrink below its content width, which
+     is the whole point of the group — it is what lets the row give way at
+     narrow widths instead of spilling its last child off the window. */
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  /* No scrollbar track through the middle of a 42px toolbar. The group is
+     scrolled with the wheel or by dragging, like every other overflow row in
+     this app. */
+  scrollbar-width: none;
+}
+
+.docedit-tools::-webkit-scrollbar {
+  display: none;
 }
 
 .docedit-insights {
@@ -5580,6 +5657,16 @@ textarea:disabled {
    tokens would silently restyle every other view against a frame that has
    nothing to say about them. */
 .home {
+  /* The scrollbar's space is reserved whether or not it is showing.
+     Without this, Home in its empty state sat exactly on the threshold: the
+     greeting wraps to two lines, the content becomes one line taller than the
+     viewport, the scrollbar appears, the narrower content unwraps the greeting,
+     the scrollbar goes away, and it wraps again — a layout that never settles.
+     Playwright caught it as "element is not stable" on "View all documents",
+     failing a different e2e test on every run; a person would see a flickering
+     scrollbar. Reserving the gutter removes the feedback loop. */
+  scrollbar-gutter: stable;
+
   --h-ink: #212429;
   --h-muted: #737880;
   --h-accent: #f97316;
@@ -5603,32 +5690,18 @@ textarea:disabled {
   gap: 0;
 }
 
-/* The frame's X (image 2, 21px at 824,17). It hides to the tray — which is what
-   closing has always meant here, since window-all-closed keeps the app alive
-   for the global hotkey. */
-.home-close {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--h-ink);
-  cursor: pointer;
-}
-.home-close:hover { background: var(--h-subtle); }
-.home-close svg { width: 17px; height: 17px; }
+/* `.home-close` is gone with the button — the real Windows close sits in that
+   corner now and hides to the tray identically. See HomeView. */
 
 .home-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding-right: 34px;
+  /* Was 34px, for the in-content close X. Now clears the OS window buttons,
+     which are drawn over this corner — see --winctl-reserve. The greeting is
+     what sits at this end of the row and it would otherwise run under them. */
+  padding-right: var(--winctl-reserve);
 }
 
 /* "Tracely" is 32px SemiBold beside a 63x54 mark. */

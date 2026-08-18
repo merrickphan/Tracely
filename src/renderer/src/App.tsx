@@ -27,15 +27,16 @@ function gateFor(user: AuthUser | null, configured: boolean): AuthGateState {
   return 'ready'
 }
 
-// No window-level chrome at all. The window is resizable and draggable now, but
-// neither needs a control here: the card itself is the drag handle (index.css's
-// `.home-canvas`/`.analyze-view`/`.settings-shell`, with every interactive
-// element opting back out), and resizing is the OS edge grab against a locked
-// aspect ratio. Minimize and maximize are still off — see createMainWindow.
+// One piece of window chrome, and it is invisible: `.app-dragbar`.
 //
-// So there is nothing to draw beyond what each view already has (Home's
-// close-X, Analyze's close-X, Settings' Back link), which is exactly what the
-// Figma design shows and nothing else.
+// The window is an ordinary OS window — native resize borders, snap, Win+Arrow,
+// and the real minimize / maximize / close, which Windows draws over the
+// page's top-right corner because the title BAR is hidden and only its overlay
+// remains (createMainWindow). What a hidden title bar does not leave behind is
+// a caption area to drag the window by, so that strip is it.
+//
+// The app draws no buttons of its own. It did once, and the cluster was deleted
+// in favour of the OS's; two close buttons on one window is worse than none.
 export default function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('home')
   // Which document the editor should open. Lives here rather than inside
@@ -87,6 +88,8 @@ export default function App(): JSX.Element {
   if (gate === 'signedOut') {
     return (
       <div className="app-shell">
+        {/* The window has no title bar to drag by — see mainWindow.ts. */}
+        <div className="app-dragbar" aria-hidden="true" />
         <main className="app-main">
           <LoginView
             onSignedIn={(u) => {
@@ -102,6 +105,8 @@ export default function App(): JSX.Element {
   if (gate === 'needsName') {
     return (
       <div className="app-shell">
+        {/* The window has no title bar to drag by — see mainWindow.ts. */}
+        <div className="app-dragbar" aria-hidden="true" />
         <main className="app-main">
           <NamePromptView
             onDone={(u) => {
@@ -116,6 +121,10 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app-shell">
+      {/* The window has no title bar to drag by — see mainWindow.ts. This is
+          the strip that replaces its caption area; it stops short of the
+          corner Windows draws the real window buttons in. */}
+      <div className="app-dragbar" aria-hidden="true" />
       <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
         {tab === 'home' ? (
           <HomeView
