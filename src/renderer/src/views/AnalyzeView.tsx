@@ -211,6 +211,26 @@ function DocumentEditor({
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
   /**
+   * Keeps `insidePopoverRef` honest when the card goes away underneath the
+   * pointer.
+   *
+   * The ref is set by the card's onMouseEnter and cleared by its onMouseLeave —
+   * and REACT DOES NOT FIRE onMouseLeave WHEN AN ELEMENT UNMOUNTS. So every
+   * action that closes the card while the pointer is still on it — Dismiss,
+   * Ignore, Done, Apply, Insert citation — left this stuck at `true`, and
+   * `handleBodyMouseMove` returns early while it is. The result was that
+   * finishing one action killed hovering for every other underline in the
+   * document until the view was remounted.
+   *
+   * The invariant is simply: no card is rendered, so the pointer cannot be
+   * inside one. Derived from state in an effect for the same reason
+   * `flowPinnedRef` above is — a ref that only DOM events can move is a ref
+   * that gets stranded by a re-render, and this one gates the whole feature.
+   */
+  useEffect(() => {
+    if (!activeMark && !activeProse) insidePopoverRef.current = false
+  }, [activeMark, activeProse])
+  /**
    * Closing a hover card is DELAYED, because the card is drawn a gap away from
    * the text it is about and crossing that gap puts the pointer over neither.
    * Closing on the first such frame made the card unreachable — it vanished
