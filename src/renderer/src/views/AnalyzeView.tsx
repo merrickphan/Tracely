@@ -1649,25 +1649,58 @@ function DocumentEditor({
   )
 }
 
-export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
-  const sourceInputRef = useRef<HTMLTextAreaElement>(null)
-  const [text, setText] = useState('')
-  const [docEditorOpen, setDocEditorOpen] = useState(false)
-  const [docName, setDocName] = useState('')
-  // The document to reopen. Fetched once so "Create Document" can continue the
-  // last one instead of silently starting a blank page over the top of it —
-  // there was no way to get back to previous work at all before, because there
-  // was no previous work: it lived in a DOM node that unmounting destroyed.
-  const [latestDoc, setLatestDoc] = useState<DocumentRecord | null>(null)
-  const [latestDocLoaded, setLatestDocLoaded] = useState(false)
+/** The title a document starts life with. Editable inline the moment the editor
+ *  opens, which is why "+ New document" does not stop to ask for one. */
+const UNTITLED = 'Untitled document'
+
+/**
+ * The document editor.
+ *
+ * It used to open onto a landing of its own — "Start a new session", a
+ * "Name your document…" field and a Create Document button. That screen is gone
+ * (see views/DocumentsView.tsx): naming was a gate in front of typing, and the
+ * field's EMPTY state doubled as "continue the last document", which was the
+ * only route back to previous work anywhere in the app — so any draft that was
+ * not the most recent one was unreachable. The Documents page lists every
+ * draft, so this view now only ever opens ON one.
+ */
+export default function AnalyzeView({
+  onNavigate,
+  openDocumentId
+}: {
+  onNavigate: (tab: Tab) => void
+  /** Which document to open. `null` starts a new, untitled one. */
+  openDocumentId: string | null
+}): JSX.Element {
+  const [docName, setDocName] = useState(UNTITLED)
+  // Fetched by id rather than "the most recent one", which is what reopening
+  // used to mean.
+  const [initialDoc, setInitialDoc] = useState<DocumentRecord | null>(null)
+  const [docLoaded, setDocLoaded] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+    if (openDocumentId === null) {
+      setInitialDoc(null)
+      setDocName(UNTITLED)
+      setDocLoaded(true)
+      return
+    }
     tracelyApi
-      .getLatestDocument()
-      .then((res) => setLatestDoc(res.document))
+      .getDocument(openDocumentId)
+      .then((res) => {
+        if (cancelled) return
+        setInitialDoc(res.document)
+        setDocName(res.document?.title || UNTITLED)
+      })
       .catch(() => {})
-      .finally(() => setLatestDocLoaded(true))
-  }, [])
+      .finally(() => {
+        if (!cancelled) setDocLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [openDocumentId])
   const [claims, setClaims] = useState<Claim[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1702,131 +1735,34 @@ export default function AnalyzeView({ onNavigate }: { onNavigate: (tab: Tab) => 
     }
   }
 
-  function handleCta(): void {
-    // A typed name starts a new document; an empty box continues the last one,
-    // which is the only way back into previous work.
-    const named = text.trim()
-    setDocName(named || latestDoc?.title || '')
-    setClaims(null)
-    setError(null)
-    setDocEditorOpen(true)
-  }
-
-  if (docEditorOpen) {
-    return (
-      <DocumentEditor
-        // Remounts when the target document changes, so the restore-once
-        // effect inside runs against the right body.
-        key={text.trim() ? 'new' : (latestDoc?.id ?? 'new')}
-        docName={docName}
-        onDocNameChange={setDocName}
-        onBack={() => {
-          setDocEditorOpen(false)
-          // claims/error belong to whichever screen last ran detection. The
-          // document editor writes into the same state the picker reads at
-          // the bottom of "Start a new session" (line ~1153) — without this,
-          // going Back left the doc's claim list rendered under the picker.
-          setClaims(null)
-          setError(null)
-        }}
-        onRunInsights={runDetection}
-        onRefreshClaims={refreshClaims}
-        insightsLoading={loading}
-        claims={claims}
-        error={error}
-        initialDoc={text.trim() ? null : latestDoc}
-        onSaved={setLatestDoc}
-      />
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="analyze-view">
-        <AnalyzingPanel onClose={() => onNavigate('home')} />
-      </div>
-    )
+  // Nothing renders until we know WHICH document this is: mounting the editor
+  // first and swapping `initialDoc` in afterwards would run its restore-once
+  // effect against an empty body and then never re-run.
+  if (!docLoaded) {
+    return <div className="analyze-view" />
   }
 
   return (
-    <div className="analyze-view">
-      <button className="analyze-back" onClick={() => onNavigate('home')}>
-        <BackIcon size={13} />
-        Back
-      </button>
-      <section className="analyze-input">
-        <h2 className="analyze-heading">Start a new session</h2>
-        <p className="analyze-subheading">Choose a source for Tracely to analyze.</p>
-        {/* Nothing to choose between any more, so this is a label for the
-            field under it rather than a toggle — no `aria-pressed`, since a
-            control that is permanently pressed tells a screen-reader user
-            there is another state to reach. Clicking it still jumps into the
-            name box, which is the one useful thing it did as a tile. */}
-        <div className="source-tile-row">
-          <button
-            type="button"
-            className="source-tile active"
-            aria-controls="analyze-source-input"
-            onClick={() => requestAnimationFrame(() => sourceInputRef.current?.focus())}
-          >
-            <DocumentIcon size={22} />
-            Document
-          </button>
-        </div>
-
-        <TextArea
-          id="analyze-source-input"
-          ref={sourceInputRef}
-          size="lg"
-          placeholder={SOURCE_PLACEHOLDER}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          // Naming a document is a title, not a paragraph — one row, not the
-          // six the paste-text box used to want out of this shared textarea.
-          rows={1}
-          // Figma 58:223 draws this at the tile row's old 620px, left-aligned
-          // with 16px of lead-in — not a narrow centred field. It was 320 and
-          // centred, which is the widest single thing on the screen sitting
-          // over a box half its width.
-          style={{ maxWidth: 620, resize: 'none', textAlign: 'left' }}
-        />
-
-        <div className="analyze-input-actions">
-          <Button
-            variant="primary"
-            className="analyze-cta"
-            onClick={handleCta}
-            disabled={loading || !latestDocLoaded}
-          >
-            {latestDocLoaded ? SOURCE_CTA : 'Loading…'}
-          </Button>
-        </div>
-
-        {/* Its own row, not a sibling of the button inside `.analyze-input-actions`.
-            That row centres its children as a group, so the moment this count
-            appeared it shoved the CTA left of centre — the design (58:225) has
-            the button alone and centred, and it should stay centred whether or
-            not a run has produced claims. */}
-        {claims ? (
-          <p className="muted analyze-feedback">
-            {claims.length} claim{claims.length === 1 ? '' : 's'} detected
-          </p>
-        ) : null}
-
-        {error ? <p className="error-text analyze-feedback">{error}</p> : null}
-
-        {claims && claims.length === 0 ? (
-          <p className="muted analyze-feedback">No checkable claims detected in this text.</p>
-        ) : null}
-
-        {claims && claims.length > 0 ? (
-          <section className="results-panel analyze-results" aria-live="polite">
-            {claims.map((claim) => (
-              <ClaimCard key={claim.id} claim={claim} />
-            ))}
-          </section>
-        ) : null}
-      </section>
-    </div>
+    <DocumentEditor
+      // Remounts when the target document changes, so the restore-once effect
+      // inside runs against the right body.
+      key={openDocumentId ?? 'new'}
+      docName={docName}
+      onDocNameChange={setDocName}
+      // Back goes to the list it was opened from, not to Home — the Documents
+      // page is this view's parent now.
+      onBack={() => {
+        setClaims(null)
+        setError(null)
+        onNavigate('documents')
+      }}
+      onRunInsights={runDetection}
+      onRefreshClaims={refreshClaims}
+      insightsLoading={loading}
+      claims={claims}
+      error={error}
+      initialDoc={initialDoc}
+      onSaved={setInitialDoc}
+    />
   )
 }

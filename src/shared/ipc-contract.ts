@@ -12,6 +12,7 @@ import type {
   FontSize,
   EvidenceItem,
   DocumentOutline,
+  DocumentListItem,
   DocumentRecord,
   EvidenceCoverage,
   LibraryItem,
@@ -873,7 +874,7 @@ export interface AuthDeleteAccountResponse {
 }
 
 export interface DocumentsListResponse {
-  documents: DocumentRecord[]
+  documents: DocumentListItem[]
 }
 export interface DocumentsGetRequest {
   id: string

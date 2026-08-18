@@ -68,8 +68,11 @@ export default function HomeView({
       </button>
 
       <img src={homePlus} className="home-el home-plusicon" alt="" />
-      <button className="home-el home-link home-link-newsession" onClick={() => onNavigate('analyze')}>
-        New Session
+      {/* Was "New Session" → straight into a naming field. It goes to the
+          Documents page now (Figma 58:172), which lists every draft and starts
+          new ones — the naming step is gone and previous work is reachable. */}
+      <button className="home-el home-link home-link-newsession" onClick={() => onNavigate('documents')}>
+        Documents
       </button>
 
       {/* The way into the saved sources. Until now nothing in the app could

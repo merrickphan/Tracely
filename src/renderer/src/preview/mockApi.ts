@@ -10,6 +10,7 @@ import type {
   AuthUser,
   Claim,
   DocumentOutline,
+  DocumentListItem,
   DocumentRecord,
   EvidenceCoverage,
   ScoreBreakdown
@@ -129,7 +130,9 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // real store would. Reset per document, like every other bit of preview
   // state, because the mock is constructed once per bridge.
   let previewClaims: Claim[] = [...fx.claims]
-  let previewDocs: DocumentRecord[] = [...fx.documents]
+  // DocumentListItem, because the Documents page lists grades — a
+  // DocumentRecord[] here would make the mock the one place those are absent.
+  let previewDocs: DocumentListItem[] = [...fx.documents]
   let previewSettings: AppSettings = { ...fx.settings }
   // Screen Watch's claims are pushed, not fetched: the real service folds a
   // refresh or a critique into its in-memory claim and redraws the overlay, so
@@ -324,7 +327,14 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
               title: req.title,
               bodyHtml: req.bodyHtml,
               createdAt: now,
-              updatedAt: now
+              updatedAt: now,
+              // A brand-new document has not been read, so it has no grade —
+              // the same state main returns for a row with no
+              // document_structure behind it. Seeding a score here would make
+              // "+ New document" produce a graded card in the preview and
+              // an ungraded one in the app.
+              score: null,
+              gradedAt: null
             }
         previewDocs = [doc, ...previewDocs.filter((d) => d.id !== doc.id)]
         return ok('documents.save', { document: doc })

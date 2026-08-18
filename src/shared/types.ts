@@ -247,6 +247,28 @@ export interface DocumentRecord {
   updatedAt: string
 }
 
+/**
+ * A document as the Documents page lists it — Figma "DocumentsPage" (58:172).
+ *
+ * The grade and the date it was earned are joined from `document_structure`,
+ * not stored on the document: that table already caches the outline (score
+ * included) and when it was analysed, so the card's chip and its "Graded May
+ * 19, 2026" line are two reads of a row that already exists. Deriving them here
+ * rather than denormalising onto `documents` is what keeps one score per draft
+ * — the alternative is a copy that goes stale the moment the draft is edited
+ * and re-analysed.
+ *
+ * Both null for a document nothing has read yet, which is a normal state and
+ * not an error: the card then draws no chip and says so, rather than showing a
+ * letter nothing computed.
+ */
+export interface DocumentListItem extends DocumentRecord {
+  /** 0-100, the same number ArgumentScoreModal shows. Null when never analysed. */
+  score: number | null
+  /** ISO timestamp of the analysis the score came from. */
+  gradedAt: string | null
+}
+
 // What a paragraph is DOING in the argument, which is a different question from
 // what it says. The vocabulary is the one composition instructors already use,
 // so a label is something a student can act on rather than jargon to decode.
