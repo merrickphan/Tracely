@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { Claim, ClaimType, CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 import { queryAll, queryOne, run, transaction } from './db'
+import { rescoreFromBreakdown } from '../search/scoring'
 
 interface ClaimRow {
   id: string
@@ -19,6 +20,7 @@ interface ClaimRow {
 }
 
 function toDomain(row: ClaimRow): Claim {
+  const breakdown = row.score_breakdown ? (JSON.parse(row.score_breakdown) as ScoreBreakdown) : null
   return {
     id: row.id,
     analysisId: row.analysis_id,
@@ -26,8 +28,13 @@ function toDomain(row: ClaimRow): Claim {
     claimType: row.claim_type as ClaimType,
     confidence: row.confidence,
     searchQuery: row.search_query,
-    strengthScore: row.strength_score,
-    scoreBreakdown: row.score_breakdown ? (JSON.parse(row.score_breakdown) as ScoreBreakdown) : null,
+    // Re-derived from the stored breakdown rather than read back, so a claim
+    // searched under older weights bands the same way a fresh one does. See
+    // rescoreFromBreakdown: it is exact, needs no network, and returns null
+    // for a claim nobody has searched. Falls back to the stored number when
+    // there is no breakdown to derive from — rows that predate the column.
+    strengthScore: breakdown ? rescoreFromBreakdown(breakdown) : row.strength_score,
+    scoreBreakdown: breakdown,
     critique: row.critique,
     critiqueVerdict: row.critique_verdict as CritiqueVerdict | null,
     // `?? null` rather than a bare read: these columns arrive by migration, and

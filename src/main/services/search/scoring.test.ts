@@ -1,6 +1,6 @@
 import { ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { computeStrengthScore, MIN_COUNTABLE_RELEVANCE, type ScorableItem } from './scoring.ts'
+import { computeStrengthScore, MIN_COUNTABLE_RELEVANCE, rescoreFromBreakdown, type ScorableItem } from './scoring.ts'
 
 // scoring.ts had no tests until 2026-08-16, which is how the dilution below
 // survived: it is not a subtle bug, but nothing ever asked the module a
@@ -186,5 +186,47 @@ describe('computeStrengthScore — the fitted weights spread claims out', () => 
     const good = computeStrengthScore([relevantItem({ venueType: 'journal' })], 'dense').score
     const poor = computeStrengthScore([relevantItem({ venueType: 'preprint' })], 'dense').score
     ok(good > poor, `a relevant journal paper should outscore a relevant preprint (${good} vs ${poor})`)
+  })
+})
+
+describe('rescoreFromBreakdown — stored claims re-band under new weights', () => {
+  it('reproduces computeStrengthScore exactly for the no-stance path', () => {
+    // The property the migration rests on: the score IS the weighted sum of
+    // the stored factors, so re-deriving one cannot drift from computing one.
+    for (const items of [
+      [relevantItem()],
+      [relevantItem(), relevantItem(), irrelevantItem()],
+      [relevantItem({ venueType: 'preprint', year: YEAR - 15 })],
+      Array.from({ length: 6 }, () => relevantItem({ textRelevance: 0.9 }))
+    ]) {
+      const { score, breakdown } = computeStrengthScore(items, 'dense')
+      strictEqual(rescoreFromBreakdown(breakdown), score)
+    }
+  })
+
+  it('keeps null distinct from zero', () => {
+    // null = nobody has looked. 0 = we looked and found nothing. problemKind.ts
+    // says different things about them, so collapsing the two would report a
+    // verdict on every claim the moment it was detected.
+    strictEqual(rescoreFromBreakdown(null), null)
+    strictEqual(
+      rescoreFromBreakdown({ sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 }),
+      0
+    )
+  })
+
+  it('re-bands a claim stored under the old weights', () => {
+    // A breakdown typical of the old failure: prestigious, recent, and barely
+    // relevant. Under the pre-2026-08-18 weights this scored in the 40-69
+    // "partially supported" band; it must now read as weak.
+    // One source of six clears the floor, it is barely on topic, and the list
+    // is recent and well-published. Old weights: 52. New: 33.
+    const prestigiousButOffTopic = { sourceCount: 0.17, quality: 1, recency: 0.9, relevance: 0.15, support: 0 }
+    const old = 0.3 * 0.15 + 0.25 * 0.17 + 0.3 * 1 + 0.15 * 0.9
+    ok(Math.round(100 * old) >= 40, 'this breakdown used to land in the partial band')
+    ok(
+      (rescoreFromBreakdown(prestigiousButOffTopic) ?? 0) < 40,
+      'a prestigious off-topic list must now band as weak'
+    )
   })
 })
