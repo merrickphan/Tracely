@@ -4,6 +4,7 @@ import { registerCitationHandlers } from './citationHandlers'
 import { registerClipboardHandlers } from './clipboardHandlers'
 import { registerCritiqueHandlers } from './critiqueHandlers'
 import { registerEvidenceHandlers } from './evidenceHandlers'
+import { registerSourcesHandlers } from './sourcesHandlers'
 import { registerHistoryHandlers } from './historyHandlers'
 import { registerDocumentsHandlers } from './documentsHandlers'
 import { registerLibraryHandlers } from './libraryHandlers'
@@ -20,6 +21,7 @@ export function registerIpcHandlers(): void {
   registerSettingsHandlers()
   registerHistoryHandlers()
   registerEvidenceHandlers()
+  registerSourcesHandlers()
   registerCritiqueHandlers()
   registerCitationHandlers()
   registerDocumentsHandlers()

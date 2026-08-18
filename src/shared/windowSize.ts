@@ -113,13 +113,64 @@ export const MAX_COMFORTABLE_SCALE = 1.6
  * resize grips stay grabbable after maximizing — a window flush to every edge
  * has no outside left to grab, and this app has no title bar to drag either.
  */
-export function maximizedScale(
+/**
+ * Kept off the very edges of the work area, so the resize grips stay grabbable.
+ *
+ * A window flush to every edge has no outside left to grab, and this app has no
+ * title bar to drag either — the grips ARE the only way to change its size, so
+ * a size that puts them under the taskbar is a size the user cannot undo.
+ */
+export const WINDOW_EDGE_MARGIN = 24
+
+/**
+ * The largest scale that actually fits on this display.
+ *
+ * Both axes, and that is the whole point. The aspect ratio is locked, so a
+ * window sized from the WIDTH alone can be arbitrarily taller than the screen:
+ * at MAX_WINDOW_SCALE on a 2560x1392 work area the window is 2245x1585 — 193px
+ * of it below the bottom of the display, which on this layout is the footer of
+ * every view and the lower half of any open popover. That is the "the overlay
+ * cuts out when you resize the app too big" report, and it is not a rendering
+ * bug: the pixels are drawn correctly, off-screen.
+ *
+ * Deliberately NOT capped by MAX_COMFORTABLE_SCALE — see maximizedScale, which
+ * applies that cap on top of this. A drag is the user explicitly asking for a
+ * size; maximize is the app choosing one for them, and only the second should
+ * be second-guessed about comfort.
+ */
+export function fitToWorkAreaScale(
   workArea: { width: number; height: number },
-  margin = 24
+  margin = WINDOW_EDGE_MARGIN
 ): number {
   const byWidth = (workArea.width - margin * 2) / LAYOUT_WIDTH
   const byHeight = (workArea.height - margin * 2) / LAYOUT_HEIGHT
-  return clampWindowScale(Math.min(byWidth, byHeight, MAX_COMFORTABLE_SCALE))
+  return Math.min(byWidth, byHeight)
+}
+
+/**
+ * The scale a DRAG may reach on this display: never past the screen edge, never
+ * past MAX_WINDOW_SCALE, never below the readable floor.
+ *
+ * The floor wins over the fit. On a display too small to hold even
+ * MIN_WINDOW_SCALE something has to overflow, and overflowing the screen edge
+ * is recoverable — the window can be moved — while shrinking below 0.7 makes
+ * the 11px labels in Settings unreadable, which is not.
+ */
+export function clampDragScale(
+  scale: number,
+  workArea: { width: number; height: number },
+  margin = WINDOW_EDGE_MARGIN
+): number {
+  const fits = fitToWorkAreaScale(workArea, margin)
+  const ceiling = Math.max(MIN_WINDOW_SCALE, Math.min(MAX_WINDOW_SCALE, fits))
+  return Math.min(ceiling, clampWindowScale(scale))
+}
+
+export function maximizedScale(
+  workArea: { width: number; height: number },
+  margin = WINDOW_EDGE_MARGIN
+): number {
+  return clampWindowScale(Math.min(fitToWorkAreaScale(workArea, margin), MAX_COMFORTABLE_SCALE))
 }
 
 export function sizeForScale(scale: number): { width: number; height: number } {

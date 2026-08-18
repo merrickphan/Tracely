@@ -5785,3 +5785,38 @@ textarea:disabled {
   line-height: 1.55;
   color: var(--muted);
 }
+
+/* --- Real publisher icons in source rows ---------------------------------- */
+
+/* The box keeps the design's 28px / 8px-radius geometry either way — a list
+   mixing publishers that have an icon with ones that do not still lines up on
+   one grid. Only the fill changes: the monogram's solid blue is the tile
+   ITSELF, and leaving it behind a favicon would tint every icon and put a
+   coloured card behind transparent PNGs. */
+.docmark-row-badge.has-icon,
+.argev-badge.has-icon {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Favicons arrive at whatever size the publisher serves. `contain` keeps a
+   non-square mark from being stretched, which is more noticeable than it
+   sounds — a wordmark distorted to a square reads as a rendering fault. */
+.docmark-row-badge.has-icon img,
+.argev-badge.has-icon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Still white. Most favicons are drawn for a light page and a dark tile puts
+     dark-on-dark marks into an invisible box; a small white chip reads as the
+     site's own icon rather than as a light patch. */
+  .docmark-row-badge.has-icon,
+  .argev-badge.has-icon {
+    background: #fff;
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+}

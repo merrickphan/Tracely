@@ -19,6 +19,8 @@ import type {
 import { cohesionGuidanceFor, guidanceFor } from '@shared/revisionGuidance'
 import { searchableClaims } from '@shared/coverageCounts'
 import { roleBlurbFor } from './roleBlurb'
+import SourceIconBox from './SourceIconBox'
+import { useFavicons } from '../lib/useFavicons'
 import { summariseDraft } from '@shared/draftSummary'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
@@ -1652,6 +1654,9 @@ function FindEvidenceResult({
   const [searching, setSearching] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  // Real publisher icons, resolving in the background — the rows render with
+  // their monogram immediately and swap when one arrives. See useFavicons.
+  const favicons = useFavicons((evidence ?? []).map((item) => item.source.url))
   const [inserted, setInserted] = useState(false)
 
   // Read what is already stored before searching anything. A claim reached from
@@ -1746,7 +1751,11 @@ function FindEvidenceResult({
                 className={`argev-row${selected === item.source.id ? ' selected' : ''}`}
                 onClick={() => setSelected(item.source.id)}
               >
-                <span className="argev-badge">{initialsFor(item.source)}</span>
+                <SourceIconBox
+                  className="argev-badge"
+                  initials={initialsFor(item.source)}
+                  faviconDataUrl={item.source.url ? favicons.get(item.source.url) : null}
+                />
                 <span className="argev-meta">
                   <span className="argev-source-title">{item.source.title}</span>
                   <span className="argev-source-sub">

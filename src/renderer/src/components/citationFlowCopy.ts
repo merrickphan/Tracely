@@ -134,11 +134,22 @@ export const EXTERNAL_REFERENCE_LABEL = 'ADD THIS TO YOUR REFERENCE LIST'
  * The monogram tile's letters: an acronym for a multi-word venue, else the
  * first two letters of whatever name there is.
  *
- * A tile rather than a favicon, and only on this surface. The overlay can show
- * the real site icon because main fetches one (search/favicon.ts) and hands it
- * over as a data: URI; nothing on the persisted `Source` the editor holds
- * carries one, and adding a fetch here would widen this window's network
- * surface for decoration.
+ * The FALLBACK now, not the only option. This used to say a tile was all this
+ * surface could have — the overlay showed real site icons because main fetched
+ * them, and nothing on the persisted `Source` the editor holds carries one, so
+ * every citation row in the app's own window drew initials while the same
+ * source in the overlay drew its publisher's mark.
+ *
+ * `ipc/sourcesHandlers.ts` closes that: main does the fetching for this window
+ * too and hands back a data: URI, which index.html's existing
+ * `img-src 'self' data: file:` already allows — so no CSP was loosened and no
+ * new network surface was opened, only a request that was already being made
+ * got a second consumer.
+ *
+ * These letters are still what a row shows while the lookup is out, and what it
+ * keeps for a publisher the favicon service has nothing for — which is common
+ * enough (preprint servers, small journals) that this is a normal state and not
+ * an error one.
  */
 export function sourceInitials(name: string): string {
   const words = name.split(/\s+/).filter((w) => /[A-Za-z]/.test(w))

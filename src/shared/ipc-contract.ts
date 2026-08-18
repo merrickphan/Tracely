@@ -965,3 +965,23 @@ export interface StructureGetResponse {
   outline: DocumentOutline | null
   stale: boolean
 }
+
+/**
+ * Real site icons for a batch of source URLs.
+ *
+ * Batched rather than one call per row because a results list is six to eight
+ * sources that routinely share a publisher domain, and the main-side cache is
+ * keyed by hostname — asking once for the whole list lets the dedupe happen
+ * before any request goes out rather than after eight of them have.
+ *
+ * A missing key and a `null` value mean the same thing and both must render the
+ * monogram: null is "asked and got nothing", missing is "over the batch cap".
+ */
+export interface SourcesFaviconsRequest {
+  urls: string[]
+}
+
+export interface SourcesFaviconsResponse {
+  /** Keyed by the URL as passed in, so the caller needs no hostname parsing. */
+  icons: Record<string, string | null>
+}

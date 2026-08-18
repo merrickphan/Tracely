@@ -6,6 +6,8 @@ import {
   LAYOUT_WIDTH,
   MAX_COMFORTABLE_SCALE,
   MAX_WINDOW_SCALE,
+  clampDragScale,
+  fitToWorkAreaScale,
   maximizedScale,
   MIN_WINDOW_SCALE,
   sizeForScale,
@@ -85,6 +87,80 @@ describe('sizeForScale', () => {
     for (const scale of [MIN_WINDOW_SCALE, 1, MAX_WINDOW_SCALE]) {
       const { width, height } = sizeForScale(scale)
       ok(Math.abs(width / height - expected) < 0.01, `scale ${scale} drifted to ${width / height}`)
+    }
+  })
+})
+
+describe('clampDragScale — a drag can never grow past the display', () => {
+  /**
+   * The bug this exists for. The aspect ratio is locked, so a size taken from
+   * the drag's WIDTH alone can be far taller than the screen: at
+   * MAX_WINDOW_SCALE on this work area the window is 2245x1585, and 193px of
+   * the app — the footer of every view, the lower half of any open popover —
+   * is below the bottom edge of the monitor. Reported as "the overlay cuts out
+   * when you resize the app too big"; nothing was mis-rendered, it was drawn
+   * off-screen.
+   */
+  it('holds a 2.5x drag inside a 2560x1392 work area', () => {
+    const workArea = { width: 2560, height: 1392 }
+    const scale = clampDragScale(MAX_WINDOW_SCALE, workArea)
+    const { width, height } = sizeForScale(scale)
+    ok(height <= workArea.height, `window is ${height}px tall in a ${workArea.height}px work area`)
+    ok(width <= workArea.width, `window is ${width}px wide in a ${workArea.width}px work area`)
+  })
+
+  it('binds on HEIGHT for an ordinary widescreen display', () => {
+    // The case width-only clamping gets wrong every time: there is plenty of
+    // width left and none of height.
+    const workArea = { width: 1920, height: 1040 }
+    const scale = clampDragScale(MAX_WINDOW_SCALE, workArea)
+    strictEqual(scale, fitToWorkAreaScale(workArea))
+    ok(sizeForScale(scale).height <= workArea.height)
+  })
+
+  it('leaves a drag that already fits completely alone', () => {
+    // The clamp must not be a resize of its own — dragging to 1.2 on a big
+    // display has to land on 1.2.
+    strictEqual(clampDragScale(1.2, { width: 2560, height: 1392 }), 1.2)
+  })
+
+  it('still refuses to go past MAX_WINDOW_SCALE on an enormous display', () => {
+    strictEqual(clampDragScale(99, { width: 7680, height: 4320 }), MAX_WINDOW_SCALE)
+  })
+
+  it('still refuses to go below the readable floor', () => {
+    strictEqual(clampDragScale(0.1, { width: 2560, height: 1392 }), MIN_WINDOW_SCALE)
+  })
+
+  /**
+   * The floor wins over the fit. On a display too small to hold even
+   * MIN_WINDOW_SCALE something must overflow, and overflowing the screen edge
+   * is recoverable — the window can be moved — while shrinking below 0.7 makes
+   * the 11px labels in Settings unreadable, which is not.
+   */
+  it('prefers overflowing a tiny display to shrinking below the floor', () => {
+    strictEqual(clampDragScale(1, { width: 320, height: 240 }), MIN_WINDOW_SCALE)
+  })
+
+  it('keeps the grips off the screen edge', () => {
+    const workArea = { width: 1920, height: 1040 }
+    const { height } = sizeForScale(clampDragScale(MAX_WINDOW_SCALE, workArea))
+    ok(workArea.height - height >= 40, `only ${workArea.height - height}px of margin left for the grips`)
+  })
+})
+
+describe('maximizedScale still caps at what is comfortable', () => {
+  it('is never larger than a drag would be allowed to reach', () => {
+    for (const workArea of [
+      { width: 1366, height: 768 },
+      { width: 1920, height: 1040 },
+      { width: 2560, height: 1392 },
+      { width: 3840, height: 2160 }
+    ]) {
+      ok(
+        maximizedScale(workArea) <= clampDragScale(MAX_WINDOW_SCALE, workArea) + 1e-9,
+        `maximize exceeds the drag ceiling on ${workArea.width}x${workArea.height}`
+      )
     }
   })
 })

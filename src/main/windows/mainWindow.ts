@@ -4,6 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import type { FontSize } from '@shared/types'
 import type { ResizeHandle } from '@shared/ipc-contract'
 import {
+  clampDragScale,
   clampWindowScale,
   LAYOUT_WIDTH,
   MAIN_WINDOW_ASPECT,
@@ -329,7 +330,18 @@ export function updateWindowResize(dx: number, dy: number): void {
   if (!mainWindow || mainWindow.isDestroyed() || !drag) return
   const { handle, start } = drag
 
-  const { width, height } = sizeForScale(requestedWidth(handle, start, dx, dy) / LAYOUT_WIDTH)
+  // Clamped to the DISPLAY, not just to MAX_WINDOW_SCALE. The aspect ratio is
+  // locked, so a size taken from the width alone can be far taller than the
+  // screen — at 2.5 on a 2560x1392 work area the window is 1585px tall and the
+  // bottom 193px of the app is simply below the edge of the monitor. See
+  // clampDragScale.
+  //
+  // The work area is re-read on every move rather than sampled at drag start:
+  // a window dragged across a monitor boundary mid-resize is a real thing to
+  // do, and `getDisplayMatching` is a cheap synchronous lookup.
+  const workArea = screen.getDisplayMatching(mainWindow.getBounds()).workArea
+  const scale = clampDragScale(requestedWidth(handle, start, dx, dy) / LAYOUT_WIDTH, workArea)
+  const { width, height } = sizeForScale(scale)
 
   // The anchor is the opposite corner, held still. Without this every drag
   // would also move the window: growing from the top-left grip would push the

@@ -30,6 +30,8 @@ import type {
   EvidenceFindResponse,
   EvidenceGetForClaimRequest,
   EvidenceGetForClaimResponse,
+  SourcesFaviconsRequest,
+  SourcesFaviconsResponse,
   FloatingClipboardCapturedEvent,
   HistoryClearRequest,
   HistoryClearResponse,
@@ -114,6 +116,10 @@ const api = {
       ipcRenderer.invoke(IPC.EVIDENCE_FIND, req),
     getForClaim: (req: EvidenceGetForClaimRequest): Promise<EvidenceGetForClaimResponse> =>
       ipcRenderer.invoke(IPC.EVIDENCE_GET_FOR_CLAIM, req)
+  },
+  sources: {
+    favicons: (req: SourcesFaviconsRequest): Promise<SourcesFaviconsResponse> =>
+      ipcRenderer.invoke(IPC.SOURCES_FAVICONS, req)
   },
   citation: {
     generate: (req: CitationGenerateRequest): Promise<CitationGenerateResponse> =>
