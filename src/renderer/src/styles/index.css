@@ -6479,3 +6479,123 @@ textarea:disabled {
 }
 .tracer-send:disabled { opacity: 0.45; cursor: default; }
 .tracer-send svg { width: 19px; height: 19px; }
+
+/* Tracer's launcher in the editor toolbar. Sized and weighted like
+   `.docedit-insights` next to it, in outline rather than fill so the two do
+   not read as a pair of primary actions. */
+.docedit-tracer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid #d9dbe0;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a4f57;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.docedit-tracer:hover { border-color: var(--accent); color: var(--accent); }
+
+/* A turn is the bubble plus anything attached to it, so the rewrite card sits
+   under its own message rather than at the end of the log. */
+.tracer-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The offer. Deliberately not styled as a bubble: this is not something Tracer
+   said, it is a button that edits the writer's document, and it should not be
+   possible to skim past it as more chat. */
+.tracer-rewrite {
+  align-self: flex-start;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #f3d3b4;
+  border-radius: 12px;
+  background: #fff8f1;
+}
+
+.tracer-rewrite b {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+/* Before and after, both shown. Showing only the replacement would ask the
+   writer to approve an edit without seeing what it replaces — and the whole
+   point of a narrowing is the difference between the two. */
+.tracer-rewrite-was,
+.tracer-rewrite-now {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.tracer-rewrite-was {
+  background: #f4f5f7;
+  color: #6b7078;
+  text-decoration: line-through;
+  text-decoration-color: #b9bdc4;
+}
+
+.tracer-rewrite-now {
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid #f0dcc6;
+  color: #2c3038;
+}
+
+.tracer-rewrite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tracer-apply,
+.tracer-dismiss {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tracer-apply {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+
+.tracer-dismiss {
+  border: 1px solid #e2d5c6;
+  background: transparent;
+  color: #6b7078;
+}
+.tracer-dismiss:hover { background: #f6ede3; }
+
+.tracer-rewrite-done,
+.tracer-rewrite-gone {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tracer-rewrite-done { color: #168449; }
+.tracer-rewrite-gone { color: #6b7078; }

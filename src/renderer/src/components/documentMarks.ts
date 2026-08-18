@@ -393,6 +393,35 @@ export function applyProseIssue(body: HTMLElement, issue: ProseIssue): boolean {
   return replaceRange(body, from, from + target.length, issue.suggestion, true)
 }
 
+/**
+ * Applies a rewrite Tracer proposed, through the same `execCommand` path as
+ * every other edit here — so one Ctrl+Z takes it back out.
+ *
+ * `find` is located in the LIVE document rather than trusted from the reply.
+ * The conversation may be minutes old and the writer has been typing in the
+ * meantime; an offset measured against the text the model saw would rewrite
+ * whatever now sits at that position.
+ *
+ * Refuses two cases rather than guessing:
+ *
+ *  - **Not found.** The sentence has been edited or deleted since Tracer read
+ *    it, so there is nothing to narrow. The caller says so.
+ *  - **Found more than once.** Which copy did the student mean? A repeated
+ *    sentence is rare in an essay and picking the first is a coin flip, so this
+ *    declines. `applyProseIssue` takes the same position on its anchor for the
+ *    same reason.
+ *
+ * Whether the replacement is ALLOWED is not decided here — `shared/
+ * tracerRewrite.ts` runs `isNarrowing` before any of this is offered. This
+ * writes what survived that.
+ */
+export function applyTracerRewrite(body: HTMLElement, find: string, replace: string): boolean {
+  const { text } = buildTextMap(body)
+  const at = text.indexOf(find)
+  if (at === -1 || at !== text.lastIndexOf(find)) return false
+  return replaceRange(body, at, at + find.length, replace, true)
+}
+
 export type WorksCitedResult = 'added' | 'already-listed' | 'failed'
 
 /**

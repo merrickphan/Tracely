@@ -436,6 +436,30 @@ existed to give a separate window a sidebar.
 - **The `tracer_conversations` / `tracer_messages` tables and both Privacy
   clears' DELETEs against them** survived the removal, so restoring wrote no
   migration. `tracerRepo.ts` came back from `git show f7eb21a^` unchanged.
+- **Tracer can edit the draft, and only in one direction.** It may end a reply
+  with a `<<<REWRITE / FIND: / REPLACE: / >>>` block; `shared/tracerRewrite.ts`
+  parses it, and the offer only becomes an Apply button if the replacement
+  passes `isNarrowing` — it may DROP a named thing, a number or a date, never
+  introduce one. That is the same rule critique's `suggestedRevision` lives by,
+  which is why `isNarrowing` moved to `shared/narrowing.ts`: one copy, enforced
+  on both paths. The relay prompt asks for the same thing and the client checks
+  it again, because the model broke this rule in production once already.
+- **The Apply button only exists in the editor.** `TracerChat`'s
+  `onApplyRewrite` is optional, and Home does not pass it — there is no open
+  document there, so the card would be a button that cannot work. In
+  `AnalyzeView` the edit goes through `applyTracerRewrite` →
+  `documentMarks.replaceRange` → `execCommand('insertText')`, so ONE Ctrl+Z
+  takes it back out. Verified in the harness, not assumed.
+- **`find` is re-located in the live document**, never applied at a stored
+  offset, and it refuses a sentence that appears twice rather than guessing
+  which copy was meant. The conversation can be minutes old and the writer has
+  been typing.
+- **Do not call the apply function inside a `setState` updater.** It was, for
+  one build: React invokes an updater twice under StrictMode, the second call
+  re-ran the rewrite against a document that had already taken it, and the card
+  said "that sentence is not in the document any more" over a correctly
+  rewritten sentence. The harness caught it; the fix is to run the edit in the
+  handler and set state with the result.
 - **`tracerPrompt` on `StructureWeakness` is still unrendered.** Nothing writes
   an "Ask Tracer about this weakness" entry point yet; the panel takes typed
   questions only.
