@@ -1,6 +1,11 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { countProseIssues, findProseIssues, type ProseIssueKind } from './proseIssues.ts'
+import {
+  countProseIssues,
+  findProseIssues,
+  replacementRange,
+  type ProseIssueKind
+} from './proseIssues.ts'
 
 const kinds = (text: string): ProseIssueKind[] => findProseIssues(text).map((i) => i.kind)
 const first = (text: string) => findProseIssues(text)[0]
@@ -167,6 +172,41 @@ describe('findProseIssues — shape', () => {
     for (const issue of findProseIssues(text)) {
       strictEqual(text.slice(issue.start, issue.end), issue.text.slice(0, issue.end - issue.start))
     }
+  })
+
+  // The invariant applying a fix depends on. `[start, end)` is what gets
+  // replaced; `text` is the wider phrase the message quotes and the anchor used
+  // to re-find the issue after an edit. Replacing `text` instead of the prefix
+  // turned "This is a error in the report" into "This is an in the report".
+  it('keeps the replaced span a prefix of the matched text', () => {
+    const samples = [
+      'This is a error in the report.',
+      'They was late to the the meeting.',
+      'She wrote an paper about it.',
+      'The result was clear , and it held.',
+      "The study lost its' funding."
+    ]
+    for (const text of samples) {
+      for (const issue of findProseIssues(text)) {
+        const { start, end, target, anchor } = replacementRange(issue)
+        strictEqual(text.slice(start, end), target, `${issue.kind} in "${text}"`)
+        ok(anchor.startsWith(target), `${issue.kind}: target is not a prefix of the anchor`)
+        ok(text.includes(anchor), `${issue.kind}: anchor is not in the source text`)
+      }
+    }
+  })
+
+  it('replaces only the article, not the phrase around it', () => {
+    // The exact case that broke: the message quotes "a error", the underline
+    // and the replacement cover "a".
+    const text = 'This is a error in the report.'
+    const issue = findProseIssues(text).find((i) => i.kind === 'article-agreement')!
+    const { start, end } = replacementRange(issue)
+    strictEqual(text.slice(start, end), 'a')
+    strictEqual(
+      text.slice(0, start) + issue.suggestion + text.slice(end),
+      'This is an error in the report.'
+    )
   })
 
   it('is empty for empty input', () => {

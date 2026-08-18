@@ -1,7 +1,7 @@
 import { claimEvidenceFor } from '@shared/claimEvidence'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
-import { findProseIssues, type ProseIssue } from '@shared/proseIssues'
+import { findProseIssues, replacementRange, type ProseIssue } from '@shared/proseIssues'
 import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
@@ -356,6 +356,36 @@ export function replaceClaimText(body: HTMLElement, claim: Claim, replacement: s
   return replaceRange(body, span.start, span.end, replacement, true)
 }
 
+/**
+ * Applies one grammar or mechanics fix, through the same `execCommand` path
+ * every other edit here uses — so it lands on the browser's undo stack and one
+ * Ctrl+Z takes it back out.
+ *
+ * The offsets are re-derived from the live document rather than trusted from
+ * the `ProseIssue`, which was measured on an earlier innerText. A writer who
+ * types anywhere above the flagged word between the card opening and the button
+ * being pressed has moved it, and applying a stale offset would rewrite a
+ * different part of the sentence.
+ */
+export function applyProseIssue(body: HTMLElement, issue: ProseIssue): boolean {
+  if (!issue.suggestion) return false
+  const { text } = buildTextMap(body)
+  const { start, end, target, anchor, offsetInAnchor } = replacementRange(issue)
+
+  // Still where it was measured: replace in place.
+  if (text.slice(start, end) === target && text.slice(start, start + anchor.length) === anchor) {
+    return replaceRange(body, start, end, issue.suggestion, true)
+  }
+
+  // Otherwise re-find it by the ANCHOR — the wider phrase — and replace the
+  // prefix inside it. Anchoring on `target` alone would be hopeless: for an
+  // article fix the target is the single letter "a".
+  const at = text.indexOf(anchor)
+  if (at === -1 || at !== text.lastIndexOf(anchor)) return false
+  const from = at + offsetInAnchor
+  return replaceRange(body, from, from + target.length, issue.suggestion, true)
+}
+
 export type WorksCitedResult = 'added' | 'already-listed' | 'failed'
 
 /**
@@ -410,14 +440,90 @@ export function revealWorksCited(body: HTMLElement): boolean {
   return true
 }
 
+function within(rect: MarkRect, x: number, y: number): boolean {
+  return x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height
+}
+
 /** The mark under a point in `wrap`'s coordinate space, if any. */
 export function markAt(marks: DocumentMark[], x: number, y: number): { mark: DocumentMark; rect: MarkRect } | null {
   for (const mark of marks) {
     for (const rect of mark.rects) {
-      if (x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height) {
-        return { mark, rect }
-      }
+      if (within(rect, x, y)) return { mark, rect }
     }
   }
   return null
+}
+
+/**
+ * The prose mark under a point, if any.
+ *
+ * Separate from `markAt` rather than generic over both, because the two layers
+ * are hit-tested in a deliberate order: a claim mark wins over a prose mark on
+ * the same words. The credibility colours carry this app's actual judgement,
+ * and a sentence that is both unverified and clumsy should open the card about
+ * whether it is true.
+ *
+ * This exists at all because the prose layer used to have `pointer-events:
+ * auto` so that a native `title` tooltip would fire — which made every
+ * grammar-flagged word a place the writer could not click to put their caret.
+ * That is the same bug Screen Watch had over the whole overlay, reintroduced in
+ * miniature. Hit-testing is how the claim layer avoided it from the start.
+ */
+export function proseMarkAt(
+  marks: ProseMark[],
+  x: number,
+  y: number
+): { mark: ProseMark; rect: MarkRect } | null {
+  for (const mark of marks) {
+    for (const rect of mark.rects) {
+      if (within(rect, x, y)) return { mark, rect }
+    }
+  }
+  return null
+}
+
+/**
+ * Scrolls the editor to a claim's sentence and returns where it landed.
+ *
+ * The report's "Show me" — the answer to a reader clicking a named problem and
+ * being shown the name again. Returns the rects so the caller can flash them;
+ * null when the claim's text is no longer in the document, which happens
+ * whenever a finding is acted on before it is clicked.
+ */
+export function revealClaim(body: HTMLElement, wrap: HTMLElement, claim: Claim): MarkRect[] | null {
+  // `buildTextMap`'s text, NOT `innerText`. They are different strings — one
+  // walks text nodes, the other inserts newlines for block boundaries — so
+  // offsets computed against innerText resolve to the wrong place, or to
+  // nothing at all, when `locate` looks them up in the node map. `measureMarks`
+  // has always used this pairing; computing the span one way and locating it
+  // the other is why the first version of "Show me" scrolled nowhere.
+  const { text, nodes } = buildTextMap(body)
+  const span = computeClaimSpans(text, [claim]).find((s) => s.claim.id === claim.id)
+  if (!span) return null
+  const start = locate(nodes, span.start)
+  const end = locate(nodes, span.end)
+  if (!start || !end) return null
+
+  const range = document.createRange()
+  range.setStart(start.node, start.offset)
+  range.setEnd(end.node, end.offset)
+
+  // The block element, not the range: Range has no scrollIntoView, and centring
+  // the paragraph is what actually shows the sentence in context.
+  const block = start.node.parentElement
+  block?.scrollIntoView({ block: 'center', behavior: 'auto' })
+
+  // Measured AFTER the scroll, so the rects are where the flash should be
+  // drawn rather than where the sentence used to be.
+  const wrapRect = wrap.getBoundingClientRect()
+  const rects = Array.from(range.getClientRects())
+    .filter((r) => r.width > 0 && r.height > 0)
+    .map((r) => ({
+      left: r.left - wrapRect.left + wrap.scrollLeft,
+      top: r.top - wrapRect.top + wrap.scrollTop,
+      width: r.width,
+      height: r.height
+    }))
+  range.detach?.()
+  return rects.length > 0 ? rects : null
 }

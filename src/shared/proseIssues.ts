@@ -304,6 +304,37 @@ export function findProseIssues(text: string): ProseIssue[] {
   return issues.sort((a, b) => a.start - b.start || a.end - b.end)
 }
 
+/**
+ * Exactly which characters `suggestion` replaces.
+ *
+ * `[start, end)` and `text` are NOT the same span, deliberately, and getting
+ * that wrong silently eats words. The article rule underlines only the article
+ * — `end - start` is one or two characters — while carrying "a error" as its
+ * `text`, because the message has to quote the phrase to be worth reading. A
+ * caller that replaced `text` with `suggestion` there would turn "This is a
+ * error in the report" into "This is an in the report", which is what happened
+ * the first time this was wired up.
+ *
+ * The invariant this encodes, and which `proseIssues.test.ts` pins: the
+ * replaced span is always a PREFIX of `text`. `text` is the anchor used to
+ * re-find the issue when the document has shifted underneath it; the prefix is
+ * what actually gets swapped.
+ */
+export function replacementRange(issue: ProseIssue): {
+  start: number
+  end: number
+  /** The characters `suggestion` stands in for. */
+  target: string
+  /** The wider match, for re-anchoring after an edit. */
+  anchor: string
+  /** Where `target` begins inside `anchor`. Always 0 today; returned rather
+   *  than assumed so a future rule may flag a word mid-phrase. */
+  offsetInAnchor: number
+} {
+  const target = issue.text.slice(0, issue.end - issue.start)
+  return { start: issue.start, end: issue.end, target, anchor: issue.text, offsetInAnchor: 0 }
+}
+
 /** How many of each severity, for a summary line. */
 export function countProseIssues(issues: ProseIssue[]): { errors: number; style: number } {
   return {
