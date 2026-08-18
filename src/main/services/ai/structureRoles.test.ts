@@ -110,7 +110,8 @@ describe('reconcileRoles — degenerate input', () => {
   it('returns empty vectors for a document with no paragraphs', () => {
     deepStrictEqual(reconcileRoles(payload({ index: 1, role: 'thesis', hasWarrant: true }), 0), {
       roles: [],
-      warranted: []
+      warranted: [],
+      statesClaim: []
     })
   })
 
@@ -216,5 +217,55 @@ describe('buildStructurePrompt', () => {
     // to them would elide nothing while still inserting a marker.
     const short = 'A short paragraph that states its point and stops.'
     strictEqual(buildStructurePrompt([short], LIMITS), `[1] ${short}`)
+  })
+})
+
+describe('reconcileRoles — statesClaim', () => {
+  it('reads the field when the relay sends it, whatever the role is', () => {
+    const result = reconcileRoles(
+      payload(
+        { index: 1, role: 'evidence', hasWarrant: true, statesClaim: true },
+        { index: 2, role: 'claim', hasWarrant: false, statesClaim: false }
+      ),
+      2
+    )
+    // Both disagree with the role, which is the entire point of the field: a
+    // paragraph presenting sources can still open with the point they support,
+    // and a paragraph the model called a claim can be restating an earlier one.
+    deepStrictEqual(result.statesClaim, [true, false])
+  })
+
+  /**
+   * The two-repo case. The client can reach users before the relay deploy that
+   * added the field, and defaulting the missing value to false would zero
+   * `governingClaims` for everyone on the older relay — a regression shipped by
+   * a client-only change. Falling back to the role reproduces the exact
+   * component that existed before the field.
+   */
+  it('falls back to the role when a relay predating the field answers', () => {
+    const result = reconcileRoles(
+      payload(
+        { index: 1, role: 'claim', hasWarrant: false },
+        { index: 2, role: 'evidence', hasWarrant: false },
+        { index: 3, role: 'unknown', hasWarrant: false }
+      ),
+      3
+    )
+    deepStrictEqual(result.statesClaim, [true, false, false])
+  })
+
+  it('treats a non-boolean as absent rather than as false', () => {
+    const result = reconcileRoles(
+      payload({ index: 1, role: 'claim', hasWarrant: false, statesClaim: 'yes' }),
+      1
+    )
+    deepStrictEqual(result.statesClaim, [true])
+  })
+
+  it('leaves paragraphs the payload never mentions at false', () => {
+    // Not the role fallback: an unmentioned paragraph is 'unknown', and
+    // 'unknown' was never claim-bearing under the old rule either.
+    const result = reconcileRoles(payload({ index: 1, role: 'claim', hasWarrant: false }), 3)
+    deepStrictEqual(result.statesClaim, [true, false, false])
   })
 })

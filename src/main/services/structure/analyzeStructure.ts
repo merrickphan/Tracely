@@ -31,7 +31,13 @@ import { findWeaknesses } from './weaknesses'
 // before it are recomputed instead of restored with the field missing —
 // `getStoredOutline` filters on this, and the alternative is a report that
 // shows no flow score for every document opened after an update.
-export const STRUCTURE_SCHEMA_VERSION = 2
+//
+// v3 adds `statesClaim`, which `governingClaims` now scores from. A v2 outline
+// would still render — the fallback to `role === 'claim'` is exactly what it
+// was scored with — but it would keep showing the OLD number beside the new
+// rubric, so a student who reopened a document would see a score that no
+// longer matches what the app would compute for the same text.
+export const STRUCTURE_SCHEMA_VERSION = 3
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -66,7 +72,7 @@ export interface AnalyzeStructureInput {
    * local heuristics, and `rolesFrom` records which was used so the panel can
    * say so rather than presenting both as the same kind of answer.
    */
-  classified?: { roles: ParagraphRole[]; warranted: boolean[] } | null
+  classified?: { roles: ParagraphRole[]; warranted: boolean[]; statesClaim: boolean[] } | null
 }
 
 export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline {
@@ -104,7 +110,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // `npm test` can load — it cannot value-import the shared detector itself,
   // and its own fallback pattern finds none of the MLA or author-and-year
   // forms a real paper uses.
-  const { roles, warranted } =
+  const { roles, warranted, statesClaim } =
     input.classified ??
     heuristicRoles({ paragraphs: spans, claimsByParagraph, hasCitation: hasInlineCitation })
 
@@ -112,6 +118,7 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     index: span.index,
     role: roles[i],
     hasWarrant: warranted[i],
+    statesClaim: statesClaim[i],
     claimIds: claimsByParagraph.get(span.index) ?? []
   }))
 

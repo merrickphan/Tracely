@@ -591,6 +591,17 @@ export interface HeuristicRoleInput {
 export interface HeuristicRoles {
   roles: ParagraphRole[]
   warranted: boolean[]
+  /**
+   * Whether the paragraph asserts a sub-point of its own — a separate axis from
+   * `role`, see ReconciledRoles.statesClaim in ai/structureRoles.ts for the
+   * whole argument and the essay that made it visible.
+   *
+   * Both signals `roleFor` would use to return 'claim', asked WITHOUT the
+   * precedence that stops it getting there. A paragraph carrying two
+   * attributions reaches the evidence branch and never reaches the claim one,
+   * so its topic sentence went unread; here it is read regardless.
+   */
+  statesClaim: boolean[]
 }
 
 /**
@@ -606,6 +617,7 @@ export function heuristicRoles({
 }: HeuristicRoleInput): HeuristicRoles {
   const roles: ParagraphRole[] = []
   const warranted: boolean[] = []
+  const statesClaim: boolean[] = []
   const lastIndex = paragraphs.length
 
   // Where the argument actually starts. A titled essay puts its title in
@@ -618,9 +630,10 @@ export function heuristicRoles({
     const hasClaim = (claimsByParagraph.get(paragraph.index) ?? []).length > 0
     roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation, thesisIndex, openingIndex))
     warranted.push(hasWarrantMarker(paragraph.text))
+    statesClaim.push(hasClaim || looksLikeTopicClaim(firstSentence(paragraph.text), hasCitation))
   }
 
-  return { roles, warranted }
+  return { roles, warranted, statesClaim }
 }
 
 /**

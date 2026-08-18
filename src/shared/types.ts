@@ -297,6 +297,20 @@ export interface ParagraphOutline {
   // the relay classifier ships this is a marker heuristic, and `rolesFrom`
   // says which it was — see DocumentOutline.
   hasWarrant: boolean
+  /**
+   * Whether the paragraph asserts a contestable sub-point of its own.
+   *
+   * A separate axis from `role`, because a paragraph carries one role and can
+   * be governed by a claim whatever that role is — the paragraph that opens
+   * with a sub-point and then cites three studies for it is `evidence` and
+   * claim-governed at the same time. See ReconciledRoles.statesClaim.
+   *
+   * Optional because it postdates the outlines already in the database.
+   * Undefined is not "false": every consumer must fall back to
+   * `role === 'claim'`, which is what `governingClaims` counted before this
+   * existed, so a stored outline keeps scoring exactly as it did.
+   */
+  statesClaim?: boolean
   /** Claims detected inside this paragraph, by id. Empty is normal. */
   claimIds: string[]
 }
@@ -380,6 +394,22 @@ export interface EvidenceCoverage {
   /** Mean strengthScore over claims whose search has resolved; null if none have. */
   meanStrength: number | null
   unchecked: number
+  /**
+   * Claims four scholarly indexes were never going to hold — a close reading, a
+   * statute, one institution's own records, the writer's own observation, a
+   * prediction. See retrievalScope.ts.
+   *
+   * A fourth separate number for the same reason the other three are separate:
+   * folded into `withRelevantSource` it would read as a retrieval failure, and
+   * folded into `unchecked` it would read as work still to do. It is neither.
+   * The denominator this belongs OUT of is "claims Tracely could meaningfully
+   * search", which is what the report subtracts it from.
+   *
+   * Optional because it postdates the stored outlines. Undefined means "not
+   * measured", and every consumer must render that as zero disclosure rather
+   * than as zero out-of-scope claims.
+   */
+  outsideIndexes?: number
 }
 
 // Deliberately holds NO prose from the document — only indices, roles, booleans

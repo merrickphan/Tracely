@@ -41,7 +41,7 @@ function cacheKey(prompt: string): string {
   // labelling, and that is the only thing the model sees. The v-prefix is the
   // invalidation lever — bump it when the prompt or the role vocabulary
   // changes, exactly as claimDetection.ts does.
-  return createHash('sha256').update(`ai:classifyStructure::v1::${prompt}`).digest('hex')
+  return createHash('sha256').update(`ai:classifyStructure::v2::${prompt}`).digest('hex')
 }
 
 /**
