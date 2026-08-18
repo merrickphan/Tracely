@@ -532,6 +532,24 @@ export interface ScreenWatchCritiqueClaimResponse {
  * overlay hides the score chip entirely in that case rather than showing a
  * number nobody can act on.
  */
+/**
+ * What the Screen Watch panel opens on.
+ *
+ * Shared because THREE places have to agree and two of them silently did not:
+ * `screenWatchService` holds the live value, `OverlayApp`'s launcher used to
+ * set its own on every click (which is why changing the service default did
+ * nothing visible), and `preview/mockApi.ts` hardcoded 'single' on collapse —
+ * so the harness reproduced the old behaviour however main was configured, and
+ * a review of this exact change would have passed while the app was wrong.
+ *
+ * 'grade' because the Figma flow opens on the Essay Grade Widget (370:191) and
+ * puts the per-claim cards behind it. Safe before a reading exists: a detection
+ * in flight draws the Analyzing card (391:342), and a draft that was read and
+ * refused falls through to "No reading of this draft yet" rather than a spinner
+ * that never resolves.
+ */
+export const DEFAULT_WIDGET_VIEW_MODE = 'grade'
+
 export interface ScreenWatchStructure {
   score: number
   /** False when any paragraph is `unknown` — the score is then provisional. */

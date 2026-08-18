@@ -1505,7 +1505,7 @@ function GradeScoreSection({ structure }: { structure: ScreenWatchStructure | nu
 /**
  * The two-pill row at the foot of both frames. Only the primary label differs.
  *
- * "Re-grade Essay" is drawn as the frame draws it and disabled: the structural
+ * "Re-grade Writing" is drawn as the frame draws it and disabled: the structural
  * read is recomputed on every poll (see refreshWatchOutline), so the number
  * above is already live and a re-grade would do nothing but redraw it.
  */
@@ -1548,7 +1548,7 @@ function GradeButtonRow({ primaryLabel, onPrimary }: { primaryLabel: string; onP
           opacity: 0.6
         }}
       >
-        Re-grade Essay
+        Re-grade Writing
       </button>
     </div>
   )
@@ -1565,7 +1565,7 @@ function EssayGradePanel({
 }): JSX.Element {
   return (
     <>
-      <GradeHeader title="Essay Grade" onClose={onClose} />
+      <GradeHeader title="Writing Grade" onClose={onClose} />
       <GradeDivider />
       <GradeScoreSection structure={structure} />
       <GradeDivider />
@@ -1764,7 +1764,7 @@ function EssayGradeReportPanel({
 
   return (
     <>
-      <GradeHeader title="Essay Grade — Full Report" onClose={onClose} />
+      <GradeHeader title="Writing Grade — Full Report" onClose={onClose} />
       <GradeDivider />
       <GradeScoreSection structure={structure} />
 
@@ -4086,10 +4086,23 @@ export default function OverlayApp(): JSX.Element {
    * actually flagged. A single claim goes straight to its actions rather than
    * to a one-item list you then have to click into.
    */
+  /**
+   * The launcher's click: open the panel, and do NOT choose a view.
+   *
+   * It used to pick one — 'all' when more than one claim was flagged, 'single'
+   * otherwise — and that call is why setting DEFAULT_VIEW_MODE to 'grade'
+   * main-side did nothing visible. The service's default was correct on every
+   * open and then overwritten by this line a moment later, so the panel always
+   * landed on a claim card and the Essay Grade Widget (Figma 370:191) was
+   * reachable only from the score chip.
+   *
+   * The mode belongs to `screenWatchService` because the panel's pixel size is
+   * computed there too (hoverTracking hit-tests the same rect), and it resets
+   * to the default whenever the panel collapses — so every open is a fresh one
+   * and lands on the grade card, with the claims a click away behind it.
+   */
   function openWidgetPanel(): void {
-    const unresolved = (widget?.claims ?? []).filter((c) => !isResolved(c.id)).length
     void window.tracely.screenWatch.setWidgetExpanded({ expanded: true })
-    void window.tracely.screenWatch.setWidgetViewMode({ mode: unresolved > 1 ? 'all' : 'single' })
     // Local feedback ahead of the next hover-tracking event, which won't
     // arrive until the cursor moves — otherwise the hover popover and the
     // panel can both be on screen for a moment.

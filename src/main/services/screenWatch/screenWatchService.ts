@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow, screen } from 'electron'
 import { IPC_EVENTS } from '@shared/ipc-channels'
+import { DEFAULT_WIDGET_VIEW_MODE } from '@shared/ipc-contract'
 import type {
   ScreenWatchClaimCitation,
   ScreenWatchClaimEvidence,
@@ -304,7 +305,7 @@ export type WidgetViewMode = 'single' | 'all' | 'structure' | 'grade' | 'report'
 // too short, or structureFit rejected the split — falls through to the grade
 // card's own "No reading of this draft yet" rather than a spinner that never
 // resolves. See ScreenWatchWidget.analyzing.
-const DEFAULT_VIEW_MODE: WidgetViewMode = 'grade'
+const DEFAULT_VIEW_MODE: WidgetViewMode = DEFAULT_WIDGET_VIEW_MODE
 let widgetViewMode: WidgetViewMode = DEFAULT_VIEW_MODE
 
 export function setWidgetExpanded(expanded: boolean): void {
