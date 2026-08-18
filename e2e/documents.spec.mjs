@@ -82,7 +82,7 @@ test('a document can be deleted from its card menu', async (t) => {
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
 
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.locator('.docs-grid').waitFor({ state: 'visible' })
 
   await createDocument(page, 'Keep me')
@@ -145,7 +145,7 @@ test('a document can be deleted from its card menu', async (t) => {
   // document still there on the next open.
   await page.getByRole('button', { name: /Back/i }).first().click()
   await page.waitForTimeout(300)
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.locator('.docs-grid').waitFor({ state: 'visible' })
   await titlesEventually(['Keep me'])
 })
@@ -159,7 +159,7 @@ test('clicking elsewhere closes the card menu without deleting', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.locator('.docs-grid').waitFor({ state: 'visible' })
   await createDocument(page, 'Still here')
 

@@ -117,7 +117,20 @@ export default function App(): JSX.Element {
   return (
     <div className="app-shell">
       <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
-        {tab === 'home' ? <HomeView onNavigate={setTab} firstName={user?.firstName ?? null} /> : null}
+        {tab === 'home' ? (
+          <HomeView
+            onNavigate={setTab}
+            // The same route DocumentsView's "+ New document" takes: a null id
+            // is what the editor reads as "start an Untitled document", so
+            // Home's primary action lands in the editor rather than one page
+            // short of it.
+            onNewDocument={() => {
+              setOpenDocumentId(null)
+              setTab('analyze')
+            }}
+            firstName={user?.firstName ?? null}
+          />
+        ) : null}
         {tab === 'documents' ? (
           <DocumentsView
             onNavigate={setTab}
