@@ -86,6 +86,42 @@ export const MAIN_WINDOW_ASPECT = LAYOUT_WIDTH / LAYOUT_HEIGHT
 export const MIN_WINDOW_SCALE = 0.7
 export const MAX_WINDOW_SCALE = 2.5
 
+/**
+ * How large "maximize" is allowed to make the UI.
+ *
+ * Maximize does NOT fill the screen, and that is the whole design of it. This
+ * window scales rather than reflows (see above), so filling a 4K display would
+ * mean 28px body text and a 62px heading — a card the size of a poster, which
+ * is the "stupidly big" outcome and the reason a plain maximize is wrong here.
+ *
+ * So maximize means: the largest aspect-correct size that still fits the work
+ * area, capped at this scale. On a 1080p screen it grows to about 1.55 and
+ * stops at the display; on a 4K one it stops HERE, well before the edges, and
+ * the extra room simply stays desktop. That is the honest reading of "make it
+ * bigger" for a fixed-coordinate layout — more comfortable, not enormous.
+ *
+ * 1.6 rather than something rounder because it is roughly the point where the
+ * 870px card stops feeling like a dialog and starts feeling like a window,
+ * without any of its type passing the size a document editor would use.
+ */
+export const MAX_COMFORTABLE_SCALE = 1.6
+
+/**
+ * The scale maximize should use on a display of this size.
+ *
+ * `margin` keeps the window off the very edges of the work area, so the
+ * resize grips stay grabbable after maximizing — a window flush to every edge
+ * has no outside left to grab, and this app has no title bar to drag either.
+ */
+export function maximizedScale(
+  workArea: { width: number; height: number },
+  margin = 24
+): number {
+  const byWidth = (workArea.width - margin * 2) / LAYOUT_WIDTH
+  const byHeight = (workArea.height - margin * 2) / LAYOUT_HEIGHT
+  return clampWindowScale(Math.min(byWidth, byHeight, MAX_COMFORTABLE_SCALE))
+}
+
 export function sizeForScale(scale: number): { width: number; height: number } {
   const clamped = clampWindowScale(scale)
   return {

@@ -90,7 +90,10 @@ import type {
   StructureGetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
+  WindowIsMaximizedResponse,
+  WindowMinimizeResponse,
   WindowResizeMoveRequest,
+  WindowToggleMaximizeResponse,
   WindowResizeMoveResponse,
   WindowResizeStartRequest,
   WindowResizeStartResponse,
@@ -195,7 +198,11 @@ const api = {
     resizeStart: (req: WindowResizeStartRequest): Promise<WindowResizeStartResponse> =>
       ipcRenderer.invoke(IPC.WINDOW_RESIZE_START, req),
     resizeMove: (req: WindowResizeMoveRequest): Promise<WindowResizeMoveResponse> =>
-      ipcRenderer.invoke(IPC.WINDOW_RESIZE_MOVE, req)
+      ipcRenderer.invoke(IPC.WINDOW_RESIZE_MOVE, req),
+    minimize: (): Promise<WindowMinimizeResponse> => ipcRenderer.invoke(IPC.WINDOW_MINIMIZE, {}),
+    toggleMaximize: (): Promise<WindowToggleMaximizeResponse> =>
+      ipcRenderer.invoke(IPC.WINDOW_TOGGLE_MAXIMIZE, {}),
+    isMaximized: (): Promise<WindowIsMaximizedResponse> => ipcRenderer.invoke(IPC.WINDOW_IS_MAXIMIZED, {})
     // No `close`. Its handler was byte-identical to `hide` — both called
     // .hide() — and it had zero callers.
   },

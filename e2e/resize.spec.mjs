@@ -320,3 +320,102 @@ test('no control is buried under a grip', async (t) => {
     assert.deepEqual(v.found, [], `controls buried under a grip on ${v.label}: ${v.found.join(', ')}`)
   }
 })
+
+test('maximize grows the window but caps the scale', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(800)
+
+  // Both controls must exist and be outside the drag region, for the same
+  // reason the grips are: the card is the window's drag handle and would
+  // otherwise swallow the click.
+  const controls = await page.evaluate(() =>
+    [...document.querySelectorAll('.winctl-btn')].map((b) => ({
+      label: b.getAttribute('aria-label'),
+      drag: getComputedStyle(b).webkitAppRegion
+    }))
+  )
+  assert.equal(controls.length, 2, `expected 2 window controls, found ${controls.length}`)
+  for (const c of controls) {
+    assert.equal(c.drag, 'no-drag', `"${c.label}" sits inside the drag region`)
+  }
+
+  const sizeOf = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
+      const [width, height] = w.getSize()
+      return { width, height }
+    })
+  const workArea = await app.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea)
+
+  const before = await sizeOf()
+  await page.locator('.winctl-btn').nth(1).click()
+  await page.waitForTimeout(500)
+  const maxed = await sizeOf()
+  console.log(
+    `  maximize: ${before.width}x${before.height} -> ${maxed.width}x${maxed.height} ` +
+      `(work area ${workArea.width}x${workArea.height})`
+  )
+
+  assert.ok(maxed.width > before.width, 'maximize did not grow the window')
+  // The cap is the whole point. MAX_COMFORTABLE_SCALE is 1.6, so the window
+  // must never exceed 898 * 1.6 however much screen there is — this is what
+  // stops a 4K display rendering 28px body text.
+  assert.ok(
+    maxed.width <= Math.round(LAYOUT_WIDTH * 1.6) + 1,
+    `maximized to ${maxed.width}px, past the comfortable cap of ${Math.round(LAYOUT_WIDTH * 1.6)}px`
+  )
+  assert.ok(maxed.width <= workArea.width && maxed.height <= workArea.height, 'maximized past the work area')
+  // Still the layout's shape — maximize must not letterbox the card.
+  assert.ok(
+    Math.abs(maxed.width / maxed.height - LAYOUT_WIDTH / LAYOUT_HEIGHT) < 0.02,
+    `aspect drifted to ${(maxed.width / maxed.height).toFixed(3)}`
+  )
+
+  // And back to where it was, not to the default.
+  await page.locator('.winctl-btn').nth(1).click()
+  await page.waitForTimeout(500)
+  const restored = await sizeOf()
+  console.log(`  restore : ${maxed.width}x${maxed.height} -> ${restored.width}x${restored.height}`)
+  assert.ok(
+    Math.abs(restored.width - before.width) <= 2,
+    `restore returned to ${restored.width}px, not the ${before.width}px it started at`
+  )
+})
+
+test('the window can actually be minimized', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForTimeout(800)
+
+  // `minimizable` was false while the window had no chrome to reach it from.
+  // A button that calls minimize() on a non-minimizable window does nothing,
+  // silently — which is exactly how this would ship broken.
+  const minimizable = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => w.webContents.getURL().endsWith('/index.html'))
+      ?.isMinimizable()
+  )
+  assert.equal(minimizable, true, 'the window is not minimizable, so the button cannot work')
+
+  await page.locator('.winctl-btn').first().click()
+  await page.waitForTimeout(600)
+  const isMin = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => w.webContents.getURL().endsWith('/index.html'))
+      ?.isMinimized()
+  )
+  assert.equal(isMin, true, 'clicking minimize did not minimize the window')
+})

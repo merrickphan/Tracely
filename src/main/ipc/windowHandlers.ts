@@ -4,13 +4,24 @@ import { IPC } from '@shared/ipc-channels'
 import type {
   AppGetBuildInfoResponse,
   ShellOpenExternalResponse,
+  WindowIsMaximizedResponse,
+  WindowMinimizeResponse,
   WindowResizeMoveResponse,
+  WindowToggleMaximizeResponse,
   WindowResizeStartResponse,
   WindowTargetResponse
 } from '@shared/ipc-contract'
 import { isPreviewBuild } from '../appIdentity'
 import { getFloatingWindow, showFloatingWindow } from '../windows/floatingWindow'
-import { beginWindowResize, getMainWindow, showMainWindow, updateWindowResize } from '../windows/mainWindow'
+import {
+  beginWindowResize,
+  getMainWindow,
+  isMainWindowMaximized,
+  minimizeMainWindow,
+  showMainWindow,
+  toggleMaximizeMainWindow,
+  updateWindowResize
+} from '../windows/mainWindow'
 
 const targetSchema = z.object({ target: z.enum(['main', 'floating']) })
 const urlSchema = z.object({ url: z.string().url() })
@@ -54,6 +65,20 @@ export function registerWindowHandlers(): void {
     updateWindowResize(dx, dy)
     return { ok: true }
   })
+
+  ipcMain.handle(IPC.WINDOW_MINIMIZE, (): WindowMinimizeResponse => {
+    minimizeMainWindow()
+    return { ok: true }
+  })
+
+  ipcMain.handle(IPC.WINDOW_TOGGLE_MAXIMIZE, (): WindowToggleMaximizeResponse => {
+    toggleMaximizeMainWindow()
+    return { maximized: isMainWindowMaximized() }
+  })
+
+  ipcMain.handle(IPC.WINDOW_IS_MAXIMIZED, (): WindowIsMaximizedResponse => ({
+    maximized: isMainWindowMaximized()
+  }))
 
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, raw): ShellOpenExternalResponse => {
     const { url } = urlSchema.parse(raw)
