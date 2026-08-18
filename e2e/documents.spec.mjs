@@ -112,7 +112,29 @@ test('a document can be deleted from its card menu', async (t) => {
   await page.locator('.docs-card-menu-popup').waitFor({ state: 'visible' })
 
   await page.locator('.docs-card-menu-delete').click()
-  await page.waitForTimeout(700)
+
+  // The confirmation sheet — Figma Frame 5. Deleting a document is
+  // irreversible, so the menu item asks rather than acts.
+  const sheet = page.locator('.savechanges-card')
+  await sheet.waitFor({ state: 'visible' })
+  assert.match(await sheet.innerText(), /Delete me/, 'the sheet does not name the document')
+  // No "Do not show anymore" on a delete: there is no undo behind it.
+  assert.equal(
+    await sheet.locator('.savechanges-check:visible').count(),
+    0,
+    'the delete sheet offers an opt-out'
+  )
+
+  // Cancel first — it must leave the document alone.
+  await sheet.locator('.savechanges-btn.cancel').click()
+  await sheet.waitFor({ state: 'detached' })
+  await titlesEventually(['Delete me', 'Keep me'])
+
+  await target.hover()
+  await target.locator('.docs-card-menu').click()
+  await page.locator('.docs-card-menu-delete').click()
+  await sheet.waitFor({ state: 'visible' })
+  await sheet.locator('.savechanges-btn.confirm').click()
 
   await titlesEventually(['Keep me'])
   // The click must not also open the document underneath the menu.
