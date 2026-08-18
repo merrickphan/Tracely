@@ -128,6 +128,13 @@ export default function App(): JSX.Element {
               setOpenDocumentId(null)
               setTab('analyze')
             }}
+            // Identical to the Documents list's row handler below — Home's
+            // recent cards are a shortcut into the editor, not a shortcut to
+            // the list.
+            onOpenDocument={(id) => {
+              setOpenDocumentId(id)
+              setTab('analyze')
+            }}
             firstName={user?.firstName ?? null}
           />
         ) : null}
