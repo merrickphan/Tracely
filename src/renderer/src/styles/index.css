@@ -301,6 +301,13 @@ input[type='range']::-webkit-slider-runnable-track {
    drop shadow fell entirely outside the window, so it never rendered at all. */
 :root {
   --window-margin: 14px;
+  /* Room the window controls occupy at the top-right, measured from the card's
+     edge: three 26px buttons with 2px gaps, plus the 27px the cluster is inset
+     by, less the 14px margin the card already has. Any view with content along
+     the top of the card must reserve this or it renders underneath them — the
+     document editor's toolbar did, putting the window's X on top of "AI
+     Insights". See components/WindowControls.tsx. */
+  --winctl-reserve: 96px;
 }
 
 .app-main {
@@ -1176,7 +1183,17 @@ textarea:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
+  /* Right padding clears the window controls — see --winctl-reserve. The
+     toolbar is the top row of the card and "AI Insights" is its last item, so
+     without this the close button lands on top of it.
+
+     The padding alone was not enough: the row's items are intrinsically wider
+     than what is left of it, and an overflowing flex row spills its last child
+     straight through the padding — measured, "AI Insights" sat 55px past the
+     padding edge and still under the close button. So the formatting group is
+     allowed to shrink below its content width, which is what makes the
+     reservation real rather than nominal. */
+  padding: 0 var(--winctl-reserve) 0 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   -webkit-app-region: no-drag;
 }
@@ -1220,6 +1237,15 @@ textarea:disabled {
   color: #333;
   width: 150px;
   padding: 2px 4px;
+  /* The one thing in this row that gives way. The toolbar has to reserve
+     --winctl-reserve on the right for the window controls, and at the design
+     width its items are ~56px wider than what is left — so something shrinks.
+     A title field is the right something: it is a text input, it scrolls, and
+     every editor truncates the document name before it squashes the formatting
+     controls. Letting those shrink instead was tried and measured — the font
+     family and size dropped 96->74 and 52->40, visibly squashed. */
+  flex-shrink: 1;
+  min-width: 92px;
 }
 
 .docedit-name::placeholder {
@@ -3562,7 +3588,11 @@ textarea:disabled {
 /* Document editor — autosave indicator. Deliberately quiet: it confirms the
    work is safe without asking to be looked at. */
 .docedit-savestate {
-  flex-shrink: 0;
+  /* Shrinkable, and first to go: it says "Saved". Losing a few characters of
+     it costs nothing next to the toolbar's controls overlapping. */
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 11.5px;
   color: var(--label);
   padding: 0 4px;
@@ -5366,51 +5396,83 @@ textarea:disabled {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Per-card delete. Hidden until the card is hovered or the control has focus:
-   the grid is a list of things to OPEN, and a delete visible on every card at
-   rest makes destruction the most eye-catching thing on the page. Focus is in
-   the selector so it stays reachable by keyboard, where there is no hover. */
-.docs-card-delete {
+/* Per-card menu. The card needs to be the positioning context so the popup can
+   sit against it rather than against the thumbnail it is drawn over. */
+.docs-card {
+  position: relative;
+}
+
+/* Hidden until the card is hovered, the control has focus, or the menu is
+   open: the grid is a list of things to OPEN, and a control visible on every
+   card at rest competes with that. Focus is in the selector so it stays
+   reachable by keyboard, where there is no hover. */
+.docs-card-menu {
   position: absolute;
   top: 8px;
   left: 8px;
-  min-width: 22px;
+  width: 24px;
   height: 22px;
-  padding: 0 6px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #d1d4db;
-  color: #737880;
-  font-size: 13px;
+  color: #55555c;
+  font-size: 15px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  z-index: 2;
 }
 
-.docs-card:hover .docs-card-delete,
-.docs-card-delete:focus-visible,
-.docs-card-delete.confirming {
+.docs-card:hover .docs-card-menu,
+.docs-card-menu:focus-visible,
+.docs-card-menu.open {
   opacity: 1;
 }
 
-.docs-card-delete:hover {
-  color: #cb3232;
-  border-color: #cb3232;
+.docs-card-menu:hover,
+.docs-card-menu.open {
+  background: #fff;
+  color: #212429;
 }
 
-/* Armed. Red, and wider because it says a word — a second click here destroys
-   work that exists nowhere else, so it should not look like the resting state. */
-.docs-card-delete.confirming {
-  background: #cb3232;
-  border-color: #cb3232;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 0 8px;
+.docs-card-menu-popup {
+  position: absolute;
+  top: 34px;
+  left: 8px;
+  z-index: 3;
+  min-width: 118px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #d1d4db;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+}
+
+.docs-card-menu-delete {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #cb3232;
+  cursor: pointer;
+  text-align: left;
+}
+
+.docs-card-menu-delete:hover,
+.docs-card-menu-delete:focus-visible {
+  background: #fdecec;
+}
+
+[data-theme='dark'] .docs-card-menu,
+[data-theme='dark'] .docs-card-menu-popup {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 /* The thumbnail is the positioning context for both the grade chip and this. */
