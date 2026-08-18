@@ -43,6 +43,17 @@ export interface ScoreSignals {
    */
   soWhatInConclusion: boolean
   /**
+   * A significance marker anywhere in the draft.
+   *
+   * Read off the TEXT rather than the role vector, because a paragraph carries
+   * one role and the closing paragraph is routinely both the conclusion and the
+   * place the stakes are stated. Judging the last paragraph as a conclusion
+   * first — which it is — used to cost the essay all 15 significance points for
+   * work it had plainly done. This credits the work; the role decides the
+   * conclusion.
+   */
+  significanceAnywhere?: boolean
+  /**
    * Whether paragraph 1 is the essay's title. It is 'unknown' by rights — a
    * title states no claim — but counting it as unlabelled made every titled
    * essay's reading "provisional", which is the panel telling the writer it
@@ -164,11 +175,12 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   const counterargument = has(roles, 'counterargument') ? COMPONENT_MAX.counterargument : 0
 
   // --- Significance (15) -------------------------------------------------
-  const significance = has(roles, 'significance')
-    ? COMPONENT_MAX.significance
-    : signals.soWhatInConclusion
-      ? COMPONENT_MAX.significance / 2
-      : 0
+  const significance =
+    has(roles, 'significance') || signals.significanceAnywhere === true
+      ? COMPONENT_MAX.significance
+      : signals.soWhatInConclusion
+        ? COMPONENT_MAX.significance / 2
+        : 0
 
   // --- Conclusion (10) ---------------------------------------------------
   // Lowest weight on purpose. It is the easiest component to satisfy and the
