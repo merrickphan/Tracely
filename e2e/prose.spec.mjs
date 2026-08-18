@@ -199,6 +199,91 @@ test('the prose card applies a fix, and Ctrl+Z takes it back', async (t) => {
   assert.ok(undone.includes('a error'), `Ctrl+Z did not restore the original: ${undone}`)
 })
 
+/**
+ * Moving the pointer from the underline to the card must not close the card.
+ *
+ * The card is drawn a gap away from the text, so crossing that gap puts the
+ * pointer over neither — and the card used to close on the first such frame,
+ * which made it unreachable: it vanished exactly as you moved toward it.
+ *
+ * The existing "applies a fix" test above did NOT catch this, and the reason is
+ * worth keeping: `locator.click()` jumps the pointer straight to the target and
+ * fires no intermediate mousemove, so it never crosses the gap. `mouse.move`
+ * with `steps` is what reproduces a human hand.
+ */
+test('the card survives the pointer travelling from the mark to it', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /New document/i }).click()
+  const body = page.locator('.docedit-body')
+  await body.waitFor({ state: 'visible' })
+  await body.click()
+  await page.keyboard.insertText('This is a error in the report.')
+
+  const mark = page.locator('.docprose[data-prose-kind="article-agreement"]').first()
+  await mark.waitFor({ state: 'visible', timeout: 10_000 })
+  const markBox = await mark.boundingBox()
+  await page.mouse.move(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2)
+
+  const card = page.locator('.docprose-card')
+  await card.waitFor({ state: 'visible', timeout: 5000 })
+  const cardBox = await card.boundingBox()
+
+  // Travel like a hand: many small steps, through the dead zone between the
+  // two. Every one of these fires a mousemove over neither element.
+  await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2, { steps: 20 })
+
+  assert.ok(await card.isVisible(), 'the card closed while the pointer was moving toward it')
+
+  // And it is still usable once reached — the point of getting there.
+  await page.getByRole('button', { name: /Change to/ }).click()
+  const after = await body.innerText()
+  assert.ok(after.includes('an error'), `fix did not apply after travelling to the card: ${after}`)
+})
+
+/** The other half: it must still close when the pointer genuinely goes away. */
+test('the card still closes when the pointer leaves for good', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /New document/i }).click()
+  const body = page.locator('.docedit-body')
+  await body.waitFor({ state: 'visible' })
+  await body.click()
+  await page.keyboard.insertText('This is a error in the report.\n\nA second paragraph well away from it.')
+
+  const mark = page.locator('.docprose[data-prose-kind="article-agreement"]').first()
+  await mark.waitFor({ state: 'visible', timeout: 10_000 })
+  const markBox = await mark.boundingBox()
+  await page.mouse.move(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2)
+  await page.locator('.docprose-card').waitFor({ state: 'visible', timeout: 5000 })
+
+  // Somewhere with no mark and no card. A lingering card covers the very text
+  // the writer moved on to read, which is its own bug.
+  const bodyBox = await body.boundingBox()
+  await page.mouse.move(bodyBox.x + bodyBox.width - 12, bodyBox.y + bodyBox.height - 12, { steps: 20 })
+
+  await page
+    .locator('.docprose-card')
+    .waitFor({ state: 'hidden', timeout: 3000 })
+    .catch(() => {
+      throw new Error('the card outstayed the pointer')
+    })
+})
+
 test('the prose layer sits under the claim layer', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
