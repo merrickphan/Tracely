@@ -5,7 +5,7 @@ import { computeHomeStats } from '@shared/homeStats'
 import { greetingFor } from '@shared/greeting'
 import type { Tab } from '../App'
 import figmaLogo from '../assets/figma-logo.png'
-import TracerMascot from '../components/TracerMascot'
+import tracerBadge from '../assets/tracer-badge.png'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
 
@@ -294,9 +294,17 @@ export default function HomeView({
             silently dropped something the design asks for.
           */}
           <div className="home-tracer">
-            <span className="home-tracer-badge">
-              <TracerMascot size={46} />
-            </span>
+            {/*
+              The owner's own artwork, used as supplied rather than redrawn.
+              A hand-authored SVG approximation shipped here for one build and
+              was rejected on sight — "use this exact image" — which is the
+              right call: the character is brand art, and an approximation of
+              brand art is just a worse version of it.
+
+              The orange disc is part of the image, so the container adds no
+              halo of its own; doing that gave it two rings.
+            */}
+            <img className="home-tracer-badge" src={tracerBadge} alt="" />
             <button className="home-tracer-btn" disabled title="Tracer is not available in this build">
               Chat with Tracer
             </button>
