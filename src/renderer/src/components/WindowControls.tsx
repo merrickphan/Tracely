@@ -10,14 +10,20 @@ import { tracelyApi } from '../lib/api'
  * any size wants a way back to a sensible one, and one with no taskbar
  * minimize (`minimizable` was false) could only be put away by closing it.
  *
- * Placed LEFT of the card's own close button rather than replacing it. The X
- * belongs to the view — Home's sits at 833px in design coordinates and does
- * what the design says it does — and these two are the window's. Sharing the
- * corner keeps them where a hand reaches for them without touching a frame.
+ * The CLOSE button is here too, and that is the change worth explaining. It
+ * used to be Home's alone — an image at 833px in design coordinates, drawn by
+ * HomeView and by nothing else — so the corner held three controls on Home and
+ * two everywhere else, at two different sizes, and closing the window was
+ * impossible from Documents, Analyze or Settings without going Home first.
  *
- * Drawn as SVG at the same weight as the design's thin-line icons rather than
- * pulled from a set: two 10px glyphs, and importing an icon library for them
- * would be more code than the paths are.
+ * Window chrome belongs to the window, not to one view. All three live here
+ * now, the same size and the same kind of button, on every screen. Home's own
+ * X is gone rather than hidden: two elements doing one job is how they came to
+ * disagree about size in the first place.
+ *
+ * Drawn as SVG at the weight of the design's thin-line icons rather than pulled
+ * from a set — three small glyphs, and an icon library would be more code than
+ * the paths are.
  */
 
 /**
@@ -59,8 +65,8 @@ export default function WindowControls(): JSX.Element {
         title="Minimize"
         aria-label="Minimize"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M1 5h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+          <path d="M3 7.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
       <button
@@ -72,15 +78,28 @@ export default function WindowControls(): JSX.Element {
         {maximized ? (
           // Two offset rectangles — the standard "restore" glyph, and the only
           // one users already read as "put it back".
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <rect x="0.65" y="2.65" width="6.7" height="6.7" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M3 2.2V1.7A1 1 0 0 1 4 0.7h4.3a1 1 0 0 1 1 1V6a1 1 0 0 1-1 1h-.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+            <rect x="2.75" y="4.75" width="7.5" height="7.5" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M5.4 4.1v-.6a1.2 1.2 0 0 1 1.2-1.2h4.9a1.2 1.2 0 0 1 1.2 1.2v4.9a1.2 1.2 0 0 1-1.2 1.2h-.6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         ) : (
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <rect x="0.65" y="0.65" width="8.7" height="8.7" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+            <rect x="2.75" y="2.75" width="9.5" height="9.5" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
           </svg>
         )}
+      </button>
+      {/* Hides rather than quits, which is what Home's X always did — the app
+          stays in the tray so the global hotkey and Screen Watch keep working
+          with no window open (see main/index.ts's window-all-closed). */}
+      <button
+        className="winctl-btn winctl-close"
+        onClick={() => void tracelyApi.hideWindow('main')}
+        title="Close"
+        aria-label="Close"
+      >
+        <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+          <path d="M3.6 3.6l7.8 7.8M11.4 3.6l-7.8 7.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </button>
     </div>
   )

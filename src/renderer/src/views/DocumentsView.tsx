@@ -54,13 +54,28 @@ const THUMB_BARS = [110.25, 133.875, 94.5, 126, 78.75]
 
 function DocumentCard({
   document: doc,
-  onOpen
+  onOpen,
+  onDelete
 }: {
   document: DocumentListItem
   onOpen: () => void
+  onDelete: () => void
 }): JSX.Element {
   const grade = doc.score === null ? null : gradeFor(doc.score)
   const chip = grade ? chipColors(grade.letter) : null
+  // Two-step, in place. Deleting a document destroys work that exists nowhere
+  // else — there is no trash and no undo — so the first click only arms it. A
+  // native confirm() would block the whole renderer, and this window is the
+  // app's only one.
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (!confirming) return
+    // Disarms itself. A card left armed behind a scroll is a delete waiting for
+    // a stray click on a page whose whole purpose is clicking cards.
+    const id = setTimeout(() => setConfirming(false), 4000)
+    return () => clearTimeout(id)
+  }, [confirming])
 
   return (
     <button className="docs-card" onClick={onOpen} title={`Open ${doc.title}`}>
@@ -73,6 +88,31 @@ function DocumentCard({
             {grade.letter}
           </span>
         ) : null}
+      </span>
+      {/* A <span role="button"> rather than a <button>: this card is itself a
+          button, and nesting one inside another is invalid HTML that Chromium
+          resolves by hoisting the inner one out of the card. */}
+      <span
+        role="button"
+        tabIndex={0}
+        className={`docs-card-delete${confirming ? ' confirming' : ''}`}
+        title={confirming ? `Delete "${doc.title}" permanently` : 'Delete this document'}
+        aria-label={confirming ? `Confirm deleting ${doc.title}` : `Delete ${doc.title}`}
+        onClick={(event) => {
+          // Or the click opens the document underneath it.
+          event.stopPropagation()
+          if (confirming) onDelete()
+          else setConfirming(true)
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          event.stopPropagation()
+          if (confirming) onDelete()
+          else setConfirming(true)
+        }}
+      >
+        {confirming ? 'Delete?' : '×'}
       </span>
       <span className="docs-card-title">{doc.title}</span>
       {/* "Not graded yet" rather than an empty line or a dash: a draft nothing
@@ -112,6 +152,26 @@ export default function DocumentsView({
       cancelled = true
     }
   }, [])
+
+  /**
+   * Removes the row first, then the record.
+   *
+   * Optimistic because the alternative is re-listing, and a re-list would
+   * re-sort — so a card the user had just deleted could be followed by the grid
+   * visibly rearranging under the cursor. On failure the document is put back
+   * and the error shown, which is the only state where the list can disagree
+   * with storage.
+   */
+  async function removeDocument(id: string): Promise<void> {
+    const previous = documents
+    setDocuments((docs) => (docs ?? []).filter((d) => d.id !== id))
+    try {
+      await tracelyApi.removeDocument(id)
+    } catch (err) {
+      setDocuments(previous)
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   const sorted = documents ? documentSort(documents, sort) : []
 
@@ -160,7 +220,12 @@ export default function DocumentsView({
 
       <div className="docs-grid">
         {sorted.map((doc) => (
-          <DocumentCard key={doc.id} document={doc} onOpen={() => onOpenDocument(doc.id)} />
+          <DocumentCard
+            key={doc.id}
+            document={doc}
+            onOpen={() => onOpenDocument(doc.id)}
+            onDelete={() => void removeDocument(doc.id)}
+          />
         ))}
       </div>
     </div>

@@ -29,14 +29,11 @@ export default function HomeView({
 
   return (
     <div className="home-canvas">
-      <img
-        src={homeClose}
-        className="home-el home-closeicon"
-        alt=""
-        role="button"
-        aria-label="Close"
-        onClick={() => tracelyApi.hideWindow('main')}
-      />
+      {/* The close X lives in components/WindowControls.tsx now, with minimize
+          and maximize, at one size on every screen. It was here alone — so the
+          corner held three controls on Home and two elsewhere, and Documents,
+          Analyze and Settings had no way to close the window at all. */}
+
 
       <img src={figmaLogo} className="home-el home-logo" alt="" />
       <span className="home-el home-title">Tracely</span>
