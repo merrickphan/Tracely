@@ -19,7 +19,7 @@
   --label: rgba(0, 0, 0, 0.56);
   --ink: #000000;
   --ink-contrast: #ffffff;
-  --accent: #f47b20;
+  --accent: #f97316;
   --accent-2: #f9a050;
   --accent-gradient: linear-gradient(164deg, #f47b20 0%, #f9a050 100%);
   --accent-wash: rgba(244, 123, 32, 0.07);
@@ -51,7 +51,7 @@
     --label: rgba(246, 246, 248, 0.62);
     --ink: #f6f6f8;
     --ink-contrast: #0b0b0d;
-    --accent: #f47b20;
+    --accent: #f97316;
     --accent-2: #f9a050;
     --accent-gradient: linear-gradient(164deg, #f47b20 0%, #f9a050 100%);
     --accent-wash: rgba(244, 123, 32, 0.16);
@@ -84,7 +84,7 @@
   --label: rgba(246, 246, 248, 0.62);
   --ink: #f6f6f8;
   --ink-contrast: #0b0b0d;
-  --accent: #f47b20;
+  --accent: #f97316;
   --accent-2: #f9a050;
   --accent-gradient: linear-gradient(164deg, #f47b20 0%, #f9a050 100%);
   --accent-wash: rgba(244, 123, 32, 0.16);
@@ -2378,9 +2378,40 @@ textarea:disabled {
   transform: scale(0.98);
 }
 
+/* The frame fills the selected item with the accent, not with ink (33:287:
+   `bg-[#f97316]`, 12px radius, white label). It was black here, which is the
+   "settings accents are black" report.
+
+   `var(--accent)` rather than the literal, so Settings > Appearance > Accent
+   color still moves it — the design's orange IS the default value of that
+   token now, so the frame is reproduced exactly until someone chooses
+   otherwise. */
 .settings-nav-item.active {
-  background: var(--ink);
-  color: var(--ink-contrast);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Settings' primary action is a FLAT accent fill in the frame (33:364), not
+   the accent gradient `.btn-primary` carries elsewhere, and not ink. Scoped to
+   this view because `.btn-dark` is also the Library's "Save notes", which no
+   frame has asked to change. */
+.settings-view .btn-dark {
+  background: var(--accent);
+  color: #fff;
+}
+
+.settings-view .btn-dark:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.06);
+}
+
+/* Screen Watch's switch and every app checkbox. `accent-color` is the one-line
+   way to tint a native control, and native is worth keeping here: these are
+   real checkboxes with real keyboard behaviour, and a hand-built switch would
+   be re-implementing that to change a colour. */
+.settings-view input[type='checkbox'],
+.settings-view input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 .settings-nav-item svg {
