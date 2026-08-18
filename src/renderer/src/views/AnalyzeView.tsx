@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CitationStyle, Claim, DocumentOutline, DocumentRecord, Source } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
 import { clientToLayout, contentOffset, readZoom } from '@shared/zoomLayout'
+import { createHoverCloser } from '@shared/hoverIntent'
 import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
@@ -209,6 +210,16 @@ function DocumentEditor({
   // The pointer is inside the popover, so leaving the underline must not close
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
+  /**
+   * Closing a hover card is DELAYED, because the card is drawn a gap away from
+   * the text it is about and crossing that gap puts the pointer over neither.
+   * Closing on the first such frame made the card unreachable — it vanished
+   * exactly as the user moved toward it. See shared/hoverIntent.ts.
+   *
+   * One closer for both surfaces: a pointer moving from a claim mark to a prose
+   * mark should not leave a stale close armed for the card it just left.
+   */
+  const hoverCloser = useRef(createHoverCloser())
   // Clears the report's "Show me" flash. A ref, not state: restarting it must
   // not re-render the editor mid-typing.
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -743,6 +754,22 @@ function DocumentEditor({
   }
 
   /**
+   * Closes whichever hover card is open, after the grace period.
+   *
+   * Never closes a PINNED flow: a running citation or fix flow owns the card
+   * until it is finished or cancelled, and the pointer wandering off the
+   * sentence must not destroy work in progress.
+   */
+  function armClose(): void {
+    if (flowPinnedRef.current) return
+    hoverCloser.current.arm(() => {
+      if (insidePopoverRef.current || flowPinnedRef.current) return
+      setActiveMark(null)
+      setActiveProse(null)
+    })
+  }
+
+  /**
    * Opens the popover for whatever underline the pointer is over.
    *
    * Hit-tested against the measured rects rather than by putting elements under
@@ -756,11 +783,14 @@ function DocumentEditor({
     // the prose layer on exactly the drafts that have most of the grammar in
     // them: a document with no scored claims has no claim marks at all.
     if (!wrap || (marks.length === 0 && visibleProseMarks.length === 0)) {
-      if (activeMark) setActiveMark(null)
-      if (activeProse) setActiveProse(null)
+      if (activeMark || activeProse) armClose()
       return
     }
-    if (insidePopoverRef.current) return
+    // The pointer is on the card. Nothing may close while it is.
+    if (insidePopoverRef.current) {
+      hoverCloser.current.cancel()
+      return
+    }
     // A running citation flow owns the popover until it is finished or
     // cancelled. Without this, reaching across another underline on the way to
     // "Insert citation" swaps the card out from under the cursor.
@@ -776,16 +806,19 @@ function DocumentEditor({
     const y = contentOffset(event.clientY - rect.top, wrap.scrollTop, zoom)
     const hit = markAt(marks, x, y)
     if (!hit) {
-      if (activeMark) setActiveMark(null)
       // Only when no claim mark was hit. A claim mark wins over a prose mark on
       // the same words: the credibility colours carry this app's actual
       // judgement, and a sentence that is both unverified and clumsy should
       // open the card about whether it is true.
       const prose = proseMarkAt(visibleProseMarks, x, y)
       if (!prose) {
-        if (activeProse) setActiveProse(null)
+        // Over neither mark — which is also what crossing the gap toward the
+        // card looks like. Arm the close rather than doing it.
+        if (activeMark || activeProse) armClose()
         return
       }
+      hoverCloser.current.cancel()
+      if (activeMark) setActiveMark(null)
       if (
         activeProse?.mark.issue.start === prose.mark.issue.start &&
         activeProse?.mark.issue.kind === prose.mark.issue.kind
@@ -796,6 +829,8 @@ function DocumentEditor({
       setActiveProse(prose)
       return
     }
+    // A real mark under the pointer cancels any pending close.
+    hoverCloser.current.cancel()
     if (activeProse) setActiveProse(null)
     if (activeMark?.mark.claim.id === hit.mark.claim.id) return
     // Captured here rather than in the measure effect: scrolling changes
@@ -1558,7 +1593,10 @@ function DocumentEditor({
         ref={wrapRef}
         onMouseMove={handleBodyMouseMove}
         onMouseLeave={() => {
-          if (!insidePopoverRef.current && !flowPinnedRef.current) setActiveMark(null)
+          // Armed, not immediate: the card can be positioned outside the
+          // editor's own box near its edges, so leaving the wrap is one of the
+          // ways a pointer travels TOWARD the card.
+          if (!insidePopoverRef.current && !flowPinnedRef.current) armClose()
         }}
       >
         <div
@@ -1592,10 +1630,13 @@ function DocumentEditor({
           }}
           onPopoverEnter={() => {
             insidePopoverRef.current = true
+            hoverCloser.current.cancel()
           }}
           onPopoverLeave={() => {
             insidePopoverRef.current = false
-            setActiveProse(null)
+            // Armed, so moving from the card back onto the sentence it is
+            // about does not close it either.
+            armClose()
           }}
         />
         {/* The report's "Show me" landing, over both mark layers — it is a
@@ -1694,10 +1735,11 @@ function DocumentEditor({
           }}
           onPopoverEnter={() => {
             insidePopoverRef.current = true
+            hoverCloser.current.cancel()
           }}
           onPopoverLeave={() => {
             insidePopoverRef.current = false
-            if (!flowPinnedRef.current) setActiveMark(null)
+            armClose()
           }}
         />
       </div>
