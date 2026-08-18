@@ -1,4 +1,4 @@
-import { strictEqual, ok } from 'node:assert/strict'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   clampWindowScale,
@@ -6,6 +6,10 @@ import {
   LAYOUT_WIDTH,
   MAX_COMFORTABLE_SCALE,
   MAX_WINDOW_SCALE,
+  clampWindowBounds,
+  maximizedBounds,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
   clampDragScale,
   fitToWorkAreaScale,
   maximizedScale,
@@ -170,6 +174,70 @@ describe('maximizedScale still caps at what is comfortable', () => {
         maximizedScale(workArea) <= clampDragScale(MAX_WINDOW_SCALE, workArea) + 1e-9,
         `maximize exceeds the drag ceiling on ${workArea.width}x${workArea.height}`
       )
+    }
+  })
+})
+
+describe('clampWindowBounds — the window resizes like any other', () => {
+  const workArea = { width: 2560, height: 1392 }
+
+  it('takes width and height independently', () => {
+    // The property the aspect lock made impossible. A very wide, short window
+    // is a legitimate thing to drag to and must survive unchanged.
+    const out = clampWindowBounds({ width: 1800, height: 600 }, workArea)
+    strictEqual(out.width, 1800)
+    strictEqual(out.height, 600)
+  })
+
+  it('holds the window inside the display on both axes', () => {
+    const out = clampWindowBounds({ width: 9999, height: 9999 }, workArea)
+    ok(out.width <= workArea.width, `${out.width} wide in a ${workArea.width} work area`)
+    ok(out.height <= workArea.height, `${out.height} tall in a ${workArea.height} work area`)
+    // And not flush to it: with no title bar, the grips are the only way to
+    // resize, and a window under the taskbar cannot be resized back.
+    ok(workArea.height - out.height >= 24, 'no room left to grab a bottom grip')
+  })
+
+  it('refuses to go below a usable minimum', () => {
+    const out = clampWindowBounds({ width: 10, height: 10 }, workArea)
+    strictEqual(out.width, MIN_WINDOW_WIDTH)
+    strictEqual(out.height, MIN_WINDOW_HEIGHT)
+  })
+
+  /**
+   * The minimum wins over the fit. On a display too small to hold even the
+   * minimum, overflowing the edge is recoverable — the window can be moved —
+   * while a window smaller than this has its own toolbar controls colliding.
+   */
+  it('prefers overflowing a tiny display to going below the minimum', () => {
+    const out = clampWindowBounds({ width: 800, height: 600 }, { width: 320, height: 240 })
+    strictEqual(out.width, MIN_WINDOW_WIDTH)
+    strictEqual(out.height, MIN_WINDOW_HEIGHT)
+  })
+
+  it('rounds to whole pixels', () => {
+    const out = clampWindowBounds({ width: 1000.6, height: 700.4 }, workArea)
+    strictEqual(out.width, 1001)
+    strictEqual(out.height, 700)
+  })
+})
+
+describe('maximizedBounds', () => {
+  it('fills the work area less the grip margin', () => {
+    const workArea = { width: 2560, height: 1392 }
+    const out = maximizedBounds(workArea)
+    strictEqual(out.width, workArea.width - 48)
+    strictEqual(out.height, workArea.height - 48)
+  })
+
+  it('never returns something the clamp would reject', () => {
+    for (const workArea of [
+      { width: 1366, height: 768 },
+      { width: 1920, height: 1040 },
+      { width: 320, height: 240 }
+    ]) {
+      const out = maximizedBounds(workArea)
+      deepStrictEqual(out, clampWindowBounds(out, workArea))
     }
   })
 })

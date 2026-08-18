@@ -120,7 +120,12 @@ test('the card fills the window at every size, and keeps its design units', asyn
       }
     }, probe)
 
-    ratios.push({ scale, width: m.probeWidth / m.innerWidth, left: m.probeLeft / m.innerWidth })
+    ratios.push({
+      scale,
+      probeWidth: Math.round(m.probeWidth),
+      width: m.probeWidth / m.innerWidth,
+      left: m.probeLeft / m.innerWidth
+    })
 
     console.log(
       `  scale ${String(scale).padEnd(4)} window ${String(m.innerWidth).padStart(4)}x${String(m.innerHeight).padStart(4)}  ` +
@@ -145,23 +150,27 @@ test('the card fills the window at every size, and keeps its design units', asyn
     assert.ok(m.scrollHeight <= m.innerHeight + 1, `the page overflows vertically at scale ${scale}`)
   }
 
-  // The assertion the whole file is for. A reflowing layout would leave this
-  // element the same PIXEL size while the window grew, so its share would fall
-  // — at 2.5x it would occupy 40% of the fraction it does at 1x.
+  // The assertion the whole file is for, INVERTED on 2026-08-18.
+  //
+  // It used to require the probe to keep the same FRACTION of the window at
+  // every size — that is what "the UI scales as one piece" means, and it was
+  // the contract until the owner asked for a window that resizes like any
+  // other app. Now the opposite must hold: the element keeps its PIXEL size
+  // and a bigger window is more room, not bigger type.
+  //
+  // Kept as a test rather than deleted because it is the only thing that would
+  // catch the zoom being re-attached to the window width, which is a change
+  // that looks harmless in a diff and breaks every viewport unit in the sheet.
   const base = ratios.find((r) => r.scale === 1)
   for (const r of ratios) {
     assert.ok(
-      Math.abs(r.width - base.width) < 0.005,
-      `at scale ${r.scale} the probe is ${(100 * r.width).toFixed(2)}% of the window, not ${(100 * base.width).toFixed(2)}% — the layout reflowed instead of scaling`
-    )
-    assert.ok(
-      Math.abs(r.left - base.left) < 0.005,
-      `at scale ${r.scale} the probe sits at ${(100 * r.left).toFixed(2)}%, not ${(100 * base.left).toFixed(2)}%`
+      Math.abs(r.probeWidth - base.probeWidth) <= 1,
+      `at ${r.scale}x the probe is ${r.probeWidth}px, not ${base.probeWidth}px — the UI scaled with the window instead of reflowing`
     )
   }
 })
 
-test('the aspect ratio is locked, so the card can never be letterboxed', async (t) => {
+test('width and height resize independently', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
@@ -170,26 +179,33 @@ test('the aspect ratio is locked, so the card can never be letterboxed', async (
 
   await mainWindow(app)
 
-  // Asked of the real window rather than of the constant: setAspectRatio is a
-  // main-process call that a later refactor can quietly drop, and the symptom
-  // would be a card letterboxed inside a wrongly-shaped window — visible only
-  // to someone dragging a corner.
-  const ratio = await app.evaluate(({ BrowserWindow }) => {
+  // Asked of the REAL window rather than of the constants: the aspect lock was
+  // a main-process `setAspectRatio` call, and a reinstated one would silently
+  // drag height around with every width change. The symptom is only visible to
+  // someone holding a side grip.
+  const limits = await app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/index.html'))
     const [minW, minH] = win.getMinimumSize()
-    const [maxW, maxH] = win.getMaximumSize()
-    return { minW, minH, maxW, maxH }
+    const before = win.getSize()
+    // Width only. Under an aspect lock the height follows; without one it does
+    // not move at all.
+    win.setSize(before[0] + 220, before[1])
+    const after = win.getSize()
+    win.setSize(before[0], before[1])
+    return { minW, minH, before, after }
   })
 
-  const expected = LAYOUT_WIDTH / LAYOUT_HEIGHT
-  assert.ok(
-    Math.abs(ratio.minW / ratio.minH - expected) < 0.01,
-    `the minimum size ${ratio.minW}x${ratio.minH} is not the layout's shape`
+  assert.equal(
+    limits.after[1],
+    limits.before[1],
+    `changing the width moved the height from ${limits.before[1]} to ${limits.after[1]} — the aspect ratio is still locked`
   )
-  // A floor low enough to be unreadable, or a ceiling below the default, would
-  // both be worse than having no limits at all.
-  assert.ok(ratio.minW >= 600 && ratio.minW < LAYOUT_WIDTH, `minimum width ${ratio.minW} is out of range`)
-  assert.ok(ratio.maxW > LAYOUT_WIDTH, `maximum width ${ratio.maxW} is not above the default`)
+  assert.equal(limits.after[0], limits.before[0] + 220, 'the width did not take the size it was given')
+
+  // A floor low enough to be unusable would be worse than none, and it must
+  // not be the layout's shape any more.
+  assert.ok(limits.minW >= 600 && limits.minW < LAYOUT_WIDTH, `minimum width ${limits.minW} is out of range`)
+  assert.ok(limits.minH >= 400 && limits.minH < LAYOUT_HEIGHT, `minimum height ${limits.minH} is out of range`)
 })
 
 test('dragging a grip resizes the real window', async (t) => {
@@ -381,11 +397,9 @@ test('maximize fills the display without burying the grips', async (t) => {
     workArea.height - maxed.height >= 24,
     `maximized to ${maxed.height}px in a ${workArea.height}px work area — no room left to grab a grip`
   )
-  // Still the layout's shape — maximize must not letterbox the card.
-  assert.ok(
-    Math.abs(maxed.width / maxed.height - LAYOUT_WIDTH / LAYOUT_HEIGHT) < 0.02,
-    `aspect drifted to ${(maxed.width / maxed.height).toFixed(3)}`
-  )
+  // No aspect assertion: maximize takes the work area's shape now, which is
+  // the display's and not the layout's. The card no longer has one shape to
+  // preserve — see the note in shared/windowSize.ts.
 
   // And back to where it was, not to the default.
   await page.locator('.winctl-btn').nth(1).click()
