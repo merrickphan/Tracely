@@ -5674,20 +5674,45 @@ textarea:disabled {
   --h-line: #d9dbe0;
   --h-accent-wash: #fef2e7;
   --h-foot: #6d6d6d;
+  /* The page's ground, sampled off the frame. Everything on Home is a white
+     card floating on this; the screen was a flat white page, which is why the
+     cards had to be outlined to be visible at all and still read as one
+     undifferentiated sheet. */
+  --h-page: #e5e7eb;
+  --h-card-line: #e3e6ea;
+  /* The gutter the content sits in (33px in an 870 frame), and how much closer
+     to the edge the header card runs (10px). One variable each, because
+     `.home-card` cancels the difference with a negative margin and the two
+     numbers have to agree. */
+  --h-gutter: clamp(20px, 3.8vw, 33px);
+  --h-card-edge: 10px;
 
   position: relative;
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: var(--h-page);
 }
 
-/* 32px gutters, as the frame has (content runs 32..854 of 870). */
+/* The frame's gutters: content runs 33..855 of 870, and the header card 10..858. */
 .home-inner {
-  padding: 32px clamp(20px, 3.6vw, 56px) 26px;
+  padding: var(--h-card-edge) var(--h-gutter) 26px;
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* The white card the greeting and status live in.
+   It runs closer to the window edge than everything below it, hence the
+   negative side margins — the alternative was a second padding context and two
+   numbers that could drift apart. Its top padding is what keeps the brand row
+   below the OS window buttons, which are drawn over this corner. */
+.home-card {
+  margin: 0 calc(var(--h-card-edge) - var(--h-gutter));
+  padding: 34px 23px 22px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 18, 22, 0.05);
 }
 
 /* `.home-close` is gone with the button — the real Windows close sits in that
@@ -5698,10 +5723,6 @@ textarea:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  /* Was 34px, for the in-content close X. Now clears the OS window buttons,
-     which are drawn over this corner — see --winctl-reserve. The greeting is
-     what sits at this end of the row and it would otherwise run under them. */
-  padding-right: var(--winctl-reserve);
 }
 
 /* "Tracely" is 32px SemiBold beside a 63x54 mark. */
@@ -5758,19 +5779,24 @@ textarea:disabled {
 .home-status.on .home-status-dot { background: #2fb457; }
 
 /* 20px Regular in the frame's grey, with the cog at 36% opacity. */
+/* A filled grey pill in the frame, not bare text — it is the only control in
+   the header card and reads as one. */
 .home-settings {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 38px;
+  padding: 0 16px;
   border: 0;
-  background: none;
+  border-radius: 19px;
+  background: #e0e1e3;
   font: inherit;
   font-size: 20px;
   letter-spacing: 0.2px;
   color: var(--h-foot);
   cursor: pointer;
 }
-.home-settings:hover { color: var(--h-ink); }
+.home-settings:hover { background: #d5d7d9; color: var(--h-ink); }
 .home-settings svg { width: 22px; height: 22px; opacity: 0.36; }
 
 /* 263.333 wide on a 16px gap, 72 tall, filled rather than outlined. */
@@ -5788,8 +5814,9 @@ textarea:disabled {
   gap: 4px;
   min-height: 72px;
   padding: 0 14px;
+  border: 1px solid var(--h-card-line);
   border-radius: 12px;
-  background: var(--h-subtle);
+  background: #fff;
 }
 .home-stat b { font-size: 22px; font-weight: 600; color: var(--h-ink); }
 .home-stat span { font-size: 10px; font-weight: 500; color: var(--h-muted); }
@@ -5797,9 +5824,13 @@ textarea:disabled {
 /* 326 and 377 wide on a 15px gap — NOT equal columns. The primary card is the
    narrower of the two and the one with a border, which is what makes it read
    as primary. */
+/* Three tracks for two cards. The frame stops the pair at 751 of 870 and
+   leaves the rest of the row empty, so the trailing column is that gap —
+   stretching them to the full width is what made this row read as a toolbar
+   rather than as two cards. */
 .home-actions {
   display: grid;
-  grid-template-columns: 326fr 377fr;
+  grid-template-columns: 325fr 378fr 104fr;
   gap: 15px;
   margin-top: 20px;
 }
@@ -5810,7 +5841,7 @@ textarea:disabled {
   gap: 12px;
   min-height: 64px;
   padding: 0 15px;
-  border: 1px solid transparent;
+  border: 1px solid var(--h-card-line);
   border-radius: 12px;
   background: #fff;
   font: inherit;
@@ -5818,8 +5849,11 @@ textarea:disabled {
   cursor: pointer;
 }
 
+/* Peach fill, and a border in the same family — NOT the black outline this
+   carried. The frame distinguishes the primary card by colour alone; a 1px
+   black rule around one card is the heaviest line on the screen. */
 .home-action.primary {
-  border-color: #000;
+  border-color: #f8e3d0;
   background: var(--h-accent-wash);
 }
 
@@ -5910,7 +5944,7 @@ textarea:disabled {
   align-items: stretch;
   min-height: 166px;
   padding: 0;
-  border: 1px solid var(--h-line);
+  border: 1px solid var(--h-card-line);
   border-radius: 12px;
   background: #fff;
   font: inherit;
@@ -5980,7 +6014,7 @@ textarea:disabled {
   flex-direction: column;
   min-height: 144px;
   padding: 13px;
-  border: 1px solid var(--h-line);
+  border: 1px solid var(--h-card-line);
   border-radius: 12px;
   background: #fff;
   box-sizing: border-box;
@@ -5997,61 +6031,35 @@ textarea:disabled {
   line-height: 1.35;
   color: var(--h-muted);
 }
+/* Full strength. It was at 0.6 to say "not wired up yet", which in practice
+   just looked like a faded link — the frame draws it in the accent at full
+   opacity, and the cards being inert is not something to communicate by
+   washing out one word. */
 .home-resource-read {
   margin-top: auto;
   font-size: 11.5px;
   font-weight: 500;
   color: var(--h-accent);
-  opacity: 0.6;
 }
 
-/* 32x32 at 8px radius. Two of the four icons are exported assets and fill the
-   box themselves; the other two are drawn from the frame's own rects, so the
-   wash lives here for them. */
+/* A 40px tinted circle with the glyph in `currentColor`.
+   Four tints, one per card, sampled off the frame — the previous revision drew
+   all four on the same peach square, which is what the two exported SVGs still
+   have baked into them. That is why the glyphs are inline in HomeView now. */
 .home-resource-icon {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
-  border-radius: 8px;
-  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
 }
-.home-resource-icon img { display: block; width: 32px; height: 32px; }
+.home-resource-icon svg { width: 26px; height: 26px; display: block; }
 
-.home-resource-bars,
-.home-resource-doc {
-  position: relative;
-  display: block;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--h-accent-wash);
-}
-.home-resource-bars i {
-  position: absolute;
-  left: 8px;
-  height: 2.4px;
-  border-radius: 1.2px;
-  background: var(--h-accent);
-}
-.home-resource-doc b {
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  width: 16px;
-  height: 20px;
-  margin: 0;
-  border: 1.6px solid var(--h-accent);
-  border-radius: 2px;
-  box-sizing: border-box;
-}
-.home-resource-doc i {
-  position: absolute;
-  left: 11.5px;
-  width: 9px;
-  height: 1.4px;
-  border-radius: 0.7px;
-  background: var(--h-accent);
-}
+.home-resource-icon.tone-peach { background: #ffe7d3; color: #f97316; }
+.home-resource-icon.tone-rose { background: #ffddda; color: #cf372b; }
+.home-resource-icon.tone-mint { background: #ceefe9; color: #138471; }
+.home-resource-icon.tone-violet { background: #e5ddfc; color: #7c3aed; }
 
 .home-foot {
   display: flex;
@@ -6073,6 +6081,13 @@ textarea:disabled {
   object-fit: contain;
   flex-shrink: 0;
   margin-left: -8px;
+  /* The supplied artwork has a white background rather than transparency, and
+     Home's ground is grey now — so it was a white tile with a mascot in it.
+     `multiply` drops white to nothing against any lighter ground while leaving
+     the orange disc and the linework untouched. Clipping to a circle was the
+     alternative and it cuts the plane's wing, which overhangs the disc on
+     purpose. */
+  mix-blend-mode: multiply;
 }
 
 /* 166x34, 17 radius, a soft shadow, 16px Medium. */

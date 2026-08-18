@@ -6,8 +6,6 @@ import { greetingFor } from '@shared/greeting'
 import type { Tab } from '../App'
 import figmaLogo from '../assets/figma-logo.png'
 import tracerBadge from '../assets/tracer-badge.png'
-import iconPersuasive from '../assets/resource-persuasive.svg'
-import iconSources from '../assets/resource-sources.svg'
 import homeArrow from '../assets/home-arrow.svg'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
@@ -28,52 +26,99 @@ import { tracelyApi } from '../lib/api'
  * status — which is the substance of the change rather than the arrangement.
  */
 
-/** The four cards under "Resources". Content, not layout, so it sits up here. */
-const RESOURCES: Array<{ id: string; title: string; blurb: string; icon: JSX.Element }> = [
+/**
+ * The four cards under "Resources". Content, not layout, so it sits up here.
+ *
+ * Each icon is drawn inline rather than imported, and that is a change: the
+ * two that were exported assets (`resource-persuasive.svg`,
+ * `resource-sources.svg`) carry a peach 32x32 rounded square baked into the
+ * file, which is what the frame drew a revision ago. It now draws a 40px
+ * circle in one of four tints, so the background belongs to CSS and the glyph
+ * belongs here in `currentColor`. The pencil and magnifier geometry is lifted
+ * verbatim from those exports; only the `<rect>` behind them is gone.
+ */
+const RESOURCES: Array<{
+  id: string
+  title: string
+  blurb: string
+  tone: 'peach' | 'rose' | 'mint' | 'violet'
+  icon: JSX.Element
+}> = [
   {
     id: 'persuasive',
     title: 'Persuasive Writing 101',
     blurb: 'Build arguments that hold up.',
-    // Exported from the frame (525:142). The pencil is a rotated rect plus a
-    // tip path — reproducing it by hand would be a redrawing of brand art, the
-    // mistake already made once with the mascot.
-    icon: <img src={iconPersuasive} alt="" width={32} height={32} />
+    tone: 'peach',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect
+          x="9"
+          y="13.5"
+          width="14"
+          height="4.5"
+          rx="1"
+          transform="rotate(45 9 13.5)"
+          fill="currentColor"
+        />
+        <path
+          d="M8.47668 13.4148L5.41481 16.4767L4.2941 12.2941L8.47668 13.4148Z"
+          fill="currentColor"
+        />
+      </svg>
+    )
   },
   {
     id: 'rubric',
     title: 'Standard Grading Rubric',
     blurb: 'See how Tracely scores essays.',
-    // Drawn, not exported: the frame builds this one from three plain rects
-    // (528:143-145) whose geometry is given exactly — 2.4px tall, 1.2 radius,
-    // 16/12/14 wide, at y 10/16/22 inside a 32px box.
+    tone: 'rose',
     icon: (
-      <span className="home-resource-bars" aria-hidden="true">
-        <i style={{ width: 16, top: 10 }} />
-        <i style={{ width: 12, top: 16 }} />
-        <i style={{ width: 14, top: 22 }} />
-      </span>
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="8" y="10" width="16" height="3" rx="1.5" fill="currentColor" />
+        <rect x="8" y="16" width="10" height="3" rx="1.5" fill="currentColor" />
+        <rect x="8" y="22" width="13" height="3" rx="1.5" fill="currentColor" />
+      </svg>
     )
   },
   {
     id: 'research',
     title: 'Research Paper Tips',
     blurb: 'Structure, sourcing, citations.',
-    // Also drawn from its own rects (528:146-149): a 16x20 outlined body at
-    // 8,6 with three 9px lines at y 12 / 16.2 / 20.4.
+    tone: 'mint',
     icon: (
-      <span className="home-resource-doc" aria-hidden="true">
-        <b />
-        <i style={{ top: 12 }} />
-        <i style={{ top: 16.2 }} />
-        <i style={{ top: 20.4 }} />
-      </span>
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect
+          x="9"
+          y="7"
+          width="14"
+          height="18"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <path
+          d="M13 13h6M13 16.5h6M13 20h4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
     )
   },
   {
     id: 'sources',
     title: 'Finding Credible Sources',
     blurb: 'Spot reliable evidence fast.',
-    icon: <img src={iconSources} alt="" width={32} height={32} />
+    tone: 'violet',
+    icon: (
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="14" cy="13" r="6" stroke="currentColor" strokeWidth="2" />
+        <path
+          d="M19.8485 18.1515C20.3171 17.6828 21.0769 17.6828 21.5456 18.1515L25.5054 22.1113C25.974 22.5799 25.974 23.3397 25.5054 23.8083C25.0367 24.277 24.2769 24.277 23.8083 23.8083L19.8485 19.8485C19.3799 19.3799 19.3799 18.6201 19.8485 18.1515Z"
+          fill="currentColor"
+        />
+      </svg>
+    )
   }
 ]
 
@@ -140,6 +185,15 @@ export default function HomeView({
   return (
     <div className="home">
       <div className="home-inner">
+        {/*
+          The white card across the top, on the page's grey.
+
+          The frame builds Home as cards floating on #e5e7eb, and this row —
+          brand, greeting, status, Settings — is one of them. It was a flat
+          white page here, which is why every border and tint below was being
+          drawn against the wrong ground.
+        */}
+        <section className="home-card">
         <header className="home-top">
           <div className="home-brand">
             <img src={figmaLogo} alt="" />
@@ -188,6 +242,7 @@ export default function HomeView({
             Settings
           </button>
         </div>
+        </section>
 
         {/*
           Three real numbers, computed from the document list this page already
@@ -296,7 +351,7 @@ export default function HomeView({
               // nowhere is a worse first impression than one that is plainly
               // not ready yet.
               <div key={item.id} className="home-resource">
-                <span className="home-resource-icon" aria-hidden="true">
+                <span className={`home-resource-icon tone-${item.tone}`} aria-hidden="true">
                   {item.icon}
                 </span>
                 <b>{item.title}</b>
