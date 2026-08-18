@@ -5667,3 +5667,121 @@ textarea:disabled {
   color: var(--text);
   border: 1px solid var(--text);
 }
+
+/* --- Full report: the pieces the Figma report frame adds ------------------ */
+
+/* The paragraph's number, leading its row. Monospaced digits so P1 and P14 are
+   the same width and the names beside them stay on one left edge — a ragged
+   column of names is what makes a fourteen-row list read as a jumble. */
+.argscore-para-index {
+  flex-shrink: 0;
+  min-width: 26px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+  text-align: center;
+}
+
+/* What the paragraph is doing, where its own text used to be quoted back at
+   its author. Not clamped: it is one sentence by construction (see
+   roleBlurb.ts), and a clamp on a line that never overflows is a trap for the
+   day someone lengthens one. */
+.argscore-para-blurb {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The named broken joins, capped at FLOW_PREVIEW. Each is a button, because
+   every finding in this report opens something — a bullet that only sits there
+   is the shape this block was deliberately not given the first time. */
+.argscore-flow-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.argscore-flow-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.argscore-flow-item:hover {
+  background: var(--surface-3, rgba(127, 127, 127, 0.09));
+}
+
+.argscore-flow-where {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+}
+
+.argscore-flow-what {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The narrowed sentence the critique already produced. Green, and set apart
+   from the quote above it, because the two are the same sentence twice and the
+   reader has to be able to tell at a glance which one is theirs. */
+.argscore-problem-rewrite {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(28, 160, 96, 0.09);
+}
+
+.argscore-problem-rewrite-label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1ca060;
+}
+
+.argscore-problem-rewrite-text {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #14603b;
+}
+
+/* Dark mode keeps the hue and moves the lightness — the green has to stay
+   legible against a dark card without becoming the brightest thing on it. */
+@media (prefers-color-scheme: dark) {
+  .argscore-problem-rewrite {
+    background: rgba(52, 199, 123, 0.12);
+  }
+  .argscore-problem-rewrite-text {
+    color: #7fe0ae;
+  }
+}
+
+/* The closing paragraph. Reads as prose, not as another statistic. */
+.argscore-summary-prose {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
