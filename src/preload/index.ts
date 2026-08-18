@@ -89,6 +89,11 @@ import type {
   StructureAnalyzeRequest,
   StructureAnalyzeResponse,
   StructureGetRequest,
+  TracerGetConversationRequest,
+  TracerGetConversationResponse,
+  TracerNewConversationResponse,
+  TracerSendRequest,
+  TracerSendResponse,
   StructureGetResponse,
   ShellOpenExternalRequest,
   ShellOpenExternalResponse,
@@ -158,6 +163,17 @@ const api = {
       ipcRenderer.invoke(IPC.STRUCTURE_ANALYZE, req),
     get: (req: StructureGetRequest): Promise<StructureGetResponse> =>
       ipcRenderer.invoke(IPC.STRUCTURE_GET, req)
+  },
+  // Home's "Chat with Tracer". Three calls, not the eight the removed Tracer
+  // window had — this panel shows one conversation and cannot open, close,
+  // list or delete windows that no longer exist.
+  tracer: {
+    getConversation: (req: TracerGetConversationRequest): Promise<TracerGetConversationResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_GET_CONVERSATION, req),
+    send: (req: TracerSendRequest): Promise<TracerSendResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_SEND, req),
+    newConversation: (): Promise<TracerNewConversationResponse> =>
+      ipcRenderer.invoke(IPC.TRACER_NEW_CONVERSATION, {})
   },
   settings: {
     get: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.SETTINGS_GET, {}),

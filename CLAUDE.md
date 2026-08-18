@@ -397,36 +397,56 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
 - **`document_structure` is a cache of a pure function that still has to be persisted**, because it cannot be recomputed on demand: the analysis runs on `innerText`, and `documents.body_html` cannot be turned back into that string from main without parsing HTML. `source_hash` is over the innerText, so reformatting leaves the analysis valid while an edit to the words marks it stale.
 - Layout: `.docedit-view` is a **row**, with the editor column in `.docedit-main`. `.docedit-wordcount` and `.docedit-error` must stay inside it or they become flex items of the row (the row had a second column, the Structure rail, until it was deleted; anything added back beside `.docedit-main` needs `-webkit-app-region: no-drag`, because `.docedit-view` is a drag region). Paragraph jumps use `scrollIntoView({ behavior: 'auto' })` — smooth scrolling is compositor-driven and silently does nothing when the window is not compositing, the same trap as the overlay's entrance animation.
 
-### Tracer (removed)
+### Tracer (removed, then restored as a panel)
 
-Tracer was a conversational writing tutor in its own `BrowserWindow`, opened
-from the Screen Watch widget. **It was removed** — window, relay client, IPC
-handlers, repo, renderer entry and every "Ask Tracer" entry point — because the
-widget was rebuilt on the Figma "Widget over Document" frames, and those frames
-have no Tracer in them.
+Tracer is a conversational writing tutor. It was removed — window, relay
+client, IPC handlers, repo, renderer entry and every "Ask Tracer" entry point —
+when the Screen Watch widget was rebuilt on the Figma "Widget over Document"
+frames, which have no Tracer in them. It came back on 2026-08-18 because Home's
+frame draws a **"Chat with Tracer"** launcher and the owner asked for the panel
+behind it.
 
-What deliberately stayed:
+**It is a panel inside the main window now, not a `BrowserWindow`.**
+`components/TracerChat.tsx`, anchored bottom-left over Home, above the launcher
+that opens it. That is what makes the restored version about a quarter of the
+old one: no window to open or close, no conversation list, no retry — those
+existed to give a separate window a sidebar.
 
-- **The `tracer_conversations` / `tracer_messages` tables**, and both Privacy
-  clears' `DELETE` statements against them. Dropping tables destroys data on
-  upgrade for nothing; the DELETEs are how an existing install's rows get
-  cleaned up. Nothing writes to them.
-- **The `Tracer*` types in `shared/ipc-contract.ts` and the `TRACER_*` channel
-  constants**, because `src/shared/*` is additive (see the branch rules above)
-  and unwiring an implementation is not a reason to restructure a shared file.
-- **`tracerPrompt` on `StructureWeakness`.** Same rule. Nothing renders it.
+- **`ipc/tracerHandlers.ts` registers three channels**, all of them ones
+  `shared/` already had (`TRACER_GET_CONVERSATION`, `TRACER_SEND`,
+  `TRACER_NEW_CONVERSATION`). The `Tracer*` types and `TRACER_*` constants were
+  never deleted — `src/shared/*` is additive — so the contract was waiting.
+- **The context comes from the most recent draft, not from Screen Watch.**
+  `currentContext()` in `services/ai/tracer.ts` reads `getLatestDocument()`.
+  The old one read whatever document was focused in another application, which
+  is the wrong source for a launcher on Home: if Home is on screen, the app's
+  own window is focused, so Screen Watch is by definition looking at nothing.
+- **Nothing is cached.** Every other relay call is keyed by a hash of its input
+  and served from `cacheRepo` on a repeat, because those are pure functions of
+  their input. A chat turn depends on the whole conversation so far, so a cache
+  would be actively wrong rather than merely useless.
+- **The history cap is on TURNS, not characters** (`MAX_TRACER_HISTORY_MESSAGES`
+  = 12). Every prior turn is re-sent on every message, so an uncapped
+  conversation costs quadratically. The OLDEST turns are trimmed, which keeps
+  the exchange the user is in the middle of intact.
+- **`callRelay`'s endpoint union names `'tracer'` again.**
+  `scripts/preflight.mjs` scrapes that union and requires each endpoint to
+  answer non-404 in production; `api/tracer.ts` is on the relay's `main` and
+  `staging`, so this does not block a release. It was never taken down.
+- **The `tracer_conversations` / `tracer_messages` tables and both Privacy
+  clears' DELETEs against them** survived the removal, so restoring wrote no
+  migration. `tracerRepo.ts` came back from `git show f7eb21a^` unchanged.
+- **`tracerPrompt` on `StructureWeakness` is still unrendered.** Nothing writes
+  an "Ask Tracer about this weakness" entry point yet; the panel takes typed
+  questions only.
 
-`git log` has the implementation if it comes back. The relay's `/api/tracer`
-was NOT touched — it is still deployed, and `callRelay`'s endpoint union no
-longer names it, so `scripts/preflight.mjs` simply stops checking it.
-
-Tailwind left with Tracer: it was scoped to that one window by import, no entry
-pulls it in now, and the plugin is gone from both Vite configs.
+Tailwind did NOT come back with it — it was scoped to the old window by import,
+and this panel is `.tracer-*` classes in `index.css` like everything else.
 
 ### Where user data lives at runtime
 
 - Windows: `%APPDATA%\Tracely\tracely.db` (SQLite: analyses, claims, evidence, citations, library, request cache) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
-- Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`). Both also clear any leftover `tracer_*` rows from before Tracer was removed.
+- Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`). Both also clear `tracer_*` rows — Tracer conversations are real rows again (see above), and "clear my history" has to mean them too.
 
 ## Known MVP simplifications (intentional, not bugs)
 

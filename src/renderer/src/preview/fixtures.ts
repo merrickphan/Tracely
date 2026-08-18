@@ -21,6 +21,8 @@ import type {
   EvidenceItem,
   LibraryItem,
   Source,
+  TracerConversation,
+  TracerMessage
 } from '@shared/types'
 
 // Fixed rather than Date.now() so a screenshot taken today and one taken
@@ -799,3 +801,31 @@ export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
     analyzing: false
   }
 }
+
+/**
+ * Tracer's opening exchange, so the panel has something in it on first render.
+ *
+ * Written against `documents[0]` — a conversation that names a draft the
+ * harness does not list would be a small lie that reviewers chase.
+ */
+export const tracerConversation: TracerConversation = {
+  id: 'preview-conversation',
+  title: 'Renewable Energy Argument',
+  createdAt: T0,
+  updatedAt: T0
+}
+
+export const tracerMessages: TracerMessage[] = [
+  {
+    id: 'preview-msg-1',
+    conversationId: tracerConversation.id,
+    role: 'tracer',
+    content:
+      'Hey! I can see your most recent draft. Ask me about a claim, a paragraph that is not landing, or what the grade is reacting to.',
+    createdAt: T0
+  }
+]
+
+/** The draft text Tracer says it can see, for the context line. */
+export const documentText =
+  'Fossil fuel companies are the root of all environmental degradation. Renewable energy is cheaper per kilowatt-hour than coal in most markets.'

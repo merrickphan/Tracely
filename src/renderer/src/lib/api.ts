@@ -42,6 +42,12 @@ export const tracelyApi = {
     call(window.tracely.documents.save(input)),
   removeDocument: (id: string) => call(window.tracely.documents.remove({ id })),
 
+  getTracerConversation: (conversationId?: string) =>
+    call(window.tracely.tracer.getConversation({ conversationId })),
+  sendToTracer: (conversationId: string, message: string) =>
+    call(window.tracely.tracer.send({ conversationId, message })),
+  newTracerConversation: () => call(window.tracely.tracer.newConversation()),
+
   analyzeStructure: (input: Parameters<typeof window.tracely.structure.analyze>[0]) =>
     call(window.tracely.structure.analyze(input)),
   getStructure: (documentId: string, text: string) =>

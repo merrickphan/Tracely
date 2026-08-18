@@ -56,3 +56,13 @@ export function truncateForClaimDetection(text: string): string {
     ? text.slice(0, MAX_CLAIM_DETECTION_INPUT_CHARS)
     : text
 }
+
+// --- Tracer -----------------------------------------------------------
+//
+// The chat is the only AI feature here that re-sends its own past on every
+// turn, so its cost grows quadratically in a long conversation unless the
+// history is capped by TURN COUNT rather than characters. Trimming the
+// OLDEST turns keeps the exchange the user is in the middle of intact.
+export const MAX_TRACER_MESSAGE_CHARS = 2000
+export const MAX_TRACER_HISTORY_MESSAGES = 12
+export const MAX_TRACER_DOCUMENT_CHARS = 4000
