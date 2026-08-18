@@ -341,7 +341,8 @@ test('maximize grows the window but caps the scale', async (t) => {
       drag: getComputedStyle(b).webkitAppRegion
     }))
   )
-  assert.equal(controls.length, 2, `expected 2 window controls, found ${controls.length}`)
+  // Three since close joined them: minimize, bigger/restore, close.
+  assert.equal(controls.length, 3, `expected 3 window controls, found ${controls.length}`)
   for (const c of controls) {
     assert.equal(c.drag, 'no-drag', `"${c.label}" sits inside the drag region`)
   }
