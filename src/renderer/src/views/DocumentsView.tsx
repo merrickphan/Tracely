@@ -63,19 +63,31 @@ function DocumentCard({
 }): JSX.Element {
   const grade = doc.score === null ? null : gradeFor(doc.score)
   const chip = grade ? chipColors(grade.letter) : null
-  // Two-step, in place. Deleting a document destroys work that exists nowhere
-  // else — there is no trash and no undo — so the first click only arms it. A
-  // native confirm() would block the whole renderer, and this window is the
-  // app's only one.
-  const [confirming, setConfirming] = useState(false)
+  // The menu, not a bare delete on the card. Opening it IS the deliberate
+  // step: a destructive item chosen from a menu you had to open is the
+  // pattern every file manager uses, and it is far harder to hit by accident
+  // than a control that appears under the cursor on hover — which is what this
+  // replaced.
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    if (!confirming) return
-    // Disarms itself. A card left armed behind a scroll is a delete waiting for
-    // a stray click on a page whose whole purpose is clicking cards.
-    const id = setTimeout(() => setConfirming(false), 4000)
-    return () => clearTimeout(id)
-  }, [confirming])
+    if (!menuOpen) return
+    // Closes on any click elsewhere and on Escape. Without the first, a menu
+    // left open on one card sits over the card beside it; without the second
+    // there is no keyboard way out of it.
+    const onDown = (): void => setMenuOpen(false)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    // Capture phase, so this runs before the card's own click handler and the
+    // dismissing click cannot also open the document.
+    window.addEventListener('mousedown', onDown, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   return (
     <button className="docs-card" onClick={onOpen} title={`Open ${doc.title}`}>
@@ -89,31 +101,60 @@ function DocumentCard({
           </span>
         ) : null}
       </span>
-      {/* A <span role="button"> rather than a <button>: this card is itself a
+      {/* Spans with role=button rather than <button>s: this card is itself a
           button, and nesting one inside another is invalid HTML that Chromium
           resolves by hoisting the inner one out of the card. */}
       <span
         role="button"
         tabIndex={0}
-        className={`docs-card-delete${confirming ? ' confirming' : ''}`}
-        title={confirming ? `Delete "${doc.title}" permanently` : 'Delete this document'}
-        aria-label={confirming ? `Confirm deleting ${doc.title}` : `Delete ${doc.title}`}
-        onClick={(event) => {
-          // Or the click opens the document underneath it.
+        className={`docs-card-menu${menuOpen ? ' open' : ''}`}
+        title="More"
+        aria-label={`More actions for ${doc.title}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onMouseDown={(event) => {
+          // mousedown, not click: the dismiss listener above is on mousedown in
+          // the capture phase, so a click handler here would run after it and
+          // the menu would close and reopen on every press.
           event.stopPropagation()
-          if (confirming) onDelete()
-          else setConfirming(true)
+        }}
+        onClick={(event) => {
+          event.stopPropagation()
+          setMenuOpen((open) => !open)
         }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== ' ') return
           event.preventDefault()
           event.stopPropagation()
-          if (confirming) onDelete()
-          else setConfirming(true)
+          setMenuOpen((open) => !open)
         }}
       >
-        {confirming ? 'Delete?' : '×'}
+        ⋯
       </span>
+      {menuOpen ? (
+        <span className="docs-card-menu-popup" role="menu">
+          <span
+            role="menuitem"
+            tabIndex={0}
+            className="docs-card-menu-delete"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              setMenuOpen(false)
+              onDelete()
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              event.stopPropagation()
+              setMenuOpen(false)
+              onDelete()
+            }}
+          >
+            Delete
+          </span>
+        </span>
+      ) : null}
       <span className="docs-card-title">{doc.title}</span>
       {/* "Not graded yet" rather than an empty line or a dash: a draft nothing
           has read is a normal state, and the card should say which state it is
