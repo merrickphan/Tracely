@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { placePopover } from '@shared/popoverPlacement'
 import type { CitationStyle } from '@shared/types'
-import type { DocumentMark, MarkRect } from './documentMarks'
+import type { DocumentMark, MarkRect, ProseMark } from './documentMarks'
 import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, opensFixFlow, popoverCopyFor } from './problemCopy'
 import { critiqueIssues } from '../critiqueIssues'
@@ -193,6 +193,52 @@ export interface DocumentMarkLayerProps {
   /** Keeps the popover open while the pointer is inside it. */
   onPopoverEnter: () => void
   onPopoverLeave: () => void
+}
+
+/**
+ * The prose layer — grammar, mechanics and wordiness.
+ *
+ * Drawn UNDER the claim marks and in its own colours, and the separation is the
+ * point. This app's three underline colours say something specific about
+ * credibility, and a repeated word is not a claim about whether a sentence is
+ * true. A writer who sees the same orange under "70% of teenagers" and under
+ * "the the" learns that the colours mean nothing.
+ *
+ * Two treatments, matching the two severities. An `error` has one right answer
+ * and gets a solid line; a `style` note is a suggestion the writer may refuse
+ * and gets a dotted one. Flattening them would make "very" as loud as "they
+ * was", which is how people learn to switch a grammar checker off.
+ *
+ * The message is a native `title`. A hover card like the claim popover would be
+ * better and is not built here: the claim card carries a whole citation flow,
+ * and borrowing it to say "a/an" would be more machinery than the message
+ * needs. The tooltip is honest about what it is.
+ */
+const PROSE_ERROR = '#2563eb'
+const PROSE_STYLE = '#9aa1ad'
+
+export function ProseMarkLayer({ marks }: { marks: ProseMark[] }): JSX.Element {
+  return (
+    <div className="docmark-layer docprose-layer" aria-hidden="true">
+      {marks.map((mark) =>
+        mark.rects.map((rect, i) => (
+          <div
+            key={`${mark.issue.kind}-${mark.issue.start}-${i}`}
+            className={`docprose docprose-${mark.issue.severity}`}
+            data-prose-kind={mark.issue.kind}
+            title={mark.issue.suggestion ? `${mark.issue.message}` : mark.issue.message}
+            style={{
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height,
+              borderBottomColor: mark.issue.severity === 'error' ? PROSE_ERROR : PROSE_STYLE
+            }}
+          />
+        ))
+      )}
+    </div>
+  )
 }
 
 export default function DocumentMarkLayer({
