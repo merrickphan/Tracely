@@ -14,7 +14,8 @@ import type {
   DocumentListItem,
   DocumentRecord,
   EvidenceCoverage,
-  ScoreBreakdown
+  ScoreBreakdown,
+  TracerMessage
 } from '@shared/types'
 
 // Deliberately `Window['tracely']` rather than a direct import of
@@ -137,6 +138,10 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // See window.toggleMaximize below.
   let previewMaximized = false
   let previewSettings: AppSettings = { ...fx.settings }
+  // Tracer's transcript, kept as state so a sent message stays on screen —
+  // the panel appends what the bridge returns rather than what it typed.
+  const previewConversation = fx.tracerConversation
+  let previewTracerMessages: TracerMessage[] = [...fx.tracerMessages]
   // Screen Watch's claims are pushed, not fetched: the real service folds a
   // refresh or a critique into its in-memory claim and redraws the overlay, so
   // the panel's two result states are only reachable here if the mock does the
@@ -407,6 +412,45 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
           outline: { ...outline, documentId: req.documentId },
           stale: scenario.structure === 'stale'
         })
+      }
+    },
+    // Tracer answers locally here. The real one is a relay round trip on the
+    // reasoning model, and the harness has no relay by design — but a chat
+    // panel with a dead composer cannot be reviewed at all, so this echoes a
+    // canned reply after a beat. The delay is real: it is what makes the
+    // typing indicator reachable.
+    tracer: {
+      getConversation: () =>
+        ok('tracer.getConversation', {
+          conversation: previewConversation,
+          messages: previewTracerMessages,
+          context: { processName: null, documentText: fx.documentText, claims: [] },
+          relayConfigured: scenario.relayConfigured,
+          focusedClaimId: null,
+          focusedPrompt: null
+        }),
+      send: (req) => {
+        const userMessage = {
+          id: `mock-user-${previewTracerMessages.length}`,
+          conversationId: req.conversationId,
+          role: 'user' as const,
+          content: req.message,
+          createdAt: fx.T0
+        }
+        const reply = {
+          id: `mock-reply-${previewTracerMessages.length}`,
+          conversationId: req.conversationId,
+          role: 'tracer' as const,
+          content:
+            'In the harness I answer from a fixture rather than the relay, so this is the same reply every time. The panel, the bubbles and the typing indicator are all real.',
+          createdAt: fx.T0
+        }
+        previewTracerMessages = [...previewTracerMessages, userMessage, reply]
+        return ok('tracer.send', { userMessage, reply })
+      },
+      newConversation: () => {
+        previewTracerMessages = []
+        return ok('tracer.newConversation', { conversation: previewConversation })
       }
     },
     settings: {

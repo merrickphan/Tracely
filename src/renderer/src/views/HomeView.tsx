@@ -13,6 +13,9 @@ import iconSources from '../assets/resource-sources.svg'
 import homeArrow from '../assets/home-arrow.svg'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
+import GuideReader from '../components/GuideReader'
+import TracerChat from '../components/TracerChat'
+import { GUIDES, guideById } from '../content/guides'
 
 /**
  * Home — rebuilt from the owner's mockup, 2026-08-18.
@@ -45,32 +48,19 @@ import { tracelyApi } from '../lib/api'
  * brand art from a screenshot is the mistake the mascot took two attempts to
  * stop making.
  */
-const RESOURCES: Array<{ id: string; title: string; blurb: string; icon: string }> = [
-  {
-    id: 'persuasive',
-    title: 'Persuasive Writing 101',
-    blurb: 'Build arguments that hold up.',
-    icon: iconPersuasive
-  },
-  {
-    id: 'rubric',
-    title: 'Standard Grading Rubric',
-    blurb: 'See how Tracely scores essays.',
-    icon: iconRubric
-  },
-  {
-    id: 'research',
-    title: 'Research Paper Tips',
-    blurb: 'Structure, sourcing, citations.',
-    icon: iconResearch
-  },
-  {
-    id: 'sources',
-    title: 'Finding Credible Sources',
-    blurb: 'Spot reliable evidence fast.',
-    icon: iconSources
-  }
-]
+const RESOURCE_ICONS: Record<string, string> = {
+  persuasive: iconPersuasive,
+  rubric: iconRubric,
+  research: iconResearch,
+  sources: iconSources
+}
+
+const RESOURCES = GUIDES.map((guide) => ({
+  id: guide.id,
+  title: guide.title,
+  blurb: guide.blurb,
+  icon: RESOURCE_ICONS[guide.id]
+}))
 
 /**
  * "Opened today" / "Opened yesterday" / "Opened May 12".
@@ -111,6 +101,8 @@ export default function HomeView({
   firstName: string | null
 }): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
+  const [openGuide, setOpenGuide] = useState<string | null>(null)
+  const [tracerOpen, setTracerOpen] = useState(false)
   const [documents, setDocuments] = useState<DocumentListItem[]>([])
 
   useEffect(() => {
@@ -300,30 +292,32 @@ export default function HomeView({
               // design and none of them is written. A "Read →" that goes
               // nowhere is a worse first impression than one that is plainly
               // not ready yet.
-              <div key={item.id} className="home-resource">
+              <button
+                key={item.id}
+                className="home-resource"
+                onClick={() => setOpenGuide(item.id)}
+              >
                 <img className="home-resource-icon" src={item.icon} alt="" width={40} height={40} />
                 <b>{item.title}</b>
                 <span className="home-resource-blurb">{item.blurb}</span>
-                <span className="home-resource-read" aria-hidden="true">
-                  Read →
-                </span>
-              </div>
+                <span className="home-resource-read">Read →</span>
+              </button>
             ))}
           </div>
         </section>
 
         <footer className="home-foot">
           {/*
-            Tracer was REMOVED from this app — window, relay client, IPC
-            handlers, repo and every entry point (see CLAUDE.md). What survives
-            is the two SQLite tables, the `Tracer*` types and the `TRACER_*`
-            channel constants, kept because `src/shared/*` is additive, plus a
-            relay endpoint that is still deployed.
+            Tracer was removed from this app when the Screen Watch widget was
+            rebuilt on the Figma frames — window, relay client, IPC handlers,
+            repo and every entry point. What survived was the two SQLite
+            tables, the `Tracer*` types, the `TRACER_*` channels and a relay
+            endpoint nobody took down, which is why bringing it back was a
+            morning rather than a week.
 
-            So this is the mascot and the affordance from the design, with
-            nothing behind it yet, and it says so rather than pretending. The
-            alternative was to leave it off the page entirely, which would have
-            silently dropped something the design asks for.
+            It is back here because this frame draws it, and the owner asked
+            for the panel: components/TracerChat.tsx, inside this window
+            rather than a BrowserWindow of its own.
           */}
           <div className="home-tracer">
             {/*
@@ -337,7 +331,7 @@ export default function HomeView({
               halo of its own; doing that gave it two rings.
             */}
             <img className="home-tracer-badge" src={tracerBadge} alt="" />
-            <button className="home-tracer-btn" disabled title="Tracer is not available in this build">
+            <button className="home-tracer-btn" onClick={() => setTracerOpen(true)}>
               Chat with Tracer
             </button>
           </div>
@@ -347,6 +341,11 @@ export default function HomeView({
           </button>
         </footer>
       </div>
+
+      {tracerOpen ? <TracerChat onClose={() => setTracerOpen(false)} /> : null}
+      {openGuide ? (
+        <GuideReader guide={guideById(openGuide)!} onClose={() => setOpenGuide(null)} />
+      ) : null}
     </div>
   )
 }
