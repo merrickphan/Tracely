@@ -6,6 +6,10 @@ import { greetingFor } from '@shared/greeting'
 import type { Tab } from '../App'
 import figmaLogo from '../assets/figma-logo.png'
 import tracerBadge from '../assets/tracer-badge.png'
+import iconPersuasive from '../assets/resource-persuasive.svg'
+import iconRubric from '../assets/resource-rubric.svg'
+import iconResearch from '../assets/resource-research.svg'
+import iconSources from '../assets/resource-sources.svg'
 import homeArrow from '../assets/home-arrow.svg'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
@@ -29,96 +33,42 @@ import { tracelyApi } from '../lib/api'
 /**
  * The four cards under "Resources". Content, not layout, so it sits up here.
  *
- * Each icon is drawn inline rather than imported, and that is a change: the
- * two that were exported assets (`resource-persuasive.svg`,
- * `resource-sources.svg`) carry a peach 32x32 rounded square baked into the
- * file, which is what the frame drew a revision ago. It now draws a 40px
- * circle in one of four tints, so the background belongs to CSS and the glyph
- * belongs here in `currentColor`. The pencil and magnifier geometry is lifted
- * verbatim from those exports; only the `<rect>` behind them is gone.
+ * Each icon is one exported 40x40 SVG holding both the tinted disc and its
+ * glyph, transcribed from the frame's own geometry — `Resource Card - *`
+ * (525:141/147/153/159) read through `get_design_context`, which gives the
+ * shapes to three decimals along with colours guessing had wrong: the pencil
+ * is #f1650b rather than the brand orange, and the magnifier #7b44d4 rather
+ * than a violet chosen to look about right.
+ *
+ * They were hand-drawn here for one build and did not match — wrong angle on
+ * the pencil, wrong bar widths, a document at the wrong proportions. Redrawing
+ * brand art from a screenshot is the mistake the mascot took two attempts to
+ * stop making.
  */
-const RESOURCES: Array<{
-  id: string
-  title: string
-  blurb: string
-  tone: 'peach' | 'rose' | 'mint' | 'violet'
-  icon: JSX.Element
-}> = [
+const RESOURCES: Array<{ id: string; title: string; blurb: string; icon: string }> = [
   {
     id: 'persuasive',
     title: 'Persuasive Writing 101',
     blurb: 'Build arguments that hold up.',
-    tone: 'peach',
-    icon: (
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect
-          x="9"
-          y="13.5"
-          width="14"
-          height="4.5"
-          rx="1"
-          transform="rotate(45 9 13.5)"
-          fill="currentColor"
-        />
-        <path
-          d="M8.47668 13.4148L5.41481 16.4767L4.2941 12.2941L8.47668 13.4148Z"
-          fill="currentColor"
-        />
-      </svg>
-    )
+    icon: iconPersuasive
   },
   {
     id: 'rubric',
     title: 'Standard Grading Rubric',
     blurb: 'See how Tracely scores essays.',
-    tone: 'rose',
-    icon: (
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect x="8" y="10" width="16" height="3" rx="1.5" fill="currentColor" />
-        <rect x="8" y="16" width="10" height="3" rx="1.5" fill="currentColor" />
-        <rect x="8" y="22" width="13" height="3" rx="1.5" fill="currentColor" />
-      </svg>
-    )
+    icon: iconRubric
   },
   {
     id: 'research',
     title: 'Research Paper Tips',
     blurb: 'Structure, sourcing, citations.',
-    tone: 'mint',
-    icon: (
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect
-          x="9"
-          y="7"
-          width="14"
-          height="18"
-          rx="2"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <path
-          d="M13 13h6M13 16.5h6M13 20h4"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
+    icon: iconResearch
   },
   {
     id: 'sources',
     title: 'Finding Credible Sources',
     blurb: 'Spot reliable evidence fast.',
-    tone: 'violet',
-    icon: (
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <circle cx="14" cy="13" r="6" stroke="currentColor" strokeWidth="2" />
-        <path
-          d="M19.8485 18.1515C20.3171 17.6828 21.0769 17.6828 21.5456 18.1515L25.5054 22.1113C25.974 22.5799 25.974 23.3397 25.5054 23.8083C25.0367 24.277 24.2769 24.277 23.8083 23.8083L19.8485 19.8485C19.3799 19.3799 19.3799 18.6201 19.8485 18.1515Z"
-          fill="currentColor"
-        />
-      </svg>
-    )
+    icon: iconSources
   }
 ]
 
@@ -351,9 +301,7 @@ export default function HomeView({
               // nowhere is a worse first impression than one that is plainly
               // not ready yet.
               <div key={item.id} className="home-resource">
-                <span className={`home-resource-icon tone-${item.tone}`} aria-hidden="true">
-                  {item.icon}
-                </span>
+                <img className="home-resource-icon" src={item.icon} alt="" width={40} height={40} />
                 <b>{item.title}</b>
                 <span className="home-resource-blurb">{item.blurb}</span>
                 <span className="home-resource-read" aria-hidden="true">

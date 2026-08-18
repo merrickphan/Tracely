@@ -5679,13 +5679,17 @@ textarea:disabled {
      cards had to be outlined to be visible at all and still read as one
      undifferentiated sheet. */
   --h-page: #e5e7eb;
-  --h-card-line: #e3e6ea;
+  /* #d9dbe0, off the frame itself (`get_design_context` on the resource
+     cards), not the #e3e6ea a screenshot pixel reads — that sample was the
+     line already blended with the card under it. Same value as --h-line, kept
+     as its own name because these are card edges rather than rules. */
+  --h-card-line: #d9dbe0;
   /* The gutter the content sits in (33px in an 870 frame), and how much closer
      to the edge the header card runs (10px). One variable each, because
      `.home-card` cancels the difference with a negative margin and the two
      numbers have to agree. */
   --h-gutter: clamp(20px, 3.8vw, 33px);
-  --h-card-edge: 10px;
+  --h-card-edge: 12px;
 
   position: relative;
   width: 100%;
@@ -5696,6 +5700,19 @@ textarea:disabled {
 
 /* The frame's gutters: content runs 33..855 of 870, and the header card 10..858. */
 .home-inner {
+  /* The frame is 870 wide and every card in it is sized against that. Let the
+     column grow past it and the cards grow too — a stat card ends up 500px
+     wide around one number, and the four resource cards stretch into
+     letterboxes. Owner: "when I resize the app, the buttons and frames expand
+     with it". So the column caps at the design width and centres; the window
+     is still free to be any size, there is simply more of the page's grey
+     around the content, which is what the frame draws anyway. */
+  width: 100%;
+  /* 888 = the frame's 822 of content plus this file's two 33px gutters. Capping
+     at the frame's own 870 looked right and was 18px short, which is enough to
+     wrap "Paste or upload writing for Tracely to grade." onto a second line. */
+  max-width: 888px;
+  margin: 0 auto;
   padding: var(--h-card-edge) var(--h-gutter) 26px;
   display: flex;
   flex-direction: column;
@@ -6042,24 +6059,16 @@ textarea:disabled {
   color: var(--h-accent);
 }
 
-/* A 40px tinted circle with the glyph in `currentColor`.
-   Four tints, one per card, sampled off the frame — the previous revision drew
-   all four on the same peach square, which is what the two exported SVGs still
-   have baked into them. That is why the glyphs are inline in HomeView now. */
+/* The exported 40x40 asset, at its designed size.
+   The tinted disc is INSIDE the SVG — it is one shape in the frame — so there
+   is no background here to get out of step with it, and both dimensions are
+   explicit rather than left to the box. */
 .home-resource-icon {
+  display: block;
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
 }
-.home-resource-icon svg { width: 26px; height: 26px; display: block; }
-
-.home-resource-icon.tone-peach { background: #ffe7d3; color: #f97316; }
-.home-resource-icon.tone-rose { background: #ffddda; color: #cf372b; }
-.home-resource-icon.tone-mint { background: #ceefe9; color: #138471; }
-.home-resource-icon.tone-violet { background: #e5ddfc; color: #7c3aed; }
 
 .home-foot {
   display: flex;
