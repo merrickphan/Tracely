@@ -4,6 +4,7 @@ import type { Tab } from '../App'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
 import { documentSort, gradedOn, type DocumentSort } from '../components/documentSort'
+import ConfirmSheet from '../components/ConfirmSheet'
 
 /**
  * Every essay Tracely has graded — Figma "DocumentsPage" (58:172).
@@ -190,6 +191,10 @@ export default function DocumentsView({
   const [documents, setDocuments] = useState<DocumentListItem[] | null>(null)
   const [sort, setSort] = useState<DocumentSort>('recent')
   const [error, setError] = useState<string | null>(null)
+  // The document the menu asked to delete, held until the sheet answers. The
+  // whole record rather than an id, so the dialog can name it — "this document"
+  // is a worse question than "Climate Policy Essay".
+  const [pendingDelete, setPendingDelete] = useState<DocumentListItem | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -271,13 +276,30 @@ export default function DocumentsView({
         </p>
       ) : null}
 
+      {pendingDelete ? (
+        <ConfirmSheet
+          title="Delete document"
+          message={`Delete “${pendingDelete.title}”? This cannot be undone.`}
+          confirmLabel="Delete"
+          busyLabel="Deleting…"
+          // No opt-out on a delete: there is no trash and no undo behind it.
+          showSuppress={false}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const target = pendingDelete
+            setPendingDelete(null)
+            void removeDocument(target.id)
+          }}
+        />
+      ) : null}
+
       <div className="docs-grid">
         {sorted.map((doc) => (
           <DocumentCard
             key={doc.id}
             document={doc}
             onOpen={() => onOpenDocument(doc.id)}
-            onDelete={() => void removeDocument(doc.id)}
+            onDelete={() => setPendingDelete(doc)}
           />
         ))}
       </div>

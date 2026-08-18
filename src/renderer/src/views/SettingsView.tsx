@@ -18,7 +18,7 @@ import type {
 import AuthPanel from '../components/AuthPanel'
 import Button from '../components/Button'
 import ConfirmDialog from '../components/ConfirmDialog'
-import SaveChangesDialog from '../components/SaveChangesDialog'
+import ConfirmSheet from '../components/ConfirmSheet'
 import DangerZone from '../components/DangerZone'
 import SettingsField from '../components/SettingsField'
 import SettingsUnavailable from '../components/SettingsUnavailable'
@@ -454,7 +454,7 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
         </aside>
 
         {confirmingSave ? (
-          <SaveChangesDialog
+          <ConfirmSheet
             busy={profileSaving}
             onConfirm={(suppress) => void confirmSaveProfile(suppress)}
             onCancel={() => setConfirmingSave(false)}
