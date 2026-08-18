@@ -353,48 +353,12 @@ input[type='range']::-webkit-slider-runnable-track {
   height: 100%;
 }
 
-.home-canvas {
-  /* `relative`, not `absolute`. It is still the containing block for its
-     absolutely-positioned `.home-el` children, which is the only thing the
-     `absolute` was buying — but as an out-of-flow box with no positioned
-     ancestor it resolved against the initial containing block, i.e. the whole
-     window, so `.app-main`'s gutter did not apply to it and it sat flush
-     against three window edges with its drop shadow entirely off-window.
-     In flow, it fills `.app-main`'s content box and inherits the gutter.
-
-     Size was 870x597 — 9px shorter than the frame around it, for no reason that
-     survives in the design. Nothing inside is bottom-anchored (the lowest
-     element ends at 558), so filling the frame only adds trailing space. */
-  position: relative;
-  width: 100%;
-  height: 100%;
-  /* Capped and centred, because this is the ONE screen that cannot reflow: its
-     sixteen `.home-el` children sit at literal Figma coordinates, so a canvas
-     wider than the design does not spread them out, it leaves them where they
-     were with empty space beside them.
-     Every other view — the editor, Settings, Documents, the modals — is flow or
-     flex and fills whatever it is given, which is why unlocking the window was
-     tractable at all. Here the card keeps its own size and floats in the middle
-     of a bigger window, which is what a card in a transparent window should do
-     and reads as deliberate rather than as a layout that gave up. */
-  /* Still capped and centred: this is the one view laid out at literal Figma
-     coordinates, so a wider canvas would not spread its children out, it would
-     leave them where they were with empty space beside them. */
-  max-width: var(--card-width);
-  max-height: var(--card-height);
-  margin: auto;
-  background: #fff;
-  /* No border, no radius, no drop shadow. Those drew a floating card inside a
-     transparent frameless window; with a real title bar the window IS the
-     frame, and a second rounded rectangle inside it reads as a dialog that
-     forgot to open. Asked for directly: "if its the rounded corners then
-     remove them". */
-  overflow: hidden;
-}
-
-.home-el {
-  position: absolute;
-}
+/* `.home-canvas` and its sixteen `.home-el` children are gone with the Home
+   rebuild. That canvas was a pixel-exact Figma transcription — absolutely
+   positioned children at literal design coordinates — and it was the ONLY view
+   in the app that could not reflow, which is why it had to keep its size and
+   centre when the window became freely resizable. The new Home is flow and
+   grid, so that exception went with it. See views/HomeView.tsx. */
 
 .login-canvas {
   display: flex;
@@ -584,168 +548,43 @@ input[type='range']::-webkit-slider-runnable-track {
 /* .home-closeicon and its hover rule were deleted with the element — the
    close button is .winctl-close now. */
 
-
-.home-logo {
-  left: -1px;
-  top: 15px;
-  width: 117px;
-  height: 83px;
-  object-fit: contain;
-}
-
-.home-title {
-  left: 95px;
-  top: 34px;
-  font-size: 36px;
-  font-weight: 500;
-  color: #000;
-}
+.
 
 /* Anchored to its right edge rather than its left. The text is "Hey, {first
    name}!", and starting it at a fixed left: 636px left only ~197px before the
    close button at 833 — about six characters at 32px — with `white-space:
    nowrap` silently cutting off the rest. Growing leftward from just inside the
    close button means a long name runs into empty card instead of off it. */
-.home-greeting {
-  left: 200px;
-  right: 50px;
-  top: 44px;
-  text-align: right;
-  font-size: 32px;
-  font-weight: 500;
-  color: #000;
-  overflow-wrap: anywhere;
-}
 
-.home-heading {
-  left: 23px;
-  top: 149px;
-  width: 538px;
-  font-size: 32px;
-  font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: 0.96px;
-  color: #000;
-  margin: 0;
-}
+.
 
 
-.home-subtext {
-  left: 23px;
-  top: 196px;
-  width: 418px;
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1.35;
-  letter-spacing: 0.18px;
-  color: #4a4a4a;
-  margin: 0;
-}
+.
 
-.home-cogicon {
-  left: 551px;
-  top: 152px;
-  width: 36px;
-  height: 36px;
-  opacity: 0.36;
-  pointer-events: none;
-}
+.
 
-.home-plusicon {
-  left: 547px;
-  top: 194px;
-  width: 46px;
-  height: 46px;
-  opacity: 0.36;
-  pointer-events: none;
-}
+.
 
 /* Figma anchors these by their own right edge + vertical center
    (-translate-x-full -translate-y-1/2 on a `left`/`top` coordinate), not
    by their top-left corner — using top-left like every other element here
    put them far right of the icons instead of snug against them. */
-.home-link {
-  border: none;
-  background: transparent;
-  color: #4a4a4a;
-  text-align: right;
-  cursor: pointer;
-  padding: 0;
-  font-weight: 400;
-  letter-spacing: 0.2px;
-  transform: translateY(-50%);
-  transition: color 0.15s ease;
-}
 
-.home-link:hover {
-  color: #000;
-}
+.
 
-.home-link-settings {
-  left: 552px;
-  top: 171px;
-  width: 123px;
-  font-size: 20px;
-}
+.
 
-.home-link-newsession {
-  left: 551px;
-  top: 219px;
-  width: 161px;
-  font-size: 20px;
-}
+.
 
 /* `.home-flagcard*` rules removed with the hardcoded placeholder card. */
 
+.
 
+.
 
+.
 
-
-
-
-.home-worktext {
-  left: 550px;
-  top: 533px;
-  font-size: 16px;
-  letter-spacing: 0.16px;
-  color: #4a4a4a;
-  white-space: nowrap;
-}
-
-.home-worktext-arrow {
-  left: 799px;
-  top: 535px;
-  width: 16.5px;
-  height: 21.5px;
-}
-
-.home-trail {
-  left: 0;
-  top: 296.11px;
-  width: 725.5px;
-  height: 76.641px;
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.home-flyinglogo {
-  left: 657px;
-  top: 296px;
-  width: 146px;
-  height: 139px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.home-flyinglogo img {
-  width: 119px;
-  height: 84px;
-  transform: rotate(-37deg) scaleY(-1);
-  filter: drop-shadow(0 7px 4px rgba(0, 0, 0, 0.25));
-  object-fit: contain;
-}
+.
 
 .textarea,
 textarea {
@@ -3205,21 +3044,8 @@ textarea:disabled {
 /* Home — third quick link, matching the Settings/New Session pair above it.
    Drawn as an SVG rather than a PNG like the other two only because no such
    asset exists; size and opacity match so the row reads as one set. */
-.home-libraryicon {
-  left: 551px;
-  top: 244px;
-  width: 36px;
-  height: 36px;
-  opacity: 0.36;
-  color: #4a4a4a;
-}
 
-.home-link-library {
-  left: 552px;
-  top: 263px;
-  width: 123px;
-  font-size: 20px;
-}
+.
 
 /* Library — the reader for what "Save to Library" writes. Uses the same card
    shell as the Analyze view: rounded, bordered, its own shadow, and the card
@@ -3435,21 +3261,8 @@ textarea:disabled {
 /* Home — third quick link, matching the Settings/New Session pair above it.
    Drawn as an SVG rather than a PNG like the other two only because no such
    asset exists; size and opacity match so the row reads as one set. */
-.home-libraryicon {
-  left: 551px;
-  top: 244px;
-  width: 36px;
-  height: 36px;
-  opacity: 0.36;
-  color: #4a4a4a;
-}
 
-.home-link-library {
-  left: 552px;
-  top: 263px;
-  width: 123px;
-  font-size: 20px;
-}
+.
 
 /* Library — the reader for what "Save to Library" writes. Uses the same card
    shell as the Analyze view: rounded, bordered, its own shadow, and the card
@@ -4913,84 +4726,20 @@ textarea:disabled {
    wrong body grey, and fixed widths on the buttons — which is what forced
    "Find a source" onto two lines. The design gives the buttons no width at all;
    they hug their text at 14px/8px padding and never wrap. */
-.home-popover {
-  left: 43px;
-  top: 380px;
-  width: 372px;
-  /* No height. The frame draws 174px, which is taller than this content needs
-     — the slack all collects below the buttons and reads as a bottom padding
-     twice the size of the top one. Hugging the content is what makes the 16px
-     padding actually look like 16px on all four sides. */
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #000;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-}
 
-.home-popover-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.
 
-.home-popover-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #ff5900;
-  flex-shrink: 0;
-}
+.
 
-.home-popover-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1c1c1c;
-}
+.
 
-.home-popover-body {
-  margin: 0;
-  width: 340px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: #737373;
-}
+.
 
-.home-popover-actions {
-  display: flex;
-  gap: 8px;
-  /* Drawn, not clickable — see the note in HomeView.tsx. */
-  pointer-events: none;
-  user-select: none;
-}
+.
 
 /* No width. The frame's buttons hug their text — see 361:335/361:337. */
-.home-popover-btn {
-  /* A span, not a button — inline-flex restores the button box these were
-     drawn as. */
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  color: #1c1c1c;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.25;
-  white-space: nowrap;
-}
 
-.home-popover-btn.primary {
-  border-color: #1c1c1c;
-  background: #1c1c1c;
-  color: #fff;
-  font-weight: 600;
-}
+.
 
 /* The one line that says why a Figma-accurate settings page cannot be used. */
 .settings-unavailable-note {
@@ -5762,7 +5511,6 @@ textarea:disabled {
  * legible as one decision and the frames' own values remain in the file for
  * whoever wants to know what the design drew.
  */
-.home-canvas,
 .analyze-view,
 .docedit-view,
 .settings-shell,
@@ -5777,4 +5525,371 @@ textarea:disabled {
    gutter and rounded to match it, and there is now neither. */
 .modal-backdrop {
   border-radius: 0;
+}
+
+/* --- Home ----------------------------------------------------------------- */
+/*
+ * Rebuilt from the owner's mockup, 2026-08-18. Flow and grid throughout, which
+ * is the substantive difference from what it replaced: the old Home was a
+ * pixel-exact Figma transcription with sixteen absolutely-positioned children,
+ * and it was the only view in the app that could not reflow.
+ */
+
+.home {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--surface, #fff);
+}
+
+/* A reading column rather than full-bleed. The stat and resource grids stop
+   being scannable somewhere past this — four cards on a 2500px monitor are a
+   long way apart — and every other app with a dashboard makes the same call. */
+.home-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 26px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.home-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text);
+}
+.home-brand img { width: 26px; height: 26px; object-fit: contain; }
+
+.home-greeting {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+}
+
+.home-statusrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: -6px;
+}
+
+.home-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+/* Grey until Screen Watch is actually on. A green dot over "Tracely is off."
+   is the status line contradicting itself, and the dot is read first. */
+.home-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted-2, #9a9ba1);
+  flex-shrink: 0;
+}
+.home-status.on .home-status-dot { background: #21a35a; }
+
+.home-settings {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.home-settings:hover { color: var(--text); }
+.home-settings svg { width: 15px; height: 15px; }
+
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.home-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.home-stat b { font-size: 21px; font-weight: 700; color: var(--text); }
+.home-stat span { font-size: 11.5px; color: var(--muted); }
+
+.home-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.home-action {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-action:hover:not(:disabled) { border-color: var(--accent, #ff5900); }
+
+/* The primary card carries the accent, as the mockup draws it. */
+.home-action.primary {
+  border-color: var(--accent, #ff5900);
+  background: color-mix(in srgb, var(--accent, #ff5900) 6%, var(--surface));
+}
+
+/* Not hidden and not removed — see the note in HomeView on why an unfinished
+   affordance says so rather than silently doing something else. */
+.home-action:disabled { opacity: 0.55; cursor: default; }
+
+.home-action-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 15px;
+  color: var(--muted-2);
+}
+.home-action.primary .home-action-icon {
+  border-color: color-mix(in srgb, var(--accent, #ff5900) 45%, transparent);
+  color: var(--accent, #ff5900);
+}
+.home-action-icon svg { width: 15px; height: 15px; }
+
+.home-action-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-action-text b { font-size: 13px; font-weight: 650; color: var(--text); }
+.home-action-text span { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+
+.home-section { display: flex; flex-direction: column; gap: 9px; }
+
+.home-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-section-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.home-section-sub {
+  margin: -6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.home-link {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, #ff5900);
+  cursor: pointer;
+}
+.home-link:hover { text-decoration: underline; }
+
+.home-empty {
+  margin: 0;
+  padding: 18px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.home-docs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.home-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.home-doc:hover { border-color: var(--accent, #ff5900); }
+
+/* A stand-in for the page, not a render of it. Three grey rules read as
+   "document" at this size, and rendering the real first lines would mean
+   loading every recent document's HTML to draw a 74px thumbnail. */
+.home-doc-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 74px;
+  padding: 14px 13px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+.home-doc-thumb i { height: 5px; border-radius: 3px; background: var(--border-strong, #d7d7dc); }
+.home-doc-thumb i:nth-child(2) { width: 80%; }
+.home-doc-thumb i:nth-child(3) { width: 55%; }
+
+.home-doc-grade {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.home-doc-grade.tone-good { background: rgba(33, 163, 90, 0.14); color: #17794a; }
+.home-doc-grade.tone-mid { background: rgba(255, 184, 0, 0.18); color: #8a6200; }
+.home-doc-grade.tone-low { background: rgba(217, 54, 54, 0.14); color: #a52a2a; }
+
+.home-doc-title {
+  padding: 9px 12px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-doc-meta { padding: 0 12px; font-size: 11px; color: var(--muted); }
+
+.home-resources {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.home-resource {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.home-resource b { font-size: 12.5px; font-weight: 650; color: var(--text); }
+.home-resource-blurb { font-size: 11px; line-height: 1.4; color: var(--muted); }
+
+.home-resource-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--accent, #ff5900);
+}
+.home-resource-icon svg { width: 16px; height: 16px; }
+
+.home-resource-read {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent, #ff5900);
+  opacity: 0.55;
+}
+
+.home-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.home-tracer { display: flex; align-items: center; gap: 10px; }
+
+/* The glow the mockup draws behind the mascot: an accent halo, not a border,
+   so the character reads as sitting in front of it rather than inside a chip. */
+.home-tracer-badge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent, #ff5900) 16%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #ff5900) 9%, transparent);
+}
+
+.home-tracer-btn {
+  padding: 8px 15px;
+  border: 1px solid var(--border-strong, #d7d7dc);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.home-tracer-btn:disabled { opacity: 0.55; cursor: default; }
+
+.home-worklink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.home-worklink:hover { color: var(--text); }
+.home-worklink svg { width: 13px; height: 16px; color: var(--accent, #ff5900); }
+
+/* One column short of the grids collapsing into unreadable slivers. The window
+   can be dragged to 680px now, and four resource cards at that width are 150px
+   each with a two-line title in every one of them. */
+@media (max-width: 720px) {
+  .home-stats,
+  .home-docs { grid-template-columns: repeat(2, 1fr); }
+  .home-resources { grid-template-columns: repeat(2, 1fr); }
+  .home-actions { grid-template-columns: 1fr; }
+  .home-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .home-greeting { text-align: left; }
 }

@@ -8,8 +8,9 @@ import { _electron as electron } from 'playwright-core'
 /**
  * The window scales instead of reflowing, and this is what proves it.
  *
- * Home is a Figma transcription: `.home-canvas` fills the window but its
- * `.home-el` children are `position: absolute` at literal design coordinates.
+ * Home used to be a Figma transcription — `.home-canvas` filling the window
+ * with sixteen `position: absolute` children at literal design coordinates —
+ * which is why this file exists. It reflows now like every other view.
  * A window that reflowed would strand them in the corner with empty space
  * beside them, and nothing in a unit test can see that — the failure is
  * geometric and lives in the real compositor.
@@ -76,7 +77,11 @@ test('the card fills the window at every size, and keeps its design units', asyn
 
   // A real element from the Figma transcription, authored at a fixed px size.
   // Its share of the window is what must not move.
-  const probe = '.home-el'
+  // Home's brand lockup: a fixed-size logo beside fixed-size type, present on
+  // every render of the screen. The old probe was `.home-el`, one of sixteen
+  // absolutely-positioned children of a Figma transcription that the Home
+  // rebuild replaced with ordinary flow and grid.
+  const probe = '.home-brand'
   assert.ok(
     await page.locator(probe).first().isVisible().catch(() => false),
     `${probe} is not on screen — this test measures nothing without it`

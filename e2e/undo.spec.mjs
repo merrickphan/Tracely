@@ -143,7 +143,7 @@ test('a real Ctrl+Z reverts an applied revision in one press', async (t) => {
 
   // Home → Documents → a new untitled one. "New Session" and its naming field
   // are gone; the Documents page (Figma 58:172) is the way in now.
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })

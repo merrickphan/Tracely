@@ -54,7 +54,7 @@ test('grammar and wordiness are underlined in the editor', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -122,7 +122,7 @@ test('a flagged word can still be clicked into', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -165,7 +165,7 @@ test('the prose card applies a fix, and Ctrl+Z takes it back', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -220,7 +220,7 @@ test('the card survives the pointer travelling from the mark to it', async (t) =
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -258,7 +258,7 @@ test('the card still closes when the pointer leaves for good', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -307,7 +307,7 @@ test('using one card leaves the other underlines hoverable', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   const body = page.locator('.docedit-body')
   await body.waitFor({ state: 'visible' })
@@ -357,7 +357,7 @@ test('the prose layer sits under the claim layer', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /View all documents/i }).click()
   await page.getByRole('button', { name: /New document/i }).click()
   await page.locator('.docedit-body').waitFor({ state: 'visible' })
   await page.locator('.docedit-body').click()
