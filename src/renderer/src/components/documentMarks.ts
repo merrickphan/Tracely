@@ -5,6 +5,9 @@ import { findProseIssues, replacementRange, type ProseIssue } from '@shared/pros
 import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
+// The app is scaled with CSS `zoom`, which puts measured rects and the
+// coordinates marks are DRAWN in into two different spaces. See zoomLayout.ts.
+import { clientToLayout, contentOffset, readZoom } from '@shared/zoomLayout'
 import type { ScreenWatchClaimEvidence, ScreenWatchProblemKind } from '@shared/ipc-contract'
 import type { CitationStyle, Claim } from '@shared/types'
 
@@ -86,6 +89,7 @@ export function measureMarks(
   if (nodes.length === 0) return []
 
   const wrapRect = wrap.getBoundingClientRect()
+  const zoom = readZoom(wrap.ownerDocument.defaultView, wrap.ownerDocument.documentElement)
   const marks: DocumentMark[] = []
 
   for (const span of computeClaimSpans(text, claims)) {
@@ -151,10 +155,10 @@ export function measureMarks(
     const rects = Array.from(range.getClientRects())
       .filter((rect) => rect.width > 0 && rect.height > 0)
       .map((rect) => ({
-        left: rect.left - wrapRect.left + wrap.scrollLeft,
-        top: rect.top - wrapRect.top + wrap.scrollTop,
-        width: rect.width,
-        height: rect.height
+        left: contentOffset(rect.left - wrapRect.left, wrap.scrollLeft, zoom),
+        top: contentOffset(rect.top - wrapRect.top, wrap.scrollTop, zoom),
+        width: clientToLayout(rect.width, zoom),
+        height: clientToLayout(rect.height, zoom)
       }))
     if (rects.length === 0) continue
 
@@ -197,6 +201,7 @@ export function measureProseMarks(body: HTMLElement, wrap: HTMLElement): ProseMa
   if (nodes.length === 0) return []
 
   const wrapRect = wrap.getBoundingClientRect()
+  const zoom = readZoom(wrap.ownerDocument.defaultView, wrap.ownerDocument.documentElement)
   const marks: ProseMark[] = []
 
   for (const issue of findProseIssues(text)) {
@@ -215,10 +220,10 @@ export function measureProseMarks(body: HTMLElement, wrap: HTMLElement): ProseMa
     const rects = Array.from(range.getClientRects())
       .filter((rect) => rect.width > 0 && rect.height > 0)
       .map((rect) => ({
-        left: rect.left - wrapRect.left + wrap.scrollLeft,
-        top: rect.top - wrapRect.top + wrap.scrollTop,
-        width: rect.width,
-        height: rect.height
+        left: contentOffset(rect.left - wrapRect.left, wrap.scrollLeft, zoom),
+        top: contentOffset(rect.top - wrapRect.top, wrap.scrollTop, zoom),
+        width: clientToLayout(rect.width, zoom),
+        height: clientToLayout(rect.height, zoom)
       }))
     if (rects.length === 0) continue
 
@@ -516,13 +521,14 @@ export function revealClaim(body: HTMLElement, wrap: HTMLElement, claim: Claim):
   // Measured AFTER the scroll, so the rects are where the flash should be
   // drawn rather than where the sentence used to be.
   const wrapRect = wrap.getBoundingClientRect()
+  const zoom = readZoom(wrap.ownerDocument.defaultView, wrap.ownerDocument.documentElement)
   const rects = Array.from(range.getClientRects())
     .filter((r) => r.width > 0 && r.height > 0)
     .map((r) => ({
-      left: r.left - wrapRect.left + wrap.scrollLeft,
-      top: r.top - wrapRect.top + wrap.scrollTop,
-      width: r.width,
-      height: r.height
+      left: contentOffset(r.left - wrapRect.left, wrap.scrollLeft, zoom),
+      top: contentOffset(r.top - wrapRect.top, wrap.scrollTop, zoom),
+      width: clientToLayout(r.width, zoom),
+      height: clientToLayout(r.height, zoom)
     }))
   range.detach?.()
   return rects.length > 0 ? rects : null
