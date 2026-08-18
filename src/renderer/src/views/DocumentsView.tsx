@@ -75,7 +75,19 @@ function DocumentCard({
     // Closes on any click elsewhere and on Escape. Without the first, a menu
     // left open on one card sits over the card beside it; without the second
     // there is no keyboard way out of it.
-    const onDown = (): void => setMenuOpen(false)
+    const onDown = (event: MouseEvent): void => {
+      // Anything inside this card's own menu is not a dismiss. The listener is
+      // in the CAPTURE phase — it has to be, or a click on the card underneath
+      // opens the document before the menu can close — which means
+      // stopPropagation on the item cannot stop it: capture runs before the
+      // target's own handlers, so the menu closed on mousedown and the click
+      // then landed on nothing. That is why Delete did nothing in the app while
+      // passing in the harness, where the test called element.click() and never
+      // fired a mousedown at all.
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.docs-card-menu-popup, .docs-card-menu')) return
+      setMenuOpen(false)
+    }
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setMenuOpen(false)
     }
