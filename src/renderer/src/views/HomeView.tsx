@@ -145,20 +145,17 @@ export default function HomeView({
             <img src={figmaLogo} alt="" />
             <span>Tracely</span>
           </div>
-          {/* The design's close X is gone: the window has a real title bar with
-              its own close now, sitting directly above where this would be, and
-              two closes stacked in one corner is what the window-controls work
-              removed in the first place. */}
-          <button
-            className="home-close"
-            aria-label="Hide Tracely"
-            title="Hide Tracely"
-            onClick={() => tracelyApi.hideWindow('main')}
-          >
-            <svg viewBox="0 0 21 21" fill="none" aria-hidden="true">
-              <path d="M4 4l13 13M17 4L4 17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </button>
+          {/*
+            No close button here.
+
+            The design has one and this had one, hiding to the tray. The window
+            now draws the real Windows close in the same corner (the title BAR
+            is hidden, its buttons are not — see mainWindow.ts), and it does
+            exactly the same thing: `close` is intercepted and hides to the
+            tray, because window-all-closed keeps the app alive for the global
+            hotkey. Two X's a few pixels apart, doing one thing, is the reason
+            the app's own window controls were deleted in the first place.
+          */}
           <h1 className="home-greeting">
             {greetingFor(now.getHours())}
             {/* The FIRST word only. `firstName` holds whatever was typed at

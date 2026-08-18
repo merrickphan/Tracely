@@ -280,3 +280,29 @@ export function zoomForWindowWidth(width: number): number {
   if (!Number.isFinite(width) || width <= 0) return 1
   return width / LAYOUT_WIDTH
 }
+
+/**
+ * The height of the invisible caption strip at the top of the main window.
+ *
+ * The window has `titleBarStyle: 'hidden'` with a transparent `titleBarOverlay`
+ * — no title bar is drawn, but Windows still renders and hit-tests the real
+ * minimize / maximize / close buttons inside a band this tall at the top-right.
+ * Main passes it to `titleBarOverlay.height`; `--titlebar-h` in index.css
+ * mirrors it, and `.app-dragbar` is the strip that makes the rest of that band
+ * draggable, since a hidden title bar has no caption area to grab.
+ *
+ * 34px because that is roughly Windows' own caption height: shorter and the
+ * glyphs are cramped against the top edge, taller and the strip starts eating
+ * into content.
+ */
+export const TITLEBAR_HEIGHT = 34
+
+/**
+ * How much of the top-right corner those three buttons occupy.
+ *
+ * Windows draws them ~46px wide each at 100% scale. Views with content along
+ * the top edge subtract this (`--winctl-reserve`) so nothing renders underneath
+ * them — which the document editor's toolbar did the last time the buttons
+ * lived over the page, putting the close button on top of "AI Insights".
+ */
+export const WINDOW_CONTROLS_WIDTH = 138

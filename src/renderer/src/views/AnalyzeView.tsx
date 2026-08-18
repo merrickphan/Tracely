@@ -1399,6 +1399,19 @@ function DocumentEditor({
           }}
         />
         <div className="docedit-divider" />
+        {/*
+          The formatting controls, in a group that can scroll.
+
+          The toolbar's items are intrinsically ~750px wide and the window's
+          minimum is 680, so at small sizes they did not fit at all — the row
+          simply spilled past the right edge, taking "AI Insights" with it (211
+          px off-window at 680, measured, once the OS window buttons started
+          reserving 142px of that corner). Everything outside this group is
+          pinned: Back and the document name on the left, "Saved" and "AI
+          Insights" on the right, so the two ends stay reachable at every width
+          and the middle scrolls.
+        */}
+        <div className="docedit-tools">
         {/* Custom menus, not <select>. The frames draw both as the same
             bordered dropdown every other toolbar menu uses (226:95, 234:46);
             a native select renders the OS's own popup, which cannot be styled
@@ -1572,7 +1585,7 @@ function DocumentEditor({
           ) : null}
         </div>
 
-        <div className="docedit-spacer" />
+        </div>
         <span className="docedit-savestate">
           {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : ''}
         </span>

@@ -8,7 +8,8 @@ import {
   LAYOUT_HEIGHT,
   LAYOUT_WIDTH,
   MIN_WINDOW_HEIGHT,
-  MIN_WINDOW_WIDTH
+  MIN_WINDOW_WIDTH,
+  TITLEBAR_HEIGHT
 } from '@shared/windowSize'
 import { windowTitle } from '../appIdentity'
 import { getSetting, setSetting } from '../services/storage/settingsRepo'
@@ -161,6 +162,31 @@ export function createMainWindow(): BrowserWindow {
     fullscreenable: true,
     show: false,
     frame: true,
+    // No title bar strip, but the real window buttons.
+    //
+    // Owner's call, 2026-08-18: "please remove this top panel" — the grey band
+    // with the app name across the top. `titleBarStyle: 'hidden'` removes the
+    // band; `titleBarOverlay` puts the OS's own minimize/maximize/close back
+    // over the page's top-right corner, so this is not a return to the
+    // hand-written cluster that was deleted a day earlier. The buttons are
+    // drawn and hit-tested by Windows — its hover states, its snap-layouts
+    // flyout on maximize, its high-contrast handling.
+    //
+    // Transparent, so the page's own background runs to the top edge and no
+    // panel of any colour is left. That also means the overlay needs no theme
+    // wiring: there is nothing to keep in sync with light/dark.
+    //
+    // The cost is that the caption area no longer exists, so dragging the
+    // window becomes CSS's job (`.app-dragbar` in index.css), and the buttons
+    // sit ON the page, so any view with content along its top edge has to keep
+    // clear of them. `--winctl-reserve` exists for exactly that and is non-zero
+    // again.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00000000',
+      symbolColor: '#212429',
+      height: TITLEBAR_HEIGHT
+    },
     // Opaque. Transparency existed only so the CSS-rounded card was the sole
     // visible thing; with a real frame the window is a rectangle and painting
     // it is what stops a white flash on show.
