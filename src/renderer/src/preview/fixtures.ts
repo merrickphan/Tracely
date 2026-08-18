@@ -15,6 +15,7 @@ import type {
   AuthUser,
   Citation,
   Claim,
+  DocumentListItem,
   DocumentOutline,
   DocumentRecord,
   EvidenceItem,
@@ -272,7 +273,12 @@ export const libraryItems: LibraryItem[] = [
 // Six paragraphs rather than two, because the Structure panel renders one row
 // per paragraph and a two-paragraph document exercises none of what makes that
 // list hard: an unlabelled paragraph, a warrant gap, and enough rows to scroll.
-export const documents: DocumentRecord[] = [
+// Typed DocumentListItem, so the Documents page (58:172) has a grid to draw.
+// The grades are the point of the extra entries: the card's chip changes colour
+// across bands, and one document is deliberately UNGRADED — the state a draft
+// is in before anything has read it, which is what a new user sees on every
+// card and so the one worth being able to look at.
+export const documents: DocumentListItem[] = [
   {
     id: 'doc-1',
     title: 'Screen time essay — draft 2',
@@ -284,7 +290,44 @@ export const documents: DocumentRecord[] = [
       '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +
       '<div>In conclusion, the link is real but weaker than the debate assumes.</div>',
     createdAt: T0,
-    updatedAt: T0
+    updatedAt: T0,
+    // Hand-traced below with the outline: 20 + 10 + 0 + 0 + 15 + 10 = 55, which
+    // gradeFor bands as a C. Written as a literal so a change to scoreDraft
+    // shows up as a disagreement with that trace rather than following it.
+    score: 55,
+    gradedAt: T0
+  },
+  {
+    id: 'doc-2',
+    title: 'The Cold War Redefined',
+    bodyHtml: '<div>A second saved draft, listed but not opened in the preview.</div>',
+    createdAt: T0,
+    updatedAt: T0,
+    // 82 is the score the Figma grade card is drawn around, and gradeFor bands
+    // it B+ — so this entry is also the check that the chip and the grade panel
+    // agree on one number.
+    score: 82,
+    gradedAt: T0
+  },
+  {
+    id: 'doc-3',
+    title: 'Macbeth Character Analysis',
+    bodyHtml: '<div>A third saved draft.</div>',
+    createdAt: T0,
+    updatedAt: T0,
+    score: 91,
+    gradedAt: T0
+  },
+  {
+    id: 'doc-4',
+    title: 'Untitled document',
+    bodyHtml: '<div>Written but never analysed.</div>',
+    createdAt: T0,
+    updatedAt: T0,
+    // The ungraded state, and not an error: no chip, and the card says so
+    // rather than showing a letter nothing computed.
+    score: null,
+    gradedAt: null
   }
 ]
 

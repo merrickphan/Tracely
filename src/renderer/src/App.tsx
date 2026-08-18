@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@shared/types'
 import AnalyzeView from './views/AnalyzeView'
+import DocumentsView from './views/DocumentsView'
 import LibraryView from './views/LibraryView'
 import HomeView from './views/HomeView'
 import LoginView from './views/LoginView'
@@ -10,7 +11,7 @@ import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize, trackWindowZoom } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 
-export type Tab = 'home' | 'analyze' | 'library' | 'settings'
+export type Tab = 'home' | 'documents' | 'analyze' | 'library' | 'settings'
 
 // 'checking': initial auth lookup hasn't resolved yet. 'signedOut'/
 // 'needsName' gate the whole app behind LoginView/NamePromptView. 'ready'
@@ -37,6 +38,10 @@ function gateFor(user: AuthUser | null, configured: boolean): AuthGateState {
 // Figma design shows and nothing else.
 export default function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('home')
+  // Which document the editor should open. Lives here rather than inside
+  // AnalyzeView because the Documents page is what chooses it, and the two are
+  // siblings. `null` means a new, untitled one.
+  const [openDocumentId, setOpenDocumentId] = useState<string | null>(null)
   const [gate, setGate] = useState<AuthGateState>('checking')
   const [user, setUser] = useState<AuthUser | null>(null)
 
@@ -113,7 +118,16 @@ export default function App(): JSX.Element {
     <div className="app-shell">
       <main className={`app-main ${tab === 'home' ? 'app-main-fixed' : ''}`}>
         {tab === 'home' ? <HomeView onNavigate={setTab} firstName={user?.firstName ?? null} /> : null}
-        {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} /> : null}
+        {tab === 'documents' ? (
+          <DocumentsView
+            onNavigate={setTab}
+            onOpenDocument={(id) => {
+              setOpenDocumentId(id)
+              setTab('analyze')
+            }}
+          />
+        ) : null}
+        {tab === 'analyze' ? <AnalyzeView onNavigate={setTab} openDocumentId={openDocumentId} /> : null}
         {tab === 'library' ? <LibraryView onNavigate={setTab} /> : null}
         {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
       </main>

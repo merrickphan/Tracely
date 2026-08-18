@@ -5092,3 +5092,205 @@ textarea:disabled {
 .resize-grip-se { bottom: 0; right: 0; cursor: nwse-resize; }
 .resize-grip-ne { top: 0; right: 0; cursor: nesw-resize; }
 .resize-grip-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* ── Documents page — Figma "DocumentsPage" (58:172) ──────────────────────────
+   Every number here is the frame's own, read with get_design_context. The card
+   is 181.5x200 on a 197.5px pitch, which is a 16px gutter across four columns
+   in the frame's 774px container. */
+.docs-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 19px 23px 8px;
+  box-sizing: border-box;
+  /* The card is the window's drag region; everything interactive below opts
+     back out via the global input/button rule. */
+  -webkit-app-region: drag;
+  overflow: hidden;
+}
+
+.docs-back {
+  -webkit-app-region: no-drag;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.docs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.docs-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #212429;
+}
+
+.docs-subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #737880;
+}
+
+/* The frame stacks the button over the sort control, right-aligned. */
+.docs-head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.docs-new {
+  -webkit-app-region: no-drag;
+  width: 172px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  /* The frame's gradient, not the app's flat accent — this button is drawn
+     differently from every other primary in the product and copying
+     `--accent` here would quietly lose that. */
+  background: linear-gradient(to right, #f97316, #dc2626);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.docs-sort {
+  -webkit-app-region: no-drag;
+  width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #d1d4db;
+  border-radius: 8px;
+  background: #fff;
+  color: #212429;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.docs-grid {
+  -webkit-app-region: no-drag;
+  display: grid;
+  /* auto-fill rather than a hard `repeat(4, …)`: the window is resizable now
+     (see shared/windowSize.ts), and although it scales rather than reflows, a
+     fixed column count would still be a second place that has to agree with
+     the container width. */
+  grid-template-columns: repeat(auto-fill, minmax(181.5px, 1fr));
+  gap: 16px;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.docs-card {
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  height: 200px;
+  padding: 0;
+  border: 1px solid #d1d4db;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.docs-card:hover {
+  border-color: #b9bdc6;
+}
+
+.docs-card-thumb {
+  position: relative;
+  display: block;
+  height: 122px;
+  flex-shrink: 0;
+  background: #f5f5f7;
+  overflow: hidden;
+}
+
+/* Five bars at the frame's widths, 14px apart from a 16px top. Decorative —
+   the thumbnail shows that the card is a document, not what it says. */
+.docs-card-bar {
+  position: absolute;
+  left: 12px;
+  height: 3px;
+  border-radius: 1.5px;
+  background: #d1d4db;
+}
+.docs-card-bar:nth-child(1) { top: 16px; }
+.docs-card-bar:nth-child(2) { top: 30px; }
+.docs-card-bar:nth-child(3) { top: 44px; }
+.docs-card-bar:nth-child(4) { top: 58px; }
+.docs-card-bar:nth-child(5) { top: 72px; }
+
+.docs-card-chip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 34px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.docs-card-title {
+  margin: 9px 11px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #212429;
+  /* Two lines, then ellipsis. The frame's title box is 32px — exactly two
+     lines — and "Photosynthesis Lab Report" already uses both. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.docs-card-date {
+  margin: auto 11px 11px;
+  font-size: 11px;
+  color: #737880;
+}
+
+.docs-empty {
+  padding: 0 24px;
+}
+
+[data-theme='dark'] .docs-title,
+[data-theme='dark'] .docs-card-title {
+  color: var(--text);
+}
+[data-theme='dark'] .docs-card,
+[data-theme='dark'] .docs-sort {
+  background: var(--surface);
+  border-color: var(--border);
+}
+[data-theme='dark'] .docs-card-thumb {
+  background: var(--surface-2, #202024);
+}
