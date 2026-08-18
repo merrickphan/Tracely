@@ -4150,44 +4150,107 @@ textarea:disabled {
 
 .argscore-flow-head .argscore-section { flex: 1; margin: 0 0 2px; }
 
-.argscore-flow-list {
-  margin: 9px 0 0;
-  padding: 0;
-  list-style: none;
+/* The inline findings list is gone. It was the only category of finding in the
+   product with nothing behind it — a paragraph weakness opens a detail, a claim
+   opens Find Evidence, and a transition gap opened the paragraph it pointed at,
+   which is not where the problem is. The problem is the JOIN, and a join needs
+   both sides on screen. They now live in their own view behind "Open Flow
+   Check →", the same shape "Open Argument Check →" already had. */
+
+/* ---- Flow Check: one row per broken boundary --------------------------- */
+.argscore-boundary-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 90ms ease, background 90ms ease;
+}
+
+.argscore-boundary-row:hover {
+  border-color: var(--text);
+  background: var(--surface-2, #fafafa);
+}
+
+/* Fixed width so every arrow lines up down the list — the pair is the row's
+   index and reads as a column, not as prose. */
+.argscore-boundary-pair {
+  flex: 0 0 auto;
+  min-width: 56px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  padding-top: 1px;
+}
+
+.argscore-boundary-body {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 
-/* Each finding opens the paragraph it is about, so it is a real control rather
-   than a bullet — the whole point of naming a boundary is to go look at it. */
-.argscore-flow-item {
-  display: block;
-  width: 100%;
-  padding: 0 0 0 12px;
-  position: relative;
-  border: none;
-  background: none;
-  font: inherit;
+.argscore-boundary-label {
   font-size: 11.5px;
-  line-height: 1.45;
-  text-align: left;
-  color: var(--muted-2);
-  cursor: pointer;
+  font-weight: 600;
+  color: var(--score-mid);
 }
 
-.argscore-flow-item::before {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: 6px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--score-mid);
+/* The actual seam: the last words of one paragraph and the first of the next.
+   One line, ellipsised — it is a preview of where to look, not the text
+   itself, and letting it wrap turns the list into paragraphs. */
+.argscore-boundary-seam {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.argscore-flow-item:hover { color: var(--text); }
+.argscore-boundary-go {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  padding-top: 1px;
+}
+
+/* ---- One boundary, opened --------------------------------------------- */
+.argscore-seam {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 12px 0;
+}
+
+.argscore-seam-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.argscore-seam-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The gap drawn between the two halves — a dashed rule standing in for the
+   join that is missing. This is the finding, rendered. */
+.argscore-seam-gap {
+  height: 18px;
+  margin: 8px 0;
+  border-top: 2px dashed var(--score-mid);
+}
 
 .argscore-flow-clear {
   margin: 8px 0 0;

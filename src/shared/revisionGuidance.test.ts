@@ -1,6 +1,13 @@
 import { ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { REVISION_GUIDANCE, guidanceFor } from './revisionGuidance.ts'
+import {
+  COHESION_GUIDANCE,
+  REVISION_GUIDANCE,
+  cohesionGuidanceFor,
+  guidanceFor
+} from './revisionGuidance.ts'
+
+const COHESION_KINDS = ['no-transition', 'topic-jump', 'unanswered-counterargument'] as const
 
 const KINDS = [
   'no-thesis',
@@ -79,5 +86,53 @@ describe('REVISION_GUIDANCE', () => {
       ok(g.why.length <= 340, `${kind}.why is ${g.why.length} chars`)
       ok(g.done.length <= 340, `${kind}.done is ${g.done.length} chars`)
     }
+  })
+})
+
+describe('COHESION_GUIDANCE', () => {
+  it('covers every cohesion finding kind', () => {
+    for (const kind of COHESION_KINDS) ok(COHESION_GUIDANCE[kind], `no guidance for ${kind}`)
+    strictEqual(Object.keys(COHESION_GUIDANCE).length, COHESION_KINDS.length)
+  })
+
+  it('gives all three fields for every kind', () => {
+    for (const kind of COHESION_KINDS) {
+      const g = cohesionGuidanceFor(kind)
+      for (const [field, value] of Object.entries(g)) {
+        ok(value.trim().length > 0, `${kind}.${field} is empty`)
+      }
+    }
+  })
+
+  it('phrases every move as an instruction, not a description', () => {
+    const DESCRIPTIVE = /^(the|this|there|it|your|a|an)/i
+    for (const kind of COHESION_KINDS) {
+      ok(!DESCRIPTIVE.test(cohesionGuidanceFor(kind).move.trim()), `${kind}.move does not start with a verb`)
+    }
+  })
+
+  // The same line the weakness guidance holds: describe the move, never supply
+  // the sentence. A transition is the easiest place to slip a ready-made clause
+  // in, and a pasted "Building on this," is exactly what this must not offer.
+  it('never puts a ready-made transition in the move', () => {
+    for (const kind of COHESION_KINDS) {
+      ok(!/["“”]/.test(cohesionGuidanceFor(kind).move), `${kind}.move quotes a phrase to paste`)
+    }
+  })
+
+  it('keeps each field short enough to read inside a card', () => {
+    for (const kind of COHESION_KINDS) {
+      const g = cohesionGuidanceFor(kind)
+      for (const [field, value] of Object.entries(g)) {
+        ok(value.length <= 340, `${kind}.${field} is ${value.length} chars`)
+      }
+    }
+  })
+
+  // Reordering is a real fix and often the better one - a tool that only ever
+  // says "add a transition" teaches students to paper over a structural
+  // problem with a sentence.
+  it('offers reordering for a topic jump, not just a bridge', () => {
+    ok(/move one|reorder/i.test(COHESION_GUIDANCE['topic-jump'].move + COHESION_GUIDANCE['topic-jump'].done))
   })
 })
