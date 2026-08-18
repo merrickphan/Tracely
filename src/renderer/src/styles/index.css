@@ -5479,3 +5479,38 @@ textarea:disabled {
 .docs-card-thumb {
   position: relative;
 }
+
+/* Prose marks — grammar, mechanics and wordiness. See ProseMarkLayer for why
+   these do not share the three credibility colours: an underline in this app
+   says something specific about whether a sentence is TRUE, and a repeated word
+   is not that kind of remark.
+
+   Under the claim marks, so a sentence that is both unverified and clumsy still
+   reads as unverified first. */
+.docprose-layer {
+  z-index: 1;
+}
+
+.docprose {
+  position: absolute;
+  pointer-events: auto;
+  border-bottom: 2px solid transparent;
+  border-radius: 1px;
+  cursor: help;
+}
+
+/* Solid for an error — one right answer. Dotted for style — a suggestion the
+   writer is free to refuse. Flattening the two would make "very" as loud as
+   "they was", which is how people learn to turn a grammar checker off. */
+.docprose-error {
+  border-bottom-style: solid;
+}
+
+.docprose-style {
+  border-bottom-style: dotted;
+  border-bottom-width: 2px;
+}
+
+.docprose:hover {
+  background: rgba(37, 99, 235, 0.08);
+}

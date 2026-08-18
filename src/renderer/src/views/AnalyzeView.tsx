@@ -8,8 +8,9 @@ import Button from '../components/Button'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
-import DocumentMarkLayer from '../components/DocumentMarkLayer'
+import DocumentMarkLayer, { ProseMarkLayer } from '../components/DocumentMarkLayer'
 import type { DocCitationFlowState, DocFixState } from '../components/DocumentMarkLayer'
+import type { ProseMark } from '../components/documentMarks'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
 import {
@@ -17,6 +18,7 @@ import {
   insertCitationForClaim,
   markAt,
   measureMarks,
+  measureProseMarks,
   replaceClaimText,
   revealWorksCited
 } from '../components/documentMarks'
@@ -138,6 +140,10 @@ function DocumentEditor({
   // the contentEditable and drawn in a layer beside it — see documentMarks.ts
   // for why nothing here may touch the DOM the user is typing into.
   const [marks, setMarks] = useState<DocumentMark[]>([])
+  // Grammar, mechanics and wordiness. Separate state from `marks` because these
+  // are not claims — see ProseMark — and separate so a re-measure driven by a
+  // claim arriving does not have to rebuild them and vice versa.
+  const [proseMarks, setProseMarks] = useState<ProseMark[]>([])
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
   const [wrapWidth, setWrapWidth] = useState(0)
   // The editor's visible box, as of the hover that opened the popover — see
@@ -604,6 +610,11 @@ function DocumentEditor({
     return scheduleFrame(window, () => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
       setMarks(measureMarks(body, wrap, live, articleCounts))
+      // In the same frame as the claim marks, not behind a debounce of its own:
+      // findProseIssues is pure and local — a thousand-word draft is a few
+      // milliseconds — and measuring both together is what keeps the two layers
+      // agreeing about where the document's characters are.
+      setProseMarks(measureProseMarks(body, wrap))
       setWrapWidth(wrap.clientWidth)
     })
     // `structureOpen` was a dependency here: opening the rail narrowed the
@@ -1368,6 +1379,10 @@ function DocumentEditor({
           to place their caret exactly as if this were not here. Only the
           popover takes the pointer.
         */}
+        {/* Under the claim marks in the DOM as well as in z-index, so a
+            sentence that is both unverified and clumsy reads as unverified
+            first. */}
+        <ProseMarkLayer marks={proseMarks} />
         <DocumentMarkLayer
           marks={marks}
           active={activeMark}

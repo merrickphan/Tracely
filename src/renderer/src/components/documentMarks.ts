@@ -1,6 +1,7 @@
 import { claimEvidenceFor } from '@shared/claimEvidence'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
+import { findProseIssues, type ProseIssue } from '@shared/proseIssues'
 import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
@@ -158,6 +159,70 @@ export function measureMarks(
     if (rects.length === 0) continue
 
     marks.push({ claim: span.claim, problemKinds, hasInlineCitation: cited, evidence, rects })
+  }
+
+  return marks
+}
+
+/**
+ * A grammar, mechanics or wordiness issue, measured for drawing.
+ *
+ * Its own type and its own pass rather than another `DocumentMark`, because a
+ * DocumentMark IS a claim — it carries evidence, a citation state and a
+ * problemKind ranking, none of which a repeated word has. Faking a Claim to
+ * reuse the layer would put "unverified statistic" one field away from "a/an".
+ *
+ * The two layers are drawn separately and coloured differently on purpose. The
+ * three underline colours in this app mean something specific about
+ * CREDIBILITY — see PROBLEM_COLOR — and a grammar flag is not a claim about
+ * whether a sentence is true. Sharing a colour would teach the writer that the
+ * orange under "70% of teenagers" and the orange under "the the" are the same
+ * kind of remark.
+ */
+export interface ProseMark {
+  issue: ProseIssue
+  rects: MarkRect[]
+}
+
+/**
+ * Measures every prose issue in the editor.
+ *
+ * Reads the same text map the claim pass does, so the two agree about where
+ * the document's characters are. `findProseIssues` is pure and cheap — a
+ * thousand-word draft is a few milliseconds — so this runs in the same measure
+ * pass as the marks rather than behind a debounce of its own.
+ */
+export function measureProseMarks(body: HTMLElement, wrap: HTMLElement): ProseMark[] {
+  const { text, nodes } = buildTextMap(body)
+  if (nodes.length === 0) return []
+
+  const wrapRect = wrap.getBoundingClientRect()
+  const marks: ProseMark[] = []
+
+  for (const issue of findProseIssues(text)) {
+    const from = locate(nodes, issue.start)
+    const to = locate(nodes, issue.end)
+    if (!from || !to) continue
+
+    const range = document.createRange()
+    try {
+      range.setStart(from.node, from.offset)
+      range.setEnd(to.node, to.offset)
+    } catch {
+      continue
+    }
+
+    const rects = Array.from(range.getClientRects())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({
+        left: rect.left - wrapRect.left + wrap.scrollLeft,
+        top: rect.top - wrapRect.top + wrap.scrollTop,
+        width: rect.width,
+        height: rect.height
+      }))
+    if (rects.length === 0) continue
+
+    marks.push({ issue, rects })
   }
 
   return marks
