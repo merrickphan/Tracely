@@ -65,6 +65,26 @@ export const CITED_SOURCE_MARKER = '[CITED BY THE WRITER]'
 export const NO_EVIDENCE_SUMMARY = 'No supporting evidence was found.'
 
 /**
+ * The heading the searched sources sit under, once a citation has resolved.
+ *
+ * They are DEMOTED rather than removed, and the distinction is the whole point.
+ * Before this, the cited work went in at slot 1 of one flat list and the four
+ * topical hits followed it as peers — so the model weighed all five and wrote
+ * the thing this heading exists to stop: "7 of 10 other articles do not support
+ * this". Those articles were never claimed as support. They came from a search
+ * on the topic, the writer never cited them, and counting them against a
+ * sentence whose own source checks out is a verdict about the literature
+ * dressed up as a verdict about the draft.
+ *
+ * They stay in the request because the fallback is real: an abstract routinely
+ * cannot speak to the specific figure a sentence quotes, and a critique with
+ * nothing else to reason over would have to answer "cannot tell". Cost is
+ * unchanged either way — same items, one extra line of heading.
+ */
+export const FALLBACK_HEADING =
+  'Other sources found by a topical search — the writer did not cite these. Use them ONLY if the source above cannot answer:'
+
+/**
  * A hard slice(0, N) can land mid-word or mid-fact ("...reduced mortality by 4"
  * instead of "...by 47%"), feeding the model a truncated number right before
  * asking it to fact-check numbers — cutting at the last whitespace before the
@@ -105,8 +125,17 @@ export function buildEvidenceSummary(
   const lines: string[] = []
   if (cited) lines.push(line(1, cited, CITED_SOURCE_MARKER, maxAbstractChars))
 
-  for (const source of searched.slice(0, maxItems - lines.length)) {
-    lines.push(line(lines.length + 1, source, null, maxAbstractChars))
+  const rest = searched.slice(0, maxItems - lines.length)
+  // The heading appears only when there IS a cited source to fall back FROM.
+  // On an uncited sentence these are not a fallback, they are the evidence —
+  // and "use these only if the source above cannot answer", with no source
+  // above, reads as an instruction to ignore everything provided.
+  if (cited && rest.length > 0) lines.push(FALLBACK_HEADING)
+
+  let n = cited ? 1 : 0
+  for (const source of rest) {
+    n += 1
+    lines.push(line(n, source, null, maxAbstractChars))
   }
 
   return lines.length === 0 ? NO_EVIDENCE_SUMMARY : lines.join('\n')
