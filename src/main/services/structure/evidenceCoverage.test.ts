@@ -46,7 +46,8 @@ describe('computeEvidenceCoverage', () => {
       withRelevantSource: 1,
       withOwnCitation: 0,
       meanStrength: 45,
-      unchecked: 1
+      unchecked: 1,
+      outsideIndexes: 0
     })
   })
 
@@ -56,7 +57,8 @@ describe('computeEvidenceCoverage', () => {
       withRelevantSource: 0,
       withOwnCitation: 0,
       meanStrength: null,
-      unchecked: 2
+      unchecked: 2,
+      outsideIndexes: 0
     })
   })
 
@@ -70,7 +72,8 @@ describe('computeEvidenceCoverage', () => {
       withRelevantSource: 0,
       withOwnCitation: 1,
       meanStrength: null,
-      unchecked: 2
+      unchecked: 2,
+      outsideIndexes: 0
     })
   })
 
@@ -98,7 +101,8 @@ describe('computeEvidenceCoverage', () => {
       withRelevantSource: 0,
       withOwnCitation: 0,
       meanStrength: null,
-      unchecked: 0
+      unchecked: 0,
+      outsideIndexes: 0
     })
   })
 })

@@ -49,3 +49,6 @@ resources/models/
 .claude/agent-memory-local/
 .claude/first-run
 .claude/assistant-daemon-state.json
+
+# Playwright/e2e run artifacts — a local record of the last run, not source.
+test-results/

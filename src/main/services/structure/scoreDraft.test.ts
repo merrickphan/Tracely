@@ -15,19 +15,32 @@ type Role =
 
 const NO_SIGNALS: ScoreSignals = { soWhatInConclusion: false }
 
-/** `'claim+'` marks a paragraph that also carries a warrant. */
+/**
+ * `'claim+'` marks a paragraph that also carries a warrant. `'evidence*'` marks
+ * one the labeller said states a claim of its own, `'claim-'` one it said does
+ * not.
+ *
+ * A spec with NEITHER marker leaves `statesClaim` undefined on purpose — that
+ * is a stored outline from before the field existed, and every test written
+ * before it is therefore also the compatibility test for the fallback.
+ */
 function outline(...specs: string[]): Array<{
   index: number
   role: Role
   hasWarrant: boolean
+  statesClaim?: boolean
   claimIds: string[]
 }> {
-  return specs.map((spec, i) => ({
-    index: i + 1,
-    role: spec.replace(/\+$/, '') as Role,
-    hasWarrant: spec.endsWith('+'),
-    claimIds: []
-  }))
+  return specs.map((spec, i) => {
+    const states = spec.includes('*') ? true : spec.includes('-') ? false : undefined
+    return {
+      index: i + 1,
+      role: spec.replace(/[+*-]/g, '') as Role,
+      hasWarrant: spec.includes('+'),
+      ...(states === undefined ? {} : { statesClaim: states }),
+      claimIds: []
+    }
+  })
 }
 
 function score(specs: string[], signals: ScoreSignals = NO_SIGNALS): number {
@@ -280,5 +293,67 @@ describe('a title is not an unread paragraph', () => {
   it('does not excuse an unknown anywhere else', () => {
     const midGap = outline('unknown', 'thesis', 'unknown', 'conclusion')
     strictEqual(scoreDraft(midGap, { soWhatInConclusion: true, titleParagraph: true }).complete, false)
+  })
+})
+
+describe('governingClaims reads statesClaim, not the role', () => {
+  /**
+   * The bug, in one assertion. Both body paragraphs open with an evaluative
+   * sub-point and then cite for it, so both labellers call them `evidence` —
+   * the model because it is told to report the DOMINANT role, the heuristics
+   * because their citation branch is checked before their claim branch. The
+   * component that asks "is this body governed by claims?" answered no about
+   * an essay whose body paragraphs are nothing but.
+   */
+  it('credits an evidence paragraph that states its own claim', () => {
+    const specs = ['thesis', 'evidence*', 'evidence*', 'conclusion']
+    strictEqual(component(specs, 'governingClaims'), COMPONENT_MAX.governingClaims)
+    // And without the field — a stored outline, or a relay a deploy behind —
+    // it scores what it always scored.
+    strictEqual(component(['thesis', 'evidence', 'evidence', 'conclusion'], 'governingClaims'), 0)
+  })
+
+  it('withholds credit from a claim paragraph the labeller says restates an earlier one', () => {
+    strictEqual(component(['thesis', 'claim-', 'claim-', 'conclusion'], 'governingClaims'), 0)
+  })
+
+  it('still measures a fraction of the body, so padding lowers it', () => {
+    strictEqual(
+      component(['thesis', 'evidence*', 'evidence', 'evidence', 'conclusion'], 'governingClaims'),
+      COMPONENT_MAX.governingClaims / 2
+    )
+  })
+
+  /**
+   * The four roles with somewhere else to earn their points. Without this gate
+   * a draft could collect governingClaims for its counterargument and its
+   * significance paragraph — both of which assert something contestable by
+   * construction — and be paid twice for one paragraph.
+   */
+  it('does not credit roles that have their own component', () => {
+    for (const role of ['counterargument', 'significance', 'transition', 'thesis']) {
+      strictEqual(
+        component(['thesis', `${role}*`, 'evidence', 'conclusion'], 'governingClaims'),
+        0,
+        `${role} was credited as a governing claim`
+      )
+    }
+  })
+
+  /**
+   * The one that would quietly undo `unknown`-is-a-real-answer. A labeller that
+   * could not say what a paragraph does has not established that it governs
+   * anything, and a `statesClaim: true` on an unlabelled paragraph would turn
+   * "we could not read this" into 20 points.
+   */
+  it('does not credit an unknown paragraph', () => {
+    strictEqual(component(['thesis', 'unknown*', 'unknown*', 'conclusion'], 'governingClaims'), 0)
+  })
+
+  it('counts reasoning paragraphs, which do argue a point of their own', () => {
+    strictEqual(
+      component(['thesis', 'reasoning*', 'evidence', 'conclusion'], 'governingClaims'),
+      COMPONENT_MAX.governingClaims
+    )
   })
 })

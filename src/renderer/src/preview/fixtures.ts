@@ -386,7 +386,17 @@ export const documentOutline: DocumentOutline = {
   // searched. Kept consistent deliberately — an outline claiming 2 detected
   // beside a list of 3 is the kind of quiet mismatch the preview exists to
   // surface, not to contain.
-  coverage: { detected: 3, withRelevantSource: 2, withOwnCitation: 1, meanStrength: 48, unchecked: 1 },
+  // `outsideIndexes: 0` — none of these three claims trips retrievalScopeFor,
+  // so the report's sub-line reads exactly as it did before that field existed
+  // and this fixture covers the unchanged path.
+  coverage: {
+    detected: 3,
+    withRelevantSource: 2,
+    withOwnCitation: 1,
+    meanStrength: 48,
+    unchecked: 1,
+    outsideIndexes: 0
+  },
   weaknesses: [
     {
       kind: 'warrant-gap',
@@ -637,7 +647,25 @@ export const screenWatchStructure: ScreenWatchStructure = {
   // Matches screenWatchClaims: c1 (34) and c2 (61) found sources, c3 searched
   // and found nothing — which is what makes it an 'unsupported-claim' rather
   // than an unchecked one.
-  coverage: { detected: 3, withRelevantSource: 2, withOwnCitation: 1, meanStrength: 42, unchecked: 0 },
+  // `outsideIndexes: 1` — c3 is the searched-and-empty claim, and it is the one
+  // the academic indexes were never going to hold.
+  //
+  // The overlay renders ArgumentScoreModal in `compact` mode, which draws no
+  // claim-count lines at all (370:135 is a ring, an eyebrow, a grade and one
+  // line), so nothing here reads this field today. It is set anyway, and set
+  // to the value that is TRUE of these three claims: a fixture that quietly
+  // omits a field is a fixture that stops matching the payload, which is the
+  // one thing it exists not to do. `searchableClaims(3, 1, 2)` = 2 is the
+  // number the non-compact report would print, and it is unit-tested in
+  // shared/coverageCounts.test.ts rather than asserted from a render.
+  coverage: {
+    detected: 3,
+    withRelevantSource: 2,
+    withOwnCitation: 1,
+    meanStrength: 42,
+    unchecked: 0,
+    outsideIndexes: 1
+  },
   // A believable school essay rather than round numbers: 1,240 words over 71
   // sentences is ~17.5 words per sentence and ~5 minutes to read, which is what
   // the stats row should show. Round figures here would hide an arithmetic

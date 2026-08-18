@@ -101,6 +101,37 @@ function has(roles: ParagraphRole[], role: ParagraphRole): boolean {
   return roles.includes(role)
 }
 
+/**
+ * Roles whose paragraphs are eligible to count as governed by a claim.
+ *
+ * The other four are excluded because they are doing a different job and
+ * crediting them here would double-pay for it: `counterargument` and
+ * `significance` have components of their own, `transition` is by definition
+ * argumentative filler, and `thesis` states the draft's position rather than a
+ * sub-point (it is outside the body slice anyway, but a delayed thesis makes
+ * that slice's start move, so this stays belt-and-braces).
+ *
+ * `unknown` is excluded too, and that is the important one: a labeller that
+ * could not say what a paragraph is doing has not established that it governs
+ * anything. Crediting it would turn "we could not read this" into points,
+ * which is the one thing the whole `unknown`-is-a-real-answer design exists to
+ * prevent.
+ */
+const GOVERNING_ELIGIBLE_ROLES = new Set<ParagraphRole>(['claim', 'evidence', 'reasoning'])
+
+/**
+ * Whether a body paragraph counts toward `governingClaims`.
+ *
+ * The fallback is what makes this safe to ship into a database full of stored
+ * outlines and into a two-repo release where the relay may be a deploy behind:
+ * with no `statesClaim`, this is `role === 'claim'` — bit-for-bit the old
+ * component. See ParagraphOutline.statesClaim.
+ */
+function governsAClaim(paragraph: ParagraphOutline): boolean {
+  if (paragraph.statesClaim === undefined) return paragraph.role === 'claim'
+  return paragraph.statesClaim && GOVERNING_ELIGIBLE_ROLES.has(paragraph.role)
+}
+
 export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals): DraftScore {
   const zero: StructureComponents = {
     thesis: 0,
@@ -153,8 +184,17 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   //
   // Falls back to the old slice when no thesis was labelled, which is the case
   // the original was written for and still correct there.
-  const body = roles.slice(thesisAt === -1 ? 1 : thesisAt + 1, -1)
-  const claimBearing = body.filter((role) => role === 'claim').length
+  //
+  // What counts is `statesClaim`, NOT `role === 'claim'` — see governsAClaim.
+  // The old test asked which paragraphs are *primarily* claims, and this
+  // component is not asking that: a body paragraph that opens with its
+  // sub-point and then spends four sentences citing studies for it is
+  // primarily evidence, and is exactly the paragraph the rubric wants to
+  // reward. Both labellers agreed on calling it `evidence` — the model does it
+  // by instruction, the heuristics by reaching their citation branch first —
+  // so the better-argued the body, the more reliably this scored zero.
+  const body = paragraphs.slice(thesisAt === -1 ? 1 : thesisAt + 1, -1)
+  const claimBearing = body.filter(governsAClaim).length
   const expectedClaims = Math.max(1, Math.ceil(body.length * 0.5))
   const governingClaims = COMPONENT_MAX.governingClaims * clamp01(claimBearing / expectedClaims)
 

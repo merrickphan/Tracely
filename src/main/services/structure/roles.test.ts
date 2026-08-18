@@ -447,3 +447,41 @@ describe('a titled essay is labelled as though the title were not there', () => 
     deepStrictEqual(roles, ['thesis', 'claim', 'conclusion'])
   })
 })
+
+describe('heuristicRoles — statesClaim', () => {
+  function statesClaimOf(texts: string[], claimParagraphs: number[] = []): boolean[] {
+    const claimsByParagraph = new Map<number, string[]>(claimParagraphs.map((i) => [i, [`c${i}`]]))
+    return heuristicRoles({ paragraphs: paras(...texts), claimsByParagraph }).statesClaim
+  }
+
+  /**
+   * The heuristic half of the same bug. `roleFor` checks its citation branch
+   * before its claim branch — deliberately, so `evidence-stacking` is
+   * reachable — so a paragraph carrying two attributions never got as far as
+   * looksLikeTopicClaim and its opening assertion went unread. Asking the
+   * question separately reads it.
+   */
+  it('is true for a citation-heavy paragraph that opens with a topic claim', () => {
+    const text =
+      'Hepburn was remembered far more for the decades after her films than for the films themselves. ' +
+      'Smith (2019) traces that shift across three decades of coverage. ' +
+      'Jones (2021) follows the same arc through the UNICEF archives.'
+    const result = heuristicRoles({
+      paragraphs: paras('Intro.', text, 'In conclusion, it mattered.'),
+      claimsByParagraph: new Map(),
+      // The real detector, near enough — the default fallback misses
+      // author-and-year entirely, which is why analyzeStructure injects one.
+      hasCitation: (s) => /\(\d{4}\)/.test(s)
+    })
+    strictEqual(result.roles[1], 'evidence', 'the role should be unchanged')
+    strictEqual(result.statesClaim[1], true)
+  })
+
+  it('is true wherever a claim was detected', () => {
+    deepStrictEqual(statesClaimOf(['One.', 'Two.', 'Three.'], [2]), [false, true, false])
+  })
+
+  it('is false for a paragraph that asserts nothing', () => {
+    deepStrictEqual(statesClaimOf(['She arrived in 1953, then left again.']), [false])
+  })
+})

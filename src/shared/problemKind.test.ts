@@ -377,3 +377,64 @@ describe('results returned vs results that are about the claim', () => {
     strictEqual(isRetrievalMiss(null, false), false)
   })
 })
+
+describe('outside-index — what four academic indexes were never going to hold', () => {
+  const empty = { ...base, evidence: retrieved(8) }
+
+  it('replaces "no sources" rather than joining it', () => {
+    // Both together would print "No supporting sources" underneath the line
+    // that exists to withdraw exactly that accusation.
+    deepStrictEqual(problemKindsFor({ ...empty, outOfIndexScope: 'primary-text' }), [
+      'outside-index'
+    ])
+  })
+
+  it('replaces "unverified statistic" too', () => {
+    deepStrictEqual(
+      problemKindsFor({ ...empty, claimType: 'statistic', outOfIndexScope: 'local-fact' }),
+      ['outside-index']
+    )
+  })
+
+  it('leaves the old wording alone when the claim was in scope', () => {
+    deepStrictEqual(problemKindsFor({ ...empty, outOfIndexScope: null }), ['no-sources'])
+    deepStrictEqual(problemKindsFor(empty), ['no-sources'])
+  })
+
+  /**
+   * Scope only ever decides what an EMPTY result set is called. A close reading
+   * of a novel that turns out to have criticism written about it is scored on
+   * that criticism like anything else — the sentence is reachable after all,
+   * and saying otherwise over sources we are holding would be its own lie.
+   */
+  it('changes nothing when evidence was actually found', () => {
+    deepStrictEqual(
+      problemKindsFor({ ...base, evidence: found(85, 6), outOfIndexScope: 'primary-text' }),
+      ['missing-citation']
+    )
+    deepStrictEqual(
+      problemKindsFor({ ...base, evidence: found(20, 4), outOfIndexScope: 'legal-text' }),
+      ['weak-evidence']
+    )
+  })
+
+  it('says nothing at all about a cited claim, as it already did', () => {
+    deepStrictEqual(
+      problemKindsFor({ ...empty, hasInlineCitation: true, outOfIndexScope: 'legal-text' }),
+      []
+    )
+  })
+
+  it('never outranks a finding there is something to say about', () => {
+    // A contradicted fact in a sentence the databases cannot check is still a
+    // contradicted fact, and it must lead the card and the widget's ordering.
+    const kinds = problemKindsFor({
+      ...empty,
+      critiqueVerdict: 'contradicted',
+      outOfIndexScope: 'prediction'
+    })
+    strictEqual(kinds[0], 'contradicted-claim')
+    ok(kinds.includes('outside-index'))
+    ok(problemSeverity('outside-index') > problemSeverity('missing-citation'))
+  })
+})

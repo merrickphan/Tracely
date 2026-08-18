@@ -30,14 +30,38 @@ const VALID_ROLES = new Set<string>([
 export interface ReconciledRoles {
   roles: ParagraphRole[]
   warranted: boolean[]
+  /**
+   * Does this paragraph assert a contestable sub-point of its own?
+   *
+   * A separate axis from `role`, for the same reason `warranted` is one: the
+   * role is the ONE thing a paragraph is primarily for, and "is this paragraph
+   * governed by a claim" is a different question that a paragraph can answer
+   * yes to whatever its dominant role turns out to be.
+   *
+   * They were the same field until 2026-08-18, and the collapse cost real
+   * essays 20 points. A body paragraph that opens with a sub-point and then
+   * cites three studies for it is *primarily* presenting evidence — the model
+   * labels it `evidence`, correctly, and the local heuristics reach their
+   * evidence branch for it too — while `governingClaims` counted only
+   * `role === 'claim'`. So the better-supported the paragraph was, the more
+   * certainly it scored zero on the component asking whether it had a point.
+   * Measured on the Hepburn draft: both body paragraphs came back `evidence`
+   * and governingClaims scored 0/20 on an essay whose body paragraphs each
+   * open with an explicit evaluative claim.
+   */
+  statesClaim: boolean[]
 }
 
 function allUnknown(count: number): ReconciledRoles {
-  return { roles: Array<ParagraphRole>(count).fill('unknown'), warranted: Array(count).fill(false) }
+  return {
+    roles: Array<ParagraphRole>(count).fill('unknown'),
+    warranted: Array(count).fill(false),
+    statesClaim: Array(count).fill(false)
+  }
 }
 
 export function reconcileRoles(raw: unknown, paragraphCount: number): ReconciledRoles {
-  if (paragraphCount <= 0) return { roles: [], warranted: [] }
+  if (paragraphCount <= 0) return { roles: [], warranted: [], statesClaim: [] }
 
   const entries = (raw as { paragraphs?: unknown })?.paragraphs
   if (!Array.isArray(entries)) return allUnknown(paragraphCount)
@@ -47,7 +71,7 @@ export function reconcileRoles(raw: unknown, paragraphCount: number): Reconciled
 
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue
-    const { index, role, hasWarrant } = entry as Record<string, unknown>
+    const { index, role, hasWarrant, statesClaim } = entry as Record<string, unknown>
 
     // 1-based, matching the numbering the model was shown.
     if (typeof index !== 'number' || !Number.isInteger(index)) continue
@@ -63,6 +87,16 @@ export function reconcileRoles(raw: unknown, paragraphCount: number): Reconciled
     // Anything non-boolean is treated as "no warrant claimed". Defaulting the
     // other way would hand out points for a field the model did not answer.
     result.warranted[index - 1] = hasWarrant === true
+    // `statesClaim` falls back to the ROLE rather than to false, and that
+    // asymmetry with `warranted` is deliberate. A relay that predates this
+    // field returns entries without it, and defaulting those to false would
+    // zero `governingClaims` for every user on the older deployment — a
+    // regression shipped by a client change, in a two-repo release where the
+    // client can reach production first. `role === 'claim'` is exactly what
+    // the component counted before the field existed, so an old payload keeps
+    // scoring the way it always did.
+    result.statesClaim[index - 1] =
+      typeof statesClaim === 'boolean' ? statesClaim : role === 'claim'
   }
 
   return result
