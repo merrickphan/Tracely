@@ -119,10 +119,23 @@ function cacheKey(
   // a critique reasoned over the writer's own source must not be served for a
   // request that never saw it, nor the reverse.
   const cited = citedWork ? `${citedWork.title}|${citedWork.year ?? ''}|${citedWork.abstract ? 'abs' : 'noabs'}` : 'none'
+  // v10: the searched sources moved under a heading marking them as NOT cited
+  // by the writer, and the relay's Pass 2.5 became a stop rather than a
+  // priority. Neither is visible in `evidenceIds` — the key is built from the
+  // set of source ids, not from the rendered summary — so without this bump
+  // every claim already critiqued kept returning its v9 answer, written by the
+  // old prompt over the old flat list. The symptom was the exact behaviour that
+  // change existed to remove: "7 of 10 other articles do not support this",
+  // still being reported after the fix shipped.
+  //
+  // The lesson for the next change here: this key must be bumped whenever the
+  // REQUEST BODY or the relay PROMPT changes, not only when the response shape
+  // does. A cached critique is an answer to a question that is no longer being
+  // asked.
   const normalizedText = claim.text.trim().replace(/\s+/g, ' ').toLowerCase()
   return createHash('sha256')
     .update(
-      `ai:critique::v9::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}::${referenceCheck ?? 'none'}::${cited}`
+      `ai:critique::v10::${normalizedText}::${claim.strengthScore ?? 'null'}::${evidenceIds}::${referenceCheck ?? 'none'}::${cited}`
     )
     .digest('hex')
 }

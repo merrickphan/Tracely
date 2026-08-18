@@ -133,6 +133,8 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
   // DocumentListItem, because the Documents page lists grades — a
   // DocumentRecord[] here would make the mock the one place those are absent.
   let previewDocs: DocumentListItem[] = [...fx.documents]
+  // See window.toggleMaximize below.
+  let previewMaximized = false
   let previewSettings: AppSettings = { ...fx.settings }
   // Screen Watch's claims are pushed, not fetched: the real service folds a
   // refresh or a critique into its in-memory claim and redraws the overlay, so
@@ -426,7 +428,17 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       // the grips are still real DOM in that iframe, and the call log is how a
       // reviewer sees that a drag is reaching the bridge at all.
       resizeStart: (req) => ok(`window.resizeStart ${req.handle}`, { ok: true as const }),
-      resizeMove: (req) => ok(`window.resizeMove ${req.dx},${req.dy}`, { ok: true as const })
+      resizeMove: (req) => ok(`window.resizeMove ${req.dx},${req.dy}`, { ok: true as const }),
+      // Logged, and `maximized` toggles so the button's icon can be reviewed in
+      // both states. There is no BrowserWindow behind an iframe to actually
+      // resize — the harness renders each surface at a fixed size — so the
+      // alternative is a control that looks permanently un-maximized.
+      minimize: () => ok('window.minimize', { ok: true as const }),
+      toggleMaximize: () => {
+        previewMaximized = !previewMaximized
+        return ok(`window.toggleMaximize -> ${previewMaximized}`, { maximized: previewMaximized })
+      },
+      isMaximized: () => Promise.resolve({ maximized: previewMaximized })
     },
     shell: {
       // Opening a real browser from a preview is the one side effect worth

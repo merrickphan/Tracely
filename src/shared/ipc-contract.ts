@@ -258,6 +258,18 @@ export interface WindowResizeMoveResponse {
   ok: true
 }
 
+export interface WindowMinimizeResponse {
+  ok: true
+}
+export interface WindowToggleMaximizeResponse {
+  /** Where the toggle left it, so the button's icon does not need its own
+   *  round trip to find out. */
+  maximized: boolean
+}
+export interface WindowIsMaximizedResponse {
+  maximized: boolean
+}
+
 export interface ShellOpenExternalRequest {
   url: string
 }

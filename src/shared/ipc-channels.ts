@@ -44,6 +44,9 @@ export const IPC = {
   // renderer/src/components/ResizeGrips.tsx.
   WINDOW_RESIZE_START: 'window:resizeStart',
   WINDOW_RESIZE_MOVE: 'window:resizeMove',
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_TOGGLE_MAXIMIZE: 'window:toggleMaximize',
+  WINDOW_IS_MAXIMIZED: 'window:isMaximized',
 
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 

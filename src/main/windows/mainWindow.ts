@@ -8,6 +8,7 @@ import {
   LAYOUT_WIDTH,
   MAIN_WINDOW_ASPECT,
   MAX_WINDOW_SCALE,
+  maximizedScale,
   MIN_WINDOW_SCALE,
   sizeForScale,
   WINDOW_FONT_SCALE
@@ -150,12 +151,13 @@ export function createMainWindow(): BrowserWindow {
     // Figma transcription, so the aspect ratio is locked below and the renderer
     // derives its zoom from the width. See shared/windowSize.ts.
     resizable: true,
-    // Still no maximize. With the aspect ratio locked, maximizing can only
-    // letterbox the card inside a screen-shaped window, and the design has no
-    // chrome to restore it from — the tray and the in-content close button are
-    // the whole vocabulary.
+    // Still no NATIVE maximize: with the aspect ratio locked it could only
+    // letterbox the card inside a screen-shaped window. The title-bar button
+    // does something different and better — see toggleMaximizeMainWindow.
     maximizable: false,
-    minimizable: false,
+    // Minimizable now, because there is a button for it. It was off when the
+    // window had no chrome at all and nothing could reach it.
+    minimizable: true,
     show: false,
     frame: false,
     // Transparent so only the CSS-rounded card is visible — otherwise the
@@ -342,4 +344,54 @@ export function updateWindowResize(dx: number, dy: number): void {
     width,
     height
   })
+}
+
+
+// -- window controls ---------------------------------------------------------
+
+export function minimizeMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.minimize()
+}
+
+/**
+ * The title bar's maximize button, which deliberately does not maximize.
+ *
+ * `win.maximize()` fills the work area, and this window scales rather than
+ * reflows — so on a 4K display that is 28px body text and a 62px heading. What
+ * the button does instead is grow to the largest aspect-correct size that fits,
+ * capped at MAX_COMFORTABLE_SCALE, and toggle back to wherever the user had it.
+ *
+ * The previous scale is remembered rather than recomputed, so restore returns
+ * to the size that was actually dragged to, not to the default.
+ */
+let restoreScale: number | null = null
+
+export function toggleMaximizeMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const [currentWidth] = mainWindow.getSize()
+  const current = currentWidth / LAYOUT_WIDTH
+  const target = maximizedScale(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
+
+  // Within a hair of the maximized size counts as maximized, because the
+  // window is sized in whole pixels and the scale will not round-trip exactly.
+  if (restoreScale !== null && Math.abs(current - target) < 0.01) {
+    const back = restoreScale
+    restoreScale = null
+    resizeToScale(back)
+    return
+  }
+
+  restoreScale = current
+  resizeToScale(target)
+}
+
+/** Whether the window is currently at its maximized size, for the button's
+ *  icon. Derived rather than tracked: a drag can leave it at any size, and a
+ *  flag would then disagree with what is on screen. */
+export function isMainWindowMaximized(): boolean {
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  const [width] = mainWindow.getSize()
+  const target = maximizedScale(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
+  return Math.abs(width / LAYOUT_WIDTH - target) < 0.01
 }

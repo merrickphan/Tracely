@@ -5314,3 +5314,50 @@ textarea:disabled {
 [data-theme='dark'] .docs-card-thumb {
   background: var(--surface-2, #202024);
 }
+
+/* Window controls — minimize and the capped maximize. See
+   components/WindowControls.tsx for why these exist and why they sit beside
+   the card's own close X rather than replacing it.
+
+   Positioned in DESIGN units against the window, not the card: the shell is
+   always LAYOUT_WIDTH design units wide whatever the window's pixel size (see
+   shared/windowSize.ts), so a fixed offset here lands in the same place at
+   every scale. 833px is where Home's close icon sits; these clear it. */
+.winctl {
+  position: fixed;
+  top: 27px;
+  right: 66px;
+  z-index: 40;
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.winctl-btn {
+  -webkit-app-region: no-drag;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #1c1c1c;
+  opacity: 0.55;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.winctl-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .winctl-btn {
+  color: var(--text);
+}
+[data-theme='dark'] .winctl-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
