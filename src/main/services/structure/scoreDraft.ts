@@ -158,10 +158,26 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // --- Thesis (20) -------------------------------------------------------
   // Position matters, so it is scored rather than merely detected. A thesis
   // stated up front tells the reader what to do with everything that follows;
-  // the same sentence buried in paragraph 6 is a discovery the reader had to
+  // the same sentence buried near the end is a discovery the reader had to
   // make unaided, which is worth partial credit and not full.
+  //
+  // "Up front" is a FRACTION of the draft, not paragraph 1 or 2. The absolute
+  // test came from the five-paragraph essay, where the opening third IS the
+  // first paragraph, and it silently punished every longer shape: a 14
+  // paragraph essay that spends four paragraphs establishing what the
+  // literature actually says and states its thesis in the fifth was docked ten
+  // points for it, on the same rule that would give full marks to a
+  // three-paragraph draft asserting its thesis in line one. Earning a thesis
+  // over four paragraphs is architecture, not burial, and the reader of
+  // paragraph 5 of 14 has not had to find anything unaided.
+  //
+  // A third, and never less than the first two paragraphs — so every draft
+  // short enough for the original rule to have been written about scores
+  // exactly as it did.
   const thesisAt = roles.indexOf('thesis')
-  const thesis = thesisAt === -1 ? 0 : thesisAt <= 1 ? COMPONENT_MAX.thesis : COMPONENT_MAX.thesis / 2
+  const upFront = Math.max(1, Math.floor(paragraphs.length / 3))
+  const thesis =
+    thesisAt === -1 ? 0 : thesisAt <= upFront ? COMPONENT_MAX.thesis : COMPONENT_MAX.thesis / 2
 
   // --- Governing claims (20) ---------------------------------------------
   // A FRACTION of the body, never a count. This is what stops the score being
@@ -202,11 +218,30 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // Measured only over the paragraphs where a warrant is owed — ones making a
   // claim or presenting evidence. Averaging over the whole essay would punish
   // an intro and conclusion for not explaining evidence they never cited.
-  const owed = paragraphs.filter((p) => p.role === 'claim' || p.role === 'evidence')
+  //
+  // `reasoning` paragraphs are owed a warrant AND satisfy it by existing, and
+  // leaving them out entirely was a 20-point hole. The classifier's own
+  // definition of the role is "explains how evidence bears on a claim, or
+  // works through an implication — no new evidence and no new claim": that IS
+  // the warrant, written out at paragraph length instead of signposted in a
+  // clause. A draft that devotes whole paragraphs to the link between its
+  // evidence and its claim was getting nothing for them, while a draft that
+  // wrote "therefore" once inside a claim paragraph got full marks.
+  //
+  // It is deliberately not gated on `hasWarrant`. That field asks whether a
+  // paragraph doing something ELSE also explains its link; asking it of a
+  // paragraph whose whole job is the explanation is asking the model to
+  // signpost its own signposting, and it answers false often enough that the
+  // role would have cost points rather than earned them.
+  const isReasoning = (p: ParagraphOutline): boolean => p.role === 'reasoning'
+  const owed = paragraphs.filter(
+    (p) => p.role === 'claim' || p.role === 'evidence' || isReasoning(p)
+  )
   const warrant =
     owed.length === 0
       ? 0
-      : COMPONENT_MAX.warrant * (owed.filter((p) => p.hasWarrant).length / owed.length)
+      : COMPONENT_MAX.warrant *
+        (owed.filter((p) => isReasoning(p) || p.hasWarrant).length / owed.length)
 
   // --- Counterargument (15) ----------------------------------------------
   // Binary, because the property is binary: an essay either takes the other
