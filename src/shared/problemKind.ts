@@ -180,6 +180,21 @@ export function isRetrievalMiss(
  */
 const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported']
 
+/**
+ * Verdicts that constitute having read the writer's own source and doubted it.
+ *
+ * `well-supported` and `partially-supported` are deliberately absent: those are
+ * the critique saying the citation holds, and the whole point of the gate they
+ * feed is that retrieval must not then contradict them.
+ *
+ * `overstated` is absent too, and that one is worth stating. It is a finding
+ * about the sentence's QUANTIFIER, not about its source — the citation can be
+ * impeccable and the sentence still say "always". It raises its own kind, which
+ * is where that belongs; adding "your citation may not support this" underneath
+ * would send the writer looking for a better source for a wording problem.
+ */
+const DOUBTING_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted', 'fabricated']
+
 /** The 70/40 bands used everywhere else in the product. */
 const STRONG = 70
 const MIXED = 40
@@ -210,6 +225,35 @@ export function problemKindsFor({
   const kinds: ScreenWatchProblemKind[] = []
   // "Nothing that speaks to this claim came back", not "no rows returned".
   const nothingFound = !evidence.hasRelevantSource
+
+  // Has anything actually READ the writer's source and doubted it?
+  //
+  // The rule this gates is the one users have raised twice: a sentence that
+  // cites a credible source which does bear the claim out must not be flagged
+  // because a topical search of the academic databases turned up other papers
+  // that score low. A student cited Wikipedia, Wikipedia agrees with them,
+  // Tracely searched OpenAlex and Crossref instead, found eight journal
+  // articles about something adjacent, scored them 22/100 and printed
+  // "Citation may not support this" over a correctly-sourced sentence.
+  //
+  // The retrieval score is a fact about the LITERATURE. It is not a fact about
+  // the writer's citation, and nothing in the retrieval path ever opens the
+  // work they named. The critique does — referenceCheck.ts resolves the cited
+  // work and citedEvidence.ts puts it in slot 1 with the relay instructed to
+  // check it FIRST — so a doubting verdict is the only signal here that was
+  // reached having looked at the right source.
+  //
+  // This is the same argument problemKindsFor already makes for `nothingFound`
+  // ("absence of evidence in a corpus that was never going to hold it is not
+  // evidence of absence"), applied where it equally holds: a LOW score over
+  // eight unrelated papers is no more informative than a zero one.
+  //
+  // The cost, stated plainly: a genuinely miscited claim now says nothing until
+  // the reasoning check runs on it. That is the right way round. Tracely cannot
+  // read a source without that call, and a tool that accuses a correct citation
+  // to avoid missing an incorrect one teaches students to ignore it.
+  const citationDoubted =
+    critiqueVerdict !== null && DOUBTING_VERDICTS.includes(critiqueVerdict)
 
   // An `unsupported` verdict the critique reached with no on-topic evidence in
   // front of it. It says nothing about the sentence, so it decides nothing
@@ -246,7 +290,9 @@ export function problemKindsFor({
   // eight results about other subjects cleared this guard and the accusation
   // went out anyway — the exact case the paragraph above says it must not fire
   // on.
-  if (hasInlineCitation && !nothingFound && evidence.score < MIXED) kinds.push('cited-unverified')
+  if (hasInlineCitation && !nothingFound && evidence.score < MIXED && citationDoubted) {
+    kinds.push('cited-unverified')
+  }
 
   // A number nothing carries, in a sentence with no citation to check it
   // against. Cited figures are excluded for the reason above: we have not
@@ -267,9 +313,16 @@ export function problemKindsFor({
     else if (evidence.score < STRONG) kinds.push('partial-evidence')
     else kinds.push('missing-citation')
   }
-  // A cited claim scoring in the middle band is neither settled nor alarming;
-  // it is worth saying it is only partly supported.
-  if (!nothingFound && hasInlineCitation && evidence.score >= MIXED && evidence.score < STRONG) {
+  // A cited claim scoring in the middle band is neither settled nor alarming.
+  // Same gate as above: it is a statement about the OTHER papers, and raising
+  // it over a citation nothing has read is the behaviour this rule removes.
+  if (
+    !nothingFound &&
+    hasInlineCitation &&
+    evidence.score >= MIXED &&
+    evidence.score < STRONG &&
+    citationDoubted
+  ) {
     kinds.push('partial-evidence')
   }
 

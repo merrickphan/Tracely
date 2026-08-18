@@ -360,3 +360,76 @@ describe('the yearless shapes — corroboration only', () => {
     strictEqual(corroborate(ref, works).found, true)
   })
 })
+
+describe('absenceIsInformative — web sources', () => {
+  const webEntry = (entry: string) =>
+    absenceIsInformative({
+      kind: 'bibliographic' as const,
+      raw: '[1]',
+      surnames: ['Contributors'],
+      year: 2024,
+      title: null,
+      entry
+    } as never)
+
+  /**
+   * The reported case. Crossref registers DOIs; a Wikipedia article has none,
+   * so an empty lookup says nothing about the citation and everything about
+   * the index. Treating it as informative fed a "not corroborated" fact to the
+   * critique about a source that was never going to be there.
+   */
+  it('does not treat a missing Wikipedia article as informative', () => {
+    strictEqual(
+      webEntry(
+        'Wikipedia contributors. (2024). Desirable difficulty. In Wikipedia. https://en.wikipedia.org/wiki/Desirable_difficulty'
+      ),
+      false
+    )
+  })
+
+  it('covers the other reference-list shapes that carry a link', () => {
+    strictEqual(webEntry('World Bank. (2023). Access to electricity. Retrieved from https://data.worldbank.org'), false)
+    strictEqual(webEntry('Encyclopaedia Britannica. (2022). Printing press.'), false)
+    strictEqual(webEntry('Ofsted. (2021). Annual report. https://gov.uk/ofsted'), false)
+  })
+
+  /**
+   * The guard has to stay narrow. A normal journal entry that happens to print
+   * its DOI as a link must still be checkable — that is most of the corpus, and
+   * turning every one of them into "absence proves nothing" would disable the
+   * fabrication check entirely.
+   */
+  it('still checks a journal article that prints its DOI as a link', () => {
+    // The over-match that a bare `https?://` alternative caused, and the reason
+    // it came out: a properly formatted APA entry ends in its DOI link, so
+    // "any URL means a web source" disabled the fabrication check for most of
+    // the corpus it exists to test.
+    strictEqual(
+      absenceIsInformative({
+        kind: 'bibliographic' as const,
+        raw: '[3]',
+        surnames: ['Mueller', 'Oppenheimer'],
+        year: 2014,
+        title: 'The Pen Is Mightier Than the Keyboard',
+        entry:
+          'Mueller, P. A., & Oppenheimer, D. M. (2014). The Pen Is Mightier Than the Keyboard. Psychological Science. https://doi.org/10.1177/0956797614524581'
+      } as never),
+      true
+    )
+  })
+
+  it('still checks an ordinary journal article', () => {
+    strictEqual(
+      absenceIsInformative({
+        kind: 'bibliographic' as const,
+        raw: '[2]',
+        surnames: ['Mueller', 'Oppenheimer'],
+        year: 2014,
+        title: 'The Pen Is Mightier Than the Keyboard',
+        entry:
+          'Mueller, P. A., & Oppenheimer, D. M. (2014). The Pen Is Mightier Than the Keyboard. Psychological Science.'
+      } as never),
+      true
+    )
+  })
+})

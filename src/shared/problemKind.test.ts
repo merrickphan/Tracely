@@ -100,14 +100,21 @@ describe('problemKindFor', () => {
   })
 
   it('separates a wrong citation from thin evidence', () => {
-    // The alarming case: the writer attributed it, and the literature we found
-    // does not carry what they attributed. It used to fall into weak-evidence,
-    // whose copy never mentions the citation at all.
+    // The alarming case: the writer attributed it, the critique read the work
+    // they named, and it does not carry what they attributed. It used to fall
+    // into weak-evidence, whose copy never mentions the citation at all.
     strictEqual(
-      problemKindFor({ ...base, hasInlineCitation: true, evidence: found(22, 5) }),
+      problemKindFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: found(22, 5),
+        critiqueVerdict: 'weak'
+      }),
       'cited-unverified'
     )
-    // Uncited at the same score is a different problem with different advice.
+    // Uncited at the same score is a different problem with different advice,
+    // and needs no critique to raise: with no citation there is no source of
+    // the writer's for retrieval to be talking past.
     strictEqual(
       problemKindFor({ ...base, hasInlineCitation: false, evidence: found(22, 5) }),
       'weak-evidence'
@@ -164,17 +171,30 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
         ...base,
         claimType: 'statistic',
         hasInlineCitation: true,
-        evidence: found(12, 4)
+        evidence: found(12, 4),
+        // Needed now: retrieval alone says nothing about a citation nothing has
+        // read. The critique is what opens the work the writer named.
+        critiqueVerdict: 'unsupported'
       }),
-      ['cited-unverified']
+      // Both, in severity order: the citation finding leads, and the verdict
+      // that produced it is reported too. `unsupported` over evidence that IS
+      // on topic is a finding about the reasoning — see isRetrievalMiss.
+      ['cited-unverified', 'weak-reasoning']
     )
   })
 
   it('does not double-report thin evidence for a cited claim', () => {
     // cited-unverified already says it, with the right advice.
     deepStrictEqual(
-      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(20, 5) }),
-      ['cited-unverified']
+      problemKindsFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: found(20, 5),
+        critiqueVerdict: 'weak'
+      }),
+      ['weak-reasoning', 'cited-unverified'].sort(
+        (a, b) => problemSeverity(a as never) - problemSeverity(b as never)
+      )
     )
   })
 
@@ -436,5 +456,87 @@ describe('outside-index — what four academic indexes were never going to hold'
     strictEqual(kinds[0], 'contradicted-claim')
     ok(kinds.includes('outside-index'))
     ok(problemSeverity('outside-index') > problemSeverity('missing-citation'))
+  })
+})
+
+/**
+ * The rule the owner has asked for twice: if the source the writer cited is
+ * credible and matches, do not flag the sentence because OTHER sources do not.
+ */
+describe('a cited claim is not flagged by what other papers say', () => {
+  /**
+   * The reported case, exactly. A student cites Wikipedia; Wikipedia bears the
+   * claim out. Tracely searches four ACADEMIC indexes, finds eight journal
+   * articles about something adjacent, scores them 22/100, and prints
+   * "Citation may not support this" over a correctly-sourced sentence.
+   *
+   * The retrieval score is a fact about the literature. Nothing in the
+   * retrieval path ever opens the work the writer named.
+   */
+  it('says nothing when the search disagrees but nothing read the citation', () => {
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(22, 8) }),
+      []
+    )
+  })
+
+  it('says nothing in the middle band either', () => {
+    deepStrictEqual(
+      problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(55, 8) }),
+      []
+    )
+  })
+
+  it('stays silent when the critique read the citation and agreed', () => {
+    for (const verdict of ['well-supported', 'partially-supported'] as const) {
+      deepStrictEqual(
+        problemKindsFor({
+          ...base,
+          hasInlineCitation: true,
+          evidence: found(22, 8),
+          critiqueVerdict: verdict
+        }),
+        [],
+        `${verdict} should not be overruled by a retrieval score`
+      )
+    }
+  })
+
+  it('still speaks when the critique read the citation and doubted it', () => {
+    ok(
+      problemKindsFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: found(22, 8),
+        critiqueVerdict: 'weak'
+      }).includes('cited-unverified')
+    )
+  })
+
+  /**
+   * `overstated` is deliberately not a doubting verdict. It is a finding about
+   * the sentence's quantifier, not about its source — the citation can be
+   * impeccable and the sentence still say "always" — so adding "your citation
+   * may not support this" underneath would send the writer looking for a better
+   * source for a wording problem.
+   */
+  it('does not treat an overstatement as doubt about the citation', () => {
+    deepStrictEqual(
+      problemKindsFor({
+        ...base,
+        hasInlineCitation: true,
+        evidence: found(22, 8),
+        critiqueVerdict: 'overstated'
+      }),
+      ['overstated-claim']
+    )
+  })
+
+  it('leaves UNCITED claims exactly as they were', () => {
+    // The gate is about talking past a citation. With no citation there is
+    // none to talk past, and the retrieval bands are the only thing there is.
+    deepStrictEqual(problemKindsFor({ ...base, evidence: found(22, 8) }), ['weak-evidence'])
+    deepStrictEqual(problemKindsFor({ ...base, evidence: found(55, 8) }), ['partial-evidence'])
+    deepStrictEqual(problemKindsFor({ ...base, evidence: found(85, 8) }), ['missing-citation'])
   })
 })
