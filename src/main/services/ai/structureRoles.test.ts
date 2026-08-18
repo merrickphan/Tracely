@@ -1,8 +1,8 @@
-import { deepStrictEqual, strictEqual } from 'node:assert/strict'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { buildStructurePrompt, reconcileRoles } from './structureRoles.ts'
 
-const LIMITS = { maxParagraphs: 24, maxParagraphChars: 320, maxInputChars: 8000 }
+const LIMITS = { maxParagraphs: 24, maxParagraphChars: 420, maxInputChars: 8000 }
 
 function payload(...entries: Array<Record<string, unknown>>): unknown {
   return { paragraphs: entries }
@@ -154,14 +154,67 @@ describe('buildStructurePrompt', () => {
     strictEqual(buildStructurePrompt(many, LIMITS).split('\n').length, LIMITS.maxParagraphs)
   })
 
-  it('truncates at a word boundary where one is close enough', () => {
+  it('cuts at word boundaries on both sides of the elision', () => {
+    // Was "truncates at a word boundary", asserting the output ended in an
+    // ellipsis — the old head-only contract. A window ends with the
+    // paragraph's real last words, so what has to hold now is that neither
+    // side is split mid-word.
     const text = `${'alpha '.repeat(20).trim()} omega`
     const out = buildStructurePrompt([text], { ...LIMITS, maxParagraphChars: 40 })
-    strictEqual(out.endsWith('…'), true)
-    strictEqual(out.includes('alph…'), false)
+    ok(out.includes('[…]'), 'the elided middle is not marked')
+    ok(!/alph\b(?!a)/.test(out), `a word was split: ${out}`)
+    ok(out.trimEnd().endsWith('omega'), `the paragraph's ending was lost: ${out}`)
   })
 
   it('returns an empty string for no paragraphs', () => {
     strictEqual(buildStructurePrompt([], LIMITS), '')
+  })
+
+  /**
+   * The regression this window exists for.
+   *
+   * A student's introduction is long and ends on its thesis. Head-only
+   * truncation showed the model the anecdote and cut the thesis off, so it
+   * labelled the introduction 'claim', called a body paragraph the thesis,
+   * found no warrant anywhere, and scored the draft 18/100 — against 78 from
+   * the local regexes the classifier was meant to improve on. The model was not
+   * bad at the task; it was answering about text it had never been shown.
+   */
+  it('keeps the END of a long paragraph, not just the beginning', () => {
+    const thesis =
+      'Whilst helping others is typically a moral obligation, her early struggles set her apart from her contemporaries.'
+    const intro = `${'She was born in Brussels and her childhood was ordinary. '.repeat(20)}${thesis}`
+
+    const out = buildStructurePrompt([intro], LIMITS)
+
+    ok(out.includes('Whilst helping others'), 'the closing thesis was cut off')
+    ok(out.startsWith('[1] She was born in Brussels'), 'the opening was lost')
+    ok(out.includes('[…]'), 'the elided middle is not marked')
+  })
+
+  it('marks the gap so the two halves cannot read as one sentence', () => {
+    // Without the marker the model reasons about a sentence that does not
+    // exist — the head's last clause welded to the tail's first.
+    const long = `${'alpha '.repeat(200)}omega ends here.`
+    const out = buildStructurePrompt([long], LIMITS)
+    ok(out.includes('[…]'))
+    ok(out.trimEnd().endsWith('omega ends here.'))
+  })
+
+  it('still respects the per-paragraph cap', () => {
+    // Both halves plus the marker, not the cap applied twice.
+    const long = 'word '.repeat(1000).trim()
+    const out = buildStructurePrompt([long], LIMITS)
+    ok(
+      out.length <= LIMITS.maxParagraphChars + 12,
+      `window overran the cap: ${out.length} > ${LIMITS.maxParagraphChars}`
+    )
+  })
+
+  it('leaves a paragraph shorter than the cap completely untouched', () => {
+    // Most paragraphs in a real draft are under the cap, and a window applied
+    // to them would elide nothing while still inserting a marker.
+    const short = 'A short paragraph that states its point and stops.'
+    strictEqual(buildStructurePrompt([short], LIMITS), `[1] ${short}`)
   })
 })

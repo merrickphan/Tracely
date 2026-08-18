@@ -38,7 +38,17 @@ export const MIN_CLAIM_CONFIDENCE = 0.4
 // two of the six score components silently read as absent rather than as
 // unassessed — a wrong score with no visible cause.
 export const MAX_STRUCTURE_PARAGRAPHS = 24
-export const MAX_STRUCTURE_PARAGRAPH_CHARS = 320
+// Split between the paragraph's opening and its closing by `windowAtWord` —
+// NOT a head truncation, which is what this was and what made the classifier
+// worse than the regexes it replaced. A paragraph's role lives at its edges,
+// and a real essay scored 18/100 because its thesis was the last sentence of a
+// 1,524-character introduction the model saw the first 320 characters of.
+//
+// 420 rather than 320 because the budget now has to cover two ends and a
+// closing move is routinely a 180-character sentence. The increase is ~100
+// tokens on the cheapest call in the app — about four thousandths of a cent —
+// against a rubric that was otherwise scoring drafts on text nobody showed it.
+export const MAX_STRUCTURE_PARAGRAPH_CHARS = 420
 export const MAX_STRUCTURE_INPUT_CHARS = 8000
 
 export function truncateForClaimDetection(text: string): string {
