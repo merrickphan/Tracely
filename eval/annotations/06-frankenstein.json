@@ -2,7 +2,12 @@
   "essay": "06-frankenstein.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "evidence", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "evidence",
+      "conclusion"
+    ]
   },
   "note": "A close reading, and the first essay in the set the academic APIs largely cannot help with. Every other essay is one where retrieval SHOULD find something, so the set can currently only measure whether good sources are found — never whether the tool knows when to stay quiet. Here exactly one sentence is citation-worthy and the rest are textual observation and interpretation. That makes this the only essay in eval/ that measures a false-positive rate. A tool that flags the interpretive sentences is not being cautious, it is telling a student their own reading needs a source.",
   "claims": [
@@ -12,7 +17,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The one genuinely checkable sentence: publication facts, well documented, and the kind of thing a literature student does need to cite. If retrieval finds nothing usable here while flagging the interpretive claims, that inversion is the finding."
+      "note": "The one genuinely checkable sentence: publication facts, well documented, and the kind of thing a literature student does need to cite. If retrieval finds nothing usable here while flagging the interpretive claims, that inversion is the finding.",
+      "support": {
+        "rel": 5,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "The Wikipedia article, Daring Creation (1818, revised 1831), the 1831 Introduction itself, the Villa Diodati article and the Fantasmagoriana/Diodati Group study all carry publication facts or the Diodati stay. Editions and prefaces of the novel are on topic without evidencing the specific bibliographic claim."
     },
     {
       "text": "The moment of animation takes up barely a paragraph.",
@@ -20,7 +31,13 @@
       "verdict": "unverifiable",
       "citationWorthy": "no",
       "sources": [],
-      "note": "A verifiable statement about the primary text, settled by opening the novel rather than by finding a paper. Not citation-worthy in any style guide. Included specifically because it LOOKS like a factual assertion and will read as one to a claim detector."
+      "note": "A verifiable statement about the primary text, settled by opening the novel rather than by finding a paper. Not citation-worthy in any style guide. Included specifically because it LOOKS like a factual assertion and will read as one to a claim detector.",
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "A close reading of one paragraph, which the academic indexes cannot serve. Anatomy and Animation in Frankenstein is about animation in the novel but says nothing about its length. Several hits are pure title collisions: the journal Paragraph, and animation-timing manuals about cartoons. The retrieved chapters are the wrong chapters."
     },
     {
       "text": "When the creature finally speaks, he speaks in the register of the books he found, which is why his eloquence startles readers who came expecting a monster.",
@@ -28,7 +45,13 @@
       "verdict": "unverifiable",
       "citationWorthy": "no",
       "sources": [],
-      "note": "The student's own argument. There is a real critical literature on the creature's education and any of it will retrieve well on these keywords — which is the trap. Surfacing Frankenstein criticism here is topical relevance, not evidence for this reading, so every such source is marg at best. This claim alone should generate several honest marg labels."
+      "note": "The student's own argument. There is a real critical literature on the creature's education and any of it will retrieve well on these keywords — which is the trap. Surfacing Frankenstein criticism here is topical relevance, not evidence for this reading, so every such source is marg at best. This claim alone should generate several honest marg labels.",
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Another close reading. The Inoculated Reader and Volney Ruins are genuinely adjacent - Ruins is one of the books the creature overhears - but neither evidences the claim about his register. Everything else is Frankenstein criticism on other themes."
     }
   ]
 }
