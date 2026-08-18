@@ -308,6 +308,12 @@ input[type='range']::-webkit-slider-runnable-track {
      document editor's toolbar did, putting the window's X on top of "AI
      Insights". See components/WindowControls.tsx. */
   --winctl-reserve: 96px;
+  /* The Figma frame's own size — MAIN_CARD_WIDTH/HEIGHT in
+     shared/windowSize.ts. Only `.home-canvas` caps itself to these: it is the
+     one view laid out at literal design coordinates, so it must not stretch.
+     Everything else fills the window. */
+  --card-width: 870px;
+  --card-height: 606px;
 }
 
 .app-main {
@@ -353,6 +359,18 @@ input[type='range']::-webkit-slider-runnable-track {
   position: relative;
   width: 100%;
   height: 100%;
+  /* Capped and centred, because this is the ONE screen that cannot reflow: its
+     sixteen `.home-el` children sit at literal Figma coordinates, so a canvas
+     wider than the design does not spread them out, it leaves them where they
+     were with empty space beside them.
+     Every other view — the editor, Settings, Documents, the modals — is flow or
+     flex and fills whatever it is given, which is why unlocking the window was
+     tractable at all. Here the card keeps its own size and floats in the middle
+     of a bigger window, which is what a card in a transparent window should do
+     and reads as deliberate rather than as a layout that gave up. */
+  max-width: var(--card-width);
+  max-height: var(--card-height);
+  margin: auto;
   background: #fff;
   border: 1px solid #000;
   border-radius: 30px;
@@ -3609,8 +3627,15 @@ textarea:disabled {
 
 .argscore-card {
   width: 460px;
-  max-width: calc(100vw - 96px);
-  max-height: calc(100vh - 140px);
+  /* Divided by the font zoom, like `.app-shell`. `zoom` scales what is
+     RENDERED while `vh` keeps resolving against the unzoomed viewport, so a
+     raw `100vh` here let the card be taller than the window — it was clipped at
+     the top AND the bottom, with the report's own header scrolled off the
+     screen. That was worth 1.9x back when the zoom tracked the window width;
+     it is worth at most 1.12 now, which is still a modal that loses its last
+     row for no reason. */
+  max-width: calc((100vw - 96px) / var(--app-zoom, 1));
+  max-height: calc((100vh - 140px) / var(--app-zoom, 1));
   padding: 0;
   display: flex;
   flex-direction: column;

@@ -69,6 +69,84 @@ export function mainWindowSize(fontSize: FontSize): { width: number; height: num
 export const LAYOUT_WIDTH = MAIN_CARD_WIDTH + MAIN_WINDOW_MARGIN * 2
 export const LAYOUT_HEIGHT = MAIN_CARD_HEIGHT + MAIN_WINDOW_MARGIN * 2
 
+// -- resizing like an ordinary window ----------------------------------------
+//
+// Everything above this line describes the window as it WAS: one layout box at
+// a fixed aspect ratio, with a CSS `zoom` absorbing the difference so the whole
+// UI grew and shrank as one piece. The reasoning is left in place because it is
+// still true about the Home screen, and because it explains most of this file.
+//
+// It is no longer how the window resizes. Owner's call, 2026-08-18, after
+// three rounds on it: "make it so the app doesn't get bigger as a whole, I can
+// kind of resize it normally like any other app".
+//
+// What scaling cost, in the end:
+//
+//   * Nothing could use viewport units. `100vh` resolves against the UNZOOMED
+//     viewport while `zoom` multiplies what is rendered, so every `vh` in the
+//     stylesheet was wrong by the zoom factor. `.app-shell` divided by it and
+//     was correct; `.argscore-card`'s `max-height: calc(100vh - 140px)` did not
+//     and was allowed to be 1.9x the window's height on a large window — which
+//     is the report clipped at the top AND bottom in the screenshot, with the
+//     header scrolled off the screen entirely.
+//   * Every measurement needed a conversion. `getBoundingClientRect` is
+//     post-zoom, `clientHeight` and `scrollTop` are not; `shared/zoomLayout.ts`
+//     exists solely to convert between them, and hover, mark placement and
+//     popover positioning each broke on it at least once.
+//   * Making the window bigger made the TEXT bigger, which is not what anyone
+//     means by resizing a window. More room was never available at any size.
+//
+// So the zoom is the font-size setting again — a deliberate user choice, and
+// the only thing it was ever for — and the window is free. Views reflow into
+// the space. Home is the one screen that cannot (its 16 elements sit at literal
+// Figma coordinates), so its card keeps its design size and centres, which is
+// what a floating card in a transparent window should do anyway.
+
+/**
+ * The smallest the window may be dragged.
+ *
+ * Not the layout size. The card is 870x606 and it no longer has to fit: the
+ * editor, Settings and the modals all reflow, and Home's card simply overflows
+ * its (scrollable) container below this. What this protects is the point where
+ * the toolbar's own controls start colliding, which is a genuinely unusable
+ * window rather than a cramped one.
+ */
+export const MIN_WINDOW_WIDTH = 680
+export const MIN_WINDOW_HEIGHT = 480
+
+/**
+ * A dragged size, held inside the display and above the usable minimum.
+ *
+ * Width and height are independent now — there is no ratio to convert through,
+ * which is the whole point. The work-area bound stays for the reason it was
+ * added: a window taller than the screen puts its own resize grips under the
+ * taskbar, and this app has no title bar to drag it back by.
+ */
+export function clampWindowBounds(
+  size: { width: number; height: number },
+  workArea: { width: number; height: number },
+  margin = WINDOW_EDGE_MARGIN
+): { width: number; height: number } {
+  const maxWidth = Math.max(MIN_WINDOW_WIDTH, workArea.width - margin * 2)
+  const maxHeight = Math.max(MIN_WINDOW_HEIGHT, workArea.height - margin * 2)
+  return {
+    width: Math.round(Math.min(maxWidth, Math.max(MIN_WINDOW_WIDTH, size.width))),
+    height: Math.round(Math.min(maxHeight, Math.max(MIN_WINDOW_HEIGHT, size.height)))
+  }
+}
+
+/** The size "maximize" should use: the work area, less the grip margin. */
+export function maximizedBounds(
+  workArea: { width: number; height: number },
+  margin = WINDOW_EDGE_MARGIN
+): { width: number; height: number } {
+  return clampWindowBounds(
+    { width: workArea.width - margin * 2, height: workArea.height - margin * 2 },
+    workArea,
+    margin
+  )
+}
+
 export const MAIN_WINDOW_ASPECT = LAYOUT_WIDTH / LAYOUT_HEIGHT
 
 /**

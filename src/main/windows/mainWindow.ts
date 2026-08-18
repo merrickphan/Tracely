@@ -4,15 +4,13 @@ import { is } from '@electron-toolkit/utils'
 import type { FontSize } from '@shared/types'
 import type { ResizeHandle } from '@shared/ipc-contract'
 import {
-  clampDragScale,
-  clampWindowScale,
+  clampWindowBounds,
+  LAYOUT_HEIGHT,
   LAYOUT_WIDTH,
-  MAIN_WINDOW_ASPECT,
-  MAX_WINDOW_SCALE,
-  maximizedScale,
-  MIN_WINDOW_SCALE,
-  sizeForScale,
-  WINDOW_FONT_SCALE
+  maximizedBounds,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+  WINDOW_EDGE_MARGIN
 } from '@shared/windowSize'
 import { windowTitle } from '../appIdentity'
 import { getSetting, setSetting } from '../services/storage/settingsRepo'
@@ -37,61 +35,49 @@ function currentFontSize(): FontSize {
  *  field: this is window state, not a preference anyone sets, and it has no
  *  business in the Settings IPC contract. */
 const SCALE_KEY = 'mainWindowScale'
+const SIZE_KEY = 'mainWindowSize'
 const POSITION_KEY = 'mainWindowPosition'
 
-function savedScale(): number | null {
-  const raw = Number(getSetting(SCALE_KEY))
-  return Number.isFinite(raw) && raw > 0 ? clampWindowScale(raw) : null
+/**
+ * The size the user last left the window at.
+ *
+ * A width and a height, because the window no longer has one degree of freedom
+ * — see the note in shared/windowSize.ts. SCALE_KEY is still read, once, so an
+ * install that has been remembering a scale opens at the size that scale meant
+ * instead of snapping back to the default; nothing writes it any more.
+ */
+function savedSize(): { width: number; height: number } | null {
+  const raw = getSetting(SIZE_KEY)
+  const [w, h] = raw.split(',').map(Number)
+  if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+    return { width: w, height: h }
+  }
+  const legacy = Number(getSetting(SCALE_KEY))
+  if (Number.isFinite(legacy) && legacy > 0) {
+    return { width: Math.round(LAYOUT_WIDTH * legacy), height: Math.round(LAYOUT_HEIGHT * legacy) }
+  }
+  return null
+}
+
+function persistSize(width: number, height: number): void {
+  setSetting(SIZE_KEY, `${Math.round(width)},${Math.round(height)}`)
 }
 
 /**
- * The scale the window should open at.
+ * The font-size setting no longer touches the window, and that is the change.
  *
- * The user's dragged size wins over the font-size setting, because it is the
- * more recent and more deliberate statement of the same thing — and being
- * handed back a window you already resized is the whole point of remembering
- * it. Font size still moves it (see applyMainWindowFontSize), which is what
- * keeps that setting meaningful rather than dead.
- */
-function startingScale(fontSize: FontSize): number {
-  return savedScale() ?? WINDOW_FONT_SCALE[fontSize] ?? 1
-}
-
-/**
- * Resizes the window when the font-size setting changes.
+ * It used to resize it, because the two really were the same operation: a
+ * `zoom` derived from the window's width meant "bigger text" and "bigger
+ * window" were one control wearing two hats, and they had to be composed or
+ * they fought. With the zoom back on the setting alone (renderer/lib/
+ * appearance.ts) they are independent — larger text simply means less fits in
+ * whatever window you have chosen, exactly as in any other application.
  *
- * RELATIVE, not absolute. Snapping to `mainWindowSize(fontSize)` would throw
- * away a size the user had dragged to every time they touched the setting, and
- * the two controls would fight: one says "make everything bigger", the other
- * says "make the window bigger", and on this UI those are the same operation.
- * Multiplying by the ratio composes them instead, so a user on a large monitor
- * who scaled the window up and then chose `large` gets a proportionally larger
- * window rather than being yanked back to 1006px.
+ * Kept as an exported no-op rather than deleted: it is called from the settings
+ * handler, and a signature change there is a bigger edit than this needs.
  */
-export function applyMainWindowFontSize(fontSize: FontSize): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const previous = savedScale() ?? 1
-  const previousFont = lastFontScale
-  lastFontScale = WINDOW_FONT_SCALE[fontSize] ?? 1
-  const next = clampWindowScale((previous * lastFontScale) / previousFont)
-  if (Math.abs(next - previous) < 0.001) return
-  resizeToScale(next)
-}
-
-function resizeToScale(scale: number): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { width, height } = sizeForScale(scale)
-  // setSize before center: centring reads the size it is given.
-  mainWindow.setSize(width, height)
-  mainWindow.center()
-  persistScale(scale)
-}
-
-/** The font scale the current window size already has baked into it. */
-let lastFontScale = 1
-
-function persistScale(scale: number): void {
-  setSetting(SCALE_KEY, String(clampWindowScale(scale)))
+export function applyMainWindowFontSize(_fontSize: FontSize): void {
+  // Deliberately nothing.
 }
 
 /**
@@ -135,10 +121,11 @@ export function createMainWindow(): BrowserWindow {
   // the app IS the frame, not a resizable OS window with the frame floating
   // inside it. No minimize/maximize either: the design has no such chrome, only
   // its own in-content close button (see HomeView/AnalyzeView).
-  const fontSize = currentFontSize()
-  lastFontScale = WINDOW_FONT_SCALE[fontSize] ?? 1
-  const scale = startingScale(fontSize)
-  const { width, height } = sizeForScale(scale)
+  const workArea = screen.getPrimaryDisplay().workArea
+  const { width, height } = clampWindowBounds(
+    savedSize() ?? { width: LAYOUT_WIDTH, height: LAYOUT_HEIGHT },
+    workArea
+  )
   const position = savedPosition(width, height)
   const win = new BrowserWindow({
     width,
@@ -178,13 +165,12 @@ export function createMainWindow(): BrowserWindow {
   })
 
 
-  // Locked so the layout box keeps its one shape at every size. Set after
-  // construction rather than passed in: `aspectRatio` is not a constructor
-  // option, and on Windows it governs the frame rather than the content area —
-  // which for a frameless window are the same rectangle.
-  win.setAspectRatio(MAIN_WINDOW_ASPECT)
-  win.setMinimumSize(...Object.values(sizeForScale(MIN_WINDOW_SCALE)) as [number, number])
-  win.setMaximumSize(...Object.values(sizeForScale(MAX_WINDOW_SCALE)) as [number, number])
+  // No aspect lock. It existed because the layout box had one shape and the
+  // zoom absorbed the difference; with the UI no longer scaling, width and
+  // height are independent and the window behaves like any other. No maximum
+  // either — the work-area clamp in the resize path is the real bound, and a
+  // fixed maximum would be wrong the moment a second monitor appeared.
+  win.setMinimumSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
 
   // Remember where the user put it, and how big. Debounced because `resize`
   // fires continuously through a drag and `setSetting` writes the whole SQLite
@@ -195,9 +181,9 @@ export function createMainWindow(): BrowserWindow {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       if (win.isDestroyed()) return
-      const [w] = win.getSize()
+      const [w, h] = win.getSize()
       const [x, y] = win.getPosition()
-      persistScale(w / LAYOUT_WIDTH)
+      persistSize(w, h)
       setSetting(POSITION_KEY, `${Math.round(x)},${Math.round(y)}`)
     }, 400)
   }
@@ -299,30 +285,30 @@ export function beginWindowResize(handle: ResizeHandle): void {
 }
 
 /**
- * The width the pointer is asking for, before clamping.
+ * The size the pointer is asking for, before clamping.
  *
- * Every handle resolves to a width because the aspect ratio is locked — there
- * is only one degree of freedom, so a vertical edge drag has to be converted
- * through the ratio rather than treated as an independent height.
+ * Width and height independently, which is the change: with the aspect ratio
+ * unlocked there are two degrees of freedom and a vertical drag is a height
+ * rather than a width to be converted through a ratio.
  *
- * The signs are what make each grip pull the way it looks like it should: a
- * handle on the east side grows with a rightward drag, a west handle grows with
- * a leftward one.
+ * The signs are what make each grip pull the way it looks like it should — an
+ * east handle grows with a rightward drag, a west handle with a leftward one —
+ * and a corner is simply both of its edges at once.
  */
-function requestedWidth(handle: ResizeHandle, start: ResizeDrag['start'], dx: number, dy: number): number {
-  switch (handle) {
-    case 'e':
-    case 'ne':
-    case 'se':
-      return start.width + dx
-    case 'w':
-    case 'nw':
-    case 'sw':
-      return start.width - dx
-    case 's':
-      return (start.height + dy) * MAIN_WINDOW_ASPECT
-    case 'n':
-      return (start.height - dy) * MAIN_WINDOW_ASPECT
+function requestedSize(
+  handle: ResizeHandle,
+  start: ResizeDrag['start'],
+  dx: number,
+  dy: number
+): { width: number; height: number } {
+  const growsEast = handle === 'e' || handle === 'ne' || handle === 'se'
+  const growsWest = handle === 'w' || handle === 'nw' || handle === 'sw'
+  const growsSouth = handle === 's' || handle === 'se' || handle === 'sw'
+  const growsNorth = handle === 'n' || handle === 'ne' || handle === 'nw'
+
+  return {
+    width: growsEast ? start.width + dx : growsWest ? start.width - dx : start.width,
+    height: growsSouth ? start.height + dy : growsNorth ? start.height - dy : start.height
   }
 }
 
@@ -330,23 +316,20 @@ export function updateWindowResize(dx: number, dy: number): void {
   if (!mainWindow || mainWindow.isDestroyed() || !drag) return
   const { handle, start } = drag
 
-  // Clamped to the DISPLAY, not just to MAX_WINDOW_SCALE. The aspect ratio is
-  // locked, so a size taken from the width alone can be far taller than the
-  // screen — at 2.5 on a 2560x1392 work area the window is 1585px tall and the
-  // bottom 193px of the app is simply below the edge of the monitor. See
-  // clampDragScale.
+  // Still clamped to the DISPLAY. A window taller than the screen puts its own
+  // resize grips under the taskbar, and this app has no title bar to drag it
+  // back by — that bound survives the aspect ratio it was written alongside.
   //
   // The work area is re-read on every move rather than sampled at drag start:
-  // a window dragged across a monitor boundary mid-resize is a real thing to
-  // do, and `getDisplayMatching` is a cheap synchronous lookup.
+  // dragging across a monitor boundary mid-resize is a real thing to do, and
+  // `getDisplayMatching` is a cheap synchronous lookup.
   const workArea = screen.getDisplayMatching(mainWindow.getBounds()).workArea
-  const scale = clampDragScale(requestedWidth(handle, start, dx, dy) / LAYOUT_WIDTH, workArea)
-  const { width, height } = sizeForScale(scale)
+  const { width, height } = clampWindowBounds(requestedSize(handle, start, dx, dy), workArea)
 
-  // The anchor is the opposite corner, held still. Without this every drag
-  // would also move the window: growing from the top-left grip would push the
-  // card down and right rather than up and left, which reads as the window
-  // running away from the cursor.
+  // The anchor is the opposite edge, held still. Without this every drag would
+  // also move the window: growing from the top-left grip would push the card
+  // down and right rather than up and left, which reads as the window running
+  // away from the cursor.
   const holdsRight = handle === 'w' || handle === 'nw' || handle === 'sw'
   const holdsBottom = handle === 'n' || handle === 'nw' || handle === 'ne'
 
@@ -369,33 +352,43 @@ export function minimizeMainWindow(): void {
 /**
  * The title bar's maximize button, which deliberately does not maximize.
  *
- * `win.maximize()` fills the work area, and this window scales rather than
- * reflows — so on a 4K display that is 28px body text and a 62px heading. What
- * the button does instead is grow to the largest aspect-correct size that fits,
- * capped at MAX_COMFORTABLE_SCALE, and toggle back to wherever the user had it.
+ * `win.maximize()` on a frameless transparent window is unreliable on Windows
+ * and would also snap to the very edges, burying the resize grips this app has
+ * instead of a title bar. So the button sets the work area less that margin,
+ * and toggles back to wherever the user had it.
  *
- * The previous scale is remembered rather than recomputed, so restore returns
- * to the size that was actually dragged to, not to the default.
+ * The previous SIZE is remembered rather than recomputed, so restore returns to
+ * what was actually dragged to and not to the default.
  */
-let restoreScale: number | null = null
+let restoreSize: { width: number; height: number } | null = null
+
+/** Whole pixels, so a round-trip through setBounds compares equal. */
+function sameSize(a: { width: number; height: number }, b: { width: number; height: number }): boolean {
+  return Math.abs(a.width - b.width) <= 2 && Math.abs(a.height - b.height) <= 2
+}
+
+function applySize({ width, height }: { width: number; height: number }): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.setSize(width, height)
+  mainWindow.center()
+  persistSize(width, height)
+}
 
 export function toggleMaximizeMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  const [currentWidth] = mainWindow.getSize()
-  const current = currentWidth / LAYOUT_WIDTH
-  const target = maximizedScale(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
+  const [width, height] = mainWindow.getSize()
+  const current = { width, height }
+  const target = maximizedBounds(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
 
-  // Within a hair of the maximized size counts as maximized, because the
-  // window is sized in whole pixels and the scale will not round-trip exactly.
-  if (restoreScale !== null && Math.abs(current - target) < 0.01) {
-    const back = restoreScale
-    restoreScale = null
-    resizeToScale(back)
+  if (restoreSize !== null && sameSize(current, target)) {
+    const back = restoreSize
+    restoreSize = null
+    applySize(back)
     return
   }
 
-  restoreScale = current
-  resizeToScale(target)
+  restoreSize = current
+  applySize(target)
 }
 
 /** Whether the window is currently at its maximized size, for the button's
@@ -403,7 +396,9 @@ export function toggleMaximizeMainWindow(): void {
  *  flag would then disagree with what is on screen. */
 export function isMainWindowMaximized(): boolean {
   if (!mainWindow || mainWindow.isDestroyed()) return false
-  const [width] = mainWindow.getSize()
-  const target = maximizedScale(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
-  return Math.abs(width / LAYOUT_WIDTH - target) < 0.01
+  const [width, height] = mainWindow.getSize()
+  return sameSize(
+    { width, height },
+    maximizedBounds(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
+  )
 }

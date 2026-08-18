@@ -22,52 +22,55 @@ export function applyDensity(density: Density): void {
 // proportionally, which keeps every panel's proportions intact instead of
 // requiring every size in the sheet to be rewritten as rem.
 //
-// The zoom is derived from the WINDOW WIDTH now, not from the font-size
-// setting, and that is the change that let the window become resizable. Both
-// controls do the same thing to this UI — scale it — so a second source for one
-// number is how they came to disagree once already: the note at the top of
-// shared/windowSize.ts is that bug, and its symptom was the login screen
-// rendering off the bottom of the window. Font size moves the WINDOW now,
-// main-side, and this follows it.
-function applyZoom(): void {
-  const zoom = String(zoomForWindowWidth(window.innerWidth))
-  document.documentElement.style.zoom = zoom
-  // `zoom` scales rendered lengths, but `100vw`/`100vh` keep resolving against
-  // the unzoomed viewport — so the shell rendered 12% larger than the window at
-  // `large` and was clipped, and 8% smaller at `small`, leaving a transparent
-  // strip. index.css divides the viewport units by this, which makes the shell
-  // fill the window exactly. Set here rather than in the stylesheet so it cannot
-  // drift from the `zoom` value it has to cancel out.
-  document.documentElement.style.setProperty('--app-zoom', zoom)
+// The zoom is the FONT-SIZE SETTING again, and nothing else.
+//
+// It was derived from the window width for a while, so that dragging the window
+// scaled the whole UI. That is what made the window resizable at all, and it is
+// what has now been removed — see the long note in shared/windowSize.ts. The
+// short version: a zoomed root makes every `vh` in the stylesheet wrong by the
+// zoom factor (the report modal was allowed to be 1.9x the window's height and
+// clipped at both ends), it makes every measured rect need a conversion, and
+// "bigger window" meant "bigger text" rather than "more room", which is not
+// what resizing a window means anywhere else.
+//
+// So this is a user preference with three values, applied once, and the window
+// is free to be any size independently of it.
+const FONT_SCALE: Record<FontSize, number> = {
+  small: 0.92,
+  medium: 1,
+  large: 1.12
 }
 
-/**
- * Keeps the zoom in step with the window for as long as the app is running.
- *
- * A `resize` listener rather than a one-shot: this is what makes dragging the
- * window edge scale the card live rather than on the next reload.
- *
- * Not debounced. The handler is two style writes, Chromium already coalesces
- * `resize` to one per frame, and a debounce would only add lag to the thing the
- * user is actively dragging.
- *
- * Returns its own teardown so a caller can be a well-behaved effect.
- */
-export function trackWindowZoom(): () => void {
-  applyZoom()
-  window.addEventListener('resize', applyZoom)
-  return () => window.removeEventListener('resize', applyZoom)
+function applyZoom(scale: number): void {
+  const zoom = String(scale)
+  document.documentElement.style.zoom = zoom
+  // Still published, and still load-bearing. `zoom` scales rendered lengths
+  // while `100vw`/`100vh` keep resolving against the unzoomed viewport, so
+  // anything in the sheet using viewport units has to divide by this or it is
+  // wrong by the font scale. That is a factor of at most 1.12 now rather than
+  // 2.5, but wrong is wrong — see `.app-shell` and `.argscore-card`.
+  document.documentElement.style.setProperty('--app-zoom', zoom)
 }
 
 /**
  * The renderer-side entry point for the font-size setting.
  *
- * The real work is main-side now — the setting resizes the WINDOW, and the
- * resize listener above picks the new width up. This recomputes immediately so
- * the two call sites (App on boot, SettingsView on change) still do something
- * synchronous rather than appearing to be no-ops; setting a zoom from the font
- * scale here would fight the window that is about to change under it.
+ * Synchronous and complete: this is the only thing that sets the zoom now, so
+ * there is no window resize to race with and no second source for the number.
  */
-export function applyFontSize(_size: FontSize): void {
-  applyZoom()
+export function applyFontSize(size: FontSize): void {
+  applyZoom(FONT_SCALE[size] ?? 1)
+}
+
+/**
+ * Retained so `App.tsx` keeps a single teardown-returning call, and because
+ * removing an exported function from a module several views import is a bigger
+ * change than this one needs to be.
+ *
+ * It no longer listens for anything. Resizing the window does not change the
+ * zoom — that is the entire point of the change — so a `resize` handler here
+ * would be a listener that recomputes a constant on every frame of a drag.
+ */
+export function trackWindowZoom(): () => void {
+  return () => {}
 }
