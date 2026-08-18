@@ -48,19 +48,50 @@ export default function ResizeGrips(): JSX.Element {
 
     // One in-flight IPC call at a time. Pointer events fire faster than a
     // round-trip completes, and queueing them makes the window lag seconds
-    // behind the cursor and keep moving after the mouse stops. Dropping the
-    // intermediate frames is correct precisely because each message carries the
-    // total delta from the drag's origin rather than an increment — the next
-    // one to get through is still exactly right.
+    // behind the cursor and keep moving after the mouse stops.
+    //
+    // Coalescing, not dropping. The old version discarded every frame that
+    // arrived while a call was outstanding and sent nothing afterwards, so the
+    // window only ever reached the position of a frame that happened to land in
+    // a gap between round-trips. Two symptoms, both reported as "glitchy":
+    // during the drag the edge advances in visible steps rather than following
+    // the cursor, and at the END the last frame before pointerup is very likely
+    // to be one of the discarded ones — so the window settles at a size the
+    // user did not release at, and no further event ever corrects it.
+    //
+    // Keeping the latest delta and sending it when the call returns fixes both,
+    // and it is safe for exactly the reason dropping was: each message carries
+    // the total delta from the drag's origin, never an increment, so a stale
+    // pending value is simply replaced rather than accumulated.
     let inFlight = false
-    const move = (e: PointerEvent): void => {
-      if (inFlight) return
+    let pending: { dx: number; dy: number } | null = null
+
+    const flush = (): void => {
+      if (inFlight || pending === null) return
+      const { dx, dy } = pending
+      pending = null
       inFlight = true
-      void tracelyApi.resizeMove(e.screenX - originX, e.screenY - originY).finally(() => {
+      void tracelyApi.resizeMove(dx, dy).finally(() => {
         inFlight = false
+        // Trailing edge: whatever arrived while this was out goes now.
+        flush()
       })
     }
-    const end = (): void => {
+
+    const move = (e: PointerEvent): void => {
+      pending = { dx: e.screenX - originX, dy: e.screenY - originY }
+      flush()
+    }
+    const end = (e: PointerEvent): void => {
+      // The release position, unconditionally — `move` may never have seen this
+      // pointer's final coordinates, and even if it did they may still be
+      // sitting in `pending` behind an in-flight call.
+      pending = { dx: e.screenX - originX, dy: e.screenY - originY }
+      flush()
+      // Released explicitly. Capture is dropped automatically on pointerup, but
+      // not on the pointercancel path, and a grip still holding capture eats
+      // every subsequent pointer event in the window.
+      if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId)
       target.removeEventListener('pointermove', move)
       target.removeEventListener('pointerup', end)
       target.removeEventListener('pointercancel', end)
