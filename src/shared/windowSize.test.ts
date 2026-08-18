@@ -15,15 +15,24 @@ import {
 } from './windowSize.ts'
 
 describe('maximizedScale', () => {
-  // The whole point of the cap. A 4K display has room for 4.9x; letting it
-  // have that would render 28px body text.
-  it('stops at the comfortable cap on a large display', () => {
-    strictEqual(maximizedScale({ width: 3840, height: 2160 }), MAX_COMFORTABLE_SCALE)
+  /**
+   * Maximize fills the display now, and no longer stops at a taste threshold.
+   * It used to cap at MAX_COMFORTABLE_SCALE, which on a 2560x1392 work area
+   * held it to 1.6 where the screen allowed 2.12 — the button used 75% of the
+   * height available and read as barely working. See the note on that constant.
+   */
+  it('uses the whole display rather than a comfort cap', () => {
+    strictEqual(maximizedScale({ width: 2560, height: 1392 }), fitToWorkAreaScale({ width: 2560, height: 1392 }))
+  })
+
+  it('still stops at MAX_WINDOW_SCALE on an enormous display', () => {
+    // A 4K screen has room for ~4.9x. The hard ceiling is still a ceiling —
+    // what was dropped is the *taste* cap below it, not the bound.
+    strictEqual(maximizedScale({ width: 3840, height: 2160 }), MAX_WINDOW_SCALE)
   })
 
   it('fits the work area when the screen is the binding constraint', () => {
     const scale = maximizedScale({ width: 1366, height: 768 })
-    ok(scale < MAX_COMFORTABLE_SCALE, `expected the screen to bind, got ${scale}`)
     const { width, height } = sizeForScale(scale)
     ok(width <= 1366 && height <= 768, `maximized to ${width}x${height}, larger than the work area`)
   })

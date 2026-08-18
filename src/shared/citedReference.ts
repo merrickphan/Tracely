@@ -658,9 +658,51 @@ export function isCheckable(ref: CitedReference): boolean {
 const UNDER_INDEXED_VENUE =
   /\b(?:proceedings|conference|symposium|workshop|neurips|nips|icml|iclr|cvpr|acl|advances in neural information processing|preprint|arxiv|biorxiv|ssrn|working paper|technical report|white paper|dissertation|thesis)\b/i
 
+/**
+ * References to things on the WEB rather than in the scholarly record.
+ *
+ * Same rule as UNDER_INDEXED_VENUE and the same evidence standard: the entry
+ * itself says the index was never going to hold it. Crossref registers DOIs and
+ * Open Library holds books; an encyclopedia article, a news story, a government
+ * page or an organisation's own report is in neither, so "no work carrying both
+ * names was found" is a fact about the index and not about the citation.
+ *
+ * Reported case: a student cited Wikipedia, the lookup could not corroborate it
+ * — of course it could not — and the sentence was then judged against a topical
+ * academic search that had never seen the source they actually named. Citing an
+ * encyclopedia may be worth an argument with a teacher; it is not fabrication,
+ * and this is what stops the pipeline treating it as one.
+ *
+ * Named venues only. A bare `https?://` was in this pattern for one draft and
+ * had to come out: a properly formatted APA entry for a journal article ends in
+ * its DOI link, so "any URL means a web source" matched most of the corpus and
+ * would have switched the fabrication check off for exactly the references it
+ * exists to test. Measured on a real entry —
+ * "Mueller, P. A., & Oppenheimer, D. M. (2014). The Pen Is Mightier Than the
+ * Keyboard. Psychological Science. https://doi.org/10.1177/0956797614524581" —
+ * which the URL alternative matched.
+ */
+const WEB_SOURCE =
+  /\b(?:wikipedia|wikimedia|britannica|encyclopaedia|encyclopedia|investopedia|blog|press release)\b/i
+
+/**
+ * A link to something that is NOT in the scholarly record.
+ *
+ * The URL signal, kept but narrowed to the case it was meant for: a DOI or
+ * handle link says the work IS registered, which is the opposite of what this
+ * is looking for, so those two hosts are excluded and any other link counts.
+ */
+const NON_SCHOLARLY_LINK = /https?:\/\/(?!(?:www\.|dx\.)?doi\.org|hdl\.handle\.net)/i
+
 export function absenceIsInformative(ref: CitedReference): boolean {
   if (ref.kind === 'bibliographic') {
-    if (UNDER_INDEXED_VENUE.test(ref.entry ?? '')) return false
+    const entry = ref.entry ?? ''
+    if (UNDER_INDEXED_VENUE.test(entry)) return false
+    if (WEB_SOURCE.test(entry)) return false
+    // Only when the entry offers NO scholarly identifier of its own. An entry
+    // carrying both a DOI and a publisher link is a journal article with a
+    // convenience link, not a web page.
+    if (NON_SCHOLARLY_LINK.test(entry) && !/doi\.org|\bdoi:/i.test(entry)) return false
     return ref.surnames.length >= MIN_CHECKABLE_SURNAMES && ref.year !== null
   }
   return ref.kind === 'author-year'

@@ -14,14 +14,44 @@
 // monogram) after being told the alternative was to keep no external image
 // calls at all.
 
+import { hostnameOf, isResolverHost } from '@shared/sourceIcon'
+
 const FAVICON_TIMEOUT_MS = 3000
 const FETCH_ATTEMPTED = new Map<string, Promise<string | null>>()
 
-function hostnameOf(url: string): string | null {
+/** DOI URL -> the publisher hostname it redirects to. Per session, like the
+ *  icons themselves; a DOI's target does not move within one run of the app. */
+const RESOLVED_HOST = new Map<string, Promise<string | null>>()
+
+/**
+ * Where a DOI actually points.
+ *
+ * A HEAD with redirects followed: `res.url` after the chain is the publisher's
+ * landing page, which is the domain whose icon identifies the source. One
+ * request per distinct DOI, cached for the session, and only for rows actually
+ * on screen — the batch handler caps how many can be asked for at once.
+ *
+ * Falls back to null on anything unexpected rather than guessing. A missing
+ * icon is a monogram; a wrong one is a publisher's mark against someone else's
+ * paper, which is a worse thing for a citation tool to draw than no mark.
+ */
+async function resolvePublisherHost(doiUrl: string): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FAVICON_TIMEOUT_MS)
   try {
-    return new URL(url).hostname
+    // GET, not HEAD. Measured against four real DOIs: HEAD resolved one of
+    // them — publishers routinely reject or ignore it — while GET resolved
+    // SAGE and Elsevier correctly. `fetch` settles as soon as the response
+    // HEADERS arrive, so the redirect chain is already walked and `res.url` is
+    // the landing page; aborting straight after means the body is never read.
+    const res = await fetch(doiUrl, { redirect: 'follow', signal: controller.signal })
+    const host = hostnameOf(res.url)
+    controller.abort()
+    return host
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -60,10 +90,30 @@ export function getFaviconDataUrl(sourceUrl: string | null): Promise<string | nu
   const hostname = hostnameOf(sourceUrl)
   if (!hostname) return Promise.resolve(null)
 
-  const cached = FETCH_ATTEMPTED.get(hostname)
-  if (cached) return cached
+  if (!isResolverHost(hostname)) {
+    const cached = FETCH_ATTEMPTED.get(hostname)
+    if (cached) return cached
+    const promise = fetchFavicon(hostname)
+    FETCH_ATTEMPTED.set(hostname, promise)
+    return promise
+  }
 
-  const promise = fetchFavicon(hostname)
-  FETCH_ATTEMPTED.set(hostname, promise)
-  return promise
+  // A DOI, not a publisher. Resolve it first — see resolvePublisherHost.
+  const cachedResolve = RESOLVED_HOST.get(sourceUrl)
+  const resolving = cachedResolve ?? resolvePublisherHost(sourceUrl)
+  if (!cachedResolve) RESOLVED_HOST.set(sourceUrl, resolving)
+
+  return resolving.then((publisher) => {
+    // Deliberately null rather than falling back to the resolver's own icon.
+    // doi.org has a perfectly good favicon and showing it is WORSE than the
+    // monogram: every row in the list gets the identical mark, so the column
+    // stops identifying anything and just says "DOI" nine times. The monogram
+    // at least differs per publisher.
+    if (!publisher || isResolverHost(publisher)) return null
+    const cached = FETCH_ATTEMPTED.get(publisher)
+    if (cached) return cached
+    const promise = fetchFavicon(publisher)
+    FETCH_ATTEMPTED.set(publisher, promise)
+    return promise
+  })
 }
