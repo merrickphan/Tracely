@@ -1,7 +1,9 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Icon Bg">
-<rect width="32" height="32" rx="8" fill="#FEF2E7"/>
-<rect id="Pencil Body" x="9" y="13.5" width="14" height="4.5" rx="1" transform="rotate(45 9 13.5)" fill="#F97316"/>
-<path id="Pencil Tip" d="M8.47668 13.4148L5.41481 16.4767L4.2941 12.2941L8.47668 13.4148Z" fill="#F97316"/>
-</g>
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="20" cy="20" r="20" fill="#FFE7D3"/>
+  <g transform="rotate(45 23.4246 24.4246)">
+    <rect x="15.4246" y="21.9246" width="16" height="5" rx="1" fill="#F1650B"/>
+  </g>
+  <g transform="rotate(75 15.368 16.368) translate(12.9865 13.618)">
+    <path d="M2.38157 0L4.76314 4.125H0L2.38157 0Z" fill="#F1650B"/>
+  </g>
 </svg>
