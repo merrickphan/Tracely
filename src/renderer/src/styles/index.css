@@ -5542,13 +5542,19 @@ textarea:disabled {
   background: var(--surface, #fff);
 }
 
-/* A reading column rather than full-bleed. The stat and resource grids stop
-   being scannable somewhere past this — four cards on a 2500px monitor are a
-   long way apart — and every other app with a dashboard makes the same call. */
+/* Full width. This was a centred 880px reading column for one build, on the
+   usual dashboard reasoning that grids stop being scannable past some width —
+   and on a large window that reasoning produced exactly what it sounds like:
+   the page in a strip down the middle with empty white either side of it,
+   which reads as the app failing to resize rather than as a layout decision.
+   Owner's call: "make it when you resize the app the app actually resizes with
+   it instead of making a bunch of empty white space."
+
+   The grids are all `1fr`, so the cards themselves take up the room. Padding
+   grows a little with the window so the content is not flush to the frame on a
+   wide one. */
 .home-inner {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 26px 28px 22px;
+  padding: 26px clamp(28px, 3.5vw, 72px) 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -5843,16 +5849,17 @@ textarea:disabled {
 
 .home-tracer { display: flex; align-items: center; gap: 10px; }
 
-/* The glow the mockup draws behind the mascot: an accent halo, not a border,
-   so the character reads as sitting in front of it rather than inside a chip. */
+/* No halo of its own: the orange disc is drawn INTO the artwork, and adding
+   one behind it gave the character two rings.
+
+   Deliberately not clipped to a circle either. The plane's wing tip and its
+   raised hand both extend past the disc in the original — that overlap is the
+   drawing — and a `border-radius: 50%` would cut both off. */
 .home-tracer-badge {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent, #ff5900) 16%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #ff5900) 9%, transparent);
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .home-tracer-btn {
