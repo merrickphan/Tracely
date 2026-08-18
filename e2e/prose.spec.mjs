@@ -284,6 +284,70 @@ test('the card still closes when the pointer leaves for good', async (t) => {
     })
 })
 
+/**
+ * Finishing an action on one card must not kill hovering everywhere else.
+ *
+ * `insidePopoverRef` is set by the card's onMouseEnter and cleared by its
+ * onMouseLeave — and React does not fire onMouseLeave when an element
+ * UNMOUNTS. So dismissing, ignoring or applying while the pointer was on the
+ * card left the ref stuck true, and the hit-test returns early while it is:
+ * one completed action and no underline in the document could be hovered
+ * again.
+ *
+ * The pointer must genuinely be over the card when the action fires, which is
+ * what `mouse.move` + `mouse.down/up` gives and what `locator.click()` does
+ * not guarantee.
+ */
+test('using one card leaves the other underlines hoverable', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /New document/i }).click()
+  const body = page.locator('.docedit-body')
+  await body.waitFor({ state: 'visible' })
+  await body.click()
+  // Two issues of different kinds, so the second is unambiguously a different
+  // mark rather than a re-measure of the first.
+  await page.keyboard.insertText('This is a error in the report. They was late to the meeting.')
+
+  const article = page.locator('.docprose[data-prose-kind="article-agreement"]').first()
+  const subjectVerb = page.locator('.docprose[data-prose-kind="subject-verb"]').first()
+  await article.waitFor({ state: 'visible', timeout: 10_000 })
+  await subjectVerb.waitFor({ state: 'visible', timeout: 10_000 })
+
+  // Hover the first, travel to its card, and dismiss it FROM the card — so the
+  // pointer is on the card at the moment it unmounts.
+  const a = await article.boundingBox()
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+  const card = page.locator('.docprose-card')
+  await card.waitFor({ state: 'visible', timeout: 5000 })
+  const ignore = page.getByRole('button', { name: /^Ignore$/ })
+  const ib = await ignore.boundingBox()
+  await page.mouse.move(ib.x + ib.width / 2, ib.y + ib.height / 2, { steps: 20 })
+  await page.mouse.down()
+  await page.mouse.up()
+  await card.waitFor({ state: 'hidden', timeout: 5000 })
+
+  // Now the other underline. This is what used to be dead.
+  const sv = await subjectVerb.boundingBox()
+  await page.mouse.move(sv.x + sv.width / 2, sv.y + sv.height / 2, { steps: 10 })
+  await page
+    .locator('.docprose-card')
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {
+      throw new Error('hovering a second underline did nothing after using the first card')
+    })
+
+  const shown = await page.locator('.docprose-card').innerText()
+  assert.ok(/They was/.test(shown), `the second card should be about the second mark, got: ${shown}`)
+})
+
 test('the prose layer sits under the claim layer', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
