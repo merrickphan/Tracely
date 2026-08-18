@@ -98,10 +98,21 @@ function openedLabel(iso: string, now: Date): string {
 export default function HomeView({
   onNavigate,
   onNewDocument,
+  onOpenDocument,
   firstName
 }: {
   onNavigate: (tab: Tab) => void
   onNewDocument: () => void
+  /**
+   * Open one draft in the editor. The same callback the Documents list uses, so
+   * a card here and a row there land in exactly the same place.
+   *
+   * These cards used to call `onNavigate('documents')` — clicking your own
+   * essay dropped you on a list you then had to find it in again, one click
+   * from where you already were. "View all documents", directly above them, is
+   * the control that means "show me the list".
+   */
+  onOpenDocument: (id: string) => void
   firstName: string | null
 }): JSX.Element {
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
@@ -257,7 +268,7 @@ export default function HomeView({
           ) : (
             <div className="home-docs">
               {recent.map((doc) => (
-                <button key={doc.id} className="home-doc" onClick={() => onNavigate('documents')}>
+                <button key={doc.id} className="home-doc" onClick={() => onOpenDocument(doc.id)}>
                   <span className="home-doc-thumb" aria-hidden="true">
                     <i />
                     <i />
