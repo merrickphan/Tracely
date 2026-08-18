@@ -87,22 +87,24 @@ export const MIN_WINDOW_SCALE = 0.7
 export const MAX_WINDOW_SCALE = 2.5
 
 /**
- * How large "maximize" is allowed to make the UI.
+ * RETIRED as a cap on maximize, and kept only because `src/shared/*` is
+ * additive (see the branch rules in CLAUDE.md).
  *
- * Maximize does NOT fill the screen, and that is the whole design of it. This
- * window scales rather than reflows (see above), so filling a 4K display would
- * mean 28px body text and a 62px heading — a card the size of a poster, which
- * is the "stupidly big" outcome and the reason a plain maximize is wrong here.
+ * The argument for it was that this window scales rather than reflows, so a
+ * maximize that filled a 4K display would mean 28px body text and a 62px
+ * heading — "more comfortable, not enormous". It is a real effect and the
+ * reasoning is preserved here rather than deleted.
  *
- * So maximize means: the largest aspect-correct size that still fits the work
- * area, capped at this scale. On a 1080p screen it grows to about 1.55 and
- * stops at the display; on a 4K one it stops HERE, well before the edges, and
- * the extra room simply stays desktop. That is the honest reading of "make it
- * bigger" for a fixed-coordinate layout — more comfortable, not enormous.
+ * It was wrong about whose call it is. On a 2560x1392 work area the screen
+ * allows 2.12 and this held maximize to 1.6 — the button used 75% of the
+ * height available and looked, correctly, like it barely did anything. A user
+ * pressing maximize has said what size they want; second-guessing it with a
+ * taste threshold makes the control feel broken, and the drag handles were
+ * already free to go past this anyway, so the two disagreed about the same
+ * question. Owner's call, 2026-08-18, second time raised.
  *
- * 1.6 rather than something rounder because it is roughly the point where the
- * 870px card stops feeling like a dialog and starts feeling like a window,
- * without any of its type passing the size a document editor would use.
+ * Nothing reads it now. MIN_WINDOW_SCALE and MAX_WINDOW_SCALE remain the real
+ * bounds, and `fitToWorkAreaScale` keeps the window on the display.
  */
 export const MAX_COMFORTABLE_SCALE = 1.6
 
@@ -170,7 +172,7 @@ export function maximizedScale(
   workArea: { width: number; height: number },
   margin = WINDOW_EDGE_MARGIN
 ): number {
-  return clampWindowScale(Math.min(fitToWorkAreaScale(workArea, margin), MAX_COMFORTABLE_SCALE))
+  return clampWindowScale(fitToWorkAreaScale(workArea, margin))
 }
 
 export function sizeForScale(scale: number): { width: number; height: number } {

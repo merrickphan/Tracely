@@ -321,7 +321,7 @@ test('no control is buried under a grip', async (t) => {
   }
 })
 
-test('maximize grows the window but caps the scale', async (t) => {
+test('maximize fills the display without burying the grips', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
@@ -365,14 +365,22 @@ test('maximize grows the window but caps the scale', async (t) => {
   )
 
   assert.ok(maxed.width > before.width, 'maximize did not grow the window')
-  // The cap is the whole point. MAX_COMFORTABLE_SCALE is 1.6, so the window
-  // must never exceed 898 * 1.6 however much screen there is — this is what
-  // stops a 4K display rendering 28px body text.
-  assert.ok(
-    maxed.width <= Math.round(LAYOUT_WIDTH * 1.6) + 1,
-    `maximized to ${maxed.width}px, past the comfortable cap of ${Math.round(LAYOUT_WIDTH * 1.6)}px`
-  )
+  // Maximize FILLS the display now. It used to stop at MAX_COMFORTABLE_SCALE
+  // (1.6), which on this work area left it using about three quarters of the
+  // height available and read, correctly, as a button that barely did anything.
+  // What remains is the screen itself: never past the work area, and never
+  // flush to it, so the resize grips stay grabbable on a window with no title
+  // bar. See the note on MAX_COMFORTABLE_SCALE.
   assert.ok(maxed.width <= workArea.width && maxed.height <= workArea.height, 'maximized past the work area')
+  const usedHeight = maxed.height / workArea.height
+  assert.ok(
+    usedHeight > 0.85,
+    `maximize used only ${Math.round(usedHeight * 100)}% of the work area's height`
+  )
+  assert.ok(
+    workArea.height - maxed.height >= 24,
+    `maximized to ${maxed.height}px in a ${workArea.height}px work area — no room left to grab a grip`
+  )
   // Still the layout's shape — maximize must not letterbox the card.
   assert.ok(
     Math.abs(maxed.width / maxed.height - LAYOUT_WIDTH / LAYOUT_HEIGHT) < 0.02,
