@@ -11,7 +11,7 @@ import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
-import { hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
+import { hasSignificanceMarker, hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
 
@@ -131,8 +131,14 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // ScoreSignals.titleParagraph.
   const titleParagraph = spans.length > 1 && looksLikeTitle(spans[0].text)
 
+  // Read off the text, not the roles, because one paragraph carries one role
+  // and the closing paragraph is routinely both the conclusion and the place
+  // the stakes are stated — see ScoreSignals.significanceAnywhere.
+  const significanceAnywhere = spans.some((span) => hasSignificanceMarker(span.text))
+
   const { score, components, complete, applicable } = scoreDraft(paragraphs, {
     soWhatInConclusion,
+    significanceAnywhere,
     titleParagraph
   })
 

@@ -189,7 +189,19 @@ describe('heuristicRoles — precedence', () => {
   })
 
   it('labels a significance paragraph from its marker', () => {
-    strictEqual(rolesOf(['Intro.', 'This matters because hiring policy follows it.'])[1], 'significance')
+    // Mid-draft, where a stakes paragraph is a stakes paragraph.
+    strictEqual(
+      rolesOf(['Intro.', 'This matters because hiring policy follows it.', 'Some ending.'])[1],
+      'significance'
+    )
+  })
+
+  it('calls the FINAL paragraph a conclusion even when it states the stakes', () => {
+    // The two are routinely the same paragraph and only one role can be
+    // carried, so the closing position decides. Nothing is lost by this:
+    // scoreDraft credits significance from the marker wherever it appears
+    // (ScoreSignals.significanceAnywhere), so the essay keeps both components.
+    strictEqual(rolesOf(['Intro.', 'This matters because hiring policy follows it.'])[1], 'conclusion')
   })
 })
 

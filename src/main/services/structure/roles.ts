@@ -51,6 +51,30 @@ const COUNTERARGUMENT_MARKERS = [
 const COUNTERARGUMENT_PATTERN =
   /^["'‘“(\[]?\s*(?:and|but|so|yet)?\s*(some|many|others|critics|opponents|skeptics|sceptics|detractors|one)\b[^.]{0,30}?\b(argue|argued|contend|contends|object|objected|maintain|counter|claim)\b/
 
+/**
+ * The other way writers open the move: by NAMING the objection rather than
+ * attributing it to anyone.
+ *
+ * "There is a serious objection to all of this", "The obvious counterargument
+ * is", "One objection deserves an answer". None of these give
+ * COUNTERARGUMENT_PATTERN a subject to match, and none contain a literal
+ * marker — so a paragraph whose entire job was to state the strongest case
+ * against the essay was labelled an ordinary claim, and the draft was told it
+ * had no counterargument at all. Measured on a deliberately well-structured
+ * essay: the paragraph opening "There is a serious objection to all of this,
+ * and it deserves better than the dismissal it usually gets" scored 0/15.
+ *
+ * The opener must be a determiner or an existential — "There is a serious
+ * objection", "The obvious counterargument", "One objection". A PRONOUN
+ * subject is refused, because "I answered an objection three sentences ago"
+ * and "We raised the objection ourselves" are the writer looking back at one,
+ * not turning to face it, and an earlier version of this pattern matched both.
+ * Bounded to the first sentence for the same reason: writers announce this
+ * move at the top of the paragraph or not at all.
+ */
+const COUNTERARGUMENT_NOUN =
+  /^["'‘“(\[]?\s*(?:there\s+(?:is|are|remains|exists)|the|one|a|an|another|its|his|her|their)\b[^.!?]{0,40}?\b(objection|objections|counterargument|counter-argument|counterpoint)\b/i
+
 const CONCLUSION_MARKERS = [
   'in conclusion',
   'to conclude',
@@ -158,8 +182,21 @@ function firstSentence(text: string): string {
  * an error worth refusing.
  */
 function lastSentence(text: string): string {
-  const parts = text.trim().split(/(?<=[.!?]["'’”)\]]*)\s+/)
+  const parts = splitIntoSentences(text)
   return parts[parts.length - 1] ?? text
+}
+
+/**
+ * The paragraph's sentences.
+ *
+ * The same split `lastSentence` always used, lifted out so the thesis scan can
+ * read all of them — see paragraphStatesThesis. Deliberately duplicated from
+ * `splitSentences` rather than imported: a module with a relative VALUE import
+ * cannot be loaded by `npm test`, and this file's tests are the whole reason
+ * its rules are checkable at all. CLAUDE.md records the constraint.
+ */
+function splitIntoSentences(text: string): string[] {
+  return text.trim().split(/(?<=[.!?]["'’”)\]]*)\s+/)
 }
 
 function startsWithMarker(text: string, markers: string[]): boolean {
@@ -234,7 +271,11 @@ function containsMarker(text: string, markers: string[]): boolean {
 /** Same anchored opening as startsWithMarker, for the pattern form. */
 function startsWithCounterargument(text: string): boolean {
   const opening = firstSentence(text).slice(0, 60).toLowerCase()
-  return startsWithMarker(text, COUNTERARGUMENT_MARKERS) || COUNTERARGUMENT_PATTERN.test(opening)
+  return (
+    startsWithMarker(text, COUNTERARGUMENT_MARKERS) ||
+    COUNTERARGUMENT_PATTERN.test(opening) ||
+    COUNTERARGUMENT_NOUN.test(opening)
+  )
 }
 
 /**
@@ -390,11 +431,48 @@ export function looksLikeClosing(text: string): boolean {
 // with. Written against one essay's "set her apart", it then failed on "sets
 // this decade apart" — the same construction with a noun in it, which is how
 // the move is written whenever the subject is not a person.
-const THESIS_SHAPE =
-  /\b(?:whilst|while|although|though|despite|rather than|not only)\b[^]{0,200}?\b(?:but|yet|however|sparked|distinguish\w*|argues?|demonstrates?|reveals?|proves?|set\w*\b[^.]{0,30}?\bapart)\b/i
+/**
+ * The shapes a thesis sentence actually takes.
+ *
+ * This was ONE regex — a concessive clause followed by a contrastive verb —
+ * and it was written to rescue one specific draft. Measured against a
+ * deliberately well-structured essay it returned false on every sentence in
+ * the piece, including the thesis, so the whole 20-point component was
+ * unreachable for anything that did not open "Although X, …". A detector that
+ * only recognises the essay it was built from is not a detector.
+ *
+ * Six shapes now, each a construction writers reach for when stating a
+ * contestable claim rather than reporting a fact:
+ *
+ *   (a) concessive contrast   "Although the reforms raised turnout, they did
+ *                              not change who was elected."
+ *   (b) scope contrast        "Almost every tool … and almost none of them …"
+ *   (c) correction            "The struggle was not an obstacle; it was the
+ *                              instrument that …"
+ *   (d) signposting           "I argue that …", "This essay contends …"
+ *   (e) the real X is …       "The real question is not whether it worked but
+ *                              who it worked for."
+ *
+ * What they have in common is CONTRAST or COMMITMENT — the two things a
+ * reportable fact does not have. That is also the limit: this cannot tell a
+ * contestable claim from a confidently-worded description, and it never will.
+ * It is a floor, and the ceiling is `ai/structureClassifier.ts`, which is built
+ * and waiting on a relay endpoint.
+ *
+ * Checked against a set of real theses and real non-theses (roles.test.ts) so
+ * widening it stays honest: every addition has to leave the negatives negative.
+ */
+const THESIS_SHAPES = [
+  /\b(?:whilst|while|although|though|despite|rather than|not only)\b[^]{0,200}?\b(?:but|yet|however|sparked|distinguish\w*|argues?|demonstrates?|reveals?|proves?|did not|does not|do not|failed to|set\w*\b[^.]{0,30}?\bapart)\b/i,
+  /\b(?:every|all|most|almost every|nearly every|virtually every)\b[^]{0,220}?\b(?:none|almost none|nearly none|hardly any|few of|not one|neither)\b/i,
+  /\b(?:is|was|were|are)\s+not\b[^]{0,140}?[;,]?\s*\b(?:but|it is|it was|they are|they were|rather)\b/i,
+  /\bnot\b[^]{0,80}?\bbut\b[^]{0,80}?\b(?:is|are|was|were)\b/i,
+  /\b(?:i|we|this essay|this paper|this article)\s+(?:will\s+)?(?:argue|argues|contend|contends|claim|claims|show|shows)\b/i,
+  /\bthe\s+(?:real|actual|central|deeper|underlying|important|only)\s+(?:question|problem|issue|point|difference|distinction|danger)\b[^]{0,80}?\bis\b/i
+]
 
 export function looksLikeThesis(sentence: string): boolean {
-  return THESIS_SHAPE.test(sentence)
+  return THESIS_SHAPES.some((shape) => shape.test(sentence))
 }
 
 /**
@@ -477,15 +555,25 @@ function afterFirstSentence(text: string): string {
 /**
  * Whether a paragraph appears to explain its own evidence.
  *
- * The connective must appear outside the paragraph's FIRST sentence. A warrant
- * follows the thing it warrants, so "Because turnout fell, the result was
- * close." — a first-sentence connective — is the writer stating a claim, not
- * explaining evidence they have just presented. Without this rule every
- * paragraph opening with "Because" or "As a result" scored full marks for
- * reasoning it never did.
+ * The connective may appear ANYWHERE in the paragraph, provided the paragraph
+ * has more than one sentence.
+ *
+ * It used to have to fall outside the first sentence, on the reasoning that a
+ * warrant follows the thing it warrants — "Because turnout fell, the result was
+ * close." is a claim, not an explanation. That reasoning holds for a paragraph
+ * that IS that sentence, and fails for everything longer. Measured on a
+ * deliberately well-reasoned essay, two of its most heavily argued paragraphs
+ * were flagged `warrant-gap`: one opened "This is the fact I want to sit with,
+ * because it is genuinely strange" and then spent four sentences explaining
+ * why, and the rule threw away the connective and read the rest as unreasoned.
+ *
+ * The sentence-count floor keeps the case the original was written for: a
+ * one-sentence paragraph whose only connective is in that sentence has stated
+ * something, not explained it.
  */
 export function hasWarrantMarker(paragraphText: string): boolean {
-  return containsMarker(afterFirstSentence(paragraphText), WARRANT_MARKERS)
+  if (afterFirstSentence(paragraphText).trim().length === 0) return false
+  return containsMarker(paragraphText, WARRANT_MARKERS)
 }
 
 export interface HeuristicRoleInput {
@@ -523,15 +611,71 @@ export function heuristicRoles({
   // Where the argument actually starts. A titled essay puts its title in
   // paragraph 1 and its introduction in paragraph 2, and every position rule
   // below would otherwise read one paragraph too early — see looksLikeTitle.
-  const thesisIndex = paragraphs.length > 1 && looksLikeTitle(paragraphs[0].text) ? 2 : 1
+  const openingIndex = paragraphs.length > 1 && looksLikeTitle(paragraphs[0].text) ? 2 : 1
+  const thesisIndex = thesisParagraphIndex(paragraphs, openingIndex)
 
   for (const paragraph of paragraphs) {
     const hasClaim = (claimsByParagraph.get(paragraph.index) ?? []).length > 0
-    roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation, thesisIndex))
+    roles.push(roleFor(paragraph, hasClaim, lastIndex, hasCitation, thesisIndex, openingIndex))
     warranted.push(hasWarrantMarker(paragraph.text))
   }
 
   return { roles, warranted }
+}
+
+/**
+ * Which paragraph carries the thesis — not necessarily the first one.
+ *
+ * The rule was purely positional: the thesis is in paragraph 1, or 2 behind a
+ * title, and nowhere else. That is one essay shape, and a common and often
+ * better one puts two or three paragraphs of setup first and states the claim
+ * once the reader can see why it matters. Measured on a deliberately
+ * well-structured essay whose thesis opened paragraph 5 ("Almost every tool
+ * built for writers … has been built to remove friction, and almost none of
+ * them distinguish between the friction that is the work and the friction that
+ * is merely in the way"): thesis scored 0/20, and every paragraph before it was
+ * 'unknown', so the reading was also "provisional".
+ *
+ * So the opening position is tried first and, failing that, the scan continues
+ * to the HALFWAY point of the draft and takes the first paragraph whose last
+ * sentence has the shape of a thesis.
+ *
+ * Two bounds keep this from swallowing body claims. It stops at the halfway
+ * point, because a claim stated for the first time in the second half is a
+ * body claim however thesis-shaped it reads. And it never considers the final
+ * paragraph, where a thesis-shaped sentence is the conclusion restating it.
+ *
+ * Lateness is priced rather than ignored: `scoreDraft` already awards half
+ * credit for a thesis found past position 1, so being generous here cannot
+ * hand a delayed thesis the same marks as an up-front one.
+ */
+function thesisParagraphIndex(paragraphs: ParagraphSpan[], openingIndex: number): number {
+  const opening = paragraphs.find((p) => p.index === openingIndex)
+  if (opening && paragraphStatesThesis(opening.text)) return openingIndex
+
+  const limit = Math.min(Math.max(openingIndex, Math.ceil(paragraphs.length / 2)), paragraphs.length - 1)
+  for (const paragraph of paragraphs) {
+    if (paragraph.index <= openingIndex || paragraph.index > limit) continue
+    if (paragraphStatesThesis(paragraph.text)) return paragraph.index
+  }
+  return openingIndex
+}
+
+/**
+ * Does ANY sentence in this paragraph state the thesis?
+ *
+ * Not just the last one. "Thesis-last" is a convention taught in schools, not a
+ * rule writers follow — and the previous code read only the final sentence, so
+ * a paragraph that stated its claim and then spent three sentences unpacking it
+ * came back with nothing. Measured: an essay whose thesis was the SECOND of
+ * four sentences in its paragraph scored 0/20 for a thesis it had.
+ *
+ * The scan is bounded elsewhere — `thesisParagraphIndex` stops at the halfway
+ * point and takes the first match — so widening from one sentence to all of
+ * them cannot reach into the body.
+ */
+function paragraphStatesThesis(text: string): boolean {
+  return splitIntoSentences(text).some((sentence) => looksLikeThesis(sentence))
 }
 
 function roleFor(
@@ -539,13 +683,32 @@ function roleFor(
   hasClaim: boolean,
   lastIndex: number,
   hasCitation: CitationPredicate,
-  /** The paragraph the thesis is expected in — 2 when paragraph 1 is a title. */
-  thesisIndex: number
+  /** The paragraph the thesis was found in — see thesisParagraphIndex. */
+  thesisIndex: number,
+  /** Where the argument starts — 2 when paragraph 1 is a title. Paragraphs
+   *  before this are the title; between this and the thesis they are setup. */
+  openingIndex: number
 ): ParagraphRole {
   const { text, index } = paragraph
 
   if (startsWithMarker(text, CONCLUSION_MARKERS)) return 'conclusion'
   if (startsWithCounterargument(text)) return 'counterargument'
+  // The LAST paragraph is judged as a conclusion before it is judged as
+  // significance, because the two are routinely the same paragraph and only one
+  // role can be carried. A closing paragraph that says why the argument matters
+  // used to be labelled 'significance' and score 0/10 for a conclusion it
+  // plainly was. Significance is no longer lost by this: scoreDraft credits it
+  // from the marker itself, wherever the marker is — see `significanceAnywhere`.
+  // `hasClosingSignificance` as well as `looksLikeClosing`: a final paragraph
+  // that says why the argument mattered is a conclusion, and it was being
+  // labelled 'significance' and scoring 0/10 for the close it plainly was.
+  // Still not position alone — the original worry, that a draft stopping
+  // mid-argument would collect a free 10 points, is answered by requiring a
+  // retrospective or stakes marker. A draft that stops does not say "the stakes
+  // here are".
+  if (index === lastIndex && (looksLikeClosing(text) || hasClosingSignificance(text))) {
+    return 'conclusion'
+  }
   if (hasSignificanceMarker(text)) return 'significance'
 
   // An opening paragraph that asserts something is stating the essay's thesis.
@@ -560,13 +723,24 @@ function roleFor(
   // thesis went unrecognised entirely. See looksLikeThesis.
   if (index === thesisIndex) {
     if (hasClaim) return 'thesis'
-    return looksLikeThesis(lastSentence(text)) ? 'thesis' : 'unknown'
+    // paragraphStatesThesis, not looksLikeThesis(lastSentence(...)): the scan
+    // that CHOSE this paragraph reads every sentence, and this read only the
+    // last one — so a paragraph selected on its second sentence came straight
+    // back as 'unknown' and the component scored 0 anyway. Two functions
+    // answering the same question differently is how that survived a rebuild.
+    return paragraphStatesThesis(text) ? 'thesis' : 'unknown'
   }
 
   // The title itself. Not 'unknown' by accident but by fact: it is not a
   // paragraph of the argument, and labelling it anything else would let it
   // collect credit for a component it cannot satisfy.
-  if (index < thesisIndex) return 'unknown'
+  if (index < openingIndex) return 'unknown'
+
+  // Setup before a delayed thesis. It falls through to the branches below
+  // rather than being forced to 'unknown', because a paragraph of context that
+  // cites three studies IS evidence and should be able to say so — the old
+  // rule blanked everything ahead of the thesis, which is why an essay that
+  // opened with two paragraphs of literature came back mostly unlabelled.
 
   // Deliberately NOT "the last paragraph is the conclusion" — a draft that
   // stops mid-argument would score a free 10 points for a conclusion it does
