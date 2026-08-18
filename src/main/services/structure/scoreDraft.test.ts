@@ -357,3 +357,114 @@ describe('governingClaims reads statesClaim, not the role', () => {
     )
   })
 })
+
+describe('thesis position is a fraction of the draft, not paragraph 1 or 2', () => {
+  /**
+   * The rule the absolute test was written for. Every draft short enough for
+   * "paragraph 1 or 2" to have been a sensible way to say "up front" scores
+   * exactly as it did — this is the compatibility half, and the eval corpus
+   * (15 essays, none over six paragraphs) does not move at all.
+   */
+  it('is unchanged on a short essay', () => {
+    strictEqual(component(['thesis', 'claim', 'conclusion'], 'thesis'), COMPONENT_MAX.thesis)
+    strictEqual(
+      component(['transition', 'thesis', 'claim', 'conclusion'], 'thesis'),
+      COMPONENT_MAX.thesis
+    )
+    strictEqual(
+      component(['claim', 'claim', 'thesis', 'conclusion'], 'thesis'),
+      COMPONENT_MAX.thesis / 2
+    )
+  })
+
+  /**
+   * A 14-paragraph essay that spends four paragraphs establishing what the
+   * literature says and states its thesis in the fifth was docked ten points,
+   * by the same rule that gives full marks to a three-paragraph draft asserting
+   * its thesis in line one. Earning a thesis is not burying it.
+   */
+  it('gives full marks to a thesis in the first third of a long draft', () => {
+    const long = [
+      'unknown',
+      'evidence',
+      'evidence',
+      'evidence',
+      'thesis',
+      'claim',
+      'claim',
+      'claim',
+      'claim',
+      'counterargument',
+      'counterargument',
+      'claim',
+      'reasoning',
+      'conclusion'
+    ]
+    strictEqual(component(long, 'thesis'), COMPONENT_MAX.thesis)
+  })
+
+  it('still halves a thesis in the back of a long draft', () => {
+    // Paragraph 10 of 14 really is a discovery the reader had to make unaided.
+    const buried = [
+      'unknown',
+      'evidence',
+      'evidence',
+      'evidence',
+      'claim',
+      'claim',
+      'claim',
+      'claim',
+      'claim',
+      'thesis',
+      'claim',
+      'claim',
+      'reasoning',
+      'conclusion'
+    ]
+    strictEqual(component(buried, 'thesis'), COMPONENT_MAX.thesis / 2)
+  })
+})
+
+describe('warrant counts reasoning paragraphs', () => {
+  /**
+   * A `reasoning` paragraph IS the warrant — the classifier's own definition is
+   * "explains how evidence bears on a claim, or works through an implication,
+   * no new evidence and no new claim". Leaving the role out of `owed` meant a
+   * draft that spent whole paragraphs on the link between its evidence and its
+   * claim earned nothing for them, while one that wrote "therefore" once inside
+   * a claim paragraph earned full marks.
+   *
+   * Only reachable on the model path: `heuristicRoles` never returns
+   * 'reasoning', which is why this went unnoticed.
+   */
+  it('counts a reasoning paragraph as owed and satisfied', () => {
+    strictEqual(
+      component(['thesis', 'reasoning', 'conclusion'], 'warrant'),
+      COMPONENT_MAX.warrant
+    )
+  })
+
+  it('does not require hasWarrant on a reasoning paragraph', () => {
+    // Asking the model whether the paragraph whose whole job is the explanation
+    // also signposts its explanation gets `false` often enough that gating on
+    // it would make the role cost points rather than earn them.
+    strictEqual(
+      component(['thesis', 'reasoning', 'claim+', 'conclusion'], 'warrant'),
+      COMPONENT_MAX.warrant
+    )
+  })
+
+  it('still dilutes the ratio with unwarranted claim and evidence paragraphs', () => {
+    strictEqual(
+      component(['thesis', 'reasoning', 'claim', 'conclusion'], 'warrant'),
+      COMPONENT_MAX.warrant / 2
+    )
+  })
+
+  it('leaves a draft with no reasoning paragraphs exactly where it was', () => {
+    strictEqual(
+      component(['thesis', 'claim+', 'evidence', 'conclusion'], 'warrant'),
+      COMPONENT_MAX.warrant / 2
+    )
+  })
+})

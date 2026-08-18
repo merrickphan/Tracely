@@ -18,6 +18,8 @@ import type {
 // move and never the sentence.
 import { cohesionGuidanceFor, guidanceFor } from '@shared/revisionGuidance'
 import { searchableClaims } from '@shared/coverageCounts'
+import { roleBlurbFor } from './roleBlurb'
+import { summariseDraft } from '@shared/draftSummary'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
@@ -830,6 +832,12 @@ function ScoreReport({
                   onClick={() => setExpanded(open ? null : paragraph.index)}
                 >
                   <span className="argscore-para-chevron" aria-hidden="true" />
+                  {/* The paragraph's number, leading. The row names the
+                      paragraph in the writer's terms ("Counterpoint"), and a
+                      name with no number is unfindable in a fourteen-paragraph
+                      draft — "Body — Evidence" describes four of them. The
+                      index is how a reader gets from this row to the text. */}
+                  <span className="argscore-para-index">P{paragraph.index}</span>
                   <span className="argscore-para-name">{name}</span>
                   {/* The role stays, demoted to the chip the index used to
                       occupy. It is what the whole /100 is computed from, so
@@ -866,7 +874,10 @@ function ScoreReport({
 
                 {open ? (
                   <div className="argscore-para-body">
-                    <p className="argscore-para-preview">{paragraphTexts[paragraph.index - 1] ?? ''}</p>
+                    {/* What the paragraph is doing, not the paragraph. See
+                        roleBlurb.ts — the text itself is the one thing on this
+                        screen the writer already has. */}
+                    <p className="argscore-para-blurb">{roleBlurbFor(paragraph.role)}</p>
                     {/* Shown unconditionally now that the grade always is. On a
                         short draft these are the explanation for the low number —
                         which components were reachable at all — so hiding them
@@ -911,9 +922,28 @@ function ScoreReport({
             </>
           ) : null}
 
+          {/*
+            The closing paragraph — which of everything above to act on first.
+            Composed deterministically from the same components the score is
+            (see shared/draftSummary.ts); never model prose, so it cannot praise
+            a strength the draft does not have and cannot move between two runs
+            on unchanged text. Shown whether or not there are draft-level
+            findings, because "what do I do first" is a question every report
+            raises and only this line answers.
+          */}
+          <h3 className="argscore-section argscore-section-dot">Summary</h3>
+          <p className="argscore-summary-prose">
+            {summariseDraft({
+              score: outline.score,
+              components: outline.components,
+              complete: outline.complete,
+              withOwnCitation,
+              detected
+            })}
+          </p>
+
           {draftWeaknesses.length > 0 ? (
             <>
-              <h3 className="argscore-section argscore-section-dot">Summary</h3>
               {/* The same card the per-paragraph findings use, not a bare
                   sentence. These are the most actionable findings in the whole
                   report — "no thesis", "no counterargument", "no significance"
@@ -967,6 +997,14 @@ function ScoreReport({
  * read as a failed one — printing "100%, strong flow" over a single paragraph
  * would turn that safe default into a compliment nothing earned.
  */
+/**
+ * How many broken joins are named in the report before it stops listing and
+ * starts counting. Three: enough that a normal draft's flow problems are all
+ * visible, few enough that a badly-joined one does not turn the middle of the
+ * report into a wall of red.
+ */
+const FLOW_PREVIEW = 3
+
 function CohesionRow({
   cohesion,
   onOpen
@@ -990,13 +1028,43 @@ function CohesionRow({
           this is a per-boundary surface with its own work in it, and a list of
           nine red bullets sitting in the middle of the report was nine things
           named and none of them openable. */}
+      {/*
+        The broken joins themselves, named, capped at FLOW_PREVIEW.
+
+        A count alone ("3 boundaries need work") is a number with nowhere to go:
+        it tells the writer something is wrong at a join without saying which
+        join, so the only move available is to open another screen and start
+        reading. Naming them costs three lines and answers the question the
+        count raises.
+
+        Capped, and every row opens the flow check, because the original
+        objection to printing them inline stands where there are nine of them:
+        nine red bullets in the middle of the report is nine things named and
+        none of them openable. Two or three that click through is not that.
+      */}
+      {n > 0 ? (
+        <ul className="argscore-flow-list">
+          {cohesion.findings.slice(0, FLOW_PREVIEW).map((finding, i) => (
+            <li key={`${finding.kind}-${i}`}>
+              <button className="argscore-flow-item" onClick={onOpen}>
+                <span className="argscore-flow-where">
+                  P{finding.fromIndex} → P{finding.toIndex}
+                </span>
+                <span className="argscore-flow-what">{finding.message}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="argscore-section-row">
         <p className="argscore-flow-clear">
           {n === 0
             ? 'Every paragraph picks up where the last one left off.'
-            : `${n} ${n === 1 ? 'boundary needs' : 'boundaries need'} work across ${cohesion.boundaries} ${
-                cohesion.boundaries === 1 ? 'join' : 'joins'
-              }.`}
+            : n > FLOW_PREVIEW
+              ? `${n - FLOW_PREVIEW} more across ${cohesion.boundaries} ${
+                  cohesion.boundaries === 1 ? 'join' : 'joins'
+                }.`
+              : `${n} of ${cohesion.boundaries} ${cohesion.boundaries === 1 ? 'join' : 'joins'} need work.`}
         </p>
         {n > 0 ? (
           <button className="argscore-link" onClick={onOpen}>
@@ -1260,6 +1328,23 @@ function ParagraphProblem({
       </div>
       {claim ? <p className="argscore-problem-quote">“{claim.text}”</p> : null}
       <p className="argscore-problem-body">{weakness.message}</p>
+      {/*
+        The narrowed sentence, when the critique produced one.
+
+        `suggestedRevision` is set for `overstated` and for nothing else — the
+        one verdict that arrives WITH its fix attached — and it was persisted on
+        the claim precisely so a surface reading a stored claim could show it.
+        This one never did: the report named an overreaching sentence and sent
+        the writer off to think about it while the rewritten version sat unread
+        on the same object. A finding that is holding the answer and prints only
+        the complaint is the most annoying shape a report can take.
+      */}
+      {claim?.suggestedRevision ? (
+        <div className="argscore-problem-rewrite">
+          <span className="argscore-problem-rewrite-label">Suggested rewrite</span>
+          <p className="argscore-problem-rewrite-text">{claim.suggestedRevision}</p>
+        </div>
+      ) : null}
       <GuidanceBlock kind={weakness.kind} />
     </div>
   )
