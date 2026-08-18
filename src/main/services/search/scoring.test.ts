@@ -124,3 +124,67 @@ describe('computeStrengthScore — stance still degrades rather than deflating',
     ok(score <= 30, `net-contradicted claim should be capped at 30 (got ${score})`)
   })
 })
+
+/**
+ * The weights themselves, fitted 2026-08-18 against 51 labelled claims.
+ *
+ * The tests above pin the SHAPE of the formula — dilution, the floor, the
+ * contradiction cap — and all of them passed unchanged when the weights moved,
+ * which is the right outcome for a property test and also the reason none of
+ * them noticed that the weights were flattening every claim onto one band.
+ * These pin the consequences the fit was run to fix.
+ */
+describe('computeStrengthScore — the fitted weights spread claims out', () => {
+  it('does not let a prestigious irrelevant list beat a modest relevant one', () => {
+    // eval/baseline.md, the failure that started this: the claim with ZERO
+    // relevant sources scored 78, the highest in that run, on venue tier and
+    // publication year alone.
+    const prestigiousNoise = computeStrengthScore(
+      Array.from({ length: 8 }, () => irrelevantItem({ venueType: 'journal', year: YEAR })),
+      'dense'
+    ).score
+    const modestButRelevant = computeStrengthScore(
+      [
+        relevantItem({ venueType: 'preprint', year: YEAR - 12 }),
+        relevantItem({ venueType: 'preprint', year: YEAR - 12 })
+      ],
+      'dense'
+    ).score
+    ok(
+      modestButRelevant > prestigiousNoise,
+      `two old preprints that are ON TOPIC (${modestButRelevant}) must beat eight recent journal ` +
+        `papers that are not (${prestigiousNoise})`
+    )
+  })
+
+  it('leaves room below 40, so the weak band is reachable', () => {
+    // Nothing in a 58-claim eval run ever scored between 1 and 39: quality and
+    // recency floored every claim with any retrieval at ~45, which made both
+    // `weak-evidence` and `cited-unverified` in problemKind.ts dead code.
+    const oneWeakSource = computeStrengthScore(
+      [relevantItem({ venueType: 'preprint', year: YEAR - 15, relevanceRank: 5, textRelevance: 0.45 })],
+      'dense'
+    ).score
+    ok(oneWeakSource > 0, 'a claim with one relevant source is not a zero')
+    ok(oneWeakSource < 40, `one weak relevant source should land in the weak band (got ${oneWeakSource})`)
+  })
+
+  it('still reaches the strong band on genuinely good evidence', () => {
+    // The other half of the same requirement, and the reason quality was kept
+    // at 0.20 rather than taken to the fit's zero: driving it out collapsed
+    // everything above 70 to nothing.
+    const strong = computeStrengthScore(
+      Array.from({ length: 6 }, () => relevantItem({ textRelevance: 0.85, venueType: 'journal' })),
+      'dense'
+    ).score
+    ok(strong >= 70, `six strongly relevant journal sources should clear the strong band (got ${strong})`)
+  })
+
+  it('keeps venue quality worth something', () => {
+    // Kept deliberately against the fit, which wanted it at zero. If this ever
+    // stops holding, the weights have drifted back to a pure relevance count.
+    const good = computeStrengthScore([relevantItem({ venueType: 'journal' })], 'dense').score
+    const poor = computeStrengthScore([relevantItem({ venueType: 'preprint' })], 'dense').score
+    ok(good > poor, `a relevant journal paper should outscore a relevant preprint (${good} vs ${poor})`)
+  })
+})
