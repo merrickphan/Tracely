@@ -1,4 +1,4 @@
-import type { StructureWeaknessKind } from './types.ts'
+import type { CohesionFindingKind, StructureWeaknessKind } from './types.ts'
 
 /**
  * What to actually DO about each named weakness.
@@ -85,4 +85,41 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
  *  `types.ts` fails the typecheck here rather than silently rendering nothing. */
 export function guidanceFor(kind: StructureWeaknessKind): RevisionGuidance {
   return REVISION_GUIDANCE[kind]
+}
+
+/**
+ * The same three fields for a broken paragraph boundary.
+ *
+ * Cohesion findings had no guidance at all, because they were a read-only list
+ * in the report — a row of red bullets naming boundaries with nothing to do
+ * about any of them. They are now their own view where each boundary is opened
+ * and worked on, which means each one needs a move.
+ *
+ * Kept separate from REVISION_GUIDANCE rather than merged into one record: a
+ * weakness is about a paragraph and a cohesion finding is about the JOIN
+ * between two, so the two vocabularies are about different objects and a
+ * combined lookup would take a kind from either union and answer for the wrong
+ * one.
+ */
+export const COHESION_GUIDANCE: Record<CohesionFindingKind, RevisionGuidance> = {
+  'no-transition': {
+    move: 'Open the second paragraph by naming what the first one established, then turning. One clause is enough — the point is that the reader arrives already knowing why they are here.',
+    why: 'A paragraph that starts cold makes the reader do the joining. They can usually manage it, but every join they build themselves is one they might build differently from the one you intended.',
+    done: 'Read the last sentence of the first paragraph and the first sentence of the second, back to back and nothing else. If they sound like two people talking past each other, the bridge is still missing.'
+  },
+  'topic-jump': {
+    move: 'Decide whether these two paragraphs belong next to each other at all. If they do, write the sentence that explains the relationship. If they do not, move one — a reordering is a real fix and usually the better one.',
+    why: 'No shared vocabulary between adjacent paragraphs usually means the draft is organised by what you found rather than by what you are arguing. That is a structural problem, and a transition sentence pasted over it only hides it.',
+    done: 'Say out loud why the second paragraph comes after the first, in one sentence. If the honest answer is "because that is the order I wrote them in", reorder rather than bridge.'
+  },
+  'unanswered-counterargument': {
+    move: 'Reply to the objection before you conclude. Say what it gets right, then what it does not settle — and if you cannot answer it, change the thesis it defeats rather than walking past it.',
+    why: 'Raising an objection and then concluding reads as conceding it. The reader is left holding the strongest thing said against you, and your conclusion arrives sounding like it did not notice.',
+    done: 'Cover the conclusion. If the draft now ends on the objection and reads as a defeat, the reply is missing — the answer has to sit between them, not inside the closing paragraph.'
+  }
+}
+
+/** Guidance for a cohesion finding. Total over its union for the same reason. */
+export function cohesionGuidanceFor(kind: CohesionFindingKind): RevisionGuidance {
+  return COHESION_GUIDANCE[kind]
 }

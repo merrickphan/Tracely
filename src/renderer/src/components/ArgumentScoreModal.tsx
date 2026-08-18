@@ -4,6 +4,8 @@ import type {
   Claim,
   DocumentOutline,
   EvidenceItem,
+  CohesionFinding,
+  CohesionFindingKind,
   DraftCohesion,
   ParagraphRole,
   Source,
@@ -14,7 +16,7 @@ import type {
 // What to DO about each named weakness. A local template, never model output —
 // see the header of revisionGuidance.ts for why the report may prescribe the
 // move and never the sentence.
-import { guidanceFor } from '@shared/revisionGuidance'
+import { cohesionGuidanceFor, guidanceFor } from '@shared/revisionGuidance'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
@@ -299,6 +301,12 @@ type View =
   | { name: 'full' }
   | { name: 'paragraph'; index: number }
   | { name: 'argument' }
+  // The flow list, and one boundary opened out of it. `boundary` carries the
+  // index INTO cohesion.findings rather than the paragraph pair, because two
+  // findings can share a boundary — a topic jump and an unanswered
+  // counterargument are both about ¶4 → ¶5 and are different pieces of work.
+  | { name: 'cohesion' }
+  | { name: 'boundary'; findingIndex: number }
   | { name: 'evidence'; claimId: string; from: { name: 'paragraph'; index: number } | { name: 'argument' } }
 
 /**
@@ -457,6 +465,22 @@ export default function ArgumentScoreModal({
             onBack={() => setView({ name: 'summary' })}
             onClose={onClose}
           />
+        ) : view.name === 'boundary' ? (
+          <BoundaryDetail
+            finding={outline.cohesion?.findings[view.findingIndex] ?? null}
+            paragraphTexts={paragraphTexts}
+            onReveal={onReveal}
+            onBack={() => setView({ name: 'cohesion' })}
+            onClose={onClose}
+          />
+        ) : view.name === 'cohesion' ? (
+          <CohesionCheck
+            cohesion={outline.cohesion}
+            paragraphTexts={paragraphTexts}
+            onOpen={(findingIndex) => setView({ name: 'boundary', findingIndex })}
+            onBack={() => setView({ name: 'full' })}
+            onClose={onClose}
+          />
         ) : view.name === 'argument' ? (
           <ArgumentCheck
             claims={claims}
@@ -489,17 +513,26 @@ export default function ArgumentScoreModal({
 function ModalHead({
   title,
   onBack,
+  backLabel = 'Back to summary',
   onClose
 }: {
   title: string
   onBack?: () => void
+  /**
+   * Where Back actually goes. It was hardcoded "Back to summary", which was
+   * true of every view that existed when it was written and stopped being true
+   * the moment one view opened out of another: the Flow Check returns to the
+   * report and a boundary returns to the Flow Check, and a button that names a
+   * destination it does not go to is worse than an unlabelled arrow.
+   */
+  backLabel?: string
   onClose: () => void
 }): JSX.Element {
   return (
     <header className="argscore-head">
       {onBack ? (
         <button className="argscore-back" onClick={onBack}>
-          ← Back to summary
+          ← {backLabel}
         </button>
       ) : (
         <h2 className="argscore-title">{title}</h2>
@@ -701,7 +734,7 @@ function ScoreReport({
             </div>
           </div>
 
-          <CohesionCard cohesion={outline.cohesion} onSelect={setExpanded} />
+          <CohesionRow cohesion={outline.cohesion} onOpen={() => onView({ name: 'cohesion' })} />
 
           <div className="argscore-section-row">
             <h3 className="argscore-section">Breakdown by paragraph</h3>
@@ -882,17 +915,17 @@ function ScoreReport({
  * read as a failed one — printing "100%, strong flow" over a single paragraph
  * would turn that safe default into a compliment nothing earned.
  */
-function CohesionCard({
+function CohesionRow({
   cohesion,
-  onSelect
+  onOpen
 }: {
   cohesion: DraftCohesion | null
-  /** Opens the paragraph a finding is about, in the breakdown below. */
-  onSelect: (index: number) => void
+  onOpen: () => void
 }): JSX.Element | null {
   if (!cohesion || cohesion.boundaries === 0) return null
   const verdict = verdictFor(cohesion.score)
   const tone = toneFor(cohesion.score)
+  const n = cohesion.findings.length
 
   return (
     <section className="argscore-flow">
@@ -901,22 +934,201 @@ function CohesionCard({
         <span className={`argscore-verdict-pill tone-${tone}`}>{verdict}</span>
       </div>
       <ComponentBar value={cohesion.score} max={100} label="Flow score" />
-      {cohesion.findings.length > 0 ? (
-        <ul className="argscore-flow-list">
-          {cohesion.findings.map((finding, i) => (
-            <li key={`${finding.kind}-${i}`}>
-              <button className="argscore-flow-item" onClick={() => onSelect(finding.toIndex)}>
-                {finding.message}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
+      {/* The same shape "Open Argument Check →" has, and for the same reason:
+          this is a per-boundary surface with its own work in it, and a list of
+          nine red bullets sitting in the middle of the report was nine things
+          named and none of them openable. */}
+      <div className="argscore-section-row">
         <p className="argscore-flow-clear">
-          Every paragraph picks up where the last one left off.
+          {n === 0
+            ? 'Every paragraph picks up where the last one left off.'
+            : `${n} ${n === 1 ? 'boundary needs' : 'boundaries need'} work across ${cohesion.boundaries} ${
+                cohesion.boundaries === 1 ? 'join' : 'joins'
+              }.`}
         </p>
-      )}
+        {n > 0 ? (
+          <button className="argscore-link" onClick={onOpen}>
+            Open Flow Check →
+          </button>
+        ) : null}
+      </div>
     </section>
+  )
+}
+
+/**
+ * Every broken boundary, as a list you can open one at a time.
+ *
+ * The findings used to be printed inline in the report, which made them the
+ * only category of finding in the whole product with nothing behind it: a
+ * paragraph weakness opens a detail, a claim opens Find Evidence, and a
+ * transition gap opened the paragraph it pointed at — which is not where the
+ * problem is. The problem is the JOIN, and a join needs both sides on screen.
+ */
+function CohesionCheck({
+  cohesion,
+  paragraphTexts,
+  onOpen,
+  onBack,
+  onClose
+}: {
+  cohesion: DraftCohesion | null
+  paragraphTexts: string[]
+  onOpen: (findingIndex: number) => void
+  onBack: () => void
+  onClose: () => void
+}): JSX.Element {
+  const findings = cohesion?.findings ?? []
+
+  return (
+    <>
+      <ModalHead title="Flow Check" onBack={onBack} backLabel="Back to report" onClose={onClose} />
+      <div className="argscore-scroll argscore-detail">
+        <h2 className="argscore-detail-title">Cohesion &amp; flow</h2>
+        <div className="argscore-detail-meta">
+          {cohesion ? (
+            <span className={`argscore-verdict-pill tone-${toneFor(cohesion.score)}`}>
+              {verdictFor(cohesion.score)}
+            </span>
+          ) : null}
+          <span>
+            {cohesion?.score ?? 0}% flow · {findings.length} of {cohesion?.boundaries ?? 0}{' '}
+            {(cohesion?.boundaries ?? 0) === 1 ? 'join' : 'joins'} flagged
+          </span>
+        </div>
+
+        {findings.length === 0 ? (
+          <p className="argscore-flow-clear">Every paragraph picks up where the last one left off.</p>
+        ) : (
+          <div className="argscore-rows">
+            {findings.map((finding, i) => (
+              <button
+                type="button"
+                key={`${finding.kind}-${finding.fromIndex}-${finding.toIndex}-${i}`}
+                className="argscore-boundary-row"
+                data-kind={finding.kind}
+                onClick={() => onOpen(i)}
+              >
+                <span className="argscore-boundary-pair">
+                  ¶{finding.fromIndex} → ¶{finding.toIndex}
+                </span>
+                <span className="argscore-boundary-body">
+                  <span className="argscore-boundary-label">{COHESION_LABEL[finding.kind]}</span>
+                  {/* The last words of one paragraph and the first of the next
+                      — the actual seam, which is the thing being judged. */}
+                  <span className="argscore-boundary-seam">
+                    …{tailOf(paragraphTexts[finding.fromIndex - 1])} ⁄{' '}
+                    {headOf(paragraphTexts[finding.toIndex - 1])}…
+                  </span>
+                </span>
+                <span className="argscore-boundary-go" aria-hidden="true">
+                  →
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+const COHESION_LABEL: Record<CohesionFindingKind, string> = {
+  'no-transition': 'Starts cold',
+  'topic-jump': 'Topic jump',
+  'unanswered-counterargument': 'Objection left unanswered'
+}
+
+/** Last / first few words, for the seam preview. Whole words only — a preview
+ *  cut mid-word reads as a different kind of text than the student wrote. */
+function tailOf(text: string | undefined, words = 9): string {
+  const parts = (text ?? '').trim().split(/\s+/).filter(Boolean)
+  return parts.slice(-words).join(' ')
+}
+function headOf(text: string | undefined, words = 9): string {
+  const parts = (text ?? '').trim().split(/\s+/).filter(Boolean)
+  return parts.slice(0, words).join(' ')
+}
+
+/**
+ * One boundary, opened — both sides of the seam and the move that repairs it.
+ *
+ * Deliberately shows the END of the first paragraph and the START of the
+ * second rather than either paragraph whole. The finding is about the join,
+ * and a full paragraph of prose above the guidance buries the two sentences
+ * that are actually adjacent.
+ */
+function BoundaryDetail({
+  finding,
+  paragraphTexts,
+  onReveal,
+  onBack,
+  onClose
+}: {
+  finding: CohesionFinding | null
+  paragraphTexts: string[]
+  onReveal: (target: RevealTarget) => void
+  onBack: () => void
+  onClose: () => void
+}): JSX.Element {
+  if (!finding) {
+    return (
+      <>
+        <ModalHead title="" onBack={onBack} backLabel="Back to Flow Check" onClose={onClose} />
+        <div className="argscore-state">
+          <p className="muted">That boundary is no longer in the draft.</p>
+        </div>
+      </>
+    )
+  }
+
+  const guidance = cohesionGuidanceFor(finding.kind)
+  const before = paragraphTexts[finding.fromIndex - 1] ?? ''
+  const after = paragraphTexts[finding.toIndex - 1] ?? ''
+
+  return (
+    <>
+      <ModalHead title="" onBack={onBack} backLabel="Back to Flow Check" onClose={onClose} />
+      <div className="argscore-scroll argscore-detail">
+        <h2 className="argscore-detail-title">
+          ¶{finding.fromIndex} → ¶{finding.toIndex} — {COHESION_LABEL[finding.kind]}
+        </h2>
+        <p className="argscore-problem-body">{finding.message}</p>
+
+        {/* The seam itself, in reading order, with the gap drawn between the
+            two halves. This is the whole evidence for the finding. */}
+        <div className="argscore-seam">
+          <div className="argscore-seam-side">
+            <span className="argscore-seam-label">End of ¶{finding.fromIndex}</span>
+            <p className="argscore-quote">…{tailOf(before, 34)}</p>
+          </div>
+          <div className="argscore-seam-gap" aria-hidden="true" />
+          <div className="argscore-seam-side">
+            <span className="argscore-seam-label">Start of ¶{finding.toIndex}</span>
+            <p className="argscore-quote">{headOf(after, 34)}…</p>
+          </div>
+        </div>
+
+        <div className="argscore-section-row">
+          <button
+            className="argscore-link"
+            onClick={() => onReveal({ claimId: null, paragraphIndex: finding.toIndex })}
+          >
+            Show me in the document →
+          </button>
+        </div>
+
+        <h3 className="argscore-section">How to fix this</h3>
+        <dl className="argscore-guidance-body">
+          <dt>Do this</dt>
+          <dd>{guidance.move}</dd>
+          <dt>Why it works</dt>
+          <dd>{guidance.why}</dd>
+          <dt>You will know it worked when</dt>
+          <dd>{guidance.done}</dd>
+        </dl>
+      </div>
+    </>
   )
 }
 
