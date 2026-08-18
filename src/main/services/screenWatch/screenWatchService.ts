@@ -66,6 +66,9 @@ import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
+// Whether a poll result that arrived after an await may still be drawn — see
+// tickGuard.ts for the bug this exists to stop.
+import { tickDecision } from './tickGuard'
 import { logScreenWatch, resetScreenWatchLog } from './debugLog'
 import { clearHoverState, setDragActive, startHoverTracking, stopHoverTracking } from './hoverTracking'
 import {
@@ -588,8 +591,29 @@ function documentChangeReason(processName: string, text: string): string | null 
 async function tick(): Promise<void> {
   if (!enabled || ticking) return
   ticking = true
+  // Sampled BEFORE the await, so the result can be checked against the world
+  // it was requested in rather than the one it arrives in.
+  const generationAtTickStart = trackingGeneration
   try {
     const snapshot = await takeUiaSnapshot(currentSpans)
+
+    // PowerShell takes hundreds of milliseconds, and the user can turn Screen
+    // Watch off inside that window. `stopScreenWatch` clears the timer, but it
+    // cannot stop a tick that is already awaiting — and because `enabled` is
+    // then false, the `finally` below does not reschedule, so nothing would
+    // ever run again to take these underlines down. They would stay drawn over
+    // every application, at screen-saver level, until the feature was switched
+    // back on. See tickGuard.ts.
+    const decision = tickDecision({
+      enabled,
+      generationAtStart: generationAtTickStart,
+      generationNow: trackingGeneration
+    })
+    if (decision === 'clear') {
+      clearOverlay()
+      return
+    }
+    if (decision === 'discard') return
 
     if (!snapshot.ok) {
       lastError = snapshot.error
@@ -1297,6 +1321,14 @@ function updateOverlayAndWidget(
   // written to stop. `clearOverlay()` rather than `hideOverlay()`, because
   // hiding alone is what left stale underlines to be re-shown on the next
   // present; clearing the state with it is this branch's whole point.
+  // Belt and braces with the guard in `tick`. This is the single function that
+  // can put the overlay on screen, so a disabled watcher is refused here too
+  // rather than trusting every caller to have checked.
+  if (!enabled) {
+    clearOverlay()
+    return
+  }
+
   const focused = focusedShieldableWindow()
   if (focused === 'main' || focused === 'floating') {
     clearOverlay()
@@ -1721,7 +1753,11 @@ export function stopScreenWatch(): void {
   }
   stopHoverTracking()
   resetTrackingState()
-  hideOverlay()
+  // clearOverlay, not hideOverlay. Hiding leaves the renderer holding the last
+  // payload and leaves `lastSentPayloadKey` stale, so the underlines are still
+  // there to be re-shown by the next present — and on re-enable an identical
+  // first payload would be swallowed by the dedupe in updateOverlayAndWidget.
+  clearOverlay()
   emitStatus({
     enabled: false,
     active: false,
