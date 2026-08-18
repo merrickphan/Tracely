@@ -17,6 +17,7 @@ import type {
 // see the header of revisionGuidance.ts for why the report may prescribe the
 // move and never the sentence.
 import { cohesionGuidanceFor, guidanceFor } from '@shared/revisionGuidance'
+import { searchableClaims } from '@shared/coverageCounts'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
@@ -588,7 +589,14 @@ function ScoreReport({
   onClose: () => void
 }): JSX.Element {
   const { detected, withRelevantSource, withOwnCitation, unchecked } = outline.coverage
+  // Undefined on an outline stored before the field existed — zero disclosure,
+  // not zero out-of-scope claims. See EvidenceCoverage.outsideIndexes.
+  const outsideIndexes = outline.coverage.outsideIndexes ?? 0
   const checked = detected - unchecked
+  // The denominator is claims Tracely could MEANINGFULLY search — the rule and
+  // the reason it is floored live in shared/coverageCounts.ts, where the test
+  // runner can reach them.
+  const searchable = searchableClaims(checked, outsideIndexes, withRelevantSource)
   const { words, sentences, uniqueWords } = readingStats(paragraphTexts)
   const grade = gradeFor(outline.score)
 
@@ -706,10 +714,24 @@ function ScoreReport({
             <p className="argscore-verdict-sub">
               {checked === 0 ? (
                 'Not checked against the literature yet.'
+              ) : searchable === 0 ? (
+                'None of these claims are the kind academic databases hold.'
               ) : (
                 <>
-                  Tracely found supporting evidence for {withRelevantSource} of the {checked} it
-                  checked
+                  Tracely found supporting evidence for {withRelevantSource} of the {searchable} it
+                  could search
+                  {/*
+                    Stated, never silently subtracted. The whole point of
+                    holding these out of the ratio is honesty about what the
+                    search covers, and a denominator that quietly shrank would
+                    be the same concealment pointing the other way.
+                  */}
+                  {outsideIndexes > 0 ? (
+                    <span className="argscore-unchecked">
+                      {' '}
+                      · {outsideIndexes} these databases don’t cover
+                    </span>
+                  ) : null}
                   {unchecked > 0 ? (
                     <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
                   ) : null}

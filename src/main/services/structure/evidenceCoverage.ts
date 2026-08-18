@@ -10,6 +10,8 @@ import { isCitedInScope } from '../../../shared/citationScope.ts'
 // a module `node --test` loads directly. claimSpans.ts itself only type-imports,
 // so it is safe to pull in here.
 import { computeClaimSpans } from '../../../shared/claimSpans.ts'
+// Same rule again — a runtime import in a module `node --test` loads directly.
+import { retrievalScopeFor } from '../../../shared/retrievalScope.ts'
 import type { Claim, EvidenceCoverage } from '@shared/types'
 
 /**
@@ -40,6 +42,21 @@ function isResolved(claim: Claim): boolean {
 
 function hasRelevantSource(claim: Claim): boolean {
   return (claim.scoreBreakdown?.sourceCount ?? 0) > 0
+}
+
+/**
+ * A claim the four academic indexes were never going to hold.
+ *
+ * Asked of the claim TEXT and nothing else, so it is true whether or not a
+ * search has run — which is what lets `claimsWithoutEvidence` withhold the
+ * `unsupported-claim` weakness for these. "This draft makes claims nothing
+ * supports" is a serious thing to tell a student, and over a close reading of a
+ * novel or a line from a statute it is not a finding about the draft at all;
+ * it is retrieval's coverage, restated as the writer's failure. See
+ * retrievalScope.ts.
+ */
+function isOutsideIndexes(claim: Claim): boolean {
+  return retrievalScopeFor(claim.text) !== null
 }
 
 /**
@@ -75,7 +92,8 @@ export function computeEvidenceCoverage(claims: Claim[], documentText?: string):
       strengths.length === 0
         ? null
         : Math.round(strengths.reduce((sum, score) => sum + score, 0) / strengths.length),
-    unchecked: claims.length - resolved.length
+    unchecked: claims.length - resolved.length,
+    outsideIndexes: claims.filter(isOutsideIndexes).length
   }
 }
 
@@ -88,5 +106,7 @@ export function computeEvidenceCoverage(claims: Claim[], documentText?: string):
  * unsupported before checking would be an accusation the app cannot back.
  */
 export function claimsWithoutEvidence(claims: Claim[]): string[] {
-  return claims.filter((claim) => isResolved(claim) && !hasRelevantSource(claim)).map((claim) => claim.id)
+  return claims
+    .filter((claim) => isResolved(claim) && !hasRelevantSource(claim) && !isOutsideIndexes(claim))
+    .map((claim) => claim.id)
 }

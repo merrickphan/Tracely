@@ -64,6 +64,7 @@ import {
 } from '@shared/inlineCitation'
 import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
+import { retrievalScopeFor } from '@shared/retrievalScope'
 import { computeWatchOutline } from './watchOutline'
 import { clipUnderline, resolveClip } from './clipRects'
 // Whether a poll result that arrived after an await may still be drawn — see
@@ -1394,7 +1395,8 @@ function updateOverlayAndWidget(
                 hasRelevantSource: hasRelevantSource(evidence.breakdown)
               }
             : null,
-          critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null
+          critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null,
+          outOfIndexScope: retrievalScopeFor(c.text)
         })
       ] as const
     })

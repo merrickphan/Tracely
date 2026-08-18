@@ -4,6 +4,7 @@ import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { findProseIssues, replacementRange, type ProseIssue } from '@shared/proseIssues'
 import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
+import { retrievalScopeFor } from '@shared/retrievalScope'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
 // The app is scaled with CSS `zoom`, which puts measured rects and the
 // coordinates marks are DRAWN in into two different spaces. See zoomLayout.ts.
@@ -131,7 +132,8 @@ export function measureMarks(
         count: evidence.count,
         hasRelevantSource: hasRelevantSource(span.claim.scoreBreakdown)
       },
-      critiqueVerdict: span.claim.critiqueVerdict
+      critiqueVerdict: span.claim.critiqueVerdict,
+      outOfIndexScope: retrievalScopeFor(span.claim.text)
     }) as MarkProblemKind[]
     // Nothing is wrong with this sentence. Not drawing it is the point: a
     // document where every claim is underlined tells the writer nothing.

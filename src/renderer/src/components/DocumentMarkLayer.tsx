@@ -615,7 +615,12 @@ function MarkPopover({
   })
 
   const { title, description, action } = popoverCopyFor(
-    { claimType: mark.claim.claimType, hasInlineCitation: mark.hasInlineCitation, critique: mark.claim.critique },
+    {
+      claimType: mark.claim.claimType,
+      hasInlineCitation: mark.hasInlineCitation,
+      critique: mark.claim.critique,
+      text: mark.claim.text
+    },
     mark.evidence,
     kind
   )

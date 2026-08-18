@@ -1,5 +1,6 @@
 import type { ScreenWatchClaimEvidence, ScreenWatchClaimSummary, ScreenWatchProblemKind } from '@shared/ipc-contract'
 import { hasRelevantSource } from '@shared/problemKind'
+import { retrievalScopeFor, type OutOfScopeReason } from '@shared/retrievalScope'
 import type { ClaimType } from '@shared/types'
 
 /**
@@ -60,6 +61,12 @@ export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   // Attribution: the sentence needs a citation, or the one it has is suspect.
   'missing-citation': DESIGN_AMBER,
   'cited-unverified': DESIGN_AMBER,
+  // Amber, with the attribution group rather than the evidence one. Orange is
+  // the design's colour for "the evidence is missing or thin", and that is a
+  // finding about the literature — the one thing this kind exists to stop
+  // asserting. What is actually left to do here is add a citation, which is
+  // what amber means everywhere else in the palette.
+  'outside-index': DESIGN_AMBER,
   // Nothing known yet — deliberately the quietest thing on screen, since it
   // resolves on its own within a few seconds. Not a state the design draws.
   searching: '#9a9ba1'
@@ -81,7 +88,43 @@ export const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
   'cited-unverified': 'Citation may not support this',
   'partial-evidence': 'Partially supported',
   'missing-citation': 'Missing citation',
+  // Not "unverified" and not "no sources". Both of those are verdicts on the
+  // sentence; this one is a disclosure about the search.
+  'outside-index': 'Not in these databases',
   searching: 'Checking…'
+}
+
+/**
+ * What the card says when the databases were never going to hold the sentence.
+ *
+ * Five wordings rather than one, because the repair is different in each case
+ * and a generic "we could not check this" leaves the writer exactly where the
+ * old "No supporting sources" did — knowing something is wrong, with no idea
+ * what to do. Each of these names the source the writer already has.
+ *
+ * Every one is phrased as a fact about the SEARCH, not about the sentence. The
+ * claim may well be true and well-evidenced; Tracely has simply looked in the
+ * wrong library for it, and says so.
+ */
+const OUT_OF_SCOPE_TITLE: Record<OutOfScopeReason, string> = {
+  'primary-text': 'Cite the text itself',
+  'legal-text': 'Cite the statute itself',
+  'local-fact': 'Cite the record itself',
+  prediction: 'A claim about the future',
+  personal: 'Your own observation'
+}
+
+const OUT_OF_SCOPE_BODY: Record<OutOfScopeReason, string> = {
+  'primary-text':
+    'This reads as a claim about the work itself, and Tracely searches journal databases — they hold criticism about a novel, not the novel. Cite the page or line you are reading.',
+  'legal-text':
+    'This reads as a claim about what a law says. Journal databases index articles about legislation, not the text of it. Cite the section directly.',
+  'local-fact':
+    'This reads as a claim about one institution’s own records. Nothing in the academic databases covers a single district or campus. Cite the report, minutes or dataset you got it from.',
+  prediction:
+    'This is a claim about something that has not happened yet, so no study can confirm it. Cite the projection you are relying on, and say whose it is.',
+  personal:
+    'This is your own observation, which is a legitimate thing to put in an essay and not something a database can check. Say plainly that it is yours.'
 }
 
 export type Bucket = 'statistic' | 'factual' | 'causal' | 'other'
@@ -226,10 +269,25 @@ export function problemCopyFor(
  * surfaces draw it as a spinner rather than a title/description/button.
  */
 export function popoverCopyFor(
-  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation' | 'critique'>,
+  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation' | 'critique' | 'text'>,
   evidence: ScreenWatchClaimEvidence,
   kind: Exclude<ScreenWatchProblemKind, 'searching'>
 ): ProblemCopy {
+  if (kind === 'outside-index') {
+    // The reason is recomputed from the claim's text rather than carried on the
+    // payload. It is a pure function of that string — the same one main ran to
+    // decide the kind — so a second field would be a second copy of one answer,
+    // free to disagree with the underline after an edit.
+    const reason = retrievalScopeFor(claim.text)
+    return {
+      title: OUT_OF_SCOPE_TITLE[reason ?? 'local-fact'],
+      description: OUT_OF_SCOPE_BODY[reason ?? 'local-fact'],
+      // Never "Find a source". The card has just said this search cannot find
+      // one, and offering the search anyway is how a disclosure turns back into
+      // a wild goose chase. The writer knows where their own source is.
+      action: 'Cite it yourself'
+    }
+  }
   if (kind === 'overstated-claim') {
     // Was falling through to problemCopyFor, i.e. to the retrieval copy — and
     // that is the one outcome problemKind.ts says this kind exists to prevent.

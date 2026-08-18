@@ -1,4 +1,5 @@
 import type { ClaimType, CritiqueVerdict, ScoreBreakdown } from '@shared/types'
+import type { OutOfScopeReason } from './retrievalScope'
 
 /**
  * What is actually wrong with a claim — decided once, in main, and sent to the
@@ -57,6 +58,19 @@ export type ScreenWatchProblemKind =
   | 'unverified-statistic'
   /** Searched, and nothing relevant came back at all. */
   | 'no-sources'
+  /**
+   * Nothing came back, and nothing was ever going to: the sentence is about a
+   * primary text, a statute, one institution's own records, the writer's own
+   * observation, or something that has not happened yet.
+   *
+   * A different sentence from 'no-sources', not a softer one. "No supporting
+   * sources" is a report on the literature, and over a claim four scholarly
+   * indexes structurally cannot hold, it is a report on nothing — the app
+   * describing the shape of its own corpus in the grammar of a fault in the
+   * writing. The claim still needs a citation; Tracely just stops saying it
+   * looked for one where it could not have been. See retrievalScope.ts.
+   */
+  | 'outside-index'
   /** Sources exist but score poorly for supporting this specific claim. */
   | 'weak-evidence'
   /** Sources qualify the claim rather than confirming it. */
@@ -101,6 +115,15 @@ export interface ProblemKindInput {
     hasRelevantSource: boolean
   } | null
   critiqueVerdict: CritiqueVerdict | null
+  /**
+   * Why the academic indexes were never going to hold this sentence, or null.
+   *
+   * Read off the claim's own text with `retrievalScopeFor`. It changes nothing
+   * when evidence WAS found — a close reading that turns out to have criticism
+   * written about it is scored on that criticism like anything else. It only
+   * decides what an empty result set is allowed to be called.
+   */
+  outOfIndexScope?: OutOfScopeReason | null
 }
 
 /**
@@ -178,7 +201,8 @@ export function problemKindsFor({
   claimType,
   hasInlineCitation,
   evidence,
-  critiqueVerdict
+  critiqueVerdict,
+  outOfIndexScope = null
 }: ProblemKindInput): ScreenWatchProblemKind[] {
   // Nothing is known yet, so nothing else can be asserted. Sole kind.
   if (!evidence) return ['searching']
@@ -228,8 +252,15 @@ export function problemKindsFor({
   // against. Cited figures are excluded for the reason above: we have not
   // read the source the writer named, so "unverified" would be our word for
   // "not indexed by OpenAlex", which is not what the reader will hear.
-  if (nothingFound && !hasInlineCitation && claimType === 'statistic') kinds.push('unverified-statistic')
-  if (nothingFound && !hasInlineCitation && claimType !== 'statistic') kinds.push('no-sources')
+  // Nothing came back, and nothing was going to. The two retrieval findings
+  // below are both statements about the literature, and there is no literature
+  // to make a statement about — so this replaces them rather than joining them.
+  // Emitting both would print "No supporting sources" underneath "these
+  // databases do not hold this kind of claim", which is the accusation the
+  // second line exists to withdraw.
+  if (nothingFound && !hasInlineCitation && outOfIndexScope) kinds.push('outside-index')
+  else if (nothingFound && !hasInlineCitation && claimType === 'statistic') kinds.push('unverified-statistic')
+  else if (nothingFound && !hasInlineCitation) kinds.push('no-sources')
 
   if (!nothingFound && !hasInlineCitation) {
     if (evidence.score < MIXED) kinds.push('weak-evidence')
@@ -284,6 +315,11 @@ const SEVERITY: ScreenWatchProblemKind[] = [
   'weak-evidence',
   'partial-evidence',
   'missing-citation',
+  // Last of the real findings. Everything above it is something Tracely
+  // established about the sentence; this is the one that reports what it could
+  // not establish, so it must never outrank a claim there IS something to say
+  // about — it would push a contradicted fact down the widget's list.
+  'outside-index',
   'searching'
 ]
 
