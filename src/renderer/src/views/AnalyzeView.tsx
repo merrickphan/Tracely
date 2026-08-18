@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CitationStyle, Claim, DocumentOutline, DocumentRecord, Source } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
+import { clientToLayout, contentOffset, readZoom } from '@shared/zoomLayout'
 import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
@@ -719,12 +720,13 @@ function DocumentEditor({
     if (!block) return
     const wrapRect = wrap.getBoundingClientRect()
     const r = block.getBoundingClientRect()
+    const zoom = readZoom(window, document.documentElement)
     flashRects([
       {
-        left: r.left - wrapRect.left + wrap.scrollLeft,
-        top: r.top - wrapRect.top + wrap.scrollTop,
-        width: r.width,
-        height: r.height
+        left: contentOffset(r.left - wrapRect.left, wrap.scrollLeft, zoom),
+        top: contentOffset(r.top - wrapRect.top, wrap.scrollTop, zoom),
+        width: clientToLayout(r.width, zoom),
+        height: clientToLayout(r.height, zoom)
       }
     ])
   }
@@ -761,8 +763,14 @@ function DocumentEditor({
     // "Insert citation" swaps the card out from under the cursor.
     if (flowPinnedRef.current) return
     const rect = wrap.getBoundingClientRect()
-    const x = event.clientX - rect.left + wrap.scrollLeft
-    const y = event.clientY - rect.top + wrap.scrollTop
+    // clientX/clientY and rect.left/top are both POST-ZOOM; scrollLeft/Top are
+    // layout px, and so are the mark rects being hit-tested against. Without
+    // the conversion the cursor and the marks disagree by the zoom factor, so
+    // on a resized window the popover opens for a sentence the pointer is
+    // nowhere near — or for none at all.
+    const zoom = readZoom(window, document.documentElement)
+    const x = contentOffset(event.clientX - rect.left, wrap.scrollLeft, zoom)
+    const y = contentOffset(event.clientY - rect.top, wrap.scrollTop, zoom)
     const hit = markAt(marks, x, y)
     if (!hit) {
       if (activeMark) setActiveMark(null)
