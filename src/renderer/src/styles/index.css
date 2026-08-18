@@ -5101,11 +5101,27 @@ textarea:disabled {
   position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 19px 23px 8px;
   box-sizing: border-box;
+  /* The card's own chrome, which the frame draws and this view was missing —
+     `bg-white`, a 1px border, 28px radius and the -13px/13px shadow, all
+     read off 58:172. Without it the page rendered straight onto the
+     TRANSPARENT window (createMainWindow sets `transparent: true`), so there
+     was no card at all: text and cards floating over the desktop with the
+     drop shadow drawn around nothing.
+
+     Same four declarations as `.analyze-view` and `.settings-shell` above,
+     because every full-screen view in this app IS the card — see the note on
+     `.app-shell`. */
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 28px;
+  box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
   /* The card is the window's drag region; everything interactive below opts
      back out via the global input/button rule. */
   -webkit-app-region: drag;
@@ -5282,6 +5298,10 @@ textarea:disabled {
   padding: 0 24px;
 }
 
+[data-theme='dark'] .docs-view {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
 [data-theme='dark'] .docs-title,
 [data-theme='dark'] .docs-card-title {
   color: var(--text);
