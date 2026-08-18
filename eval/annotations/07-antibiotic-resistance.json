@@ -2,7 +2,12 @@
   "essay": "07-antibiotic-resistance.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "counterargument",
+      "conclusion"
+    ]
   },
   "note": "Added to close two structural gaps at once. (1) PubMed has never been the RIGHT provider for a whole essay. domainRouter.ts carries a full 'biomedical' branch and three anchors for it, and the only claim in the set that exercises it is one sleep sentence inside a school-policy essay — so the router's biomedical path has been measured on n=1. Every claim here is clinical, which means this essay can tell a biomedical routing win from a biomedical routing loss. (2) 'contradicted' appeared zero times across the previous six essays, despite problemKind.ts ranking contradicted-claim above every other kind and CRITIQUE_SYSTEM_PROMPT reserving a whole verdict for it. The highest-priority problem kind in the product had no test case. Claim 2 is one. Also carries the set's first clean compound sentence (claim 3), for the rule RUBRIC.md leaves provisional. Secondary value: 'resistance' is heavily polysemous — insulin resistance, electrical resistance, resistance training — so this essay is a natural probe for the lexical-collision demotion the rubric already describes.",
   "claims": [
@@ -12,7 +17,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The GRAM study (Murray et al., Lancet 2022, estimating 2019 burden). A single, specific, heavily-cited paper states exactly this figure, so retrieval failing here is a retrieval failure and not an ambiguity about what counts as evidence — which makes it the cleanest positive control in the whole set. Expect the failure mode to be near-misses: the same consortium published several companion papers with different denominators (deaths 'associated with' resistance, 4.95 million, rather than 'attributable to'). A companion paper is marg, not rel — it evidences a different number than the sentence asserts."
+      "note": "The GRAM study (Murray et al., Lancet 2022, estimating 2019 burden). A single, specific, heavily-cited paper states exactly this figure, so retrieval failing here is a retrieval failure and not an ambiguity about what counts as evidence — which makes it the cleanest positive control in the whole set. Expect the failure mode to be near-misses: the same consortium published several companion papers with different denominators (deaths 'associated with' resistance, 4.95 million, rather than 'attributable to'). A companion paper is marg, not rel — it evidences a different number than the sentence asserts.",
+      "support": {
+        "rel": 5,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "The GBD 2019 AMR paper itself, its 33-pathogen companion, the 1990-2021 update and two news write-ups of the same study all carry the 1.27 million figure and the HIV/malaria comparison. The 10-million-by-2050 projection and the US-only threats report are a different claim."
     },
     {
       "text": "The mechanism is simple enough: every time a person takes an antibiotic their body adapts to the drug, so it works less well the next time they need it.",
@@ -28,7 +39,13 @@
       "verdict": "unsupported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "COMPOUND — the case RUBRIC.md says it does not settle, chosen deliberately as a clean instance. First half is a real and specific finding (Fleming-Dutra et al., JAMA 2016, ~30% of US outpatient antibiotic prescriptions unnecessary). Second half is an unevidenced causal leap: hospital-acquired resistant infection is driven substantially by inpatient prescribing and in-facility transmission, and no source attributes it primarily to outpatient overprescription. Verdict is 'unsupported' because the README says to label the sentence AS PHRASED, and as phrased it asserts the causal claim. Under the provisional compound rule the SOURCE labels go against the outpatient-prescribing half, since that is what any query built from this sentence will retrieve — so expect a claim that scores well on sources while its actual assertion is unevidenced. That gap is the point of including it."
+      "note": "COMPOUND — the case RUBRIC.md says it does not settle, chosen deliberately as a clean instance. First half is a real and specific finding (Fleming-Dutra et al., JAMA 2016, ~30% of US outpatient antibiotic prescriptions unnecessary). Second half is an unevidenced causal leap: hospital-acquired resistant infection is driven substantially by inpatient prescribing and in-facility transmission, and no source attributes it primarily to outpatient overprescription. Verdict is 'unsupported' because the README says to label the sentence AS PHRASED, and as phrased it asserts the causal claim. Under the provisional compound rule the SOURCE labels go against the outpatient-prescribing half, since that is what any query built from this sentence will retrieve — so expect a claim that scores well on sources while its actual assertion is unevidenced. That gap is the point of including it.",
+      "support": {
+        "rel": 3,
+        "total": 12
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "The JAMA 2016 ambulatory-care prevalence study is the 30 percent figure, with its companion editorial and the 2000-2010 outpatient prescribing trend. Nothing retrieved supports the second half - that outpatient overprescription is the MAIN reason hospital resistance rose - which is a causal leap the sources do not make."
     },
     {
       "text": "Resistance genes have been recovered from permafrost sediment tens of thousands of years older than any human medicine, which suggests resistance is an ordinary feature of bacterial life rather than something modern prescribing invented.",
@@ -36,7 +53,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "D'Costa et al., Nature 2011 — 30,000-year-old permafrost resistome. The factual half is squarely supported; the 'which suggests' half is the student's inference and is flagged as inference by its own grammar, which is the correct thing for a claim detector to notice. Second reason for including it: it is a paleogenomics paper reached from a clinical essay, so it tests whether the biomedical route can still surface a source that is not itself clinical."
+      "note": "D'Costa et al., Nature 2011 — 30,000-year-old permafrost resistome. The factual half is squarely supported; the 'which suggests' half is the student's inference and is flagged as inference by its own grammar, which is the correct thing for a claim detector to notice. Second reason for including it: it is a paleogenomics paper reached from a clinical essay, so it tests whether the biomedical route can still surface a source that is not itself clinical.",
+      "support": {
+        "rel": 3,
+        "total": 10
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Both 2008 East Siberia permafrost isolation papers are exactly the study being described, and Antibiotic resistance in the environment carries the wider point. The remaining permafrost hits are geology and hydrology - a clean topic collision on one word."
     },
     {
       "text": "If nothing changes, routine surgery will become impossible within a decade, because the procedures we treat as safe are only safe on the assumption that an infection afterward can be cleared.",
@@ -44,7 +67,13 @@
       "verdict": "unverifiable",
       "citationWorthy": "borderline",
       "sources": [],
-      "note": "A prediction, so nothing can settle it — but unlike the interpretive sentences in 06-frankenstein, this one has a real literature standing near it (the O'Neill AMR review and similar make comparable projections). Borderline rather than no: a marker would accept a citation here and would also accept its absence. Included as the set's first case where the right answer is 'a source exists, and it still cannot make this sentence true'."
+      "note": "A prediction, so nothing can settle it — but unlike the interpretive sentences in 06-frankenstein, this one has a real literature standing near it (the O'Neill AMR review and similar make comparable projections). Borderline rather than no: a marker would accept a citation here and would also accept its absence. Included as the set's first case where the right answer is 'a source exists, and it still cannot make this sentence true'.",
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "A forecast about the next decade, which no retrieval can evidence. The orthopaedic and periprosthetic infection papers are the nearest thing and speak to surgical infection risk, not to routine surgery becoming impossible."
     }
   ]
 }

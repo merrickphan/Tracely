@@ -20,7 +20,13 @@
       "note": "FABRICATED CITATION. Now filed under the `fabricated` verdict added for this case; it was `unsupported` before, and the note here used to say that was wrong in a way it could not be fixed without inventing schema. No paper matching this author-year-and-finding exists in any of the four indexes searched. The distinction from 05-social-media is the point: that one is a real source that does not say what the sentence claims, this one is no source at all. Both produce identical retrieval behaviour, which is exactly why the verdict has to carry the difference. `citedSource.searchedFor` is required by validation so the claim stays falsifiable.",
       "citedSource": {
         "searchedFor": "Ramirez and Doyle 2024 AI-generated feedback revision quality; author-pair search on OpenAlex, Crossref, Semantic Scholar and Google Scholar for any 2023-2025 paper by a Ramirez with a Doyle on AI feedback and student revision"
-      }
+      },
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Ramirez and Doyle 2024 does not exist, and nothing retrieved is it. The AI-feedback literature that came back is real and on topic but evidences none of the three specifics - the 23 percent, the single semester, or the comparison against every human intervention."
     },
     {
       "text": "Their sample was large and the effect held across grade levels, so the usual complaints about small studies do not apply here.",
@@ -31,7 +37,13 @@
       "note": "The second sentence of the same fabricated citation, and where the tell usually is: it describes methodology in the vaguest terms available ('large', 'held across grade levels') because there is no methods section to paraphrase. Kept as a separate claim, and separately `fabricated`, because a detector that catches only the sentence carrying the parenthetical would miss the follow-on sentences that do the actual persuading.",
       "citedSource": {
         "searchedFor": "the same Ramirez and Doyle (2024) study this sentence continues describing — same four indexes, plus a methods search for any large multi-grade-level study of AI-generated feedback on revision quality by any author"
-      }
+      },
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "A claim about the sample of a study that does not exist. Every hit is a collision on sample size or grade level: Louisiana soil shear strength, Stata regression speed, qualitative research methods."
     },
     {
       "text": "GPT-5 class models now score above the median human rater on the AP English Language essay rubric, according to the vendor's own published evaluation.",
@@ -39,7 +51,13 @@
       "verdict": "unsupported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "Not fabricated and not necessarily false — structurally unreachable. The evidence a marker would want is a vendor evaluation published on a company site within the last few months: real, public, citable, and indexed by none of OpenAlex, Crossref, Semantic Scholar or PubMed. Every source retrieval CAN return here is older work about automated essay scoring, which is the right topic and a different proposition, so marg under question 2 of the ladder. This is the first claim in the set that distinguishes 'nothing exists' from 'nothing these four providers index', and those should not produce the same output to a student."
+      "note": "Not fabricated and not necessarily false — structurally unreachable. The evidence a marker would want is a vendor evaluation published on a company site within the last few months: real, public, citable, and indexed by none of OpenAlex, Crossref, Semantic Scholar or PubMed. Every source retrieval CAN return here is older work about automated essay scoring, which is the right topic and a different proposition, so marg under question 2 of the ladder. This is the first claim in the set that distinguishes 'nothing exists' from 'nothing these four providers index', and those should not produce the same output to a student.",
+      "support": {
+        "rel": 0,
+        "total": 14
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Real AES literature came back, but all of it is GPT-4 era and none of it is a vendor evaluation against the AP English Language rubric. The LLM rater-effects paper is the closest and still evidences a different comparison."
     },
     {
       "text": "Every student I know already uses one, so the honest thing for schools to do is grade with them too instead of pretending otherwise.",

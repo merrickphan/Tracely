@@ -2,7 +2,14 @@
   "essay": "13-peer-review.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "evidence", "reasoning", "evidence", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "evidence",
+      "reasoning",
+      "evidence",
+      "conclusion"
+    ]
   },
   "note": "11-debt-threshold opened a case RUBRIC.md still lists as OPEN: a source that addresses the exact proposition and is wrong anyway. Its closing suggestion was that this may not be a labelling problem at all — 'Crossref publishes retraction and correction relationships, and this is the shape of claim a citing-context or stance signal would catch.' Nothing in the set tests that suggestion, because Reinhart and Rogoff (2010) was never retracted. It was reanalysed, disputed in print, and left standing; no index carries a flag for it, so no metadata signal could ever have saved that claim. This essay is the other half of the pair. The Lancet hydroxychloroquine paper (Mehra et al., May 2020) was formally retracted, which means the fact the product needs is sitting in Crossref's `relation.is-retracted-by` and in PubMed's `Retracted Publication` publication type — machine-readable, free, and on providers the pipeline already queries. Together the two essays draw the line: 11 is what a retraction signal CANNOT fix and 13 is what it can, and having only one of them made 'add retraction checking' look like a general answer to a problem it solves about half of. Second thing this essay is built to separate, and the reason it carries two claims about one paper: C1 reports what the study said and is true as phrased, C4 asserts the same figure as fact and is false. Retrieval behaves identically for both — same paper, same rank, same high strength score — so the only thing that distinguishes them is what the SENTENCE does with the source, which is the distinction the whole product rests on and which no existing fixture isolates. Third, smaller: C2's correct source is a retraction notice rather than a study, and a notice is a Crossref record with a real DOI, no abstract and a title that begins 'Retraction:'. Whether one can be retrieved and scored at all is unmeasured. Deliberately a flawed draft — the README asks for roughly 3:1 flawed to clean, and the flaw here is one students actually commit: reporting a retraction in paragraph 3 and then arguing from the retracted number in paragraph 6, without noticing.",
   "claims": [
@@ -12,7 +19,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "True as phrased, which is the point. The sentence asserts what a study REPORTED and what the WHO then DID, and both happened. RUBRIC.md's practical note — 'label the sentence as phrased, not as the student meant it' — is what forces `supported` here, and a labeller who reads ahead to paragraph 6 and marks this one down for the company it keeps has quietly relabelled two claims as one. Compound, so the provisional rule applies and the split is noted: the retrieval query is built from the first half (the study), and the second half (the WHO trial pause) is a news fact the four academic providers do not hold. Expect the retracted paper itself to come back first and to be labelled rel under the ladder, exactly as 11-debt-threshold's does — question 2 is about whether the source addresses the proposition, and it addresses it perfectly."
+      "note": "True as phrased, which is the point. The sentence asserts what a study REPORTED and what the WHO then DID, and both happened. RUBRIC.md's practical note — 'label the sentence as phrased, not as the student meant it' — is what forces `supported` here, and a labeller who reads ahead to paragraph 6 and marks this one down for the company it keeps has quietly relabelled two claims as one. Compound, so the provisional rule applies and the split is noted: the retrieval query is built from the first half (the study), and the second half (the WHO trial pause) is a news fact the four academic providers do not hold. Expect the retracted paper itself to come back first and to be labelled rel under the ladder, exactly as 11-debt-threshold's does — question 2 is about whether the source addresses the proposition, and it addresses it perfectly.",
+      "support": {
+        "rel": 1,
+        "total": 12
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Only the WHO SOLIDARITY suspension piece carries the second half. The 96,000-patient study is the retracted Surgisphere paper, so it is no longer indexed and could not come back - the strongest possible illustration that absence here is not evidence about the sentence. The real HCQ mortality studies are adjacent, not the study being described."
     },
     {
       "text": "The paper was retracted less than two weeks after it appeared, once three of its four authors said they could not verify the patient data the company behind it had supplied.",
@@ -20,7 +33,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The claim whose correct source is a retraction notice. Notices are registered in Crossref with their own DOIs, carry no abstract, and are titled as retractions rather than as papers about anything — so every relevance signal in scoring.ts reads them badly and MIN_COUNTABLE_RELEVANCE may well drop the one correct answer. If this claim comes back with the retracted paper itself scored above its own retraction notice, that is a finding and not a near miss: it is the pipeline preferring the thing being corrected to the correction. Hedged deliberately at 'less than two weeks' rather than an exact interval — the correction I am confident about is that it was retracted within days of publication, and a fixture should not assert a precision I cannot check offline."
+      "note": "The claim whose correct source is a retraction notice. Notices are registered in Crossref with their own DOIs, carry no abstract, and are titled as retractions rather than as papers about anything — so every relevance signal in scoring.ts reads them badly and MIN_COUNTABLE_RELEVANCE may well drop the one correct answer. If this claim comes back with the retracted paper itself scored above its own retraction notice, that is a finding and not a near miss: it is the pipeline preferring the thing being corrected to the correction. Hedged deliberately at 'less than two weeks' rather than an exact interval — the correction I am confident about is that it was retracted within days of publication, and a fixture should not assert a precision I cannot check offline.",
+      "support": {
+        "rel": 0,
+        "total": 12
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Nothing retrieved is about this retraction. The arsenic-life retraction is a different episode fifteen years apart, and the rest are HCQ efficacy papers."
     },
     {
       "text": "Retractions are rare enough that most readers will never knowingly encounter one, since fewer than one published paper in a thousand is ever withdrawn.",
@@ -28,7 +47,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The control claim, and the only one here the scholarly providers should serve straightforwardly: retraction rates are a scientometrics question with a real literature, indexed in exactly the venues OpenAlex and Crossref cover best. Published estimates sit near four retractions per ten thousand papers, so 'fewer than one in a thousand' is true with room to spare and is not a knife-edge judgement. It is here so the essay can distinguish a retrieval failure on the retraction MACHINERY (C2) from a retrieval failure on retraction as a SUBJECT, which are different problems with the same word in them."
+      "note": "The control claim, and the only one here the scholarly providers should serve straightforwardly: retraction rates are a scientometrics question with a real literature, indexed in exactly the venues OpenAlex and Crossref cover best. Published estimates sit near four retractions per ten thousand papers, so 'fewer than one in a thousand' is true with room to spare and is not a knife-edge judgement. It is here so the essay can distinguish a retrieval failure on the retraction MACHINERY (C2) from a retrieval failure on retraction as a SUBJECT, which are different problems with the same word in them.",
+      "support": {
+        "rel": 2,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "The Retraction Index and the increase-in-retractions paper both carry retraction rates. Misconduct-as-cause and the citation-penalty work are adjacent. Three hits are pure collisions on the word one: One is never enough, One Light Can Be More Than Enough, One Nation One Language."
     },
     {
       "text": "So the honest summary is that hydroxychloroquine raised mortality by roughly a third and the correction was mostly a bookkeeping exercise about who could take credit for showing it.",

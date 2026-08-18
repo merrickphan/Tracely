@@ -2,7 +2,12 @@
   "essay": "05-social-media.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "counterargument",
+      "conclusion"
+    ]
   },
   "note": "A deliberately weak draft. The annotations README asks for roughly 3:1 flawed to clean because a clean essay contributes almost no negatives, and the set had no flawed essay at all. The point of this one is the miscitation in paragraph 2: it is wrong BY CONSTRUCTION rather than by judgement, so it is the first claim in the set whose correct verdict cannot drift between labelling sessions. Everything the miscitation detector is measured against currently depends on someone's reading; this does not.",
   "claims": [
@@ -12,7 +17,13 @@
       "verdict": "unsupported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The first half is well documented. The second half — 'no other explanation fits the timing as well' — is an exclusivity claim no single source establishes, and it is what makes the sentence unsupported as phrased. A source showing the rise in adolescent depression is marg here, not rel: it evidences half a sentence. This is exactly the rel/marg call RUBRIC.md exists to settle."
+      "note": "The first half is well documented. The second half — 'no other explanation fits the timing as well' — is an exclusivity claim no single source establishes, and it is what makes the sentence unsupported as phrased. A source showing the rise in adolescent depression is marg here, not rel: it evidences half a sentence. This is exactly the rel/marg call RUBRIC.md exists to settle.",
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Nothing retrieved carries the timing claim. The systematic review, the girls-vs-boys piece and the screen-time/depression association are on topic but none evidences a post-2012 steep climb, let alone that no other explanation fits. The rest are collisions on depression/anxiety - Scotland 1980s men, cerebral palsy, rheumatoid arthritis, chatbot CBT."
     },
     {
       "text": "Orben and Przybylski (2019) analyzed data from over 350,000 adolescents and concluded that social media use is a primary driver of declining teen well-being.",
@@ -24,7 +35,13 @@
         "says": "The paper reports that the association between adolescent well-being and digital technology use is negative but negligible, explaining roughly 0.4% of the variation — a magnitude the authors compare to eating potatoes and to wearing glasses. Its argument is explicitly AGAINST treating technology use as a primary driver, which is the opposite of what the essay attributes to it."
       },
       "sources": [],
-      "note": "The sample size and the authors are correct; only the conclusion is inverted. That is the realistic shape of student miscitation and the hard case for detection — retrieval will surface the right paper, so a system that only checks whether a relevant source exists will pass this sentence."
+      "note": "The sample size and the authors are correct; only the conclusion is inverted. That is the realistic shape of student miscitation and the hard case for detection — retrieval will surface the right paper, so a system that only checks whether a relevant source exists will pass this sentence.",
+      "support": {
+        "rel": 3,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Orben and Przybylski 2019 itself came back twice (Nature Human Behaviour, and the three time-use-diary studies in Psych Science), plus the no-evidence follow-up. These evidence what the study found - which is the opposite of what the sentence attributes to it. Retrieval did its job here; the sentence is miscited."
     },
     {
       "text": "But small average effects can hide large effects in vulnerable subgroups, and anyone who has watched a fourteen-year-old scroll for four hours straight knows what they are looking at.",
@@ -32,7 +49,13 @@
       "verdict": "unverifiable",
       "citationWorthy": "no",
       "sources": [],
-      "note": "Two moves in one sentence: a legitimate statistical point, then an appeal to personal observation standing in for evidence. Marked not citation-worthy on purpose — the first clause is arguable in the abstract and the second is not the kind of thing a source settles. If the tool demands a citation here it is reading topic rather than function."
+      "note": "Two moves in one sentence: a legitimate statistical point, then an appeal to personal observation standing in for evidence. Marked not citation-worthy on purpose — the first clause is arguable in the abstract and the second is not the kind of thing a source settles. If the tool demands a citation here it is reading topic rather than function.",
+      "support": {
+        "rel": 2,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Small effects, big questions and the subgroup-heterogeneity paper both speak to the methodological point. The second half of the sentence is an appeal to personal observation and is not checkable. The Lancet commissions and euthanasia paper are mental-health collisions."
     }
   ]
 }

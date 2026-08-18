@@ -164,9 +164,54 @@ const CONTRADICTED_SCORE_CAP = 30
 // are proxies that a claim can score well on while being wrong.
 const WEIGHTS_WITH_STANCE = { support: 0.4, relevance: 0.25, sourceCount: 0.15, quality: 0.15, recency: 0.05 }
 
-// Unchanged from before stance existed, so a machine that cannot run the model
-// scores exactly as it did rather than drifting to a different scale.
-const WEIGHTS_WITHOUT_STANCE = { support: 0, relevance: 0.3, sourceCount: 0.25, quality: 0.3, recency: 0.15 }
+/**
+ * The weights every shipped build actually uses, because STANCE_ENABLED is
+ * false (see services/ml/index.ts) — so this is not a fallback, it is the
+ * formula.
+ *
+ * FITTED, 2026-08-18, against 51 hand-labelled claims via `npm run eval:fit`.
+ * These were `{ relevance: .3, sourceCount: .25, quality: .3, recency: .15 }`,
+ * chosen by intuition and never measured, and the measurement is damning:
+ *
+ *     Spearman rho against relevant-source count
+ *       old weights                       0.242
+ *       fitted, leave-one-out             0.654
+ *       these weights                     0.616
+ *       noise floor at n=51              ±0.141
+ *
+ * Quality and recency described the CORPUS, not the sentence. Between them
+ * they carried 45% of a score meant to say how well evidenced a claim is, and
+ * they are near-constant across claims — every academic search returns recent
+ * papers in real journals whether or not any of them is about the claim. That
+ * is why nothing ever scored between 1 and 39, why half of everything landed
+ * in the 40–69 "partially supported" band, and why `weak-evidence` and
+ * `cited-unverified` in problemKind.ts were unreachable.
+ *
+ * Two deliberate departures from what the fit wanted:
+ *
+ *   - The fit drove quality to ZERO. It is kept at 0.20, which costs 0.026 rho
+ *     — a fifth of the noise floor. The fit's target is COUNT OF RELEVANT
+ *     SOURCES, so a factor that does not measure relevance scores zero against
+ *     it almost by construction; that is not evidence that venue quality is
+ *     worthless to a reader. Zeroing it also collapsed the ≥70 band to nothing,
+ *     which is its own broken product.
+ *   - The fit wanted MIN_COUNTABLE_RELEVANCE raised to 0.50. It is left where
+ *     it is. That floor has its own purpose-built calibration above, over 24
+ *     labelled sources, and 0.50 drops SIX of them — telling a well-supported
+ *     claim it has no support, the failure this product can least afford. The
+ *     rank objective cannot see that harm. Keeping 0.42 costs 0.052 rho, again
+ *     inside the noise floor.
+ *
+ * Recency IS zero. Adding it back at 0.05 measured WORSE (0.652 against
+ * 0.672), which makes sense: publication year says nothing about whether a
+ * paper is about this sentence.
+ *
+ * Re-run `npm run eval:fit <report>` whenever labels are added. 38 of the 51
+ * labels are model-generated and marked `supportBy` in eval/annotations — only
+ * 13 are human, so the DIRECTION here is much better evidenced than the third
+ * decimal place.
+ */
+const WEIGHTS_WITHOUT_STANCE = { support: 0, relevance: 0.5, sourceCount: 0.3, quality: 0.2, recency: 0 }
 
 export function computeStrengthScore(
   items: ScorableItem[],

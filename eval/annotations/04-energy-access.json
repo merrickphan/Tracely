@@ -2,7 +2,12 @@
   "essay": "04-energy-access.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "counterargument",
+      "conclusion"
+    ]
   },
   "note": "Written to answer a request eval/rerun-2026-08-09.md makes explicitly. After the harness was fixed to warm worldBank before the first claim, the provider still contributed 0 of 104 sources — but that is measured silence, not a cold index: none of the 13 existing claims is answerable by a World Development Indicator. That doc's closing line on the finding is 'Real coverage needs an essay with an answerable statistical claim.' This is that essay. Two claims below sit on real WDI series (EG.ELC.ACCS.ZS, EG.ELC.LOSS.ZS) and one deliberately does not, so the run distinguishes a provider that works from one that answers everything.",
   "claims": [
@@ -12,7 +17,13 @@
       "verdict": null,
       "citationWorthy": "yes",
       "sources": [],
-      "note": "WDI EG.ELC.ACCS.ZS covers this directly. The 'barely improved in two decades' half is a trend claim a single indicator value does not settle — a source that reports the current share only is marg, not rel."
+      "note": "WDI EG.ELC.ACCS.ZS covers this directly. The 'barely improved in two decades' half is a trend claim a single indicator value does not settle — a source that reports the current share only is marg, not rel.",
+      "support": {
+        "rel": 3,
+        "total": 14
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Taking Stock, the WDI access indicator, and Policy's role all report the access share or its trend. Health-facility access, the HDI nexus, connection charges and the SSA thesis are on-topic but do not carry the population share or the two-decade trend; the rest are SSA-about-something-else."
     },
     {
       "text": "Household solar systems can now power lighting, phone charging, and a radio for under a hundred dollars, and adoption across East Africa has been rapid.",
@@ -20,7 +31,13 @@
       "verdict": null,
       "citationWorthy": "yes",
       "sources": [],
-      "note": "Deliberately the one claim here the World Bank cannot serve — it is a price and adoption claim, not an indicator. Expect scholarly providers or nothing. A World Bank result on this claim is a false positive worth seeing."
+      "note": "Deliberately the one claim here the World Bank cannot serve — it is a price and adoption claim, not an indicator. Expect scholarly providers or nothing. A World Bank result on this claim is a false positive worth seeing.",
+      "support": {
+        "rel": 2,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "PAYG diffusion in Central East Africa and off-grid solar home systems in Kenya/Rwanda/Tanzania both evidence rapid East African adoption. Nothing retrieved supports the under-a-hundred-dollars figure at all. India, Kerala, Chile, California and the agricultural solar papers are topic collisions on the word solar."
     },
     {
       "text": "Critics of grid investment point out that centralized generation in low-income countries has a poor record: transmission and distribution losses in some national grids exceed twenty percent of all electricity generated, and state utilities often cannot collect enough revenue to maintain what they have already built.",
@@ -28,7 +45,13 @@
       "verdict": null,
       "citationWorthy": "yes",
       "sources": [],
-      "note": "WDI EG.ELC.LOSS.ZS. Also a test of claim-splitting: the sentence carries two assertions and only the first is indicator-backed. A source evidencing losses but silent on utility revenue is rel for what is asked, and the label should not be dragged down by the second half."
+      "note": "WDI EG.ELC.LOSS.ZS. Also a test of claim-splitting: the sentence carries two assertions and only the first is indicator-backed. A source evidencing losses but silent on utility revenue is rel for what is asked, and the label should not be dragged down by the second half.",
+      "support": {
+        "rel": 2,
+        "total": 11
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "T&D losses in developing countries carries the losses half; the electricity-payment RCT carries the revenue-collection half. Infrastructure-and-growth is adjacent. The grid-protection and battery-market papers are collisions on grid/electricity."
     }
   ]
 }

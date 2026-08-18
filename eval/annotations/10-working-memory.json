@@ -2,7 +2,12 @@
   "essay": "10-working-memory.txt",
   "labelledBy": "claude — DRAFT, unreviewed by merrick",
   "draft": {
-    "roles": ["thesis", "evidence", "counterargument", "conclusion"]
+    "roles": [
+      "thesis",
+      "evidence",
+      "counterargument",
+      "conclusion"
+    ]
   },
   "note": "The first essay written so that its key terms are polysemous on purpose. RUBRIC.md's longest demotion — 'right entity, wrong sense of the word, is irr, never marg' — is the rule with the most evidence behind it and no fixture: every example it lists ('visibility' → eye health, 'remote' → Remote Agent, 'existed before' → DNA) was found by accident in a re-run, so the set can notice lexical collisions when they happen but cannot ask for them. This essay asks for them. Memory, capacity, buffer, attention, encoding, retrieval and recall are all live technical vocabulary in machine learning, and the claims are phrased in the cognitive-psychology sense of every one of them. A tool that returns attention-mechanism papers for claim 2 is producing exactly the failure the rubric describes, and the whole point is that here it is reproducible rather than anecdotal. Second gap, smaller: 'contradicted' appeared once in the previous nine essays (07-antibiotic-resistance C2), so the highest-ranked problem kind in problemKind.ts was resting on a single test case. Claim 3 is a second one, and it is the canonical education myth rather than a mechanism error, so the two do not fail together. Discipline is new to the set as well — cognitive psychology and study skills, where the relevant literature is genuinely large and genuinely findable, which is what makes a bad answer here a retrieval failure rather than a coverage failure.",
   "claims": [
@@ -12,7 +17,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The capacity figure is a real and heavily replicated finding (Cowan's ~4 chunks, against Miller's older 7±2), so a good evidence list exists and is reachable from all three core scholarly providers. The collision risk is total: 'working memory', 'capacity' and 'buffer' are the standard vocabulary of computer architecture and of memory-augmented neural networks. A cache-replacement or memory-network paper here fails question 1 of the ladder and is irr, not marg — the entity word is shared and the subject is not. Note also that the sentence is compound under the rule RUBRIC.md leaves provisional: the capacity number is checkable and 'the rest is gone' is the student's inference from it. Labelled against the first half, which is what a retrieval query would be built from."
+      "note": "The capacity figure is a real and heavily replicated finding (Cowan's ~4 chunks, against Miller's older 7±2), so a good evidence list exists and is reachable from all three core scholarly providers. The collision risk is total: 'working memory', 'capacity' and 'buffer' are the standard vocabulary of computer architecture and of memory-augmented neural networks. A cache-replacement or memory-network paper here fails question 1 of the ladder and is irr, not marg — the entity word is shared and the subject is not. Note also that the sentence is compound under the rule RUBRIC.md leaves provisional: the capacity number is checkable and 'the rest is gone' is the student's inference from it. Labelled against the first half, which is what a retrieval query would be built from.",
+      "support": {
+        "rel": 6,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Cowan magical number 4 is the source of the figure, with the two capacity-for-dissimilar-items papers and the working-memory reference entries. The buffer-overrun half of the sentence is a pedagogical inference no source makes. Two hits are pure faster-than collisions: the Mpemba effect and Arctic warming."
     },
     {
       "text": "Dividing attention during encoding reliably reduces how much of the material is recalled later.",
@@ -20,7 +31,13 @@
       "verdict": "supported",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The fixture claim. Every content word — attention, encoding, recall — names a different thing in the machine-learning literature than it does here, and the ML literature is vastly larger and more recently published, so recency and citation-count factors in scoring.ts push the wrong sources up rather than down. The correct evidence is the divided-attention-at-encoding literature in cognitive psychology, which is decades old and well indexed. Watch for the specific bad outcome: an evidence list topped by transformer papers that scores WELL, because every factor computeStrengthScore reads (venue quality, recency, relevance rank) is satisfied by them. That would be the clearest demonstration yet that the strength score measures the quality of a source rather than its fit to the claim."
+      "note": "The fixture claim. Every content word — attention, encoding, recall — names a different thing in the machine-learning literature than it does here, and the ML literature is vastly larger and more recently published, so recency and citation-count factors in scoring.ts push the wrong sources up rather than down. The correct evidence is the divided-attention-at-encoding literature in cognitive psychology, which is decades old and well indexed. Watch for the specific bad outcome: an evidence list topped by transformer papers that scores WELL, because every factor computeStrengthScore reads (venue quality, recency, relevance rank) is satisfied by them. That would be the clearest demonstration yet that the strength score measures the quality of a source rather than its fit to the claim.",
+      "support": {
+        "rel": 10,
+        "total": 15
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "Near-perfect retrieval. Ten of fifteen are the divided-attention-at-encoding literature itself, including Craik 1996 and the 2000 interference study. Only a joint-replacement paper and a genetic-diversity monitoring paper are off."
     },
     {
       "text": "Some students are visual learners and retain more when the same material is presented as diagrams, which is why a good lecturer draws.",
@@ -28,7 +45,13 @@
       "verdict": "contradicted",
       "citationWorthy": "yes",
       "sources": [],
-      "note": "The meshing hypothesis — that matching presentation to a learner's preferred modality improves retention — has been tested directly and repeatedly and does not hold. This is a genuine 'contradicted', not an 'unsupported': the literature has looked and argues against it. It is also the hardest kind of contradiction for retrieval to serve, because the refutations are review articles and the phrase 'visual learner' appears far more often in papers that assume it than in papers that test it. A tool that returns the assuming literature will report this claim as supported, which is the failure that matters — the student would be told an education myth is evidenced."
+      "note": "The meshing hypothesis — that matching presentation to a learner's preferred modality improves retention — has been tested directly and repeatedly and does not hold. This is a genuine 'contradicted', not an 'unsupported': the literature has looked and argues against it. It is also the hardest kind of contradiction for retrieval to serve, because the refutations are review articles and the phrase 'visual learner' appears far more often in papers that assume it than in papers that test it. A tool that returns the assuming literature will report this claim as supported, which is the failure that matters — the student would be told an education myth is evidenced.",
+      "support": {
+        "rel": 0,
+        "total": 16
+      },
+      "supportBy": "claude-2026-08-18",
+      "supportNote": "The learning-styles meshing hypothesis, which the evidence does not support - so nothing CAN be rel here. The cognitive-load and visual-literacy papers are on topic and none of them evidences that some students retain more from diagrams because they are visual learners."
     },
     {
       "text": "the fastest way to write something down is not the same as the best way to keep it",
