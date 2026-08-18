@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CitationStyle, Claim, DocumentOutline, DocumentRecord, Source } from '@shared/types'
 import { splitParagraphs } from '@shared/paragraphSplit'
 import { clientToLayout, contentOffset, readZoom } from '@shared/zoomLayout'
+import { iconUrlFor } from '@shared/sourceIcon'
 import { createHoverCloser } from '@shared/hoverIntent'
 import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
@@ -969,7 +970,10 @@ function DocumentEditor({
                   year: item.source.year,
                   matchPercent: Math.round(item.relevanceScore * 100),
                   initials: sourceInitials(item.source.venue ?? item.source.title),
-                  url: item.source.url
+                  // The PUBLISHER's link, which is not always `url` — see
+                  // shared/sourceIcon.ts. Crossref hands back a doi.org URL for
+                  // every record it holds, and its favicon is the DOI logo.
+                  url: iconUrlFor(item.source)
                 })),
                 selectedId: evidence[0]?.source.id ?? null,
                 style: citationStyle,
