@@ -300,14 +300,23 @@ input[type='range']::-webkit-slider-runnable-track {
    with. Without it the card sat flush against three edges and its `-13px 13px`
    drop shadow fell entirely outside the window, so it never rendered at all. */
 :root {
-  --window-margin: 14px;
+  /* Zero now: the window has a real frame, so there is no transparent gutter
+     for a floating card to sit inside and nothing outside the content to
+     leave room for. Kept as a variable rather than deleted because
+     `.modal-backdrop` and `.app-main` both read it, and one number in one
+     place is why they agreed in the first place. */
+  --window-margin: 0px;
   /* Room the window controls occupy at the top-right, measured from the card's
      edge: three 26px buttons with 2px gaps, plus the 27px the cluster is inset
      by, less the 14px margin the card already has. Any view with content along
      the top of the card must reserve this or it renders underneath them — the
      document editor's toolbar did, putting the window's X on top of "AI
      Insights". See components/WindowControls.tsx. */
-  --winctl-reserve: 96px;
+  /* Zero now. This reserved the top-right corner for the app's own minimize /
+     maximize / close cluster; the OS title bar owns that corner, so every view
+     gets the space back. Kept as a variable because several views subtract it
+     and one number in one place is why they agreed. */
+  --winctl-reserve: 0px;
   /* The Figma frame's own size — MAIN_CARD_WIDTH/HEIGHT in
      shared/windowSize.ts. Only `.home-canvas` caps itself to these: it is the
      one view laid out at literal design coordinates, so it must not stretch.
@@ -368,17 +377,19 @@ input[type='range']::-webkit-slider-runnable-track {
      tractable at all. Here the card keeps its own size and floats in the middle
      of a bigger window, which is what a card in a transparent window should do
      and reads as deliberate rather than as a layout that gave up. */
+  /* Still capped and centred: this is the one view laid out at literal Figma
+     coordinates, so a wider canvas would not spread its children out, it would
+     leave them where they were with empty space beside them. */
   max-width: var(--card-width);
   max-height: var(--card-height);
   margin: auto;
   background: #fff;
-  border: 1px solid #000;
-  border-radius: 30px;
-  box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
+  /* No border, no radius, no drop shadow. Those drew a floating card inside a
+     transparent frameless window; with a real title bar the window IS the
+     frame, and a second rounded rectangle inside it reads as a dialog that
+     forgot to open. Asked for directly: "if its the rounded corners then
+     remove them". */
   overflow: hidden;
-  /* No title bar anywhere in this design, so the card itself is the drag
-     handle — every interactive element inside opts back out below. */
-  -webkit-app-region: drag;
 }
 
 .home-el {
@@ -844,7 +855,6 @@ textarea:disabled {
      that opt out. `.settings-panel` already documents this exact trap.
      Scrolling moved to `.analyze-input`, which opts out. */
   overflow: hidden;
-  -webkit-app-region: drag;
 }
 
 .analyze-close {
@@ -1180,7 +1190,6 @@ textarea:disabled {
      box, and as siblings of the rail they would become flex items of the row
      and land next to it instead of over the page. */
   flex-direction: row;
-  -webkit-app-region: drag;
 }
 
 .docedit-main {
@@ -2445,7 +2454,6 @@ textarea:disabled {
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow-lg);
-  -webkit-app-region: drag;
 }
 
 .settings-sidebar {
@@ -3228,7 +3236,6 @@ textarea:disabled {
   border-radius: 28px;
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
   overflow: hidden;
-  -webkit-app-region: drag;
 }
 
 .library-body {
@@ -3459,7 +3466,6 @@ textarea:disabled {
   border-radius: 28px;
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
   overflow: hidden;
-  -webkit-app-region: drag;
 }
 
 .library-body {
@@ -5147,61 +5153,10 @@ textarea:disabled {
   border: 0;
 }
 
-/* Window resize handles — see components/ResizeGrips.tsx for why these exist at
-   all (a transparent frameless window gets no OS resize border).
-
-   Invisible by design: they sit over the transparent gutter between the card
-   and the window edge, where there is nothing to cover, and the cursor is the
-   affordance exactly as it is on any OS window.
-
-   `no-drag` is the load-bearing declaration. The card is the window's drag
-   region, and a drag region eats the pointer events these need — without it
-   every grip moves the window instead of resizing it, which is the bug they
-   were added to fix. */
-.resize-grip {
-  position: fixed;
-  z-index: 9999;
-  -webkit-app-region: no-drag;
-}
-
-/* Wider than the 14px gutter, and deliberately so: at the 0.7 minimum scale the
-   gutter renders under 10 physical pixels, which is below what anyone can hit
-   reliably with a mouse. Overlapping the card's edge by a few px costs nothing
-   — there is no interactive element within 20px of the card border on any view,
-   because the Figma frames all carry 28-32px of internal padding. */
-.resize-grip-n,
-.resize-grip-s {
-  left: 18px;
-  right: 18px;
-  height: 18px;
-  cursor: ns-resize;
-}
-.resize-grip-e,
-.resize-grip-w {
-  top: 18px;
-  bottom: 18px;
-  width: 18px;
-  cursor: ew-resize;
-}
-.resize-grip-n { top: 0; }
-.resize-grip-s { bottom: 0; }
-.resize-grip-w { left: 0; }
-.resize-grip-e { right: 0; }
-
-/* Corners last so they win the overlap against the edges — a diagonal drag is
-   the natural gesture on an aspect-locked window, and a corner that lost to an
-   edge would be unreachable. */
-.resize-grip-nw,
-.resize-grip-ne,
-.resize-grip-sw,
-.resize-grip-se {
-  width: 22px;
-  height: 22px;
-}
-.resize-grip-nw { top: 0; left: 0; cursor: nwse-resize; }
-.resize-grip-se { bottom: 0; right: 0; cursor: nwse-resize; }
-.resize-grip-ne { top: 0; right: 0; cursor: nesw-resize; }
-.resize-grip-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+/* The eight hand-drawn resize handles that used to live here are gone with
+   components/ResizeGrips.tsx. They existed because a frameless TRANSPARENT
+   window gets no OS resize border on Windows; the window has a real frame now
+   and the border comes with it. */
 
 /* ── Documents page — Figma "DocumentsPage" (58:172) ──────────────────────────
    Every number here is the frame's own, read with get_design_context. The card
@@ -5234,7 +5189,6 @@ textarea:disabled {
   box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
   /* The card is the window's drag region; everything interactive below opts
      back out via the global input/button rule. */
-  -webkit-app-region: drag;
   overflow: hidden;
 }
 
@@ -5425,66 +5379,10 @@ textarea:disabled {
   background: var(--surface-2, #202024);
 }
 
-/* Window controls — minimize and the capped maximize. See
-   components/WindowControls.tsx for why these exist and why they sit beside
-   the card's own close X rather than replacing it.
-
-   Positioned in DESIGN units against the window, not the card: the shell is
-   always LAYOUT_WIDTH design units wide whatever the window's pixel size (see
-   shared/windowSize.ts), so a fixed offset here lands in the same place at
-   every scale. 833px is where Home's close icon sits; these clear it. */
-.winctl {
-  position: fixed;
-  /* Where Home's X used to sit, so the corner did not move: `.app-main` insets
-     everything by the 14px window margin and the icon was at left 833 / top 16
-     inside an 870-wide canvas, putting its right edge 30px from the window's.
-     Measured in design units, which is the space `.app-shell` is always
-     LAYOUT_WIDTH of — see shared/windowSize.ts — so this holds at every scale. */
-  top: 27px;
-  right: 27px;
-  z-index: 40;
-  display: flex;
-  gap: 2px;
-  -webkit-app-region: no-drag;
-}
-
-.winctl-btn {
-  -webkit-app-region: no-drag;
-  /* One size for all three. The X was a 21px image and the other two were 10px
-     glyphs in 22px boxes, which is what "make them the same size and the same
-     type of button" was about. */
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #1c1c1c;
-  opacity: 0.55;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
-}
-
-.winctl-btn:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.06);
-}
-
-/* The close is the one destructive-looking control of the three, and the
-   design draws its X heavier than the rest of its thin-line set. */
-.winctl-close {
-  opacity: 0.72;
-}
-
-[data-theme='dark'] .winctl-btn {
-  color: var(--text);
-}
-[data-theme='dark'] .winctl-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
+/* The app's own minimize / maximize / close cluster is gone with
+   components/WindowControls.tsx. The OS title bar owns that corner now, and
+   two close buttons on one window is worse than none. --winctl-reserve, which
+   several views subtract to clear it, is 0px for the same reason. */
 
 /* Per-card menu. The card needs to be the positioning context so the popup can
    sit against it rather than against the thumbnail it is drawn over. */
@@ -5844,4 +5742,39 @@ textarea:disabled {
     background: #fff;
     border-color: rgba(255, 255, 255, 0.14);
   }
+}
+
+
+/* --- Native window -------------------------------------------------------- */
+
+/*
+ * The views ARE the window now, not cards floating inside it.
+ *
+ * Every top-level view was a transcription of a Figma frame: a 1px black
+ * border, a 28-30px radius and a -13px/13px drop shadow, drawn inside a
+ * frameless transparent window so the rounded card was the only visible thing.
+ * With a real title bar the window is already a frame, and a second rounded
+ * rectangle inside it reads as a dialog that forgot to open — which is the
+ * "frame aspect ratio is still kind of wrong ... if its the rounded corners
+ * then remove them" report.
+ *
+ * An override at the end rather than six edits in place, so the decision is
+ * legible as one decision and the frames' own values remain in the file for
+ * whoever wants to know what the design drew.
+ */
+.home-canvas,
+.analyze-view,
+.docedit-view,
+.settings-shell,
+.library-view,
+.docs-view {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Full-bleed for the same reason: it covered a card inset by the window
+   gutter and rounded to match it, and there is now neither. */
+.modal-backdrop {
+  border-radius: 0;
 }

@@ -1,8 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import ResizeGrips from './components/ResizeGrips'
-import WindowControls from './components/WindowControls'
 import '@fontsource/instrument-sans/400.css'
 import '@fontsource/instrument-sans/500.css'
 import '@fontsource/instrument-sans/600.css'
@@ -10,17 +8,23 @@ import '@fontsource/instrument-sans/700.css'
 import './styles/index.css'
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  // Grips here rather than inside App: they are window chrome, not app content,
-  // and App returns four different trees (checking / signed out / needs name /
-  // ready) that would each need their own copy. They are `position: fixed`, so
-  // a sibling of the app is exactly as correct as a child of it.
+  // No ResizeGrips and no WindowControls any more.
+  //
+  // Both existed to replace chrome a frameless, transparent window does not
+  // get: the OS sends no non-client hit-test to such a window, so there was no
+  // resize border and no title bar to minimize, maximize or close from. Eight
+  // DOM handles and a three-button cluster stood in for them.
+  //
+  // The window has a real frame now, so the OS provides every one of those —
+  // and provides them better: snap, Win+Arrow, double-click-to-maximize,
+  // fullscreen, and a maximize that actually maximizes rather than sizing to
+  // the work area and centring. Keeping the hand-written versions alongside
+  // would put two close buttons on the same window.
   //
   // The MAIN window's entry only. floating.tsx and overlay.tsx are separate
   // documents in separate windows — the floating popup is a fixed-size panel
   // and the overlay is click-through by design.
   <React.StrictMode>
     <App />
-    <ResizeGrips />
-    <WindowControls />
   </React.StrictMode>
 )

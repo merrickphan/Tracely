@@ -208,208 +208,89 @@ test('width and height resize independently', async (t) => {
   assert.ok(limits.minH >= 400 && limits.minH < LAYOUT_HEIGHT, `minimum height ${limits.minH} is out of range`)
 })
 
-test('dragging a grip resizes the real window', async (t) => {
+/*
+ * The window is an ORDINARY OS window now.
+ *
+ * Three tests were deleted here, and what they covered is worth recording:
+ * "dragging a grip resizes the real window", "no control is buried under a
+ * grip", and a minimize test that clicked the app's own button. All three
+ * exercised chrome this app had to draw itself because a frameless TRANSPARENT
+ * window receives no non-client hit-test on Windows — no resize border, no
+ * title bar, so eight DOM handles and a three-button cluster stood in.
+ *
+ * With a real frame the OS provides all of it, and testing that Electron's
+ * `frame: true` works would be testing Electron. What is worth pinning is that
+ * the window is CONFIGURED to allow it: every one of these flags defaulted the
+ * wrong way at some point in this file's history — `maximizable: false` and
+ * `minimizable: false` both shipped — and a false here is silent, because
+ * `maximize()` on a non-maximizable window simply does nothing.
+ */
+test('the window is a real, fully-capable OS window', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
     await teardown(app, userData)
   })
 
-  const page = await mainWindow(app)
-  await page.waitForLoadState('domcontentloaded')
-  await page.waitForTimeout(800)
+  await mainWindow(app)
 
-  // The grips exist because the OS resize border does not reach a transparent
-  // frameless window — `resizable: true` was set and no corner caught, on a
-  // real build. So "is the window resizable" is not the question any more;
-  // "does a pointer drag on this DOM element move the window" is.
-  const grips = await page.locator('.resize-grip').count()
-  assert.equal(grips, 8, `expected 8 resize grips, found ${grips}`)
-
-  // Every grip must opt out of the drag region. One that does not moves the
-  // window instead of resizing it, which is silent and exactly the failure
-  // these replaced.
-  const dragging = await page.evaluate(() =>
-    [...document.querySelectorAll('.resize-grip')]
-      .filter((el) => getComputedStyle(el).webkitAppRegion !== 'no-drag')
-      .map((el) => el.dataset.handle)
-  )
-  assert.deepEqual(dragging, [], `these grips sit inside the drag region: ${dragging.join(', ')}`)
-
-  const sizeOf = () =>
-    app.evaluate(({ BrowserWindow }) => {
-      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
-      const [width, height] = w.getSize()
-      const [x, y] = w.getPosition()
-      return { width, height, x, y }
-    })
-
-  const before = await sizeOf()
-
-  // A real pointer drag on the south-east grip, through the browser's own input
-  // pipeline — not a synthetic event and not a setSize call, because what is
-  // being tested is precisely whether the DOM handler is reached and whether
-  // its screen-coordinate maths lands.
-  const box = await page.locator('.resize-grip-se').boundingBox()
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.down()
-  // In steps: one jump gives the handler a single pointermove, which would pass
-  // even if the in-flight coalescing dropped everything after the first.
-  for (let i = 1; i <= 6; i++) {
-    await page.mouse.move(box.x + box.width / 2 + i * 20, box.y + box.height / 2 + i * 14)
-    await page.waitForTimeout(60)
-  }
-  await page.mouse.up()
-  await page.waitForTimeout(400)
-
-  const after = await sizeOf()
-  console.log(`  se drag: ${before.width}x${before.height} -> ${after.width}x${after.height}`)
-
-  assert.ok(after.width > before.width + 40, `the window did not grow: ${before.width} -> ${after.width}`)
-  // The aspect ratio must survive a drag that pulled both axes by different
-  // amounts — 120px across, 84px down.
-  const expected = LAYOUT_WIDTH / LAYOUT_HEIGHT
-  assert.ok(
-    Math.abs(after.width / after.height - expected) < 0.02,
-    `aspect drifted to ${(after.width / after.height).toFixed(3)}, expected ${expected.toFixed(3)}`
-  )
-  // The anchor: dragging the SE corner holds the top-left still. If this moves,
-  // the window crawls away from the cursor across a drag.
-  assert.ok(
-    Math.abs(after.x - before.x) <= 2 && Math.abs(after.y - before.y) <= 2,
-    `the top-left moved from ${before.x},${before.y} to ${after.x},${after.y} during an SE drag`
-  )
-})
-
-test('no control is buried under a grip', async (t) => {
-  const { userData, app: launching } = launchIsolated()
-  const app = await launching
-  t.after(async () => {
-    await teardown(app, userData)
+  const caps = await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/index.html'))
+    return {
+      resizable: win.isResizable(),
+      maximizable: win.isMaximizable(),
+      minimizable: win.isMinimizable(),
+      fullScreenable: win.isFullScreenable()
+    }
   })
 
-  const page = await mainWindow(app)
-  await page.waitForLoadState('domcontentloaded')
-  await page.waitForTimeout(800)
-
-  // The grips are `position: fixed` at z-index 9999, so anything they overlap
-  // becomes unclickable — silently, and only near the window edge. The CSS
-  // claims the Figma frames' 28-32px internal padding keeps every control
-  // clear; this is that claim being checked rather than repeated.
-  //
-  // Checked by hit-testing the control's own centre, not by intersecting
-  // rectangles: a button whose corner slips under a grip is still perfectly
-  // usable, and failing on that would make this test noise nobody trusts.
-  async function buried(label) {
-    return page.evaluate(() =>
-      [...document.querySelectorAll('button, a, input, textarea, select, [role="button"]')]
-        .filter((el) => {
-          const r = el.getBoundingClientRect()
-          if (r.width === 0 || r.height === 0) return false
-          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-          return hit?.classList.contains('resize-grip')
-        })
-        .map((el) => (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 40))
-    ).then((found) => ({ label, found }))
-  }
-
-  const views = []
-  views.push(await buried('home'))
-
-  await page.getByRole('button', { name: /Settings/i }).first().click()
-  await page.waitForTimeout(600)
-  views.push(await buried('settings'))
-
-  // At the minimum scale the gutter is under 10 physical px and the grips
-  // overlap the card most — if anything is ever covered, it is here.
-  await app.evaluate(({ BrowserWindow }) => {
-    const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
-    w.setSize(629, 444)
-  })
-  await page.waitForTimeout(500)
-  views.push(await buried('settings @ 0.7'))
-
-  for (const v of views) {
-    console.log(`  ${v.label.padEnd(16)} ${v.found.length === 0 ? 'clear' : v.found.join(' | ')}`)
-  }
-  for (const v of views) {
-    assert.deepEqual(v.found, [], `controls buried under a grip on ${v.label}: ${v.found.join(', ')}`)
+  for (const [name, value] of Object.entries(caps)) {
+    assert.equal(value, true, `the window is not ${name}, so the title bar's control cannot work`)
   }
 })
 
-test('maximize fills the display without burying the grips', async (t) => {
+test('maximize really maximizes, and restores', async (t) => {
   const { userData, app: launching } = launchIsolated()
   const app = await launching
   t.after(async () => {
     await teardown(app, userData)
   })
 
-  const page = await mainWindow(app)
-  await page.waitForLoadState('domcontentloaded')
-  await page.waitForTimeout(800)
+  await mainWindow(app)
 
-  // Both controls must exist and be outside the drag region, for the same
-  // reason the grips are: the card is the window's drag handle and would
-  // otherwise swallow the click.
-  const controls = await page.evaluate(() =>
-    [...document.querySelectorAll('.winctl-btn')].map((b) => ({
-      label: b.getAttribute('aria-label'),
-      drag: getComputedStyle(b).webkitAppRegion
-    }))
-  )
-  // Three since close joined them: minimize, bigger/restore, close.
-  assert.equal(controls.length, 3, `expected 3 window controls, found ${controls.length}`)
-  for (const c of controls) {
-    assert.equal(c.drag, 'no-drag', `"${c.label}" sits inside the drag region`)
-  }
+  const result = await app.evaluate(async ({ BrowserWindow, screen }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/index.html'))
+    const before = win.getSize()
+    win.maximize()
+    await new Promise((r) => setTimeout(r, 400))
+    const maxed = win.getSize()
+    const isMaximized = win.isMaximized()
+    win.unmaximize()
+    await new Promise((r) => setTimeout(r, 400))
+    return {
+      before,
+      maxed,
+      isMaximized,
+      restored: win.getSize(),
+      workArea: screen.getDisplayMatching(win.getBounds()).workArea
+    }
+  })
 
-  const sizeOf = () =>
-    app.evaluate(({ BrowserWindow }) => {
-      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().endsWith('/index.html'))
-      const [width, height] = w.getSize()
-      return { width, height }
-    })
-  const workArea = await app.evaluate(({ screen }) => screen.getPrimaryDisplay().workArea)
-
-  const before = await sizeOf()
-  await page.locator('.winctl-btn').nth(1).click()
-  await page.waitForTimeout(500)
-  const maxed = await sizeOf()
   console.log(
-    `  maximize: ${before.width}x${before.height} -> ${maxed.width}x${maxed.height} ` +
-      `(work area ${workArea.width}x${workArea.height})`
+    `  maximize: ${result.before[0]}x${result.before[1]} -> ${result.maxed[0]}x${result.maxed[1]} ` +
+      `(work area ${result.workArea.width}x${result.workArea.height})`
   )
 
-  assert.ok(maxed.width > before.width, 'maximize did not grow the window')
-  // Maximize FILLS the display now. It used to stop at MAX_COMFORTABLE_SCALE
-  // (1.6), which on this work area left it using about three quarters of the
-  // height available and read, correctly, as a button that barely did anything.
-  // What remains is the screen itself: never past the work area, and never
-  // flush to it, so the resize grips stay grabbable on a window with no title
-  // bar. See the note on MAX_COMFORTABLE_SCALE.
-  assert.ok(maxed.width <= workArea.width && maxed.height <= workArea.height, 'maximized past the work area')
-  const usedHeight = maxed.height / workArea.height
+  // The report this replaced: "the fullscreen is not actually fullscreening".
+  // The old button sized the window to the work area LESS a margin and centred
+  // it, which is a large window and not a maximized one — it did not snap, did
+  // not restore, and `isMaximized()` was false the whole time.
+  assert.equal(result.isMaximized, true, 'maximize did not put the window in the maximized state')
   assert.ok(
-    usedHeight > 0.85,
-    `maximize used only ${Math.round(usedHeight * 100)}% of the work area's height`
+    result.maxed[0] >= result.workArea.width - 2,
+    `maximized to ${result.maxed[0]}px wide in a ${result.workArea.width}px work area`
   )
-  assert.ok(
-    workArea.height - maxed.height >= 24,
-    `maximized to ${maxed.height}px in a ${workArea.height}px work area — no room left to grab a grip`
-  )
-  // No aspect assertion: maximize takes the work area's shape now, which is
-  // the display's and not the layout's. The card no longer has one shape to
-  // preserve — see the note in shared/windowSize.ts.
-
-  // And back to where it was, not to the default.
-  await page.locator('.winctl-btn').nth(1).click()
-  await page.waitForTimeout(500)
-  const restored = await sizeOf()
-  console.log(`  restore : ${maxed.width}x${maxed.height} -> ${restored.width}x${restored.height}`)
-  assert.ok(
-    Math.abs(restored.width - before.width) <= 2,
-    `restore returned to ${restored.width}px, not the ${before.width}px it started at`
-  )
+  assert.deepEqual(result.restored, result.before, 'restore did not return the window to its old size')
 })
 
 test('the window can actually be minimized', async (t) => {
@@ -421,24 +302,28 @@ test('the window can actually be minimized', async (t) => {
 
   const page = await mainWindow(app)
   await page.waitForLoadState('domcontentloaded')
-  await page.waitForTimeout(800)
+  // The window is created with `show: false` and shown on ready-to-show.
+  // `minimize()` on a window that is not yet visible is a no-op on Windows, so
+  // waiting for the load is not enough — wait for the window itself.
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/index.html'))
+    for (let i = 0; i < 40 && !win.isVisible(); i++) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  })
 
-  // `minimizable` was false while the window had no chrome to reach it from.
-  // A button that calls minimize() on a non-minimizable window does nothing,
-  // silently — which is exactly how this would ship broken.
-  const minimizable = await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .find((w) => w.webContents.getURL().endsWith('/index.html'))
-      ?.isMinimizable()
-  )
-  assert.equal(minimizable, true, 'the window is not minimizable, so the button cannot work')
+  const isMin = await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('/index.html'))
+    win.minimize()
+    // Polled rather than slept: the state change is asynchronous on Windows and
+    // a fixed wait is either flaky or slow.
+    for (let i = 0; i < 40 && !win.isMinimized(); i++) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    const min = win.isMinimized()
+    win.restore()
+    return min
+  })
 
-  await page.locator('.winctl-btn').first().click()
-  await page.waitForTimeout(600)
-  const isMin = await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .find((w) => w.webContents.getURL().endsWith('/index.html'))
-      ?.isMinimized()
-  )
-  assert.equal(isMin, true, 'clicking minimize did not minimize the window')
+  assert.equal(isMin, true, 'minimize did not minimize the window')
 })

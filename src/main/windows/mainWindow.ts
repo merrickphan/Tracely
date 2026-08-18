@@ -7,10 +7,8 @@ import {
   clampWindowBounds,
   LAYOUT_HEIGHT,
   LAYOUT_WIDTH,
-  maximizedBounds,
   MIN_WINDOW_HEIGHT,
-  MIN_WINDOW_WIDTH,
-  WINDOW_EDGE_MARGIN
+  MIN_WINDOW_WIDTH
 } from '@shared/windowSize'
 import { windowTitle } from '../appIdentity'
 import { getSetting, setSetting } from '../services/storage/settingsRepo'
@@ -135,25 +133,31 @@ export function createMainWindow(): BrowserWindow {
     // hugging a screen edge rather than the middle) since no x/y is given.
     // Skipped when a remembered position is being restored.
     center: position === null,
-    // Resizes by SCALING, not by reflowing — the layout is a fixed-coordinate
-    // Figma transcription, so the aspect ratio is locked below and the renderer
-    // derives its zoom from the width. See shared/windowSize.ts.
+    // An ordinary OS window. Frame, title bar, native minimize/maximize/close,
+    // native resize borders, snap, double-click-to-maximize, Win+Arrow — all of
+    // it, for free and behaving exactly as every other window on the machine.
+    //
+    // This app spent a long time as a frameless transparent floating card,
+    // because the Figma frames draw no chrome and the design IS the app. What
+    // that cost: a hand-written resize grip per edge (the OS will not send
+    // non-client hit-tests to a transparent frameless window), a hand-written
+    // minimize/maximize/close cluster, a drag region that had to be opted out
+    // of by every interactive element, and a "maximize" that could only ever
+    // approximate the real one — it sized to the work area and centred, which
+    // is not maximizing and does not fullscreen.
+    //
+    // Owner's call, 2026-08-18: "make it like an actual app". Every one of
+    // those hand-written pieces is now the OS's job.
     resizable: true,
-    // Still no NATIVE maximize: with the aspect ratio locked it could only
-    // letterbox the card inside a screen-shaped window. The title-bar button
-    // does something different and better — see toggleMaximizeMainWindow.
-    maximizable: false,
-    // Minimizable now, because there is a button for it. It was off when the
-    // window had no chrome at all and nothing could reach it.
+    maximizable: true,
     minimizable: true,
+    fullscreenable: true,
     show: false,
-    frame: false,
-    // Transparent so only the CSS-rounded card is visible — otherwise the
-    // OS window itself stays a plain opaque rectangle behind/around the
-    // rounded content and its square corners show through.
-    transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
+    frame: true,
+    // Opaque. Transparency existed only so the CSS-rounded card was the sole
+    // visible thing; with a real frame the window is a rectangle and painting
+    // it is what stops a white flash on show.
+    backgroundColor: '#ffffff',
     title: windowTitle(),
     icon: getAppIconPath(),
     webPreferences: {
@@ -253,92 +257,24 @@ export function showMainWindow(): void {
   }
 }
 
-// -- manual resizing ---------------------------------------------------------
-//
-// The OS will not do this one. A frameless window normally still gets Windows'
-// invisible resize border, but this window is also `transparent: true`, and a
-// transparent frameless window does not receive the non-client hit-test that
-// border depends on — measured by dragging every corner of a real build with
-// `resizable: true` set and nothing catching. So the grips are drawn in the
-// renderer (components/ResizeGrips.tsx) and the movement is applied here.
-//
-// All of the arithmetic is on this side on purpose. The renderer is inside a
-// CSS `zoom` that this very drag is changing, so it cannot convert its own
-// coordinates to screen pixels reliably; the window's real bounds only exist
-// here. The renderer's whole contribution is a compass direction and a pointer
-// delta.
-
-interface ResizeDrag {
-  handle: ResizeHandle
-  /** The window as it was when the drag began. Every frame is computed from
-   *  this, never from the current bounds — see WindowResizeMoveRequest on why
-   *  accumulating per-frame deltas drifts at the clamps. */
-  start: { x: number; y: number; width: number; height: number }
-}
-
-let drag: ResizeDrag | null = null
-
-export function beginWindowResize(handle: ResizeHandle): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const { x, y, width, height } = mainWindow.getBounds()
-  drag = { handle, start: { x, y, width, height } }
-}
-
 /**
- * The size the pointer is asking for, before clamping.
+ * The renderer no longer drives resizing — the OS does, through the window's
+ * own borders. Kept as no-ops because the IPC channels and the preload surface
+ * still name them, and unwiring an implementation is not a reason to
+ * restructure a shared contract (see the branch rules in CLAUDE.md).
  *
- * Width and height independently, which is the change: with the aspect ratio
- * unlocked there are two degrees of freedom and a vertical drag is a height
- * rather than a width to be converted through a ratio.
- *
- * The signs are what make each grip pull the way it looks like it should — an
- * east handle grows with a rightward drag, a west handle with a leftward one —
- * and a corner is simply both of its edges at once.
+ * What they used to do: a frameless TRANSPARENT window receives no non-client
+ * hit-test on Windows, so the invisible resize border every other window gets
+ * simply did not exist. Eight DOM handles stood in for it, forwarding a pointer
+ * delta to `setBounds` once per IPC round-trip. It worked, and it was never as
+ * good as the border the OS was already prepared to give us.
  */
-function requestedSize(
-  handle: ResizeHandle,
-  start: ResizeDrag['start'],
-  dx: number,
-  dy: number
-): { width: number; height: number } {
-  const growsEast = handle === 'e' || handle === 'ne' || handle === 'se'
-  const growsWest = handle === 'w' || handle === 'nw' || handle === 'sw'
-  const growsSouth = handle === 's' || handle === 'se' || handle === 'sw'
-  const growsNorth = handle === 'n' || handle === 'ne' || handle === 'nw'
-
-  return {
-    width: growsEast ? start.width + dx : growsWest ? start.width - dx : start.width,
-    height: growsSouth ? start.height + dy : growsNorth ? start.height - dy : start.height
-  }
+export function beginWindowResize(_handle: ResizeHandle): void {
+  // Deliberately nothing.
 }
 
-export function updateWindowResize(dx: number, dy: number): void {
-  if (!mainWindow || mainWindow.isDestroyed() || !drag) return
-  const { handle, start } = drag
-
-  // Still clamped to the DISPLAY. A window taller than the screen puts its own
-  // resize grips under the taskbar, and this app has no title bar to drag it
-  // back by — that bound survives the aspect ratio it was written alongside.
-  //
-  // The work area is re-read on every move rather than sampled at drag start:
-  // dragging across a monitor boundary mid-resize is a real thing to do, and
-  // `getDisplayMatching` is a cheap synchronous lookup.
-  const workArea = screen.getDisplayMatching(mainWindow.getBounds()).workArea
-  const { width, height } = clampWindowBounds(requestedSize(handle, start, dx, dy), workArea)
-
-  // The anchor is the opposite edge, held still. Without this every drag would
-  // also move the window: growing from the top-left grip would push the card
-  // down and right rather than up and left, which reads as the window running
-  // away from the cursor.
-  const holdsRight = handle === 'w' || handle === 'nw' || handle === 'sw'
-  const holdsBottom = handle === 'n' || handle === 'nw' || handle === 'ne'
-
-  mainWindow.setBounds({
-    x: Math.round(holdsRight ? start.x + start.width - width : start.x),
-    y: Math.round(holdsBottom ? start.y + start.height - height : start.y),
-    width,
-    height
-  })
+export function updateWindowResize(_dx: number, _dy: number): void {
+  // Deliberately nothing.
 }
 
 
@@ -350,55 +286,27 @@ export function minimizeMainWindow(): void {
 }
 
 /**
- * The title bar's maximize button, which deliberately does not maximize.
+ * Maximize and restore.
  *
- * `win.maximize()` on a frameless transparent window is unreliable on Windows
- * and would also snap to the very edges, burying the resize grips this app has
- * instead of a title bar. So the button sets the work area less that margin,
- * and toggles back to wherever the user had it.
+ * The title bar's own button does this now. These are kept because the IPC
+ * contract and the preload surface still expose them — `src/shared/*` is
+ * additive — and because the renderer's own control called them.
  *
- * The previous SIZE is remembered rather than recomputed, so restore returns to
- * what was actually dragged to and not to the default.
+ * They are the REAL maximize now, not an approximation. The old pair sized the
+ * window to the work area less a margin and centred it, which is a large window
+ * and not a maximized one: it did not snap, did not restore, and did not
+ * fullscreen. `win.maximize()` does all three because the OS is doing it.
  */
-let restoreSize: { width: number; height: number } | null = null
-
-/** Whole pixels, so a round-trip through setBounds compares equal. */
-function sameSize(a: { width: number; height: number }, b: { width: number; height: number }): boolean {
-  return Math.abs(a.width - b.width) <= 2 && Math.abs(a.height - b.height) <= 2
-}
-
-function applySize({ width, height }: { width: number; height: number }): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  mainWindow.setSize(width, height)
-  mainWindow.center()
-  persistSize(width, height)
-}
-
 export function toggleMaximizeMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  const [width, height] = mainWindow.getSize()
-  const current = { width, height }
-  const target = maximizedBounds(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
-
-  if (restoreSize !== null && sameSize(current, target)) {
-    const back = restoreSize
-    restoreSize = null
-    applySize(back)
-    return
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow.maximize()
   }
-
-  restoreSize = current
-  applySize(target)
 }
 
-/** Whether the window is currently at its maximized size, for the button's
- *  icon. Derived rather than tracked: a drag can leave it at any size, and a
- *  flag would then disagree with what is on screen. */
 export function isMainWindowMaximized(): boolean {
   if (!mainWindow || mainWindow.isDestroyed()) return false
-  const [width, height] = mainWindow.getSize()
-  return sameSize(
-    { width, height },
-    maximizedBounds(screen.getDisplayMatching(mainWindow.getBounds()).workArea)
-  )
+  return mainWindow.isMaximized()
 }
