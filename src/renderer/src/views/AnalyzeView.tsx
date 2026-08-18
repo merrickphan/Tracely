@@ -134,6 +134,9 @@ function DocumentEditor({
   const [outlineError, setOutlineError] = useState<string | null>(null)
   const [activeParagraph, setActiveParagraph] = useState<number | null>(null)
   const [checking, setChecking] = useState<{ done: number; total: number } | null>(null)
+  // Progress of a reasoning pass. Separate from `checking` because the two
+  // sweeps cost wildly different amounts and must never be conflated in the UI.
+  const [critiquing, setCritiquing] = useState<{ done: number; total: number } | null>(null)
   // Recomputed from the live editor rather than stored on the outline, which
   // deliberately carries no prose — see DocumentOutline.
   const [paragraphTexts, setParagraphTexts] = useState<string[]>([])
@@ -1161,7 +1164,18 @@ function DocumentEditor({
   // toggle used to be what opened this, and without the re-gate a saved
   // document showed an empty report until runStructure came back.
   useEffect(() => {
-    if (!scoreOpen || outline || !docIdRef.current) return
+    // NOT gated on `scoreOpen` any more. It was, and the consequence was that a
+    // saved document showed no underlines at all until AI Insights had been
+    // opened once — the marks are drawn from `claims`, and `claims` were only
+    // ever fetched by this effect. So the writer had to open a full-screen
+    // report and close it again before their own document would tell them
+    // anything, which is the opposite of what an inline mark is for.
+    //
+    // Reading a stored analysis costs NO relay call — it is two SQLite reads —
+    // so there is nothing to gate. Re-analysing is what costs, and this still
+    // never triggers one: a stale result is shown with its banner and the user
+    // decides.
+    if (outline || !docIdRef.current) return
     let cancelled = false
     void tracelyApi
       .getStructure(docIdRef.current, bodyText())
@@ -1185,7 +1199,7 @@ function DocumentEditor({
     return () => {
       cancelled = true
     }
-  }, [scoreOpen, outline, onRefreshClaims])
+  }, [outline, onRefreshClaims])
 
   /**
    * Runs the evidence search for claims that have not been checked.
@@ -1202,6 +1216,53 @@ function DocumentEditor({
    * These are the four free academic APIs, not the paid relay, which is why
    * this can be offered as a button per claim at all.
    */
+  /**
+   * Runs the critique over claims that already have evidence.
+   *
+   * This is the only route by which a REASONING problem can ever be underlined
+   * in the editor. `problemKindsFor` returns 'weak-reasoning',
+   * 'contradicted-claim', 'overstated-claim' and 'fabricated-citation' only
+   * when `critiqueVerdict` is set, and nothing in this app was setting it
+   * outside Screen Watch's manual popover — so the document editor could tell a
+   * writer their sentence lacked sources and could never tell them it did not
+   * follow, no matter how long they looked at it. The IPC has been wired
+   * through the preload since critiqueHandlers.ts was written; it simply had no
+   * caller.
+   *
+   * Kept SEPARATE from checkClaims rather than folded into it, deliberately.
+   * The evidence sweep hits four free academic APIs; this is the reasoning
+   * model, the most expensive call in the product, at roughly a cent a claim.
+   * Merging them would make one button silently cost fifty times what it did,
+   * and "Check all" is offered to every writer on every draft.
+   *
+   * Serial with a visible count, for the same reason the evidence sweep is:
+   * a second press must not queue a duplicate pass, and the user should see
+   * what they are spending.
+   *
+   * Only claims whose evidence has resolved are eligible — the critique reasons
+   * over an evidence list, and handing it an empty one produces a verdict about
+   * the search rather than about the sentence (see isRetrievalMiss).
+   */
+  async function critiqueClaims(ids: string[]): Promise<void> {
+    if (ids.length === 0) return
+    setCritiquing({ done: 0, total: ids.length })
+    for (const [i, id] of ids.entries()) {
+      try {
+        await tracelyApi.generateCritique(id)
+      } catch {
+        // One claim failing must not abandon the queue. The relay is billed
+        // per call, so a retry loop here would be a retry loop on a meter.
+      }
+      setCritiquing({ done: i + 1, total: ids.length })
+    }
+    setCritiquing(null)
+
+    // The verdicts are persisted by the handler; re-reading is what puts them
+    // on the claims the marks are measured from. Costs nothing.
+    const analysisId = analysisIdRef.current
+    if (analysisId) await onRefreshClaims(analysisId)
+  }
+
   async function checkClaims(ids: string[]): Promise<void> {
     if (ids.length === 0) return
     setChecking({ done: 0, total: ids.length })
@@ -1715,7 +1776,11 @@ function DocumentEditor({
           // claims and the outline when it finishes — closing the modal
           // mid-sweep must not abandon either.
           onCheckClaims={(ids) => void checkClaims(ids)}
+          // The paid pass, and the only thing that can put a reasoning
+          // underline in the document — see critiqueClaims.
+          onCritiqueClaims={(ids) => void critiqueClaims(ids)}
           checking={checking}
+          critiquing={critiquing}
           /**
            * "Show me" — closes the report and takes the writer to the text the
            * finding is about.

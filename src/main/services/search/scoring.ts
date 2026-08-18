@@ -73,6 +73,39 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
+/**
+ * The score a stored breakdown would get under TODAY'S weights.
+ *
+ * `strength_score` is persisted beside the breakdown it was computed from, so
+ * every claim searched before a weight change keeps a number from the old
+ * formula. After the 2026-08-18 refit that is not a cosmetic staleness: those
+ * claims still band as "partially supported" in the editor and the overlay
+ * while freshly-searched ones do not, so the same draft reports two different
+ * verdicts depending on when each sentence happened to be checked.
+ *
+ * Re-deriving is exact rather than approximate, and needs no network at all:
+ * the score IS the weighted sum of the five stored factors. The only thing
+ * `computeStrengthScore` adds on top is the contradiction cap, which requires
+ * stance verdicts that a breakdown does not carry — and cannot apply anyway
+ * while STANCE_ENABLED is false, since the cap only fires when the balance of
+ * stance runs against the claim.
+ *
+ * Returns null for a claim that was never searched, which must stay null: 0
+ * means "we looked and found nothing" and null means "nobody has looked", and
+ * problemKind.ts tells the writer different things about them.
+ */
+export function rescoreFromBreakdown(breakdown: ScoreBreakdown | null): number | null {
+  if (!breakdown) return null
+  const w = breakdown.support !== 0 ? WEIGHTS_WITH_STANCE : WEIGHTS_WITHOUT_STANCE
+  const weighted =
+    w.sourceCount * breakdown.sourceCount +
+    w.quality * breakdown.quality +
+    w.recency * breakdown.recency +
+    w.relevance * breakdown.relevance +
+    w.support * breakdown.support
+  return Math.round(100 * clamp01(weighted))
+}
+
 // Words too common to mean anything about topical overlap — filtering these
 // out is what stops two completely unrelated results that both happen to
 // contain "the study found that people" from looking related.

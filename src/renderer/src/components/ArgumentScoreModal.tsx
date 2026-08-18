@@ -333,7 +333,9 @@ export default function ArgumentScoreModal({
   onReanalyze,
   onEvidenceSearched,
   onCheckClaims,
+  onCritiqueClaims,
   checking,
+  critiquing,
   onReveal,
   onClose
 }: {
@@ -388,8 +390,19 @@ export default function ArgumentScoreModal({
    * visible count and has to survive this modal closing mid-sweep.
    */
   onCheckClaims: (ids: string[]) => void
+  /**
+   * Runs the critique over claims that already have evidence.
+   *
+   * The only route by which a REASONING problem can be underlined at all:
+   * problemKind.ts returns 'weak-reasoning', 'contradicted-claim',
+   * 'overstated-claim' and 'fabricated-citation' only when critiqueVerdict is
+   * set, and nothing in the editor was setting it.
+   */
+  onCritiqueClaims: (ids: string[]) => void
   /** Progress of a running sweep, or null when idle. */
   checking: { done: number; total: number } | null
+  /** Progress of a running reasoning pass. Separate because it is the paid one. */
+  critiquing: { done: number; total: number } | null
   /**
    * Closes the report and takes the writer to the text a finding is about.
    *
@@ -499,6 +512,8 @@ export default function ArgumentScoreModal({
             compact={view.name === 'summary'}
             onView={setView}
             onReveal={onReveal}
+            onCritiqueClaims={onCritiqueClaims}
+            critiquing={critiquing}
             onReanalyze={onReanalyze}
             onCheckClaims={onCheckClaims}
             checking={checking}
@@ -552,9 +567,11 @@ function ScoreReport({
   compact,
   onView,
   onReveal,
+  onCritiqueClaims,
   onReanalyze,
   onCheckClaims,
   checking,
+  critiquing,
   onClose
 }: {
   outline: DocumentOutline
@@ -565,7 +582,9 @@ function ScoreReport({
   onReveal: (target: RevealTarget) => void
   onReanalyze: () => void
   onCheckClaims: (ids: string[]) => void
+  onCritiqueClaims: (ids: string[]) => void
   checking: { done: number; total: number } | null
+  critiquing: { done: number; total: number } | null
   onClose: () => void
 }): JSX.Element {
   const { detected, withRelevantSource, withOwnCitation, unchecked } = outline.coverage
@@ -600,6 +619,12 @@ function ScoreReport({
   // `outline.coverage.unchecked` counts with, so the button's number and the
   // "N not checked yet" line above it can never disagree.
   const pending = claims.filter((claim) => claim.strengthScore === null).map((claim) => claim.id)
+  // Evidence has resolved and no verdict has been reached. Excludes unsearched
+  // claims on purpose: a critique handed an empty evidence list returns a
+  // verdict about the search rather than about the sentence.
+  const uncritiqued = claims
+    .filter((claim) => claim.strengthScore !== null && claim.critiqueVerdict === null)
+    .map((claim) => claim.id)
 
   // Which paragraph row is expanded. One at a time, and the first row carrying
   // a finding opens by default — the report is read top-down and an all-collapsed
@@ -748,6 +773,11 @@ function ScoreReport({
           </div>
 
           <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} />
+          <CheckReasoningRow
+            pending={uncritiqued}
+            critiquing={critiquing}
+            onCritiqueClaims={onCritiqueClaims}
+          />
 
           {/*
             One row per paragraph, collapsed to a header until opened. The row
@@ -1304,6 +1334,56 @@ function CheckAllRow({
               {pending.length === 1 ? 'has' : 'have'} not been checked yet.
             </span>
           ) : null}
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The reasoning pass — the paid sibling of CheckAllRow.
+ *
+ * Its own row, and its own wording, because it costs about fifty times what
+ * the evidence sweep does: that one hits four free academic APIs, this one is
+ * the reasoning model at roughly a cent a claim. A writer pressing a button on
+ * their own draft is entitled to know which of those they just pressed, so the
+ * note says so rather than leaving "check" to mean two different prices.
+ *
+ * Offered only for claims whose evidence has already resolved. The critique
+ * reasons over an evidence list; handing it an empty one produces a verdict
+ * about the search rather than about the sentence.
+ */
+function CheckReasoningRow({
+  pending,
+  critiquing,
+  onCritiqueClaims
+}: {
+  pending: string[]
+  critiquing: { done: number; total: number } | null
+  onCritiqueClaims: (ids: string[]) => void
+}): JSX.Element | null {
+  if (pending.length === 0 && !critiquing) return null
+
+  return (
+    <div className="argscore-checkall-row" data-paid="true">
+      {critiquing ? (
+        <p className="argscore-checkall-progress">
+          <Spinner />
+          <span>
+            Reading {Math.min(critiquing.done + 1, critiquing.total)} of {critiquing.total}…
+          </span>
+        </p>
+      ) : (
+        <>
+          <button className="argscore-checkall" onClick={() => onCritiqueClaims(pending)}>
+            Check reasoning on {pending.length}
+          </button>
+          <span className="argscore-checkall-note">
+            Reads {pending.length === 1 ? 'the claim' : `all ${pending.length} claims`} against{' '}
+            {pending.length === 1 ? 'its' : 'their'} evidence to find reasoning that does not follow,
+            overstatement, and claims the sources contradict. Unlike the source search, this one
+            costs — about a cent per claim.
+          </span>
         </>
       )}
     </div>

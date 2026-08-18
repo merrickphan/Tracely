@@ -5651,3 +5651,19 @@ textarea:disabled {
     opacity: 0;
   }
 }
+
+/* The reasoning pass costs about fifty times what the evidence sweep does —
+   one hits four free academic APIs, the other is the reasoning model. The row
+   is marked so a writer can see at a glance which button they are about to
+   press; leaving the two identical is how "check" comes to mean two prices. */
+.argscore-checkall-row[data-paid='true'] {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.argscore-checkall-row[data-paid='true'] .argscore-checkall {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--text);
+}
