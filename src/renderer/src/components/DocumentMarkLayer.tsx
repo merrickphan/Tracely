@@ -1,5 +1,23 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { placePopover } from '@shared/popoverPlacement'
+// The mark's own look and motion, shared with the Screen Watch overlay so the
+// two surfaces cannot drift into drawing the same problem differently.
+import {
+  BAND_INSET_BOTTOM,
+  BAND_INSET_TOP,
+  BAND_RADIUS,
+  BAND_SCALE_RESTING,
+  BAND_TRANSITION,
+  DESCENDER_ROOM,
+  LINE_HEIGHT,
+  LINE_HEIGHT_HOVERED,
+  LINE_RADIUS,
+  LINE_TRANSITION,
+  MOVE_TRANSITION,
+  bandBackground,
+  hasJumped
+} from '@shared/markMotion'
+import type { ProseIssue } from '@shared/proseIssues'
 import type { CitationStyle } from '@shared/types'
 import type { DocumentMark, MarkRect, ProseMark } from './documentMarks'
 import MarkdownText from './MarkdownText'
@@ -214,30 +232,266 @@ export interface DocumentMarkLayerProps {
  * and borrowing it to say "a/an" would be more machinery than the message
  * needs. The tooltip is honest about what it is.
  */
-const PROSE_ERROR = '#2563eb'
-const PROSE_STYLE = '#9aa1ad'
+export const PROSE_ERROR = '#2563eb'
+export const PROSE_STYLE = '#9aa1ad'
 
-export function ProseMarkLayer({ marks }: { marks: ProseMark[] }): JSX.Element {
+export function ProseMarkLayer({
+  marks,
+  active,
+  fix,
+  onApply,
+  onDismiss,
+  onPopoverEnter,
+  onPopoverLeave,
+  wrapWidth,
+  wrapHeight,
+  wrapScrollTop
+}: {
+  marks: ProseMark[]
+  /** The issue the pointer is over, hit-tested in AnalyzeView. */
+  active: { mark: ProseMark; rect: MarkRect } | null
+  fix: DocProseFix | null
+  onApply: (mark: ProseMark) => void
+  onDismiss: (mark: ProseMark) => void
+  onPopoverEnter: () => void
+  onPopoverLeave: () => void
+  wrapWidth: number
+  wrapHeight: number
+  wrapScrollTop: number
+}): JSX.Element {
   return (
-    <div className="docmark-layer docprose-layer" aria-hidden="true">
+    <div className="docmark-layer docprose-layer">
       {marks.map((mark) =>
         mark.rects.map((rect, i) => (
-          <div
+          <SpanMark
             key={`${mark.issue.kind}-${mark.issue.start}-${i}`}
+            rect={rect}
+            color={mark.issue.severity === 'error' ? PROSE_ERROR : PROSE_STYLE}
+            hovered={isSameIssue(active?.mark.issue, mark.issue)}
             className={`docprose docprose-${mark.issue.severity}`}
-            data-prose-kind={mark.issue.kind}
-            title={mark.issue.suggestion ? `${mark.issue.message}` : mark.issue.message}
-            style={{
-              left: rect.left,
-              top: rect.top,
-              width: rect.width,
-              height: rect.height,
-              borderBottomColor: mark.issue.severity === 'error' ? PROSE_ERROR : PROSE_STYLE
-            }}
+            data={{ 'data-prose-kind': mark.issue.kind }}
+            dotted={mark.issue.severity === 'style'}
           />
         ))
       )}
+      {active ? (
+        <ProsePopover
+          mark={active.mark}
+          rect={active.rect}
+          fix={fix}
+          wrapWidth={wrapWidth}
+          wrapHeight={wrapHeight}
+          wrapScrollTop={wrapScrollTop}
+          onApply={() => onApply(active.mark)}
+          onDismiss={() => onDismiss(active.mark)}
+          onMouseEnter={onPopoverEnter}
+          onMouseLeave={onPopoverLeave}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/** Offsets identify an issue: `ProseMark` objects are rebuilt on every measure,
+ *  so comparing them by reference makes the hovered mark flicker off on each
+ *  keystroke. */
+function isSameIssue(a: ProseIssue | undefined, b: ProseIssue): boolean {
+  return a !== undefined && a.start === b.start && a.end === b.end && a.kind === b.kind
+}
+
+/** Whether a prose fix is mid-flight, so Apply can say so. */
+export interface DocProseFix {
+  start: number
+  end: number
+  applying: boolean
+}
+
+/**
+ * The grammar card — what the native `title` tooltip used to be.
+ *
+ * The tooltip was the reason `.docprose` carried `pointer-events: auto`, which
+ * made every flagged word a place the caret could not be placed: the layer sits
+ * over the contentEditable, so an element that accepts a pointer event is a
+ * hole in the document. Hit-testing removes the need for the element to be
+ * hoverable at all, and it buys a card that can hold the one thing a tooltip
+ * never could — the button that applies the fix.
+ *
+ * Narrower than the claim popover (240 against 320) and visibly lighter: a 1px
+ * border where the claim card has 2, no dot, no count. A remark about "the the"
+ * should not arrive with the same weight as one about whether a statistic is
+ * real, and the card is where a reader reads that difference.
+ */
+const PROSE_POPOVER_WIDTH = 240
+
+function ProsePopover({
+  mark,
+  rect,
+  fix,
+  wrapWidth,
+  wrapHeight,
+  wrapScrollTop,
+  onApply,
+  onDismiss,
+  onMouseEnter,
+  onMouseLeave
+}: {
+  mark: ProseMark
+  rect: MarkRect
+  fix: DocProseFix | null
+  wrapWidth: number
+  wrapHeight: number
+  wrapScrollTop: number
+  onApply: () => void
+  onDismiss: () => void
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}): JSX.Element {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(0)
+  useLayoutEffect(() => {
+    setHeight(cardRef.current?.offsetHeight ?? 0)
+  }, [mark.issue.start, mark.issue.kind])
+
+  const width = PROSE_POPOVER_WIDTH
+  const idealLeft = rect.left + rect.width / 2 - width / 2
+  const left = Math.max(8, Math.min(idealLeft, wrapWidth - width - 8))
+  const { above, top } = placePopover({
+    markTop: rect.top,
+    markHeight: rect.height,
+    cardHeight: height,
+    gap: POPOVER_GAP,
+    viewportHeight: wrapHeight,
+    scrollTop: wrapScrollTop
+  })
+
+  const { suggestion, message, severity } = mark.issue
+  const applying = fix !== null && fix.start === mark.issue.start && fix.applying
+
+  return (
+    <div
+      className="docmark-popover docprose-popover"
+      style={{ left, top, width }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <div ref={cardRef} className="docprose-card" data-above={above ? 'true' : undefined}>
+        <div className="docprose-card-head">
+          <span
+            className="docprose-card-kind"
+            style={{ color: severity === 'error' ? PROSE_ERROR : PROSE_STYLE }}
+          >
+            {severity === 'error' ? 'Grammar' : 'Style'}
+          </span>
+        </div>
+        <p className="docprose-card-body">{message}</p>
+        <div className="docmark-actions">
+          {/* Offered only where there IS one right answer. `filler` and
+              `long-sentence` carry no suggestion on purpose — whether a given
+              "very" is doing work is the writer's call, and a button that
+              deleted it would be this app writing their sentence. */}
+          {suggestion ? (
+            <button className="docmark-btn-primary" onClick={onApply} disabled={applying}>
+              {applying ? 'Applying…' : `Change to “${suggestion}”`}
+            </button>
+          ) : null}
+          <button className="docmark-btn-secondary" onClick={onDismiss}>
+            {suggestion ? 'Ignore' : 'Got it'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One flagged span: the highlighter band and the line beneath it.
+ *
+ * The same mark the Screen Watch overlay draws, from the same constants
+ * (`shared/markMotion.ts`). It used to be a flat 2px border with a 12%-alpha
+ * box on hover and no motion at all, so the identical problem on the identical
+ * sentence looked like two different products depending on which window it was
+ * in.
+ *
+ * Movement is a transform rather than left/top so it composites rather than
+ * laying out — this layer sits over a contentEditable that reflows on every
+ * keystroke, so a layout-triggering animation here is felt while typing. Large
+ * jumps cut instead of gliding, or inserting a paragraph sends every mark below
+ * it swooping diagonally up the page.
+ */
+function SpanMark({
+  rect,
+  color,
+  hovered,
+  className,
+  data,
+  dotted = false,
+  title
+}: {
+  rect: MarkRect
+  color: string
+  hovered: boolean
+  className: string
+  data?: Record<string, string>
+  /** A style note's line is dotted — a suggestion the writer may refuse. */
+  dotted?: boolean
+  title?: string
+}): JSX.Element {
+  const prev = useRef<{ x: number; y: number } | null>(null)
+  const jumped = hasJumped(prev.current, { x: rect.left, y: rect.top })
+  useEffect(() => {
+    prev.current = { x: rect.left, y: rect.top }
+  })
+
+  return (
+    <span
+      className={className}
+      data-hovered={hovered ? 'true' : 'false'}
+      title={title}
+      {...data}
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: rect.width,
+        height: rect.height + DESCENDER_ROOM,
+        transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+        transition: jumped ? 'none' : MOVE_TRANSITION,
+        willChange: 'transform',
+        pointerEvents: 'none'
+      }}
+    >
+      <span
+        className="docmark-band"
+        style={{
+          position: 'absolute',
+          inset: `${-BAND_INSET_TOP}px 0 ${BAND_INSET_BOTTOM}px 0`,
+          background: bandBackground(color, hovered),
+          borderRadius: BAND_RADIUS,
+          opacity: hovered ? 1 : 0,
+          transform: hovered ? 'scaleY(1)' : `scaleY(${BAND_SCALE_RESTING})`,
+          transformOrigin: 'bottom',
+          transition: BAND_TRANSITION
+        }}
+      />
+      <span
+        className="docmark-line"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          borderRadius: LINE_RADIUS,
+          transition: LINE_TRANSITION,
+          // A dotted line cannot be drawn as a filled box — it is the bottom
+          // border of a zero-height element instead. A style note does not
+          // thicken on hover either: the dots would merge into a solid rule and
+          // read as the error treatment.
+          ...(dotted
+            ? { height: 0, borderBottom: `${LINE_HEIGHT}px dotted ${color}` }
+            : { height: hovered ? LINE_HEIGHT_HOVERED : LINE_HEIGHT, background: color })
+        }}
+      />
+    </span>
   )
 }
 
@@ -264,20 +518,17 @@ export default function DocumentMarkLayer({
           const kind = mark.problemKinds[0]
           const isActive = active?.mark.claim.id === mark.claim.id
           return (
-            <span
+            <SpanMark
               key={`${mark.claim.id}:${i}`}
+              rect={rect}
+              color={PROBLEM_COLOR[kind]}
+              hovered={isActive}
               className={`docmark${isActive ? ' active' : ''}`}
+              // Same attributes the overlay's marks carry, and for the same
+              // reason: this layer renders no text, so without them its DOM is
+              // unreadable when inspecting it or asserting on it from a test.
+              data={{ 'data-claim-id': mark.claim.id, 'data-problem': kind }}
               title={PROBLEM_LABEL[kind]}
-              style={{
-                left: rect.left,
-                top: rect.top,
-                width: rect.width,
-                height: rect.height,
-                // The mark is the bottom border, so the box can also carry the
-                // hover wash without the underline moving.
-                borderBottomColor: PROBLEM_COLOR[kind],
-                background: isActive ? `${PROBLEM_COLOR[kind]}1f` : 'transparent'
-              }}
             />
           )
         })

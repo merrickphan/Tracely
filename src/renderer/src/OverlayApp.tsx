@@ -22,6 +22,26 @@ import type {
   ScreenWatchWidget
 } from '@shared/ipc-contract'
 import { hasRelevantSource, isRetrievalMiss } from '@shared/problemKind'
+// The mark's look and motion. Shared with the document editor's marks
+// (DocumentMarkLayer.tsx), which draw the same thing over Tracely's own
+// contentEditable — the values live in one place so the two surfaces cannot
+// drift into showing the same problem differently.
+import {
+  BAND_INSET_BOTTOM,
+  BAND_INSET_TOP,
+  BAND_RADIUS,
+  BAND_SCALE_RESTING,
+  BAND_TRANSITION,
+  DESCENDER_ROOM,
+  LINE_HEIGHT,
+  LINE_HEIGHT_HOVERED,
+  LINE_RADIUS,
+  LINE_TRANSITION,
+  MOVE_TRANSITION,
+  bandBackground,
+  hasJumped,
+  withAlpha
+} from '@shared/markMotion'
 import figmaLogo from './assets/figma-logo.png'
 import MarkdownText from './components/MarkdownText'
 // Shared with the document editor, which draws the same marks over Tracely's
@@ -171,11 +191,6 @@ const BUCKET_COLOR: Record<Bucket, string> = {
   other: '#d6301a'
 }
 
-function withAlpha(hex: string, alpha: number): string {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
-}
-
 type Underlines = ScreenWatchOverlayUpdateEvent['underlines']
 
 // How long a still-tracked claim keeps its last known rects after an update
@@ -295,7 +310,7 @@ function UnderlineMark({
 }): JSX.Element {
   const prev = useRef<{ x: number; y: number } | null>(null)
 
-  const jumped = prev.current === null || Math.abs(x - prev.current.x) > 40 || Math.abs(y - prev.current.y) > 24
+  const jumped = hasJumped(prev.current, { x, y })
 
   useEffect(() => {
     prev.current = { x, y }
@@ -317,13 +332,11 @@ function UnderlineMark({
         left: 0,
         top: 0,
         width,
-        // The band covers the text itself; the extra 4px below leaves room
+        // The band covers the text itself; the extra room below leaves space
         // for the line to sit clear of descenders (g, y, p).
-        height: height + 4,
+        height: height + DESCENDER_ROOM,
         transform: `translate3d(${x}px, ${y}px, 0)`,
-        transition: jumped
-          ? 'none'
-          : 'transform 150ms cubic-bezier(0.22, 1, 0.36, 1), width 150ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transition: jumped ? 'none' : MOVE_TRANSITION,
         willChange: 'transform',
         pointerEvents: 'none'
       }}
@@ -334,7 +347,7 @@ function UnderlineMark({
           // Extends 2px above the text's own bounding box. A band clipped
           // exactly to the glyph box reads as a background colour change;
           // a little air above it reads as a highlighter stroke.
-          inset: '-2px 0 3px 0',
+          inset: `${-BAND_INSET_TOP}px 0 ${BAND_INSET_BOTTOM}px 0`,
           // Translucent, not opaque: the overlay window sits ON TOP of the
           // watched app, so anything solid here would hide the very text it
           // is meant to be highlighting. This is a highlighter pen, and the
@@ -344,12 +357,12 @@ function UnderlineMark({
           // rgb(253,236,222) over white, which is invisible in practice
           // next to black body text. Anything past ~0.35 starts fighting
           // the text for contrast.
-          background: withAlpha(color, 0.3),
-          borderRadius: 3,
+          background: bandBackground(color, true),
+          borderRadius: BAND_RADIUS,
           opacity: hovered ? 1 : 0,
-          transform: hovered ? 'scaleY(1)' : 'scaleY(0.72)',
+          transform: hovered ? 'scaleY(1)' : `scaleY(${BAND_SCALE_RESTING})`,
           transformOrigin: 'bottom',
-          transition: 'opacity 110ms ease, transform 110ms cubic-bezier(0.22, 1, 0.36, 1)'
+          transition: BAND_TRANSITION
         }}
       />
       <div
@@ -361,11 +374,11 @@ function UnderlineMark({
           // 2px tall with a 1px radius, at full strength — the design's
           // `rounded-[1px]` marks. It was a 2px radius at 0.85 opacity, which
           // on a 2px bar rounds it into a capsule and washes the colour.
-          height: hovered ? 3 : 2,
-          borderRadius: 1,
+          height: hovered ? LINE_HEIGHT_HOVERED : LINE_HEIGHT,
+          borderRadius: LINE_RADIUS,
           background: color,
           opacity: 1,
-          transition: 'height 110ms ease'
+          transition: LINE_TRANSITION
         }}
       />
     </div>

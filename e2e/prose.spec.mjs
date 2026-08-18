@@ -69,8 +69,7 @@ test('grammar and wordiness are underlined in the editor', async (t) => {
       severities: els.map((e) => (e.className.includes('docprose-error') ? 'error' : 'style')),
       // A zero-width rect renders as nothing — the failure mode a unit test
       // cannot see.
-      allPositioned: els.every((e) => e.getBoundingClientRect().width > 0),
-      messages: els.map((e) => e.getAttribute('title'))
+      allPositioned: els.every((e) => e.getBoundingClientRect().width > 0)
     }
   })
 
@@ -98,9 +97,106 @@ test('grammar and wordiness are underlined in the editor', async (t) => {
     'the agentless passive was flagged too'
   )
 
-  for (const message of drawn.messages) {
-    assert.ok(message && message.length > 0, 'a mark carries no explanation')
-  }
+  // The explanation used to be a native `title` on the mark, which is what
+  // forced `pointer-events: auto` and made the flagged words unclickable. It is
+  // a hover card now, so it is asserted where it now lives — on the card, in
+  // the two tests below.
+})
+
+/**
+ * The bug this layer shipped with: `.docprose` carried `pointer-events: auto`
+ * so a native `title` tooltip would fire, which made every flagged word a place
+ * the caret could not be placed. Same class of bug as the Screen Watch overlay
+ * capturing the whole screen, in miniature and in our own editor.
+ *
+ * Asserted by clicking the flagged word and reading back where the caret went.
+ * A CSS assertion would pass on `pointer-events: none` while some other element
+ * in the layer still swallowed the click.
+ */
+test('a flagged word can still be clicked into', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /New document/i }).click()
+  const body = page.locator('.docedit-body')
+  await body.waitFor({ state: 'visible' })
+  await body.click()
+  await page.keyboard.insertText('This is a error in the report.')
+  const mark = page.locator('.docprose[data-prose-kind="article-agreement"]').first()
+  await mark.waitFor({ state: 'visible', timeout: 10_000 })
+
+  // Click the middle of the underlined word itself.
+  const box = await mark.boundingBox()
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+
+  const caret = await page.evaluate(() => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return null
+    const editor = document.querySelector('.docedit-body')
+    return {
+      inEditor: editor.contains(sel.anchorNode),
+      offset: sel.anchorOffset
+    }
+  })
+
+  assert.ok(caret, 'clicking a flagged word placed no caret at all')
+  assert.ok(caret.inEditor, 'the click did not reach the contentEditable')
+
+  // And typing there actually lands, which is the thing the writer was trying
+  // to do when they clicked.
+  await page.keyboard.type('X')
+  const text = await body.innerText()
+  assert.ok(text.includes('X'), `typing after the click did not reach the document: ${text}`)
+})
+
+/** The card that replaced the tooltip, and the button a tooltip could not hold. */
+test('the prose card applies a fix, and Ctrl+Z takes it back', async (t) => {
+  const { userData, app: launching } = launchIsolated()
+  const app = await launching
+  t.after(async () => {
+    await teardown(app, userData)
+  })
+
+  const page = await mainWindow(app)
+  await page.waitForLoadState('domcontentloaded')
+  await page.getByRole('button', { name: /^Documents$/i }).click()
+  await page.getByRole('button', { name: /New document/i }).click()
+  const body = page.locator('.docedit-body')
+  await body.waitFor({ state: 'visible' })
+  await body.click()
+  await page.keyboard.insertText('This is a error in the report.')
+  const mark = page.locator('.docprose[data-prose-kind="article-agreement"]').first()
+  await mark.waitFor({ state: 'visible', timeout: 10_000 })
+
+  const box = await mark.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+
+  const card = page.locator('.docprose-card')
+  await card.waitFor({ state: 'visible', timeout: 5000 })
+
+  // The band is up while the pointer is on the mark — the Screen Watch
+  // treatment, which this layer did not have.
+  assert.equal(await mark.getAttribute('data-hovered'), 'true', 'the mark did not register as hovered')
+
+  const apply = page.getByRole('button', { name: /Change to/ })
+  await apply.click()
+
+  const after = await body.innerText()
+  assert.ok(after.includes('an error'), `fix did not apply: ${after}`)
+  assert.ok(!after.includes('a error'), `the old text is still there: ${after}`)
+
+  // Through execCommand, so it is on the browser's undo stack like every other
+  // edit this editor makes.
+  await body.click()
+  await page.keyboard.press('Control+z')
+  const undone = await body.innerText()
+  assert.ok(undone.includes('a error'), `Ctrl+Z did not restore the original: ${undone}`)
 })
 
 test('the prose layer sits under the claim layer', async (t) => {

@@ -11,6 +11,10 @@ import type {
   StructureWeakness,
   StructureWeaknessKind
 } from '@shared/types'
+// What to DO about each named weakness. A local template, never model output —
+// see the header of revisionGuidance.ts for why the report may prescribe the
+// move and never the sentence.
+import { guidanceFor } from '@shared/revisionGuidance'
 import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
@@ -297,6 +301,19 @@ type View =
   | { name: 'argument' }
   | { name: 'evidence'; claimId: string; from: { name: 'paragraph'; index: number } | { name: 'argument' } }
 
+/**
+ * Where in the document a finding is, for "Show me".
+ *
+ * A claim id when the finding is about a sentence, a paragraph index when it is
+ * about a paragraph, and neither when it is about the whole draft — "this essay
+ * has no counterargument" is about a paragraph that was never written, so there
+ * is nothing to scroll to and the button is not offered.
+ */
+export interface RevealTarget {
+  claimId: string | null
+  paragraphIndex: number | null
+}
+
 export default function ArgumentScoreModal({
   outline,
   claims,
@@ -309,6 +326,7 @@ export default function ArgumentScoreModal({
   onEvidenceSearched,
   onCheckClaims,
   checking,
+  onReveal,
   onClose
 }: {
   outline: DocumentOutline | null
@@ -364,6 +382,15 @@ export default function ArgumentScoreModal({
   onCheckClaims: (ids: string[]) => void
   /** Progress of a running sweep, or null when idle. */
   checking: { done: number; total: number } | null
+  /**
+   * Closes the report and takes the writer to the text a finding is about.
+   *
+   * Owned by the editor, because only the editor can scroll its own
+   * contentEditable — and it closes this modal on the way, since at 898px wide
+   * there is no showing someone their document with a full-screen report over
+   * it.
+   */
+  onReveal: (target: RevealTarget) => void
   onClose: () => void
 }): JSX.Element {
   // Opens on the Essay Grade widget — 370:135, the compact card with the ring
@@ -423,6 +450,7 @@ export default function ArgumentScoreModal({
             claims={claims}
             paragraphTexts={paragraphTexts}
             index={view.index}
+            onReveal={onReveal}
             onFindEvidence={(claimId) =>
               setView({ name: 'evidence', claimId, from: { name: 'paragraph', index: view.index } })
             }
@@ -446,6 +474,7 @@ export default function ArgumentScoreModal({
             paragraphTexts={paragraphTexts}
             compact={view.name === 'summary'}
             onView={setView}
+            onReveal={onReveal}
             onReanalyze={onReanalyze}
             onCheckClaims={onCheckClaims}
             checking={checking}
@@ -489,6 +518,7 @@ function ScoreReport({
   paragraphTexts,
   compact,
   onView,
+  onReveal,
   onReanalyze,
   onCheckClaims,
   checking,
@@ -499,6 +529,7 @@ function ScoreReport({
   paragraphTexts: string[]
   compact: boolean
   onView: (view: View) => void
+  onReveal: (target: RevealTarget) => void
   onReanalyze: () => void
   onCheckClaims: (ids: string[]) => void
   checking: { done: number; total: number } | null
@@ -756,6 +787,7 @@ function ScoreReport({
                         weakness={weakness}
                         claim={claims.find((claim) => claim.id === weakness.claimId) ?? null}
                         onView={onView}
+                        onReveal={onReveal}
                         paragraphIndex={paragraph.index}
                       />
                     ))}
@@ -781,10 +813,19 @@ function ScoreReport({
           {draftWeaknesses.length > 0 ? (
             <>
               <h3 className="argscore-section argscore-section-dot">Summary</h3>
+              {/* The same card the per-paragraph findings use, not a bare
+                  sentence. These are the most actionable findings in the whole
+                  report — "no thesis", "no counterargument", "no significance"
+                  — and they were the only ones with no route onward at all. */}
               {draftWeaknesses.map((weakness, i) => (
-                <p className="argscore-weakness-block" key={`${weakness.kind}-${i}`}>
-                  {weakness.message}
-                </p>
+                <ParagraphProblem
+                  key={`${weakness.kind}-${i}`}
+                  weakness={weakness}
+                  claim={claims.find((claim) => claim.id === weakness.claimId) ?? null}
+                  onView={onView}
+                  onReveal={onReveal}
+                  paragraphIndex={weakness.paragraphIndex}
+                />
               ))}
             </>
           ) : null}
@@ -881,14 +922,20 @@ function ParagraphProblem({
   weakness,
   claim,
   paragraphIndex,
-  onView
+  onView,
+  onReveal
 }: {
   weakness: StructureWeakness
   claim: Claim | null
-  paragraphIndex: number
+  paragraphIndex: number | null
   onView: (view: View) => void
+  onReveal: (target: RevealTarget) => void
 }): JSX.Element {
   const searchable = weakness.kind === 'unsupported-claim' && claim !== null
+  // A finding with neither a claim nor a paragraph is about the whole draft —
+  // "no counterargument" is about a paragraph that does not exist, and there is
+  // nowhere to send anyone.
+  const locatable = claim !== null || paragraphIndex !== null
 
   return (
     <div className="argscore-problem" data-kind={weakness.kind}>
@@ -900,25 +947,82 @@ function ParagraphProblem({
             <span className="argscore-problem-score"> · {claim.strengthScore}/100 evidence</span>
           ) : null}
         </span>
-        <button
-          className="argscore-link"
-          onClick={() =>
-            onView(
-              searchable
-                ? {
-                    name: 'evidence',
-                    claimId: claim.id,
-                    from: { name: 'paragraph', index: paragraphIndex }
-                  }
-                : { name: 'paragraph', index: paragraphIndex }
-            )
-          }
-        >
-          {searchable ? 'Find evidence →' : 'Fix →'}
-        </button>
+        {/* Two different things, and they were one before: "Show me" leaves the
+            report and puts the cursor on the text, "Find evidence" starts a
+            search. The old single "Fix →" did neither — it opened the paragraph
+            detail, another screen inside the same modal, which is how a report
+            could name a problem in the fourth paragraph and never once show
+            anyone the fourth paragraph. */}
+        {locatable ? (
+          <button
+            className="argscore-link"
+            onClick={() =>
+              onReveal({ claimId: claim?.id ?? null, paragraphIndex })
+            }
+          >
+            Show me →
+          </button>
+        ) : null}
+        {searchable ? (
+          <button
+            className="argscore-link"
+            onClick={() =>
+              onView({
+                name: 'evidence',
+                claimId: claim.id,
+                from: { name: 'paragraph', index: paragraphIndex ?? 1 }
+              })
+            }
+          >
+            Find evidence →
+          </button>
+        ) : null}
       </div>
       {claim ? <p className="argscore-problem-quote">“{claim.text}”</p> : null}
       <p className="argscore-problem-body">{weakness.message}</p>
+      <GuidanceBlock kind={weakness.kind} />
+    </div>
+  )
+}
+
+/**
+ * How to fix it — the half of the report that was missing.
+ *
+ * `weaknesses.ts` names what is wrong and stops, because the route onward used
+ * to be `tracerPrompt` and Tracer was removed. Nothing replaced it, so for
+ * several releases this report could tell a student their fourth paragraph had
+ * a warrant gap and offer them no way to find out what a warrant gap is, let
+ * alone what to do about one.
+ *
+ * Collapsed by default and opened per finding. A reader scanning six findings
+ * wants the six names; a reader who has stopped on one wants all three fields
+ * at once, which is why opening it shows move, why and done together rather
+ * than revealing them in turn.
+ *
+ * The guidance never contains a sentence to paste — see revisionGuidance.ts.
+ */
+function GuidanceBlock({ kind }: { kind: StructureWeaknessKind }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const guidance = guidanceFor(kind)
+
+  return (
+    <div className="argscore-guidance" data-open={open ? 'true' : 'false'}>
+      <button className="argscore-guidance-toggle" onClick={() => setOpen((o) => !o)}>
+        {open ? '− How to fix this' : '+ How to fix this'}
+      </button>
+      {open ? (
+        <dl className="argscore-guidance-body">
+          <dt>Do this</dt>
+          <dd>{guidance.move}</dd>
+          <dt>Why it works</dt>
+          <dd>{guidance.why}</dd>
+          {/* The field that makes the other two checkable. Without it the
+              guidance is advice, and a student cannot tell whether they have
+              taken it. */}
+          <dt>You will know it worked when</dt>
+          <dd>{guidance.done}</dd>
+        </dl>
+      ) : null}
     </div>
   )
 }
@@ -985,6 +1089,7 @@ function ParagraphDetail({
   paragraphTexts,
   index,
   onFindEvidence,
+  onReveal,
   onBack,
   onClose
 }: {
@@ -993,6 +1098,7 @@ function ParagraphDetail({
   paragraphTexts: string[]
   index: number
   onFindEvidence: (claimId: string) => void
+  onReveal: (target: RevealTarget) => void
   onBack: () => void
   onClose: () => void
 }): JSX.Element {
@@ -1036,17 +1142,30 @@ function ParagraphDetail({
 
         <blockquote className="argscore-quote">{text}</blockquote>
 
+        {/* Leaves the report and puts this paragraph on screen. The detail view
+            quotes the paragraph above, which is not the same as showing the
+            writer where it is — the quote cannot be edited, and editing it is
+            the entire reason anyone opened this. */}
+        <button className="argscore-link" onClick={() => onReveal({ claimId: null, paragraphIndex: index })}>
+          Show me in the document →
+        </button>
+
         {weaknesses.length > 0 ? (
           <>
             <h3 className="argscore-section">Why this needs work</h3>
-            {/* The rubric's own sentences. The design writes prose here and
-                nothing on this path generates text — an invented paragraph
-                would be the one part of this view that was not a reading of
-                the draft. */}
+            {/* The rubric's own sentences, and beneath each the revision move
+                it implies. Nothing on this path generates prose — both halves
+                are local templates, so an invented paragraph cannot appear in
+                the one view that is supposed to be a reading of the draft. */}
             {weaknesses.map((weakness, i) => (
-              <p className="argscore-weakness-block" key={`${weakness.kind}-${i}`}>
-                {weakness.message}
-              </p>
+              <ParagraphProblem
+                key={`${weakness.kind}-${i}`}
+                weakness={weakness}
+                claim={claims.find((claim) => claim.id === weakness.claimId) ?? null}
+                paragraphIndex={index}
+                onView={() => onFindEvidence(weakness.claimId ?? '')}
+                onReveal={onReveal}
+              />
             ))}
           </>
         ) : null}

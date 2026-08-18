@@ -9,17 +9,20 @@ import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer, { ProseMarkLayer } from '../components/DocumentMarkLayer'
-import type { DocCitationFlowState, DocFixState } from '../components/DocumentMarkLayer'
+import type { DocCitationFlowState, DocFixState, DocProseFix } from '../components/DocumentMarkLayer'
 import type { ProseMark } from '../components/documentMarks'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
 import {
   addWorksCitedEntry,
+  applyProseIssue,
   insertCitationForClaim,
   markAt,
   measureMarks,
   measureProseMarks,
+  proseMarkAt,
   replaceClaimText,
+  revealClaim,
   revealWorksCited
 } from '../components/documentMarks'
 import type { WorksCitedResult } from '../components/documentMarks'
@@ -145,6 +148,27 @@ function DocumentEditor({
   // claim arriving does not have to rebuild them and vice versa.
   const [proseMarks, setProseMarks] = useState<ProseMark[]>([])
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
+  // The prose issue under the pointer, and whether its fix is being applied.
+  // Hit-tested exactly like `activeMark`: nothing in either layer may accept a
+  // pointer event, because both sit over the contentEditable.
+  const [activeProse, setActiveProse] = useState<{ mark: ProseMark; rect: MarkRect } | null>(null)
+  const [proseFix, setProseFix] = useState<DocProseFix | null>(null)
+  // Prose issues waved away this session, by offset+kind. Same reasoning as
+  // `dismissed` for claims, and the same non-persistence.
+  const [proseDismissed, setProseDismissed] = useState<Set<string>>(new Set())
+  /**
+   * Where the report's "Show me" just landed, drawn as a fading band.
+   *
+   * Held as rects rather than as a claim id because the thing being shown is
+   * not always a claim — a structural weakness is about a paragraph, which has
+   * no mark of its own. Cleared on a timer rather than on the next edit, so it
+   * survives the writer immediately starting to type in the paragraph it just
+   * took them to, which is the entire point of taking them there.
+   */
+  const [flash, setFlash] = useState<MarkRect[]>([])
+  /** A grammar fix that could not be applied. Local, because `error` is a prop
+   *  owned by the parent and this is not that kind of failure. */
+  const [proseNotice, setProseNotice] = useState<string | null>(null)
   const [wrapWidth, setWrapWidth] = useState(0)
   // The editor's visible box, as of the hover that opened the popover — see
   // handleBodyMouseMove for why it is sampled there and not on every measure.
@@ -181,6 +205,9 @@ function DocumentEditor({
   // The pointer is inside the popover, so leaving the underline must not close
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
+  // Clears the report's "Show me" flash. A ref, not state: restarting it must
+  // not re-render the editor mid-typing.
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ---- The popover's citation flow ---------------------------------------
   //
@@ -632,6 +659,84 @@ function DocumentEditor({
     return () => observer.disconnect()
   }, [])
 
+  /** Identifies a prose issue across re-measures — the objects are rebuilt on
+   *  every keystroke, so a dismissal cannot be held by reference. */
+  const proseKey = (issue: ProseMark['issue']): string => `${issue.kind}:${issue.start}:${issue.text}`
+
+  const visibleProseMarks = proseMarks.filter((mark) => !proseDismissed.has(proseKey(mark.issue)))
+
+  /**
+   * Applies one grammar fix and closes the card.
+   *
+   * Through `execCommand`, so Ctrl+Z takes it back out — the same undo stack
+   * the citation insert and the claim revision land on. No relay call and no
+   * IPC: `findProseIssues` is local and pure, and the replacement it suggests
+   * was computed on this machine.
+   */
+  function applyProseFix(mark: ProseMark): void {
+    const body = editorRef.current
+    if (!body || !mark.issue.suggestion) return
+    setProseFix({ start: mark.issue.start, end: mark.issue.end, applying: true })
+    const applied = applyProseIssue(body, mark.issue)
+    setProseFix(null)
+    setActiveProse(null)
+    setProseNotice(null)
+    if (!applied) {
+      // The words moved under the card. Saying so beats silently doing nothing;
+      // the next measure re-flags it wherever it went.
+      setProseNotice('That text has changed — the fix was not applied.')
+      return
+    }
+    queueSave()
+    setMeasureTick((n) => n + 1)
+  }
+
+  /**
+   * Scrolls the editor to a claim's sentence and flashes it.
+   *
+   * The report's "Show me". Before this the report answered a click on a named
+   * problem by showing the name again on another screen, which is the thing
+   * the whole modal was accused of: it could tell you the fourth paragraph had
+   * a warrant gap and never once show you the fourth paragraph.
+   */
+  function revealClaimInEditor(claimId: string): void {
+    const body = editorRef.current
+    const wrap = wrapRef.current
+    const claim = (claims ?? []).find((c) => c.id === claimId)
+    if (!body || !wrap || !claim) return
+    const rects = revealClaim(body, wrap, claim)
+    if (rects) flashRects(rects)
+  }
+
+  /** Scrolls to a paragraph and flashes its first line. */
+  function revealParagraph(index: number): void {
+    selectParagraph(index)
+    const wrap = wrapRef.current
+    const editor = editorRef.current
+    if (!wrap || !editor) return
+    const blocks = Array.from(editor.children).filter((el) => (el.textContent ?? '').trim().length > 0)
+    const block = blocks[index - 1]
+    if (!block) return
+    const wrapRect = wrap.getBoundingClientRect()
+    const r = block.getBoundingClientRect()
+    flashRects([
+      {
+        left: r.left - wrapRect.left + wrap.scrollLeft,
+        top: r.top - wrapRect.top + wrap.scrollTop,
+        width: r.width,
+        height: r.height
+      }
+    ])
+  }
+
+  function flashRects(rects: MarkRect[]): void {
+    setFlash(rects)
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    // Matches the CSS animation's duration, so the nodes leave the tree once
+    // they have finished fading rather than sitting there invisible.
+    flashTimer.current = setTimeout(() => setFlash([]), 1500)
+  }
+
   /**
    * Opens the popover for whatever underline the pointer is over.
    *
@@ -642,8 +747,12 @@ function DocumentEditor({
    */
   function handleBodyMouseMove(event: ReactMouseEvent<HTMLDivElement>): void {
     const wrap = wrapRef.current
-    if (!wrap || marks.length === 0) {
+    // `marks.length === 0` used to short-circuit here, which silently disabled
+    // the prose layer on exactly the drafts that have most of the grammar in
+    // them: a document with no scored claims has no claim marks at all.
+    if (!wrap || (marks.length === 0 && visibleProseMarks.length === 0)) {
       if (activeMark) setActiveMark(null)
+      if (activeProse) setActiveProse(null)
       return
     }
     if (insidePopoverRef.current) return
@@ -657,8 +766,26 @@ function DocumentEditor({
     const hit = markAt(marks, x, y)
     if (!hit) {
       if (activeMark) setActiveMark(null)
+      // Only when no claim mark was hit. A claim mark wins over a prose mark on
+      // the same words: the credibility colours carry this app's actual
+      // judgement, and a sentence that is both unverified and clumsy should
+      // open the card about whether it is true.
+      const prose = proseMarkAt(visibleProseMarks, x, y)
+      if (!prose) {
+        if (activeProse) setActiveProse(null)
+        return
+      }
+      if (
+        activeProse?.mark.issue.start === prose.mark.issue.start &&
+        activeProse?.mark.issue.kind === prose.mark.issue.kind
+      ) {
+        return
+      }
+      setWrapView({ height: wrap.clientHeight, scrollTop: wrap.scrollTop })
+      setActiveProse(prose)
       return
     }
+    if (activeProse) setActiveProse(null)
     if (activeMark?.mark.claim.id === hit.mark.claim.id) return
     // Captured here rather than in the measure effect: scrolling changes
     // scrollTop without re-rendering this component, and the popover decides
@@ -1382,7 +1509,40 @@ function DocumentEditor({
         {/* Under the claim marks in the DOM as well as in z-index, so a
             sentence that is both unverified and clumsy reads as unverified
             first. */}
-        <ProseMarkLayer marks={proseMarks} />
+        <ProseMarkLayer
+          marks={visibleProseMarks}
+          active={activeProse}
+          fix={proseFix}
+          wrapWidth={wrapWidth}
+          wrapHeight={wrapView.height}
+          wrapScrollTop={wrapView.scrollTop}
+          onApply={applyProseFix}
+          onDismiss={(mark) => {
+            setProseDismissed((prev) => new Set(prev).add(proseKey(mark.issue)))
+            setActiveProse(null)
+          }}
+          onPopoverEnter={() => {
+            insidePopoverRef.current = true
+          }}
+          onPopoverLeave={() => {
+            insidePopoverRef.current = false
+            setActiveProse(null)
+          }}
+        />
+        {/* The report's "Show me" landing, over both mark layers — it is a
+            temporary answer to "where is it?", so for the second and a half it
+            exists it should not be underneath anything. */}
+        {flash.length > 0 ? (
+          <div className="docmark-layer" aria-hidden="true" style={{ zIndex: 4 }}>
+            {flash.map((rect, i) => (
+              <div
+                key={i}
+                className="docedit-flash"
+                style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+              />
+            ))}
+          </div>
+        ) : null}
         <DocumentMarkLayer
           marks={marks}
           active={activeMark}
@@ -1494,6 +1654,8 @@ function DocumentEditor({
 
       {error ? <p className="error-text docedit-error">{error}</p> : null}
 
+      {proseNotice ? <p className="error-text docedit-error">{proseNotice}</p> : null}
+
       {claims && claims.length === 0 ? <p className="muted docedit-error">No checkable claims detected.</p> : null}
 
       {/*
@@ -1546,6 +1708,32 @@ function DocumentEditor({
           // mid-sweep must not abandon either.
           onCheckClaims={(ids) => void checkClaims(ids)}
           checking={checking}
+          /**
+           * "Show me" — closes the report and takes the writer to the text the
+           * finding is about.
+           *
+           * The modal is full-screen, so showing someone where a problem is
+           * necessarily means leaving it. Closing here rather than letting the
+           * modal try to stay open beside the document: at 898px there is no
+           * beside.
+           */
+          onReveal={(target) => {
+            setScoreOpen(false)
+            // After the modal has unmounted, or the editor is still behind a
+            // backdrop and `scrollIntoView` measures against a layout that is
+            // about to change.
+            // scheduleFrame, NOT a bare requestAnimationFrame. Chromium
+            // freezes rAF entirely on a window that is not compositing, so the
+            // bare version left "Show me" doing nothing at all in the preview
+            // harness — no scroll, no flash, and no error to explain it. Same
+            // trap as the overlay's entrance animation and the mark measure;
+            // scheduleFrame arms a frame and a 50ms timer and takes whichever
+            // arrives first, so the shipped behaviour is unchanged.
+            scheduleFrame(window, () => {
+              if (target.claimId) revealClaimInEditor(target.claimId)
+              else if (target.paragraphIndex !== null) revealParagraph(target.paragraphIndex)
+            })
+          }}
           onClose={() => setScoreOpen(false)}
         />
       ) : null}
