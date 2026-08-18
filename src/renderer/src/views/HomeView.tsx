@@ -129,11 +129,16 @@ export default function HomeView({
             <span>Tracely</span>
           </div>
           {/* The design's close X is gone: the window has a real title bar with
-              its own close now, and two of them on one screen is what the
-              window-controls work removed in the first place. */}
+              its own close now, sitting directly above where this would be, and
+              two closes stacked in one corner is what the window-controls work
+              removed in the first place. */}
           <h1 className="home-greeting">
             {greetingFor(now.getHours())}
-            {firstName ? `, ${firstName}` : ''}!
+            {/* The FIRST word only. `firstName` holds whatever was typed at
+                sign-up, which is routinely a full name — the greeting rendered
+                "Good afternoon, Merrick Han!" where the design greets you by
+                first name alone. */}
+            {firstName ? `, ${firstName.trim().split(/\s+/)[0]}` : ''}!
           </h1>
         </header>
 

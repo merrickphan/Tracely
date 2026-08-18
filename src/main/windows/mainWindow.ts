@@ -149,6 +149,13 @@ export function createMainWindow(): BrowserWindow {
     // Owner's call, 2026-08-18: "make it like an actual app". Every one of
     // those hand-written pieces is now the OS's job.
     resizable: true,
+    // The menu bar is HIDDEN, not removed. `File Edit View Window Help` across
+    // the top of the app is chrome the design does not have and does not want —
+    // but `Menu.setApplicationMenu(null)` would take the Edit role with it, and
+    // that role is what carries Ctrl+Z into the document editor. There is an
+    // e2e test asserting it is installed for exactly that reason. Auto-hide
+    // keeps every accelerator and shows the bar on Alt.
+    autoHideMenuBar: true,
     maximizable: true,
     minimizable: true,
     fullscreenable: true,
