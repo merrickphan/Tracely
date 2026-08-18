@@ -1,4 +1,5 @@
 import { hasInlineCitation } from '@shared/inlineCitation'
+import { DEFAULT_WIDGET_VIEW_MODE } from '@shared/ipc-contract'
 import type {
   ScreenWatchClaimSummary,
   ScreenWatchWidget,
@@ -459,7 +460,14 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       // them inert in the preview, which is precisely where they need
       // exercising — the overlay is the hardest surface to reach for real.
       setWidgetExpanded: (req) => {
-        emitWidget({ expanded: req.expanded, viewMode: req.expanded ? undefined : 'single' })
+        // The shared default, not a literal. This line said 'single' and so
+        // reproduced the pre-'grade' behaviour in the harness no matter what
+        // main was set to — the harness agreeing with a stale copy of the app
+        // is worse than it not covering the case at all.
+        emitWidget({
+          expanded: req.expanded,
+          viewMode: req.expanded ? undefined : DEFAULT_WIDGET_VIEW_MODE
+        })
         return ok('screenWatch.setWidgetExpanded', { ok: true as const })
       },
       setWidgetViewMode: (req) => {
