@@ -6,6 +6,7 @@ import { analyzeStructure } from '../structure/analyzeStructure'
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../structure/evidenceCoverage'
 import { describeFit, structureFit } from './structureFit'
 import { logScreenWatch } from './debugLog'
+import { paragraphPreviews } from '../../../shared/paragraphPreview.ts'
 
 /**
  * The structural read of a document being watched in another application.
@@ -21,9 +22,6 @@ import { logScreenWatch } from './debugLog'
  * `saveOutline` is never involved.
  */
 
-/** Enough of a paragraph to recognise it in a 364px-wide row. */
-const PREVIEW_CHARS = 90
-
 /**
  * Defensive ceiling mirroring MAX_TEXT_CHARS in ipc/structureHandlers.ts. That
  * path has a zod schema in front of it; this one has no gate at all, and UIA
@@ -31,20 +29,11 @@ const PREVIEW_CHARS = 90
  */
 const MAX_TEXT_CHARS = 400_000
 
-/**
- * First line of each paragraph, index-aligned to 1-based `ParagraphOutline.index`.
- *
- * Truncation is by code point, not by UTF-16 unit, so a slice can never land
- * inside a surrogate pair and emit a lone half — which renders as a replacement
- * glyph in the overlay and looks like a corrupted read of the user's document.
- */
-export function paragraphPreviews(texts: string[], maxChars = PREVIEW_CHARS): string[] {
-  return texts.map((text) => {
-    const collapsed = text.replace(/\s+/g, ' ').trim()
-    const points = Array.from(collapsed)
-    return points.length <= maxChars ? collapsed : `${points.slice(0, maxChars).join('')}…`
-  })
-}
+// `paragraphPreviews` moved to shared/paragraphPreview.ts when the document
+// editor started rendering the same report and needed the same truncation.
+// Re-exported so this module's existing importers do not have to care, and the
+// `.ts` extension is what lets Node's type-stripping test runner follow it.
+export { PREVIEW_CHARS, paragraphPreviews } from '../../../shared/paragraphPreview.ts'
 
 export interface WatchOutlineInput {
   /**

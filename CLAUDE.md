@@ -381,6 +381,21 @@ A reading of the draft as an *argument* rather than as sentences: it labels what
 
 It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was removed when the report modal took over the flow, and the component sat orphaned for a while afterwards — with it went the only bulk **"Check all N"** evidence sweep, leaving `checkClaims` reachable only from a mark popover that needs an already-scored claim to exist. That button now lives in the report's paragraph breakdown (`ScoreReport`, `onCheckClaims`/`checking` threaded down from `AnalyzeView`); the panel and its `docedit-structure`/`docedit-score`/`docedit-evidence`/`docedit-para` CSS are deleted. The sweep stays owned by `AnalyzeView` because it is serial with a visible count and must survive the modal closing mid-run.
 
+- **ONE report, rendered on both surfaces** (`components/EssayGradeReport.tsx`).
+  Screen Watch's breakdown and the editor's "AI Insights" report were two
+  implementations of one rubric — the overlay's built verbatim from Figma
+  "Essay Grade Widget (Full Report)" (404:185), the editor's from `.argscore-*`
+  classes in `index.css` — drifting apart at the pace of whichever was edited
+  last. The owner's call (2026-08-19) was that the widget's is the one to keep,
+  so it moved out of `OverlayApp.tsx` and `ArgumentScoreModal` renders it for
+  `view.name === 'full'`. **Inline styles, deliberately**: the overlay window
+  loads no stylesheet, so that is the one form that works in both. It is the
+  opposite of the `problemCopy.ts` rule (share the wording, not the markup) and
+  the exception is that here the markup is the thing being shared. Its props
+  (`GradeInput`/`GradeClaim`) are narrower than `ScreenWatchStructure` so the
+  editor can adapt a `DocumentOutline` without pretending to be a Screen Watch
+  payload — the two fields it must supply itself, previews and stats, are the
+  two `DocumentOutline` deliberately has no prose for.
 - **The score is a deterministic formula, not a model output** (`structure/scoreDraft.ts`) — the same stance `search/scoring.ts` takes for evidence strength, and for the same reason: a number a student is asked to act on has to be one they can argue with. Six components (thesis 20, governing claims 20, warrant 20, counterargument 15, significance 15, conclusion 10). Governing claims is a **fraction of the body, never a count**, which is what stops the score being a length proxy — padding an essay lowers it. The panel displays every paragraph's role label beside the number so a wrong label is visibly wrong rather than mysteriously costly.
 - **Evidence is deliberately NOT in the /100.** `strengthScore` already contains a `sourceCount` factor, so folding retrieval in would double-count it — and worse, would make the score track how *searchable* the topic is, capping a close reading of a novel near 50 because the academic APIs have nothing to say about it. `structure/evidenceCoverage.ts` reports it beside the score as a ratio instead. It reads `scoreBreakdown.sourceCount` rather than re-thresholding `claim_evidence.relevance_score`, because which metric produced those values (lexical 0.2 vs dense 0.35 floor) is *not* persisted with the rows.
 - **`unknown` is a real answer.** `structure/roles.ts` labels only what a marker or a detected claim justifies and returns `unknown` for everything else; `complete: false` then makes the panel say **"provisional"**, and `structure/weaknesses.ts` **withholds whole-draft findings entirely** while any paragraph is unlabelled — "this draft has no counterargument" is an assertion about paragraphs nothing read. A guessed label produces a confident number computed from nothing, which is worse than admitting the paragraph wasn't read.
