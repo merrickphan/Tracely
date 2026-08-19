@@ -119,7 +119,16 @@ const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
   'new-claim-in-conclusion': 'New claim in the conclusion',
   'evidence-stacking': 'Stacked evidence',
   'no-counterargument': 'No counterargument',
-  'no-significance': 'No significance'
+  'no-significance': 'No significance',
+  // The prose findings. Named for what the writing DOES, not for what is
+  // absent, because each of these quotes the sentence it is about.
+  'dropped-evidence': 'Evidence left hanging',
+  'overreaching-claim': 'Overreaching claim',
+  'unsupported-emphasis': 'Emphasis without argument',
+  'unclear-reference': 'Unclear reference',
+  'restated-conclusion': 'Conclusion restates the thesis',
+  'undeveloped-repetition': 'Point repeated, not developed',
+  'generic-opening': 'Generic opening'
 }
 
 const COMPONENT_LABEL: Array<[keyof StructureComponents, string, number]> = [
@@ -1462,7 +1471,16 @@ function ParagraphProblem({
           </button>
         ) : null}
       </div>
-      {claim ? <p className="argscore-problem-quote">“{claim.text}”</p> : null}
+      {/* The claim when there is one, otherwise the words the prose rule
+          matched. A reasoning finding has no claim behind it — nothing detected
+          "always" as an assertion about the world — so without this the report
+          would say "the fourth paragraph states something absolutely" over a
+          90-word paragraph and leave the writer hunting for the adverb. */}
+      {claim ? (
+        <p className="argscore-problem-quote">“{claim.text}”</p>
+      ) : weakness.quote ? (
+        <p className="argscore-problem-quote">“{weakness.quote}”</p>
+      ) : null}
       <p className="argscore-problem-body">{weakness.message}</p>
       {/*
         The narrowed sentence, when the critique produced one.

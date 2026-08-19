@@ -78,6 +78,44 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
     move: 'Say what follows from your argument being true — for whom, and what changes. Give it a place of its own, near the end but before the conclusion restates.',
     why: 'A reader can finish an essay convinced and still not know why they were asked to read it. This is not decoration; it is the claim about consequence that the rest of the draft has earned the right to make.',
     done: 'Check that your sentence would be false if the thesis were false. "This is an important topic today" survives either way and is therefore not doing the work; "then the standard advice to X is backwards" does not.'
+  },
+  'dropped-evidence': {
+    move: 'Add a sentence after the citation, in your own words, saying what that source established for your argument. Then read the paragraph again and cut anything the new sentence made redundant.',
+    why: 'Evidence is not an argument, it is the raw material for one. A paragraph that ends on its source has handed the reader a fact and asked them to draw the conclusion — and readers who draw it themselves draw it differently from you, while markers do not draw it at all.',
+    done: 'Delete the quotation and the citation. If the paragraph still tells a reader what you concluded, the analysis exists. If what is left is a topic sentence and a full stop, it does not.'
+  },
+  'overreaching-claim': {
+    // No quoted replacement here, deliberately: naming the bound is the
+    // student's job, and a pair of before-and-after phrases is a sentence to
+    // paste. See the test that enforces it.
+    move: 'Replace the absolute with the boundary you can actually defend. Name who, when, where or how often — the group you studied rather than everyone, the period your sources cover rather than always.',
+    why: 'An absolute claim is defeated by one exception, so it is the easiest thing in your draft to argue against. Narrowing is not retreating: a bounded claim you can support is worth more than a universal one you cannot, and it is usually the more interesting sentence.',
+    done: 'Try to think of one counter-example. If you can find one in under a minute, the sentence is still too wide — and if you cannot, write down what makes you sure, because that is the evidence the sentence needs anyway.'
+  },
+  'unsupported-emphasis': {
+    move: 'Cut the word and see whether the sentence still convinces. If it does, leave it cut. If it does not, the missing thing is a reason, and that reason is the sentence to write in its place.',
+    why: '"Obviously" and "clearly" ask the reader to agree before you have argued, which has the opposite effect on a reader who does not already agree — it reads as the writer skipping the part they could not do. "Massive" and "devastating" are the same move in adjective form: a conclusion used as a premise.',
+    done: 'Read the sentence to someone who disagrees with your thesis. If the word is the only thing carrying it, they will say "no it is not" — and they will be right, because nothing there answers them.'
+  },
+  'unclear-reference': {
+    move: 'Put a noun after the demonstrative. Whatever the opening word is pointing at in the previous paragraph, say it — the pattern, the gap, the discrepancy — so the sentence carries its own referent.',
+    why: 'Within a paragraph "this" points at the sentence before it and the reader manages fine. Across a paragraph break it points at everything you just wrote, and the reader has to guess which part you meant. Usually they guess the most obvious part, which is rarely the part you were building on.',
+    done: 'Cover the previous paragraph with your hand and read the opening sentence alone. If you cannot tell what "this" is, neither can a reader who has read it once.'
+  },
+  'restated-conclusion': {
+    move: 'Write down what your body paragraphs collectively showed that no single one of them showed on its own. That sentence is your conclusion. The thesis goes in the opening; it does not need saying twice.',
+    why: 'A conclusion that repeats the thesis tells the reader the essay went nowhere — they end holding exactly what they were handed on page one. Synthesis is the one move only a conclusion can make, because it is the only paragraph that comes after all the evidence.',
+    done: 'Put your thesis and your conclusion side by side. If someone who read only those two sentences would learn nothing from the second, it is a restatement — the second one should be a claim the first had not yet earned.'
+  },
+  'undeveloped-repetition': {
+    move: 'Cut the second sentence, then decide whether the paragraph lost anything. If it did, the thing it lost is the new layer — write that instead. If it did not, the cut is the fix.',
+    why: 'Length is not depth. Restating a point in different words fills the page and leaves the argument exactly where it was, and a marker reading closely sees a paragraph that stalled. Real development moves from what happened to why, or from why to what follows.',
+    done: 'Ask what the second sentence tells a reader that the first did not. If the honest answer is "the same thing, more emphatically", it is repetition.'
+  },
+  'generic-opening': {
+    move: 'Delete the first sentence and start on the second. Then check whether the new opening is specific to your subject — if it could still introduce a different essay, delete that one too.',
+    why: '"Since the beginning of time" and a dictionary definition are the two openings a marker has read most often, and neither tells them anything about your argument. The opening sentence is the one place you have the reader\'s full attention, and spending it on filler spends it on nothing.',
+    done: 'Show the first sentence to someone and ask what the essay is about. If they cannot narrow it past "history" or "society", the sentence is not yet yours.'
   }
 }
 

@@ -333,6 +333,9 @@ export interface StructureComponents {
 }
 
 export type StructureWeaknessKind =
+  // What the draft is MISSING. Every one of these is an absence, found by
+  // reading the role vector, and each is withheld while any paragraph is
+  // unlabelled — see weaknesses.ts.
   | 'no-thesis'
   | 'warrant-gap'
   | 'evidence-stacking'
@@ -340,6 +343,18 @@ export type StructureWeaknessKind =
   | 'unsupported-claim'
   | 'new-claim-in-conclusion'
   | 'no-significance'
+  // What the draft DOES that weakens it. These come from `reasoningIssues.ts`
+  // and are read off the prose rather than the roles, which is why they are not
+  // gated on `allLabelled`: each one quotes the words it is about, so a wrong
+  // one is visibly wrong instead of being an accusation about a paragraph
+  // nothing read.
+  | 'dropped-evidence'
+  | 'overreaching-claim'
+  | 'unsupported-emphasis'
+  | 'unclear-reference'
+  | 'restated-conclusion'
+  | 'undeveloped-repetition'
+  | 'generic-opening'
 
 export interface StructureWeakness {
   kind: StructureWeaknessKind
@@ -350,6 +365,16 @@ export interface StructureWeakness {
   message: string
   /** Prefilled into Tracer when the user asks about this weakness. */
   tracerPrompt: string
+  /**
+   * The writer's own words that triggered this, when the finding is about a
+   * phrase rather than an absence.
+   *
+   * Optional because the seven original kinds have nothing to quote: "this
+   * draft has no counterargument" is about text that is not there. Added rather
+   * than made required so every stored outline predating it still parses —
+   * `src/shared/*` is additive.
+   */
+  quote?: string
 }
 
 export type CohesionFindingKind = 'no-transition' | 'topic-jump' | 'unanswered-counterargument'

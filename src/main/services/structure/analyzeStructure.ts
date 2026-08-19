@@ -11,6 +11,11 @@ import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
+import {
+  conclusionRestatesThesis,
+  droppedEvidenceParagraphs,
+  findReasoningIssues
+} from './reasoningIssues'
 import { hasSignificanceMarker, hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
@@ -42,7 +47,13 @@ import { findWeaknesses } from './weaknesses'
 // was scored with — but it would keep showing the OLD number beside the new
 // rubric, so a student who reopened a document would see a score that no
 // longer matches what the app would compute for the same text.
-export const STRUCTURE_SCHEMA_VERSION = 4
+//
+// v5 adds the reasoning pass (`reasoningIssues.ts`). It changes both the
+// weakness list and the SCORE — a paragraph ending on its citation loses its
+// warrant, and a conclusion that restates the thesis halves — so a stored v4
+// outline would keep showing a number this app no longer computes for the same
+// text, which is the exact failure every bump above was written for.
+export const STRUCTURE_SCHEMA_VERSION = 5
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -138,10 +149,39 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     ? input.classified.statesClaim.map((flag, i) => flag || local.statesClaim[i] === true)
     : local.statesClaim
 
+  // A titled essay puts its title in paragraph 1. It is labelled 'unknown' by
+  // rights and must not be counted as a paragraph nothing could read — see
+  // ScoreSignals.titleParagraph. Hoisted above the reasoning pass, which skips
+  // it for the same reason: a heading has no argument to open badly.
+  const titleParagraph = spans.length > 1 && looksLikeTitle(spans[0].text)
+
+  // How well the draft ARGUES, read off the prose rather than the role vector —
+  // see reasoningIssues.ts. Runs on the same spans and the same roles, so a
+  // finding and the label beside it can never describe different paragraphs.
+  //
+  // The thesis position is the local reader's whenever the vector names none,
+  // exactly as the score's fallback works. Both or neither: crediting a thesis
+  // in the score while telling the conclusion it has nothing to restate would
+  // be the report disagreeing with itself again.
+  const labelledThesis = roles.indexOf('thesis')
+  const reasoning = findReasoningIssues({
+    paragraphs: spans.map((span, i) => ({ index: span.index, text: span.text, role: roles[i] })),
+    thesisIndex:
+      labelledThesis !== -1 ? labelledThesis : local.thesisIndex > 0 ? local.thesisIndex - 1 : null,
+    titleParagraph
+  })
+
+  // The one veto. `hasWarrant` is a model's answer to "does this paragraph
+  // explain how its evidence bears on the claim?", and a paragraph whose last
+  // sentence IS the citation has demonstrably not done that — the explanation
+  // would have to come after it, and nothing comes after it. Where the two
+  // disagree the text wins, because the text is checkable and the label is not.
+  const dropped = droppedEvidenceParagraphs(reasoning)
+
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
     role: roles[i],
-    hasWarrant: warranted[i],
+    hasWarrant: warranted[i] && !dropped.has(span.index),
     statesClaim: statesClaim[i],
     claimIds: claimsByParagraph.get(span.index) ?? []
   }))
@@ -157,11 +197,6 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // the wider list is confined to this one position.
   const soWhatInConclusion = closing ? hasClosingSignificance(closing.text) : false
 
-  // A titled essay puts its title in paragraph 1. It is labelled 'unknown' by
-  // rights and must not be counted as a paragraph nothing could read — see
-  // ScoreSignals.titleParagraph.
-  const titleParagraph = spans.length > 1 && looksLikeTitle(spans[0].text)
-
   // Read off the text, not the roles, because one paragraph carries one role
   // and the closing paragraph is routinely both the conclusion and the place
   // the stakes are stated — see ScoreSignals.significanceAnywhere.
@@ -173,7 +208,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     thesisFallbackIndex: local.thesisIndex > 0 ? local.thesisIndex - 1 : null,
     soWhatInConclusion,
     significanceAnywhere,
-    titleParagraph
+    titleParagraph,
+    conclusionRestatesThesis: conclusionRestatesThesis(reasoning)
   })
 
   return {
@@ -194,7 +230,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
       soWhatInConclusion,
       titleParagraph,
       // The same fallback the score uses. Both or neither — see thesisFound.
-      thesisFound: roles.includes('thesis') || local.thesisIndex > 0
+      thesisFound: roles.includes('thesis') || local.thesisIndex > 0,
+      reasoning
     }),
     // Measured over the same spans the roles were computed from, so a boundary
     // finding and the role labels either side of it can never describe

@@ -189,3 +189,57 @@ describe('findWeaknesses — output contract', () => {
     }
   })
 })
+
+describe('findWeaknesses — findings read off the prose', () => {
+  const reasoning = (kind: string, paragraphIndex: number | null, quote = 'the flagged words') =>
+    ({ kind, paragraphIndex, quote }) as never
+
+  it('carries the quote through to the weakness', () => {
+    const [found] = findWeaknesses({
+      paragraphs: outline(...COMPLETE),
+      claimsWithoutEvidence: [],
+      soWhatInConclusion: false,
+      reasoning: [reasoning('overreaching-claim', 2, 'Everyone recognised the shift.')]
+    }).filter((w) => w.kind === 'overreaching-claim')
+    strictEqual(found.quote, 'Everyone recognised the shift.')
+    strictEqual(found.paragraphIndex, 2)
+    strictEqual(found.claimId, null)
+  })
+
+  it('names the paragraph in the message', () => {
+    const [found] = findWeaknesses({
+      paragraphs: outline(...COMPLETE),
+      claimsWithoutEvidence: [],
+      soWhatInConclusion: false,
+      reasoning: [reasoning('dropped-evidence', 3)]
+    }).filter((w) => w.kind === 'dropped-evidence')
+    strictEqual(found.message.includes('3rd paragraph'), true)
+  })
+
+  // The two modules describe the same failure from different evidence, and a
+  // report that prints both about one paragraph reads as two problems.
+  it('drops the warrant gap where dropped evidence already quotes the sentence', () => {
+    const found = kinds(['thesis', 'claim', 'evidence', 'counterargument', 'significance', 'conclusion'], {
+      reasoning: [reasoning('dropped-evidence', 3)]
+    })
+    strictEqual(found.filter((k) => k === 'warrant-gap').length, 1)
+    strictEqual(found.includes('dropped-evidence'), true)
+  })
+
+  it('keeps a warrant gap in a paragraph the prose rules said nothing about', () => {
+    const found = kinds(['thesis', 'claim', 'counterargument', 'significance', 'conclusion'], {
+      reasoning: [reasoning('dropped-evidence', 4)]
+    })
+    strictEqual(found.includes('warrant-gap'), true)
+  })
+
+  // Unlike every whole-draft finding, these are not gated on `allLabelled` —
+  // they quote text that is demonstrably there. See WeaknessInput.reasoning.
+  it('reports them even when the draft could not be fully labelled', () => {
+    const found = kinds(['unknown', 'unknown', 'unknown'], {
+      reasoning: [reasoning('generic-opening', 1)]
+    })
+    strictEqual(found.includes('generic-opening'), true)
+    strictEqual(found.includes('no-counterargument'), false)
+  })
+})
