@@ -590,3 +590,63 @@ describe('scoreDraft — a conclusion that restates the thesis', () => {
     }
   })
 })
+
+describe('scoreDraft — a topic where a thesis should be', () => {
+  const CLOSED = ['thesis', 'claim+', 'counterargument', 'significance', 'conclusion']
+
+  it('halves the thesis component', () => {
+    strictEqual(scoreDraft(outline(...CLOSED), NO_SIGNALS).components.thesis, 20)
+    strictEqual(
+      scoreDraft(outline(...CLOSED), { ...NO_SIGNALS, thesisStatesTopicOnly: true }).components
+        .thesis,
+      10
+    )
+  })
+
+  it('compounds with a late thesis rather than replacing it', () => {
+    const late = ['evidence+', 'evidence+', 'evidence+', 'thesis', 'conclusion']
+    strictEqual(scoreDraft(outline(...late), NO_SIGNALS).components.thesis, 10)
+    strictEqual(
+      scoreDraft(outline(...late), { ...NO_SIGNALS, thesisStatesTopicOnly: true }).components.thesis,
+      5
+    )
+  })
+
+  it('cannot invent credit for a draft with no thesis at all', () => {
+    strictEqual(
+      scoreDraft(outline('evidence+', 'evidence+'), { ...NO_SIGNALS, thesisStatesTopicOnly: true })
+        .components.thesis,
+      0
+    )
+  })
+})
+
+/**
+ * The complaint this answers, 2026-08-19: "Can these all be 100%? Besides
+ * significance and counterargument, it just doesn't make sense."
+ *
+ * Four of the six components were pure presence checks, so an essay with an
+ * introduction, a claim, a marker word and a last paragraph scored 20/20/20/10
+ * on all four. Two of them now have a quality axis, which is what makes a
+ * perfect component mean something.
+ */
+describe('scoreDraft — the components no longer saturate on presence alone', () => {
+  const SHAPED = ['thesis', 'claim+', 'counterargument', 'significance', 'conclusion']
+
+  it('still gives full marks to a draft that does the work', () => {
+    const { components } = scoreDraft(outline(...SHAPED), NO_SIGNALS)
+    strictEqual(components.thesis, 20)
+    strictEqual(components.conclusion, 10)
+  })
+
+  it('drops both for the same draft written as an announcement and a restatement', () => {
+    const { components, score } = scoreDraft(outline(...SHAPED), {
+      ...NO_SIGNALS,
+      thesisStatesTopicOnly: true,
+      conclusionRestatesThesis: true
+    })
+    strictEqual(components.thesis, 10)
+    strictEqual(components.conclusion, 5)
+    strictEqual(scoreDraft(outline(...SHAPED), NO_SIGNALS).score - score, 15)
+  })
+})

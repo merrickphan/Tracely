@@ -128,7 +128,9 @@ const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
   'unclear-reference': 'Unclear reference',
   'restated-conclusion': 'Conclusion restates the thesis',
   'undeveloped-repetition': 'Point repeated, not developed',
-  'generic-opening': 'Generic opening'
+  'generic-opening': 'Generic opening',
+  'topic-not-thesis': 'A topic, not a thesis',
+  'summary-without-point': 'Summary without a point'
 }
 
 const COMPONENT_LABEL: Array<[keyof StructureComponents, string, number]> = [
@@ -2005,6 +2007,26 @@ function ArgumentCheck({
   const tone = toneFor(score)
 
   /**
+   * Did anything actually speak to this claim?
+   *
+   * When nothing cleared the relevance floor, every factor in the breakdown is
+   * 0 by construction — support, relevance, quality and recency are all
+   * computed over the sources that passed it, and there were none. The card
+   * then drew "Argument strength · 0/100" over four empty bars, which reads as
+   * a verdict on the sentence and is instead a report on the search.
+   *
+   * The two zeroes are not the same finding and must not render the same way. A
+   * biographical fact, a claim about one organisation's own history, anything
+   * these four scholarly indexes were never going to hold — all score 0 here
+   * beside a sentence that is true, properly hedged and correctly cited.
+   * `problemKindsFor` has drawn this distinction since 2026-08-16 (`nothingFound`
+   * gates `cited-unverified` for exactly this reason); the score display never
+   * got the same treatment, so the accusation the problem kinds refuse to make
+   * was being made by the number underneath them.
+   */
+  const measured = hasRelevantSource(weakest?.scoreBreakdown ?? null)
+
+  /**
    * How many sources this claim actually has, read from the stored evidence.
    *
    * NOT `scoreBreakdown.sourceCount`, which is the 0..1 fraction of the
@@ -2055,19 +2077,37 @@ function ArgumentCheck({
 
             <div className="argscore-check-rule" />
 
-            <div className="argscore-check-score">
-              <span className="argscore-eyebrow">Argument strength</span>
-              <span className={`argscore-check-band tone-${tone}`}>{strengthLabel(score)}</span>
-              <span className="argscore-check-number">
-                {score}
-                <small>/100</small>
-              </span>
-            </div>
-            <span className="argscore-check-track">
-              <span className={`argscore-check-fill tone-${tone}`} style={{ width: `${score}%` }} />
-            </span>
+            {measured ? (
+              <>
+                <div className="argscore-check-score">
+                  <span className="argscore-eyebrow">Argument strength</span>
+                  <span className={`argscore-check-band tone-${tone}`}>{strengthLabel(score)}</span>
+                  <span className="argscore-check-number">
+                    {score}
+                    <small>/100</small>
+                  </span>
+                </div>
+                <span className="argscore-check-track">
+                  <span className={`argscore-check-fill tone-${tone}`} style={{ width: `${score}%` }} />
+                </span>
+              </>
+            ) : (
+              // No number at all, rather than a grey zero. A score is a claim
+              // about the literature, and nothing was read — see `measured`.
+              // The sentence still owes the reader a citation; Tracely just
+              // stops pretending it looked somewhere the answer could have been.
+              <div className="argscore-check-unmeasured">
+                <span className="argscore-eyebrow">Argument strength</span>
+                <p className="argscore-check-unmeasured-body">
+                  Not scored. Nothing in OpenAlex, Crossref, Semantic Scholar or PubMed spoke to this
+                  sentence, so there is no evidence here to weigh — which is a fact about those four
+                  indexes, not about your claim. They hold scholarly articles; biography, institutional
+                  records, news and primary texts largely sit outside them.
+                </p>
+              </div>
+            )}
 
-            {weakest.scoreBreakdown ? (
+            {weakest.scoreBreakdown && measured ? (
               <>
                 <span className="argscore-eyebrow argscore-check-eyebrow">Breakdown</span>
                 {/* The same ComponentBar the report uses — it already draws a

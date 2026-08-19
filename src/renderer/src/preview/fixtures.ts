@@ -222,6 +222,31 @@ export const claims: Claim[] = [
       'Wahlstrom, Kyla. "Later Start Time for Teens Improves Grades, Mood, and Safety." Phi Delta Kappan, 2014, p. 12.',
     createdAt: T0
   },
+  // Searched, and nothing cleared the relevance floor — every factor 0 by
+  // construction, because they are all computed over the sources that passed
+  // it. Reported by the owner on 2026-08-19 over a correctly cited biographical
+  // sentence: "How is the support 0%, relevance 0%, recency 0, and quality 0?
+  // It just doesn't make sense."
+  //
+  // Here so the harness covers the branch where the card must NOT print a
+  // score. Without a fixture in this state the unmeasured path is unreachable
+  // in the preview, and it is the state the four scholarly indexes put a whole
+  // category of true sentences into.
+  {
+    id: 'c5',
+    analysisId: 'a1',
+    text: 'She had largely contributed to the resistance by delivering underground newspapers and taking messages to downed Allied flyers (Walker, 2010).',
+    claimType: 'factual',
+    confidence: 0.88,
+    searchQuery: 'Dutch resistance underground newspapers Allied airmen',
+    strengthScore: 0,
+    scoreBreakdown: { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 },
+    critique: null,
+    critiqueVerdict: null,
+    suggestedRevision: null,
+    citationFix: null,
+    createdAt: T0
+  },
   {
     id: 'c3',
     analysisId: 'a1',

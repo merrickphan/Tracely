@@ -93,6 +93,21 @@ export interface ScoreSignals {
    * writer can look at — which these two do, because both quote the sentence.
    */
   conclusionRestatesThesis?: boolean
+  /**
+   * The opening announces a subject where a thesis should assert a position —
+   * see `reasoningIssues.ts`, `topic-not-thesis`.
+   *
+   * Half credit, not none. A draft that says "this essay will examine the
+   * causes of the famine" HAS oriented its reader and put the sentence in the
+   * right place; what it has not done is claim anything. Zeroing it would say
+   * the draft has no opening at all, which is a different and false finding.
+   *
+   * This is the component that most needed a quality axis. It was binary —
+   * 20/20 for a thesis-shaped paragraph in the first third — so every draft
+   * with an introduction scored full marks on the rubric line that is supposed
+   * to measure whether the draft argues anything.
+   */
+  thesisStatesTopicOnly?: boolean
 }
 
 export interface DraftScore {
@@ -220,9 +235,14 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
           signals.thesisFallbackIndex < paragraphs.length
         ? signals.thesisFallbackIndex
         : -1
+  //
+  // Two axes now, and they compound the same way the conclusion's do: WHERE the
+  // thesis is, and whether it asserts anything. A topic announced late earns a
+  // quarter.
   const upFront = Math.max(1, Math.floor(paragraphs.length / 3))
-  const thesis =
+  const placedThesis =
     thesisAt === -1 ? 0 : thesisAt <= upFront ? COMPONENT_MAX.thesis : COMPONENT_MAX.thesis / 2
+  const thesis = signals.thesisStatesTopicOnly === true ? placedThesis / 2 : placedThesis
 
   // --- Governing claims (20) ---------------------------------------------
   // A FRACTION of the body, never a count. This is what stops the score being

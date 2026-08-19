@@ -355,6 +355,8 @@ export type StructureWeaknessKind =
   | 'restated-conclusion'
   | 'undeveloped-repetition'
   | 'generic-opening'
+  | 'topic-not-thesis'
+  | 'summary-without-point'
 
 export interface StructureWeakness {
   kind: StructureWeaknessKind

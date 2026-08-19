@@ -4684,6 +4684,27 @@ textarea:disabled {
 .argscore-check-metrics .argscore-bar-track { height: 5px; border-radius: 999px; }
 .argscore-check-metrics .argscore-bar-fill { border-radius: 999px; background: var(--ink); }
 
+/* The unscored state. Deliberately not styled as a score of zero: no track, no
+   tone colour, no number. A grey 0/100 beside four empty bars was read as a
+   verdict on the sentence when it is a report on the search — see `measured` in
+   ArgumentScoreModal. */
+.argscore-check-unmeasured {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+}
+
+.argscore-check-unmeasured-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .argscore-check-sources {
   display: flex;
   align-items: center;

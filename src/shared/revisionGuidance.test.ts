@@ -23,7 +23,9 @@ const KINDS = [
   'unclear-reference',
   'restated-conclusion',
   'undeveloped-repetition',
-  'generic-opening'
+  'generic-opening',
+  'topic-not-thesis',
+  'summary-without-point'
 ] as const
 
 describe('REVISION_GUIDANCE', () => {
