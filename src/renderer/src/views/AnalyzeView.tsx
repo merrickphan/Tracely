@@ -1084,10 +1084,15 @@ function DocumentEditor({
    * `generateCitation`, which is where the style formatters live (and which
    * caches its result in the citations table).
    */
-  async function previewFlowCitation(): Promise<void> {
+  async function previewFlowCitation(forSourceId?: string): Promise<void> {
     const flow = citationFlow
-    if (flow?.state.step !== 'picking' || !flow.state.selectedId) return
-    const { selectedId, style } = flow.state
+    if (flow?.state.step !== 'picking') return
+    // The id is passed in when this runs off a selection, because React state
+    // has not settled at that point and `flow.state.selectedId` is still the
+    // previous one — the classic stale-closure read.
+    const selectedId = forSourceId ?? flow.state.selectedId
+    if (!selectedId) return
+    const { style } = flow.state
     const source = flowSourcesRef.current.get(selectedId)
     if (!source) return
     setCitationBusy('previewing')
@@ -1922,11 +1927,17 @@ function DocumentEditor({
                   // writer would see underlined if they closed the card now.
                   flagsRemaining: Math.max(0, marks.length - 1),
                   onSelect: (sourceId) =>
-                    setCitationFlow((prev) =>
-                      prev && prev.state.step === 'picking'
-                        ? { ...prev, state: { ...prev.state, selectedId: sourceId, preview: null } }
-                        : prev
-                    ),
+                    setCitationFlow((prev) => {
+                      const next =
+                        prev && prev.state.step === 'picking'
+                          ? { ...prev, state: { ...prev.state, selectedId: sourceId, preview: null } }
+                          : prev
+                      // Format it straight away rather than behind a button.
+                      // The block says what will be inserted, and a writer who
+                      // has just picked a source is already asking that.
+                      if (next !== prev) queueMicrotask(() => void previewFlowCitation(sourceId))
+                      return next
+                    }),
                   onSetStyle: (style) =>
                     setCitationFlow((prev) =>
                       prev && prev.state.step === 'picking'
@@ -1935,6 +1946,16 @@ function DocumentEditor({
                     ),
                   onSearchAgain: () => void startCitationFlow(activeMark.mark.claim, true),
                   onPreview: () => void previewFlowCitation(),
+                  onOpenArticle: () => {
+                    const id =
+                      citationFlow?.state.step === 'picking' ? citationFlow.state.selectedId : null
+                    const url = id ? flowSourcesRef.current.get(id)?.url : null
+                    // shell.openExternal — the writer's own browser, not an
+                    // embedded view. Checking whether a page says what they are
+                    // about to attribute to it is reading, and reading belongs
+                    // in a browser.
+                    if (url) void window.tracely.shell.openExternal({ url })
+                  },
                   onInsert: () => void insertFlowCitation(activeMark.mark.claim),
                   onCancel: closeCitationFlow,
                   onDone: closeCitationFlow,

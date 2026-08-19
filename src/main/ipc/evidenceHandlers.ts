@@ -4,7 +4,11 @@ import { IPC } from '@shared/ipc-channels'
 import type { EvidenceFindResponse, EvidenceGetForClaimResponse } from '@shared/ipc-contract'
 import type { EvidenceItem } from '@shared/types'
 import { findEvidenceCached } from '../services/search/cachedEvidence'
-import { linkEvidence, getEvidenceForClaim } from '../services/storage/claimEvidenceRepo'
+import {
+  clearEvidenceForClaim,
+  getEvidenceForClaim,
+  linkEvidence
+} from '../services/storage/claimEvidenceRepo'
 import { getClaim, updateClaimScore } from '../services/storage/claimsRepo'
 import { transaction } from '../services/storage/db'
 import { upsertSource } from '../services/storage/sourcesRepo'
@@ -23,6 +27,10 @@ export function registerEvidenceHandlers(): void {
     // loop plus the score update was ~21 full-database serializations, each
     // proportional to total database size, on the main thread.
     const evidence: EvidenceItem[] = transaction(() => {
+      // Replace, never merge. linkEvidence upserts per (claim, source), so
+      // without this a search returning five sources leaves a previous
+      // search's other eleven linked — and the picker reads stored rows.
+      clearEvidenceForClaim(claimId)
       const items = result.evidence.map((item, index) => {
         const source = upsertSource({
           doi: item.doi,

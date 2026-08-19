@@ -241,3 +241,45 @@ describe('sentenceAround — a claim is a sub-span, not a sentence', () => {
     strictEqual(hasInlineCitationNear(two, 0, 'Rates rose sharply'.length), false)
   })
 })
+
+/**
+ * A claim span that ends exactly on its own full stop must not borrow the next
+ * sentence's citation.
+ *
+ * Owner, 2026-08-19, on a sentence with no citation of any kind: *"why is it
+ * asking to compare sources? It isn't even cited."* The forward walk began one
+ * character past the claim's own terminator, so it never saw it and ran on
+ * until the next one — taking the following sentence, and its ("Audrey"
+ * UNICEF), with it. The relay returns whole sentences for a great many claims,
+ * so this was the common case rather than an edge one.
+ */
+describe('sentenceAround — a span that already ends a sentence', () => {
+  const para =
+    'This was caused by the Nazis who wanted to kill the population by starving them to death. ' +
+    'She devolved anemia, respiratory difficulties, and oedema because of her consequential malnutrition. ' +
+    'Surviving on boiled grass, the people of Arnhem received medical help from UNICEF ("Audrey" UNICEF).'
+  const claim =
+    'She devolved anemia, respiratory difficulties, and oedema because of her consequential malnutrition.'
+
+  it('stops at its own terminator instead of swallowing the next sentence', () => {
+    const start = para.indexOf(claim)
+    const window = sentenceAround(para, start, start + claim.length)
+    strictEqual(window.includes('UNICEF'), false, window)
+    strictEqual(hasInlineCitation(window), false, window)
+  })
+
+  it('still widens when the span stops SHORT of the sentence end', () => {
+    // The reason sentenceAround exists: a detected claim is usually a sub-span,
+    // and the citation sits after it.
+    const cited = 'the people of Arnhem received medical help from UNICEF'
+    const start = para.indexOf(cited)
+    const window = sentenceAround(para, start, start + cited.length)
+    strictEqual(hasInlineCitation(window), true, window)
+  })
+
+  it('is unaffected by trailing whitespace on the span', () => {
+    const start = para.indexOf(claim)
+    const window = sentenceAround(para, start, start + claim.length + 1)
+    strictEqual(hasInlineCitation(window), false, window)
+  })
+})

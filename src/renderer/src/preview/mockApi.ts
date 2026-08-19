@@ -315,7 +315,17 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence })
     },
     citation: {
-      generate: () => ok('citation.generate', { citation: fx.citations[0].formattedText }),
+      // Looks the source UP, rather than always answering with the first
+      // citation. It did the latter, and the consequence was that the picker's
+      // "WILL BE INSERTED" block showed one source's in-text marker beside a
+      // DIFFERENT source's works-cited entry — which reads exactly like a real
+      // formatting bug, and would equally have HIDDEN one.
+      generate: (req: { sourceId: string }) =>
+        ok('citation.generate', {
+          citation: (
+            fx.citations.find((c) => c.sourceId === req.sourceId) ?? fx.citations[0]
+          ).formattedText
+        }),
       list: () => ok('citation.list', { citations: fx.citations })
     },
     critique: {

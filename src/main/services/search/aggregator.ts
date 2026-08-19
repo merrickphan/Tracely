@@ -16,6 +16,9 @@ import {
   type RelevanceMetric
 } from './scoring'
 import type { NormalizedSourceResult } from './types'
+// The number itself lives in shared/evidenceLimits.ts, because the same cap has
+// to hold when reading rows a PREVIOUS search stored — see the note there.
+import { MAX_EVIDENCE_RESULTS } from '@shared/evidenceLimits'
 import { findWebSources } from './webSources'
 
 const PER_PROVIDER_LIMIT = 6
@@ -36,10 +39,6 @@ const MAX_SCORED_RESULTS = 8
 // casualties at Stalingrad was offered "Paediatric Battle Casualties" and "The
 // DSM and Its Discontents" to cite.
 //
-// Five, because that is what they asked for, and because a citation flow is a
-// list someone picks from: past about five the extra rows are not more choice,
-// they are more to reject.
-const MAX_EVIDENCE_RESULTS = 5
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))

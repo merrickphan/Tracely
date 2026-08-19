@@ -273,6 +273,29 @@ export const citations: Citation[] = [
     formattedText:
       'Okonkwo, A., Zhang, R., Lindqvist, P., et al. (2023). Adolescent screen time and depressive symptoms: a three-year longitudinal cohort. Computers in Human Behavior.',
     createdAt: T0
+  },
+  // One per source, so the picker's "WILL BE INSERTED" block can show a marker
+  // and an entry that BELONG TOGETHER. With only s1 here the mock fell back to
+  // it for every selection, and the block showed s3's in-text marker beside
+  // s1's works-cited entry — which reads exactly like a real formatting bug and
+  // would equally have hidden one.
+  {
+    id: 'cite2',
+    sourceId: 's2',
+    style: 'APA',
+    formattedText:
+      'Marchetti, S., & Bell. (2022). Reassessing the association between digital media use and adolescent well-being. Proceedings of the National Academy of Sciences. https://doi.org/10.1073/pnas.2022114119',
+    createdAt: T0
+  },
+  {
+    // A preprint, so the locator is its DOI — see shared/citationLocator.ts,
+    // where 'preprint' is one of the venue types that keeps one.
+    id: 'cite3',
+    sourceId: 's3',
+    style: 'APA',
+    formattedText:
+      'Iglesias-Muñoz, T. (2024). Screen exposure in early adolescence: a preregistered replication. PsyArXiv. https://doi.org/10.31234/osf.io/preg2024',
+    createdAt: T0
   }
 ]
 
