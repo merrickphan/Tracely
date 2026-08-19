@@ -367,3 +367,7 @@ export function isReasoningProblem(kind: ScreenWatchProblemKind): boolean {
 export function opensFixFlow(kind: ScreenWatchProblemKind): boolean {
   return isReasoningProblem(kind) || kind === 'overstated-claim'
 }
+
+// `insertsCitation` lives in shared/citationAction.ts — a leaf, so `npm test`
+// can load it. This module value-imports @shared/problemKind and cannot be.
+export { insertsCitation } from '@shared/citationAction'

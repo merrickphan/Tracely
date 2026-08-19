@@ -22,6 +22,7 @@ import type { CitationStyle } from '@shared/types'
 import type { DocumentMark, MarkRect, ProseMark } from './documentMarks'
 import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, opensFixFlow, popoverCopyFor } from './problemCopy'
+import { insertsCitation } from '@shared/citationAction'
 import SourceIconBox from './SourceIconBox'
 import { useFavicons } from '../lib/useFavicons'
 import { critiqueIssues } from '../critiqueIssues'
@@ -45,6 +46,7 @@ import {
   insertedBody,
   resultsBody,
   resultsTitle,
+  readOnlyTitle,
   searchingBody,
   worksCitedLabel
 } from './citationFlowCopy'
@@ -154,6 +156,16 @@ export type DocCitationFlowState =
 export interface DocCitationFlow {
   claimId: string
   state: DocCitationFlowState
+  /**
+   * Opened to LOOK at the sources rather than to cite one.
+   *
+   * Set when the popover's action was "Compare sources" or "Review the
+   * sources" — see shared/citationAction.ts. The list renders identically; the
+   * style pills, Preview and Insert do not, because the card that opened this
+   * has either just said the writer already cited the claim or that these
+   * sources do not confirm it.
+   */
+  readOnly: boolean
   inserting: boolean
   previewing: boolean
   undoing: boolean
@@ -217,7 +229,8 @@ export interface DocumentMarkLayerProps {
   flow: DocCitationFlow | null
   /** The fix card, when one is open for the active mark's claim. */
   fix: DocFixFlow | null
-  onFindSource: (mark: DocumentMark) => void
+  /** `readOnly` when the card was opened to look rather than to cite. */
+  onFindSource: (mark: DocumentMark, readOnly: boolean) => void
   onSuggestFix: (mark: DocumentMark) => void
   onDismiss: (mark: DocumentMark) => void
   /** Keeps the popover open while the pointer is inside it. */
@@ -554,7 +567,7 @@ export default function DocumentMarkLayer({
           wrapScrollTop={wrapScrollTop}
           flow={activeFlow}
           fix={activeFix}
-          onFindSource={() => onFindSource(active.mark)}
+          onFindSource={(readOnly) => onFindSource(active.mark, readOnly)}
           onSuggestFix={() => onSuggestFix(active.mark)}
           onDismiss={() => onDismiss(active.mark)}
           onMouseEnter={onPopoverEnter}
@@ -586,7 +599,7 @@ function MarkPopover({
   wrapScrollTop: number
   flow: DocCitationFlow | null
   fix: DocFixFlow | null
-  onFindSource: () => void
+  onFindSource: (readOnly: boolean) => void
   onSuggestFix: () => void
   onDismiss: () => void
   onMouseEnter: () => void
@@ -681,7 +694,13 @@ function MarkPopover({
         <div className="docmark-actions">
           <button
             className="docmark-btn-primary"
-            onClick={opensFixFlow(kind) ? onSuggestFix : onFindSource}
+            // NOT insertsCitation(action) — readOnly is its negation. Passing
+            // it straight through inverted the whole feature: "Add citation"
+            // opened the read-only card and "Compare sources" opened the
+            // inserter. Caught in the harness, not by reading.
+            onClick={
+              opensFixFlow(kind) ? onSuggestFix : () => onFindSource(!insertsCitation(action))
+            }
           >
             {action}
           </button>
@@ -984,8 +1003,10 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
     <>
       <div className="docmark-head">
         <span className="docmark-dot" style={{ background: '#16a34a' }} />
-        <span className="docmark-title">{resultsTitle(candidates.length)}</span>
-        <span className="docmark-chip">{CITATION_STYLE_LABEL[style]}</span>
+        <span className="docmark-title">
+          {flow.readOnly ? readOnlyTitle(candidates.length) : resultsTitle(candidates.length)}
+        </span>
+        {flow.readOnly ? null : <span className="docmark-chip">{CITATION_STYLE_LABEL[style]}</span>}
       </div>
       <p className="docmark-body">{resultsBody(claimText)}</p>
       <div className="docmark-rows">
@@ -1023,7 +1044,10 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
         ))}
       </div>
       {/* Every option at once, as the frame draws them — not one cycling
-          button, which hid two thirds of the control behind a second click. */}
+          button, which hid two thirds of the control behind a second click.
+          Absent in read-only: a citation style is a question about a citation
+          nobody is inserting. */}
+      {flow.readOnly ? null : (
       <div className="docmark-styles">
         <span className="docmark-styles-label">Style</span>
         {CITATION_STYLES.map((option) => (
@@ -1037,6 +1061,7 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
           </button>
         ))}
       </div>
+      )}
       {preview ? (
         <div className="docmark-block">
           <div className="docmark-block-label">WILL BE INSERTED</div>
@@ -1044,22 +1069,30 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
           <div className="docmark-block-body">{preview.worksCitedEntry}</div>
         </div>
       ) : null}
-      <div className="docmark-actions">
-        <button
-          className="docmark-btn-primary"
-          onClick={flow.onInsert}
-          disabled={flow.inserting || !selectedId}
-        >
-          {flow.inserting ? 'Inserting…' : 'Insert citation'}
-        </button>
-        <button
-          className="docmark-btn-secondary"
-          onClick={flow.onPreview}
-          disabled={flow.previewing || !selectedId}
-        >
-          {flow.previewing ? 'Formatting…' : 'Preview'}
-        </button>
-      </div>
+      {flow.readOnly ? (
+        <div className="docmark-actions">
+          <button className="docmark-btn-primary" onClick={flow.onCancel}>
+            Done
+          </button>
+        </div>
+      ) : (
+        <div className="docmark-actions">
+          <button
+            className="docmark-btn-primary"
+            onClick={flow.onInsert}
+            disabled={flow.inserting || !selectedId}
+          >
+            {flow.inserting ? 'Inserting…' : 'Insert citation'}
+          </button>
+          <button
+            className="docmark-btn-secondary"
+            onClick={flow.onPreview}
+            disabled={flow.previewing || !selectedId}
+          >
+            {flow.previewing ? 'Formatting…' : 'Preview'}
+          </button>
+        </div>
+      )}
       {/* Full-width under the pair — the frame's own third row. Re-runs the
           four academic searches rather than filtering what came back. */}
       <button className="docmark-btn-secondary docmark-btn-wide" onClick={flow.onSearchAgain}>
