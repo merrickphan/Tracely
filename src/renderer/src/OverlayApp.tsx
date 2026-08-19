@@ -1490,7 +1490,6 @@ function AnalyzingCard({ onClose }: { onClose: () => void }): JSX.Element {
 }
 
 
-const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
 
 /** Stable enough to dedupe one paragraph's sources: title + year. */
 function articleRowKey(a: ScreenWatchEvidenceArticle): string {
@@ -1556,7 +1555,6 @@ function ParagraphDetailPanel({
     }
   }
 
-  const ordinal = ORDINAL[index - 1] ?? `${index}th`
 
   return (
     <>
@@ -1620,7 +1618,10 @@ function ParagraphDetailPanel({
           {strong ? 'Strong' : 'Needs Work'}
         </span>
         <span style={{ fontSize: 13, fontWeight: 500, color: '#7e7f84' }}>
-          {paragraphClaims.length} claim{paragraphClaims.length === 1 ? '' : 's'} · {ordinal} paragraph
+          {/* The ordinal that followed this counted the raw array, while the
+              heading above numbers the body — "12th paragraph" under
+              "Paragraph 11". One name per paragraph; the heading has it. */}
+          {paragraphClaims.length} claim{paragraphClaims.length === 1 ? '' : 's'}
         </span>
       </div>
 

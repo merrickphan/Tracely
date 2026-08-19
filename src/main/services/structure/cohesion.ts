@@ -217,6 +217,16 @@ export interface DraftCohesion {
   findings: CohesionFinding[]
 }
 
+/**
+ * The message names no paragraph, deliberately.
+ *
+ * It used to open `¶12 → ¶13 —`, numbered off the raw array, while every
+ * heading in the same report numbered the BODY — so on a titled essay the two
+ * disagreed by one and the renderer printed the location twice besides. The
+ * finding carries `fromIndex`/`toIndex`; naming them is the surface's job,
+ * because only the surface knows whether the draft has a title.
+ * See `shared/paragraphNames.ts`.
+ */
 export interface CohesionParagraph {
   index: number
   role: ParagraphRole
@@ -260,14 +270,14 @@ export function measureCohesion(paragraphs: CohesionParagraph[]): DraftCohesion 
         kind: 'topic-jump',
         fromIndex: from.index,
         toIndex: to.index,
-        message: `¶${from.index} → ¶${to.index} — no transition, and the two paragraphs share almost no subject matter.`
+        message: 'No transition, and the two paragraphs share almost no subject matter.'
       })
     } else if (!signalled) {
       findings.push({
         kind: 'no-transition',
         fromIndex: from.index,
         toIndex: to.index,
-        message: `¶${from.index} → ¶${to.index} — nothing bridges these paragraphs; the next one starts cold.`
+        message: 'Nothing bridges these paragraphs; the next one starts cold.'
       })
     }
 
@@ -278,7 +288,7 @@ export function measureCohesion(paragraphs: CohesionParagraph[]): DraftCohesion 
         kind: 'unanswered-counterargument',
         fromIndex: from.index,
         toIndex: to.index,
-        message: `¶${from.index} raises an objection and ¶${to.index} concludes without replying to it.`
+        message: 'An objection is raised here and the draft concludes without replying to it.'
       })
     }
   }

@@ -638,7 +638,13 @@ export function EssayGradeReportPanel({
                             !
                           </span>
                           <span style={{ fontSize: 12.5, fontWeight: 600, color: '#b35116' }}>
-                            {claim
+                            {/* `problemKinds` can be EMPTY on a claim a
+                                weakness points at — the finding came off the
+                                prose or the role vector, not off the claim —
+                                and indexing [0] then rendered the literal
+                                string "undefined · 88% confidence". Seen in
+                                the harness on the fixture report. */}
+                            {claim && claim.problemKinds.length > 0
                               ? `${PROBLEM_LABEL[claim.problemKinds[0]]} · ${Math.round(claim.confidence * 100)}% confidence`
                               : 'Needs attention'}
                           </span>

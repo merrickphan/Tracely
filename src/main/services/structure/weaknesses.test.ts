@@ -225,7 +225,37 @@ describe('findWeaknesses — findings read off the prose', () => {
       soWhatInConclusion: false,
       reasoning: [reasoning('dropped-evidence', 3)]
     }).filter((w) => w.kind === 'dropped-evidence')
-    strictEqual(found.message.includes('3rd paragraph'), true)
+    // The name every panel heads that paragraph with — see
+    // shared/paragraphNames.ts. COMPLETE opens on a thesis, so array position
+    // 2 is the second BODY paragraph.
+    strictEqual(found.message.startsWith('Paragraph 2 '), true, found.message)
+  })
+
+  // The bug this naming exists to fix. A titled essay shifts every array
+  // position by one, and the message used to number the array while the card
+  // above it numbered the body — so a card headed "Paragraph 11" carried a
+  // finding about "the 12th paragraph".
+  it('names the paragraph the way the panel heading does, on a titled essay', () => {
+    const [found] = findWeaknesses({
+      paragraphs: outline('unknown', ...COMPLETE),
+      titleParagraph: true,
+      claimsWithoutEvidence: [],
+      soWhatInConclusion: false,
+      reasoning: [reasoning('dropped-evidence', 4)]
+    }).filter((w) => w.kind === 'dropped-evidence')
+    strictEqual(found.message.startsWith('Paragraph 2 '), true, found.message)
+    strictEqual(/\d+(?:st|nd|rd|th) paragraph/.test(found.message), false, found.message)
+  })
+
+  // An ordinal cannot say this at all, which is half the reason it went.
+  it('calls the conclusion the conclusion', () => {
+    const [found] = findWeaknesses({
+      paragraphs: outline(...COMPLETE),
+      claimsWithoutEvidence: [],
+      soWhatInConclusion: false,
+      reasoning: [reasoning('unclear-reference', COMPLETE.length)]
+    }).filter((w) => w.kind === 'unclear-reference')
+    strictEqual(found.message.startsWith('The conclusion '), true, found.message)
   })
 
   // The two modules describe the same failure from different evidence, and a
@@ -267,7 +297,7 @@ describe('findWeaknesses — reasoning faults the classifier named', () => {
       reasoningFaults: [fault(2, 'sequence-as-cause')]
     }).filter((w) => w.kind === 'sequence-as-cause')
     strictEqual(found.paragraphIndex, 2)
-    strictEqual(found.message.includes('2nd paragraph'), true)
+    strictEqual(found.message.startsWith('Paragraph 1 '), true, found.message)
     // The message must say what the fault IS, not repeat its name — "circular
     // reasoning" is a term many writers have heard and few can act on.
     strictEqual(/order or correlation/.test(found.message), true)
