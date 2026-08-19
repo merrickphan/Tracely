@@ -1,6 +1,12 @@
-import { ok, strictEqual } from 'node:assert/strict'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { computeStrengthScore, MIN_COUNTABLE_RELEVANCE, rescoreFromBreakdown, type ScorableItem } from './scoring.ts'
+import {
+  computeStrengthScore,
+  MIN_COUNTABLE_RELEVANCE,
+  rescoreFromBreakdown,
+  selectShownEvidence,
+  type ScorableItem
+} from './scoring.ts'
 
 // scoring.ts had no tests until 2026-08-16, which is how the dilution below
 // survived: it is not a subtle bug, but nothing ever asked the module a
@@ -228,5 +234,49 @@ describe('rescoreFromBreakdown — stored claims re-band under new weights', () 
       (rescoreFromBreakdown(prestigiousButOffTopic) ?? 0) < 40,
       'a prestigious off-topic list must now band as weak'
     )
+  })
+})
+
+/**
+ * What a student is OFFERED, which is a different question from what the score
+ * is computed over. Owner, 2026-08-19: *"a lot of them don't even match
+ * whatsoever."* Measured cause: the displayed list had no floor at all.
+ */
+describe('selectShownEvidence', () => {
+  const at = (textRelevance: number) => ({ textRelevance })
+
+  it('drops everything below the floor for the metric in use', () => {
+    const shown = selectShownEvidence([at(0.6), at(0.5), at(0.3), at(0.05)], 'dense', 10)
+    deepStrictEqual(shown.map((s) => s.textRelevance), [0.6, 0.5])
+  })
+
+  // The two floors are not on the same scale — claim-word coverage runs high,
+  // MiniLM cosine runs low and compresses. Using one for the other would either
+  // show everything or nothing.
+  it('uses the LEXICAL floor when the embedder was unavailable', () => {
+    const candidates = [at(0.6), at(0.5), at(0.3), at(0.05)]
+    strictEqual(selectShownEvidence(candidates, 'dense', 10).length, 2)
+    strictEqual(selectShownEvidence(candidates, 'lexical', 10).length, 3)
+  })
+
+  it('caps what survives the floor, keeping the best', () => {
+    const shown = selectShownEvidence([at(0.9), at(0.8), at(0.7), at(0.6), at(0.5)], 'dense', 3)
+    deepStrictEqual(shown.map((s) => s.textRelevance), [0.9, 0.8, 0.7])
+  })
+
+  // The honest outcome for a claim the four indexes cannot answer. Padding the
+  // list to look useful is what put "The DSM and Its Discontents" under a claim
+  // about German casualties at Stalingrad.
+  it('returns NOTHING rather than the best of a bad set', () => {
+    deepStrictEqual(selectShownEvidence([at(0.3), at(0.2), at(0.05)], 'dense', 5), [])
+  })
+
+  it('keeps a source exactly on the floor', () => {
+    strictEqual(selectShownEvidence([at(MIN_COUNTABLE_RELEVANCE.dense)], 'dense', 5).length, 1)
+  })
+
+  it('preserves the order it was given, which is the caller ranking', () => {
+    const shown = selectShownEvidence([at(0.9), at(0.44), at(0.7)], 'dense', 5)
+    deepStrictEqual(shown.map((s) => s.textRelevance), [0.9, 0.44, 0.7])
   })
 })

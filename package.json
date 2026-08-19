@@ -25,6 +25,7 @@
     "evaluate:smoke": "node scripts/evaluate.mjs --smoke",
     "eval:citations": "node eval/citations/run.mjs",
     "eval:rank": "node eval/retrieval/rank.mjs",
+    "eval:floor": "node eval/retrieval/floor.mjs",
     "eval:robustness": "node eval/retrieval/robustness.mjs",
     "eval:stance": "node eval/retrieval/stance.mjs",
     "eval:critique": "node eval/critique/score.mjs",
