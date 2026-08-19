@@ -1,4 +1,5 @@
-import type { ParagraphRole, StructureComponents } from '@shared/types'
+import type { ParagraphRole, StructureComponents, StructureWeaknessKind } from '@shared/types'
+import { needsWork } from '@shared/weaknessSeverity'
 import type { ScreenWatchProblemKind } from '@shared/ipc-contract'
 import { PROBLEM_LABEL } from './problemCopy'
 import { POINTS_PER_LEVEL, REFERENCE_LEVEL, adjustedScore, gradeFor, gradeLevelCredit } from '@shared/gradeLevel'
@@ -511,7 +512,11 @@ export function EssayGradeReportPanel({
           // paragraph of one is what produced a row reading "P1 · Unlabelled".
           if (name === null) return null
           const issues = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === paragraph.index)
-          const strong = issues.length === 0
+          // NOT `issues.length === 0`. Every finding used to flip this badge, so
+          // one "obviously" printed the same NEEDS WORK as a circular argument and a
+          // well-written draft could not keep a single Strong. See
+          // shared/weaknessSeverity.ts — the notes still render underneath.
+          const strong = !needsWork(issues.map((w) => w.kind as StructureWeaknessKind))
           const preview = structure?.previews[paragraph.index - 1] ?? ''
           const cited = paragraph.claimIds.filter((id) => claimById.get(id)?.hasInlineCitation).length
 

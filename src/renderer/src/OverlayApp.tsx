@@ -9,6 +9,8 @@ import type {
   SourceProvider,
   StructureComponents
 } from '@shared/types'
+import type { StructureWeaknessKind } from '@shared/types'
+import { needsWork } from '@shared/weaknessSeverity'
 import type {
   ScreenWatchClaimCitation,
   ScreenWatchClaimEvidence,
@@ -1536,7 +1538,9 @@ function ParagraphDetailPanel({
 }): JSX.Element {
   const paragraph = structure?.paragraphs.find((p) => p.index === index) ?? null
   const issues = (structure?.weaknesses ?? []).filter((w) => w.paragraphIndex === index)
-  const strong = issues.length === 0
+  // Same rule the editor's report uses — one definition of "needs work" across
+  // both surfaces. See shared/weaknessSeverity.ts.
+  const strong = !needsWork(issues.map((w) => w.kind as StructureWeaknessKind))
   const claimById = new Map(claims.map((c) => [c.id, c] as const))
   const paragraphClaims = (paragraph?.claimIds ?? []).map((id) => claimById.get(id)).filter(Boolean) as ScreenWatchClaimSummary[]
   const uncited = paragraphClaims.filter((c) => !c.hasInlineCitation)

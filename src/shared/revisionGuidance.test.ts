@@ -95,11 +95,12 @@ describe('REVISION_GUIDANCE', () => {
   it('keeps each field short enough to read inside a card', () => {
     for (const kind of KINDS) {
       const g = guidanceFor(kind)
-      // The report's problem card is 3 lines of body text at ~330px. Past ~340
-      // characters a field stops being read at all.
-      ok(g.move.length <= 340, `${kind}.move is ${g.move.length} chars`)
-      ok(g.why.length <= 340, `${kind}.why is ${g.why.length} chars`)
-      ok(g.done.length <= 340, `${kind}.done is ${g.done.length} chars`)
+      // One line each, not three. At 340 the three fields together came to ~640
+      // characters — about 100 words behind a "+ How to fix this" toggle, which
+      // the owner read as unskimmable and was right to. 110 is one sentence.
+      ok(g.move.length <= 110, `${kind}.move is ${g.move.length} chars`)
+      ok(g.why.length <= 110, `${kind}.why is ${g.why.length} chars`)
+      ok(g.done.length <= 110, `${kind}.done is ${g.done.length} chars`)
     }
   })
 })
@@ -120,7 +121,7 @@ describe('COHESION_GUIDANCE', () => {
   })
 
   it('phrases every move as an instruction, not a description', () => {
-    const DESCRIPTIVE = /^(the|this|there|it|your|a|an)/i
+    const DESCRIPTIVE = /^(the|this|there|it|your|a|an)\b/i
     for (const kind of COHESION_KINDS) {
       ok(!DESCRIPTIVE.test(cohesionGuidanceFor(kind).move.trim()), `${kind}.move does not start with a verb`)
     }
