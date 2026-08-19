@@ -10,6 +10,7 @@ import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/scr
 import { warmUp as warmUpMl } from './services/ml'
 import { warmUp as warmUpWorldBank } from './services/search/worldBank'
 import { initDb, persist } from './services/storage/db'
+import { forgetDocumentNames, recoverLearnedNames } from './spellcheck'
 import { setAppPaths } from './services/storage/paths'
 import { getSetting } from './services/storage/settingsRepo'
 import { createTray } from './tray'
@@ -83,6 +84,12 @@ if (!gotLock) {
 
     await initDb()
 
+    // Immediately after the DB and before any document is opened. A session
+    // that did not shut down cleanly left its learned names in Chromium's
+    // PERSISTENT dictionary, and leaving them there is exactly what
+    // session-scoped name learning exists to prevent — see spellcheck.ts.
+    recoverLearnedNames()
+
     // Before any window exists, because a window is where AI calls come from.
     // The relay bills per account and refuses calls it cannot attribute, so
     // every request carries the signed-in user's Supabase access token —
@@ -144,6 +151,10 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     setQuitting(true)
+    // The other half of session-scoped: every name Tracely taught the
+    // spellchecker is removed on the way out, so nothing it learned from one
+    // essay survives into the next launch.
+    forgetDocumentNames()
     persist()
   })
 

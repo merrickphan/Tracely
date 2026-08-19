@@ -43,7 +43,12 @@ const DEFAULTS: Record<string, string> = {
   // source to, capped per analysis, and cached on the claim text so re-opening
   // costs nothing. Off by default would mean the citation check that makes the
   // report honest is one almost nobody ever turns on.
-  autoCritiqueCited: 'true'
+  autoCritiqueCited: 'true',
+  // Names Tracely taught the spellchecker for the open document, as JSON.
+  // Bookkeeping, not a preference: it exists so a crash cannot make
+  // session-scoped name learning permanent. Read and cleared at startup — see
+  // recoverLearnedNames in spellcheck.ts.
+  learnedNamesForCleanup: '[]'
 }
 
 export function getSetting(key: string): string {
