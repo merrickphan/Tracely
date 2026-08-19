@@ -103,6 +103,7 @@ export async function callRelay<T>(
     | 'correction'
     | 'classify-structure'
     | 'grade-draft'
+    | 'find-sources'
     | 'tracer',
   body: unknown
 ): Promise<T> {
