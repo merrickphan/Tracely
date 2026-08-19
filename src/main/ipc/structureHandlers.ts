@@ -12,6 +12,8 @@ import {
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
 import { classifyStructure } from '../services/ai/structureClassifier'
 import { argumentParagraphs } from '@shared/structureText'
+import { offThesisParagraphs } from '../services/structure/thesisSupport'
+import { looksLikeTitle } from '../services/structure/roles'
 
 // Matches documentsHandlers' MAX_BODY_CHARS. The analysis is linear in the
 // document, but the database is fully re-serialized on every write, so a
@@ -73,6 +75,39 @@ export function registerStructureHandlers(): void {
       argumentParagraphs(input.text).map((p) => p.text)
     )
 
+
+    /**
+     * Which paragraphs are not about the thesis, measured with the LOCAL
+     * embedder — see structure/thesisSupport.ts. Two rubric lines that had no
+     * implementation at all: "Flag if the body paragraphs do not actually
+     * support the thesis" and "Flag tangents."
+     *
+     * Runs after the classifier because it needs the thesis position, and only
+     * ever from the model's answer: the local reader's thesis guess is a
+     * fallback for SCORING a component, and it is not a firm enough basis for
+     * telling a student a paragraph does not belong in their essay.
+     *
+     * Free — in-process MiniLM, no relay, no network — which is what makes it
+     * safe to run on every analysis. Null when it could not be measured, and
+     * null is passed on as "say nothing".
+     */
+    const thesisAt = classified ? classified.roles.indexOf('thesis') : -1
+    const spans = argumentParagraphs(input.text)
+    const offThesis =
+      thesisAt === -1
+        ? null
+        : await offThesisParagraphs({
+            paragraphs: spans.map((p) => ({ index: p.index, text: p.text })),
+            thesisIndex: thesisAt,
+            titleParagraph: spans.length > 1 && looksLikeTitle(spans[0].text),
+            // A conclusion restates rather than develops, so it sits closer to
+            // the thesis than a body paragraph does and is never the tangent
+            // this is looking for.
+            skip: (classified?.roles ?? []).flatMap((r, i) =>
+              r === 'conclusion' && spans[i] ? [spans[i].index] : []
+            )
+          })
+
     const outline = analyzeStructure({
       documentId: input.documentId ?? null,
       analysisId: input.analysisId ?? null,
@@ -81,6 +116,7 @@ export function registerStructureHandlers(): void {
       claimsWithoutEvidence: claimsWithoutEvidence(claims, input.text),
       coverage: computeEvidenceCoverage(claims, input.text),
       classified,
+      ...(offThesis ? { offThesis } : {}),
       analyzedAt: new Date().toISOString()
     })
 

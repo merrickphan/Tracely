@@ -50,18 +50,54 @@ export interface ReconciledRoles {
    * open with an explicit evaluative claim.
    */
   statesClaim: boolean[]
+  /**
+   * The NAME of the reasoning fault in each paragraph, or 'none'.
+   *
+   * `warranted` asks whether a paragraph explains its link and answers in one
+   * bit. The model is making a far richer judgement than that to decide it —
+   * the prompt asks it to distinguish summary, a logical leap, sequence read as
+   * cause, and a generalisation from a single case — and every one of those
+   * distinctions was being discarded on the way back.
+   *
+   * The cost was the whole quality of the report. A paragraph that treats a
+   * correlation as a cause and one that simply stops after a quotation both
+   * arrived as `warranted: false` and produced the identical sentence:
+   * "presents evidence without explaining how it supports the argument." The
+   * rubric calls ANALYSIS / REASONING one of the most important grading
+   * dimensions, and the channel between the model's reading and the writer's
+   * screen was one bit wide.
+   *
+   * 'none' is the common and correct answer, including for many paragraphs
+   * where `warranted` is false: a paragraph that presents a statistic and stops
+   * has no reasoning to be faulty, it has none at all.
+   */
+  reasoningFailure: ReasoningFailure[]
 }
+
+/**
+ * The four reasoning faults the classifier can name.
+ *
+ * Each is a rubric clause under ANALYSIS / REASONING, and `shared/rubric.ts`
+ * ties each resulting weakness back to the exact sentence it comes from. There
+ * is no 'summary' member on purpose: `summary-without-point` already catches
+ * that locally and for free, from the structure of the paragraph rather than
+ * from a model's opinion of it.
+ */
+export type ReasoningFailure = 'none' | 'circular' | 'sequence-as-cause' | 'single-case' | 'leap'
+
+const VALID_FAILURES = new Set<string>(['none', 'circular', 'sequence-as-cause', 'single-case', 'leap'])
 
 function allUnknown(count: number): ReconciledRoles {
   return {
     roles: Array<ParagraphRole>(count).fill('unknown'),
     warranted: Array(count).fill(false),
-    statesClaim: Array(count).fill(false)
+    statesClaim: Array(count).fill(false),
+    reasoningFailure: Array<ReasoningFailure>(count).fill('none')
   }
 }
 
 export function reconcileRoles(raw: unknown, paragraphCount: number): ReconciledRoles {
-  if (paragraphCount <= 0) return { roles: [], warranted: [], statesClaim: [] }
+  if (paragraphCount <= 0) return { roles: [], warranted: [], statesClaim: [], reasoningFailure: [] }
 
   const entries = (raw as { paragraphs?: unknown })?.paragraphs
   if (!Array.isArray(entries)) return allUnknown(paragraphCount)
@@ -71,7 +107,10 @@ export function reconcileRoles(raw: unknown, paragraphCount: number): Reconciled
 
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue
-    const { index, role, hasWarrant, statesClaim } = entry as Record<string, unknown>
+    const { index, role, hasWarrant, statesClaim, reasoningFailure } = entry as Record<
+      string,
+      unknown
+    >
 
     // 1-based, matching the numbering the model was shown.
     if (typeof index !== 'number' || !Number.isInteger(index)) continue
@@ -97,6 +136,15 @@ export function reconcileRoles(raw: unknown, paragraphCount: number): Reconciled
     // scoring the way it always did.
     result.statesClaim[index - 1] =
       typeof statesClaim === 'boolean' ? statesClaim : role === 'claim'
+    // Defaults to 'none', like `warranted` defaults to false and for the same
+    // reason: a relay that predates the field says nothing, and inventing an
+    // accusation out of silence is the one direction this must not fail. An
+    // unrecognised string is also 'none' — a future member the client does not
+    // know about has no message to render.
+    result.reasoningFailure[index - 1] =
+      typeof reasoningFailure === 'string' && VALID_FAILURES.has(reasoningFailure)
+        ? (reasoningFailure as ReasoningFailure)
+        : 'none'
   }
 
   return result

@@ -122,6 +122,36 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
     why: 'Reporting what three sources found puts research on the page and leaves your argument exactly where it was. A marker reading this paragraph learns what you read; they still do not know what you think, and they can only give credit for the second thing.',
     done: 'Strike out every sentence that reports what somebody else said. If nothing is left, the paragraph was a summary. What remains after you fix it should be an argument the sources happen to support.'
   },
+  'off-thesis-paragraph': {
+    move: 'Decide which one is wrong — the paragraph or the thesis. Either cut the paragraph, or widen the thesis to cover what you actually spent the essay arguing. Both are real fixes and the second is more common than students expect.',
+    why: 'A paragraph nobody can connect to your argument reads as padding even when it is the best writing in the draft, because the reader has no slot to put it in. Often it is a sign the essay found its real subject partway through and the introduction never caught up.',
+    done: 'Say in one sentence how this paragraph makes your thesis more likely to be true. If the honest answer is that it does not, but you still want to keep it, the thesis is the thing to change.'
+  },
+  'vague-significance': {
+    move: 'Replace the adverb with the specifics. Name what changed, who it changed for, and by how much — a number, a date range, a named group. If you do not know any of those yet, that is the research the sentence still needs.',
+    why: 'A sentence built from an abstract subject, a change verb and an intensifier cannot be agreed with or disagreed with, so it persuades nobody and commits you to nothing. It also reads as a placeholder, which is often what it is.',
+    done: 'Ask what a reader could look up to check the sentence. If there is nothing — no figure, no period, no population — it is still describing the shape of a claim rather than making one.'
+  },
+  'circular-reasoning': {
+    move: 'Find the sentence meant to support the claim and check whether it says anything the claim did not. If it does not, replace it with the reason you actually believe the claim — the fact, mechanism or consequence that would persuade someone who started out disagreeing.',
+    why: 'A reason that restates the claim moves nobody, because anyone who doubted the claim doubts the restatement for identical reasons. It also tends to hide from the writer: the paragraph feels supported because the point has been made twice.',
+    done: 'Cover the claim and read only the support. If a reader could work out what you were arguing for from the support alone, it is doing work. If the support only makes sense once you already know the claim, it is the claim again.'
+  },
+  'sequence-as-cause': {
+    move: 'Say HOW the first thing produced the second — the process in between. Then name the most obvious alternative explanation and say why it does not account for what you are describing.',
+    why: 'Order is not causation and neither is correlation. Two things moving together is exactly what you would see if a third thing drove both, or if the causation ran the other way, and a reader who thinks of that before you do stops trusting the rest of the paragraph.',
+    done: 'Ask what would have happened without the cause you name. If you can answer with something specific, you have a mechanism. If the honest answer is that you do not know, the claim needs narrowing to what the evidence shows: that the two occur together.'
+  },
+  'single-case-generalisation': {
+    move: 'Either say why this case is representative — what makes it typical rather than convenient — or narrow the conclusion to the case you actually examined. Both are honest; only the first keeps the general claim.',
+    why: 'One example proves the thing is possible, not that it is usual. A reader who can name a counter-example has defeated the whole paragraph, and the counter-example is easy to find precisely because the claim was general.',
+    done: 'Count the cases behind the conclusion. If the answer is one, read the sentence again and ask whether it claims more than one case can carry.'
+  },
+  'logical-leap': {
+    move: 'Write out the step you skipped. Put your evidence and your conclusion side by side, say in one sentence what has to be true for the second to follow from the first, and then decide whether you have shown it.',
+    why: 'The connection you can see is the one a reader most often cannot, because you arrived at the conclusion by a route the page never describes. A missing step reads as a jump, and a marker cannot give credit for reasoning that stayed in your head.',
+    done: 'Hand the paragraph to someone who disagrees with you and ask what it establishes. If they stop at the evidence and do not reach your conclusion, the step between them is still missing.'
+  },
   'malformed-citation': {
     move: 'Open the source and copy the four things a reader needs from it: who wrote it, when, what it is called, and where it lives. Then write the in-text marker and the reference-list entry from those, in one style, and use that style everywhere.',
     why: 'A citation exists so a reader can go and check you. One they cannot follow does the opposite of what it is for — and a marker who cannot find your source has no way to tell a formatting slip from an invented reference, so they mark it as the worse of the two.',

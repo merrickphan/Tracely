@@ -497,3 +497,60 @@ describe('conclusionDrawsOnBody — the finding it exists to stop', () => {
     strictEqual(conclusionDrawsOnBody([{ index: 1, role: 'thesis', text: FILLER }]), false)
   })
 })
+
+/**
+ * The rubric's PRECISION section, and its own worked example:
+ * "Example of weak reasoning: 'Technology has changed society significantly.'"
+ */
+describe('findReasoningIssues — vague significance', () => {
+  it('flags the rubric\u2019s own example', () => {
+    ok(
+      run([para(FILLER), para('Technology has changed society significantly. ' + FILLER)]).includes(
+        'vague-significance'
+      )
+    )
+  })
+
+  it('flags the same shape in other clothes', () => {
+    for (const sentence of [
+      'Social media has affected culture dramatically.',
+      'The internet transformed the world for the better.',
+      'Technology has improved people\u2019s lives in countless ways.'
+    ]) {
+      ok(run([para(FILLER), para(`${sentence} ${FILLER}`)]).includes('vague-significance'), sentence)
+    }
+  })
+
+  // All three conditions are needed, and each negative here is a sentence a
+  // one-condition rule would flag.
+  it('does not flag a specific claim about the same subjects', () => {
+    for (const sentence of [
+      'Technology changed how surgeons train for keyhole procedures.',
+      'Social media changed the way the campaign raised money.',
+      'The war significantly delayed her return to Arnhem.',
+      'Society was slower to accept the appointment than the press was.'
+    ]) {
+      ok(!run([para(FILLER), para(`${sentence} ${FILLER}`)]).includes('vague-significance'), sentence)
+    }
+  })
+
+  // A number is the work the finding would ask for, so it exempts the sentence
+  // whatever adverbs sit around it.
+  it('does not flag a claim that carries a measurement', () => {
+    ok(
+      !run([
+        para(FILLER),
+        para('Social media use rose 23% over the decade and changed how teenagers sleep significantly. ' + FILLER)
+      ]).includes('vague-significance')
+    )
+  })
+
+  it('does not flag a quotation that happens to be vague', () => {
+    ok(
+      !run([
+        para(FILLER),
+        para('She was asked about the shift. "Technology has changed society significantly," she said, and moved on. ' + FILLER)
+      ]).includes('vague-significance')
+    )
+  })
+})

@@ -70,6 +70,14 @@ export type ReasoningIssueKind =
    * in it connecting any of that to the argument.
    */
   | 'summary-without-point'
+  /**
+   * A sentence that sounds like a finding and states none.
+   *
+   * The rubric's own example: "Technology has changed society significantly."
+   * Every word is doing work except the ones that would tell a reader what
+   * changed, for whom, or by how much.
+   */
+  | 'vague-significance'
 
 export interface ReasoningParagraph {
   /** 1-based, matching ParagraphOutline.index. */
@@ -194,6 +202,31 @@ const EMPHASIS: RegExp[] = [
   /\bhorrific\b/i,
   /\bterrible\b/i
 ]
+
+/**
+ * Abstract collective subjects — what a vague claim is usually made about.
+ *
+ * Closed and short on purpose. These are the nouns with no edges: you cannot
+ * check a statement about "society" the way you can one about "the students
+ * surveyed", so a change claimed about one of them and quantified only by an
+ * adverb is unfalsifiable by construction.
+ */
+const VAGUE_SUBJECT =
+  /\b(?:technology|society|the world|the internet|social media|the media|culture|history|humanity|people|things|modern life|the economy|the government|science)\b/i
+
+/** Verbs of change, which is what these sentences always assert. */
+const CHANGE_VERB =
+  /\b(?:changed|changes|affected|affects|impacted|impacts|influenced|influences|transformed|transforms|shaped|shapes|improved|improves|worsened|worsens|revolutionis\w+|revolutioniz\w+)\b/i
+
+/**
+ * Magnitude asserted as an adverb rather than measured.
+ *
+ * The load-bearing half. "Technology changed how surgeons train" is a good
+ * specific claim; "technology changed society significantly" is the same
+ * sentence with the specifics replaced by an intensifier.
+ */
+const VAGUE_MAGNITUDE =
+  /\b(?:significantly|greatly|drastically|dramatically|immensely|enormously|tremendously|a lot|in many ways|in countless ways|for the better|for the worse|forever)\b/i
 
 /** Openings that say nothing about this essay and could open any other. */
 const GENERIC_OPENINGS: RegExp[] = [
@@ -457,6 +490,26 @@ export function findReasoningIssues({
       // Every word added to catch it widens a pattern used to EXCUSE a
       // paragraph. The structural test needs no vocabulary.
       if (own.length === 0) push('summary-without-point', paragraph.index, trimQuote(sentences[0]))
+    }
+
+    // --- vague significance ------------------------------------------------
+    // All three conditions, and each one is needed. A vague subject alone is
+    // most essays about the internet; a change verb alone is most history; an
+    // intensifier alone is a style note. It is the combination — an abstract
+    // collective, a change, and a magnitude given as an adverb — that produces
+    // a sentence with no checkable content.
+    //
+    // A DIGIT anywhere in the sentence is an exemption: "social media use rose
+    // 23% and changed how teenagers sleep" has done the work the finding would
+    // ask for, whatever adverbs sit around it.
+    for (const sentence of sentences) {
+      const own = withoutQuotations(sentence)
+      if (/\d/.test(own)) continue
+      if (!VAGUE_SUBJECT.test(own)) continue
+      if (!CHANGE_VERB.test(own)) continue
+      if (!VAGUE_MAGNITUDE.test(own)) continue
+      push('vague-significance', paragraph.index, trimQuote(sentence))
+      break
     }
 
     // --- undeveloped repetition -------------------------------------------

@@ -27,12 +27,18 @@ import type { ReasoningFinding } from './reasoningIssues.ts'
 const SEVERITY: StructureWeaknessKind[] = [
   'no-thesis',
   'topic-not-thesis',
+  'off-thesis-paragraph',
   'unsupported-claim',
   // Above every reasoning finding: a reference a reader cannot follow is the
   // one defect here that costs marks on its own, whatever the argument does.
   'malformed-citation',
   'summary-without-point',
   'dropped-evidence',
+  // The named faults sit above the generic one they were being collapsed into.
+  'circular-reasoning',
+  'sequence-as-cause',
+  'single-case-generalisation',
+  'logical-leap',
   'warrant-gap',
   'overreaching-claim',
   'new-claim-in-conclusion',
@@ -41,6 +47,7 @@ const SEVERITY: StructureWeaknessKind[] = [
   'restated-conclusion',
   'undeveloped-repetition',
   'unclear-reference',
+  'vague-significance',
   'unsupported-emphasis',
   'generic-opening'
 ]
@@ -109,11 +116,54 @@ const REASONING_TEMPLATE: Record<
     tracerPrompt:
       'One of my paragraphs just summarises my sources. What should I be adding so it argues something?'
   },
+  'vague-significance': {
+    message: (where) =>
+      `The ${where} claims a big change without saying what changed, for whom, or by how much. "Significantly" is doing the work a measurement should do.`,
+    tracerPrompt:
+      'I wrote that something changed things significantly. How do I turn that into a claim a reader could actually check?'
+  },
   'generic-opening': {
     message: () =>
       'The draft opens on a line that would fit any essay on any subject. The first sentence is doing no work for this argument.',
     tracerPrompt:
       'My introduction starts with a generic hook. What should the opening sentence of an argumentative essay actually do?'
+  }
+}
+
+/**
+ * The four faults the classifier can name, in local template form.
+ *
+ * The model returns a label; every word a student reads is written here. Each
+ * message says what the fault IS rather than restating its name, because
+ * "circular reasoning" is a term a lot of writers have heard and few could act
+ * on.
+ */
+const REASONING_FAULT_TEMPLATE: Partial<
+  Record<StructureWeaknessKind, { message: (where: string) => string; tracerPrompt: string }>
+> = {
+  'circular-reasoning': {
+    message: (where) =>
+      `The ${where} supports its claim by restating it. The reason given assumes the point it is meant to establish, so a reader who doubted the claim has been given nothing new.`,
+    tracerPrompt:
+      'One of my paragraphs apparently argues in a circle. How do I tell a real reason from a restatement of my own claim?'
+  },
+  'sequence-as-cause': {
+    message: (where) =>
+      `The ${where} treats one thing as causing another on the strength of order or correlation alone. Nothing in it explains how the first produced the second.`,
+    tracerPrompt:
+      'I claimed one thing caused another because they happened together. What do I need to show to make that a real causal claim?'
+  },
+  'single-case-generalisation': {
+    message: (where) =>
+      `The ${where} draws a general conclusion from one case, without saying why that case is representative. A single counter-example would defeat it.`,
+    tracerPrompt:
+      'I generalised from one example. How do I decide whether to justify the example or narrow the claim?'
+  },
+  'logical-leap': {
+    message: (where) =>
+      `The ${where} reaches a conclusion the evidence does not quite carry. The evidence may be sound and the conclusion may be right; the step between them is not on the page.`,
+    tracerPrompt:
+      'There is a gap between my evidence and my conclusion. How do I find the step I skipped?'
   }
 }
 
@@ -171,6 +221,24 @@ export interface WeaknessInput {
    * template: no model wrote any of it.
    */
   citationDefects?: Array<{ paragraphIndex: number; message: string; quote: string }>
+  /**
+   * Reasoning faults the CLASSIFIER named, 1-based paragraph -> kind.
+   *
+   * These are the only findings here that come from a model rather than from a
+   * rule, and the messages are still local templates — the model supplies the
+   * NAME of the fault and nothing else. It never writes a sentence the writer
+   * reads, which is the line `weaknesses.ts` has held since it was written.
+   */
+  reasoningFaults?: Array<{ paragraphIndex: number; kind: StructureWeaknessKind }>
+  /**
+   * 1-based paragraphs that do not speak to the thesis — measured with the
+   * local embedder, see `structure/thesisSupport.ts`.
+   *
+   * Empty means "measured, nothing off-topic". The caller passes nothing at all
+   * when no measurement was possible, which is a different state and must stay
+   * silent rather than become an empty finding.
+   */
+  offThesis?: number[]
 }
 
 function ordinal(index: number): string {
@@ -186,7 +254,9 @@ export function findWeaknesses({
   thesisFound = false,
   reasoning = [],
   conclusionDrawsOnBody = false,
-  citationDefects = []
+  citationDefects = [],
+  reasoningFaults = [],
+  offThesis = []
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
@@ -304,6 +374,39 @@ export function findWeaknesses({
   )
   for (let i = found.length - 1; i >= 0; i--) {
     if (found[i].kind === 'warrant-gap' && droppedAt.has(found[i].paragraphIndex)) found.splice(i, 1)
+  }
+
+  // A named fault REPLACES the generic warrant gap on its paragraph. They are
+  // the same complaint at two resolutions — "you did not explain the link" and
+  // "the link you gave is circular" — and printing both reads as two problems
+  // while burying the one that says something.
+  const faultAt = new Set(reasoningFaults.map((f) => f.paragraphIndex))
+  for (let i = found.length - 1; i >= 0; i--) {
+    const at = found[i].paragraphIndex
+    if (found[i].kind === 'warrant-gap' && at !== null && faultAt.has(at)) found.splice(i, 1)
+  }
+
+  for (const paragraphIndex of offThesis) {
+    found.push({
+      kind: 'off-thesis-paragraph',
+      paragraphIndex,
+      claimId: null,
+      message: `The ${ordinal(paragraphIndex)} paragraph is not about what this draft says it is arguing. It may be true and interesting and still be a tangent.`,
+      tracerPrompt:
+        'One of my paragraphs apparently does not support my thesis. How do I decide whether to cut it or change the thesis?'
+    })
+  }
+
+  for (const fault of reasoningFaults) {
+    const template = REASONING_FAULT_TEMPLATE[fault.kind]
+    if (!template) continue
+    found.push({
+      kind: fault.kind,
+      paragraphIndex: fault.paragraphIndex,
+      claimId: null,
+      message: template.message(`${ordinal(fault.paragraphIndex)} paragraph`),
+      tracerPrompt: template.tracerPrompt
+    })
   }
 
   for (const defect of citationDefects) {

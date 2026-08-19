@@ -130,7 +130,13 @@ const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
   'generic-opening': 'Generic opening',
   'topic-not-thesis': 'A topic, not a thesis',
   'summary-without-point': 'Summary without a point',
-  'malformed-citation': 'Citation problem'
+  'malformed-citation': 'Citation problem',
+  'circular-reasoning': 'Circular reasoning',
+  'sequence-as-cause': 'Sequence treated as cause',
+  'single-case-generalisation': 'One case, general conclusion',
+  'logical-leap': 'The conclusion does not follow',
+  'vague-significance': 'Vague claim',
+  'off-thesis-paragraph': 'Does not support the thesis'
 }
 
 const COMPONENT_LABEL: Array<[keyof StructureComponents, string, number]> = [

@@ -205,6 +205,14 @@ export const FLAG_RUBRIC_SOURCE: Record<FlagKind, RubricClause> = {
     section: 'THESIS / CENTRAL ARGUMENT',
     clause: 'Flag if the thesis merely restates the prompt or topic.'
   },
+  // One measurement, and it could equally cite RELEVANCE's "Flag tangents." The
+  // THESIS clause is the stronger statement of the two — a tangent is a
+  // paragraph that goes nowhere, this is a paragraph that goes somewhere the
+  // draft did not say it was going.
+  'off-thesis-paragraph': {
+    section: 'THESIS / CENTRAL ARGUMENT',
+    clause: 'Flag if the body paragraphs do not actually support the thesis.'
+  },
   'unsupported-claim': {
     section: 'CLAIMS',
     clause:
@@ -232,6 +240,25 @@ export const FLAG_RUBRIC_SOURCE: Record<FlagKind, RubricClause> = {
   'summary-without-point': {
     section: 'ANALYSIS / REASONING',
     clause: 'Flag summary that replaces analysis.'
+  },
+  // The four the classifier names. Each is its own rubric line, which is the
+  // whole reason they are separate kinds: `warrant-gap` was carrying all of
+  // them and could say none of them.
+  'circular-reasoning': {
+    section: 'ANALYSIS / REASONING',
+    clause: 'Flag circular reasoning.'
+  },
+  'sequence-as-cause': {
+    section: 'ANALYSIS / REASONING',
+    clause: 'Flag correlation being treated as causation.'
+  },
+  'single-case-generalisation': {
+    section: 'ANALYSIS / REASONING',
+    clause: 'Flag one example being used to establish an overly broad generalization.'
+  },
+  'logical-leap': {
+    section: 'ANALYSIS / REASONING',
+    clause: 'Flag logical leaps between evidence and conclusion.'
   },
   'warrant-gap': {
     section: 'ANALYSIS / REASONING',
@@ -269,6 +296,10 @@ export const FLAG_RUBRIC_SOURCE: Record<FlagKind, RubricClause> = {
   },
 
   // --- cohesion: the joins ------------------------------------------------
+  'vague-significance': {
+    section: 'PRECISION',
+    clause: 'Flag vague statements that sound meaningful but cannot be clearly interpreted.'
+  },
   'unsupported-emphasis': {
     section: 'PRECISION',
     clause:
