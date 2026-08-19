@@ -300,6 +300,8 @@ function DocumentEditor({
   const [citationFlow, setCitationFlow] = useState<{
     claimId: string
     state: DocCitationFlowState
+    /** Opened to look, not to cite — see shared/citationAction.ts. */
+    readOnly: boolean
   } | null>(null)
   const [citationBusy, setCitationBusy] = useState<'inserting' | 'previewing' | 'undoing' | null>(null)
   // While a flow is open its mark is pinned: the hit-test must not swap the
@@ -998,8 +1000,12 @@ function DocumentEditor({
    * database would make pressing the button cost a 15-45 second wait for a
    * result we hold. "Search again" is the button that spends that.
    */
-  async function startCitationFlow(claim: Claim, fresh: boolean): Promise<void> {
-    setCitationFlow({ claimId: claim.id, state: { step: 'searching' } })
+  async function startCitationFlow(
+    claim: Claim,
+    fresh: boolean,
+    readOnly = citationFlow?.readOnly ?? false
+  ): Promise<void> {
+    setCitationFlow({ claimId: claim.id, state: { step: 'searching' }, readOnly })
     try {
       const res = fresh ? await tracelyApi.findEvidence(claim.id) : await tracelyApi.getEvidenceForClaim(claim.id)
       const evidence = res.evidence
@@ -1023,6 +1029,7 @@ function DocumentEditor({
           ? prev
           : {
               claimId: claim.id,
+              readOnly: prev.readOnly,
               state: {
                 step: 'picking',
                 candidates: evidence.map((item) => ({
@@ -1047,7 +1054,11 @@ function DocumentEditor({
       setCitationFlow((prev) =>
         prev?.claimId !== claim.id
           ? prev
-          : { claimId: claim.id, state: { step: 'error', message: err instanceof Error ? err.message : String(err) } }
+          : {
+              claimId: claim.id,
+              readOnly: prev.readOnly,
+              state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
+            }
       )
     }
   }
@@ -1099,6 +1110,7 @@ function DocumentEditor({
     } catch (err) {
       setCitationFlow({
         claimId: flow.claimId,
+        readOnly: flow.readOnly,
         state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
       })
     } finally {
@@ -1118,6 +1130,10 @@ function DocumentEditor({
       undoStepsRef.current = result.undoSteps
       setCitationFlow({
         claimId: claim.id,
+        // An insert can only happen from a flow that offered one, so this is
+        // always false here — carried rather than hardcoded so the two cannot
+        // drift if a future path opens the insert from somewhere else.
+        readOnly: false,
         state: {
           step: 'inserted',
           citation: {
@@ -1133,6 +1149,7 @@ function DocumentEditor({
     } catch (err) {
       setCitationFlow({
         claimId: claim.id,
+        readOnly: false,
         state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
       })
     } finally {
@@ -1896,6 +1913,7 @@ function DocumentEditor({
               ? {
                   claimId: citationFlow.claimId,
                   state: citationFlow.state,
+                  readOnly: citationFlow.readOnly,
                   inserting: citationBusy === 'inserting',
                   previewing: citationBusy === 'previewing',
                   undoing: citationBusy === 'undoing',
@@ -1952,7 +1970,7 @@ function DocumentEditor({
                 }
               : null
           }
-          onFindSource={(mark) => void startCitationFlow(mark.claim, false)}
+          onFindSource={(mark, readOnly) => void startCitationFlow(mark.claim, false, readOnly)}
           // Opens the fix in the popover, over the sentence it is about. It used
           // to call setScoreOpen(true) — the full-screen Argument Score report,
           // i.e. exactly the context switch away from the paragraph being

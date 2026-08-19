@@ -49,6 +49,18 @@ export function resultsTitle(count: number): string {
 }
 
 /**
+ * The same list, opened to be READ rather than picked from.
+ *
+ * "N sources found" is the answer to "find me a source". This card opened from
+ * "Compare sources" or "Review the sources" — the writer has one already, or
+ * has been told these do not carry the claim — so the heading says what the
+ * list is FOR rather than announcing a result they did not ask for.
+ */
+export function readOnlyTitle(count: number): string {
+  return `What the search found (${count})`
+}
+
+/**
  * "supports", never "proves".
  *
  * The percentage beside each row is `relevanceScore` — how directly a source
