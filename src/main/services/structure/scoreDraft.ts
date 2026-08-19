@@ -108,6 +108,23 @@ export interface ScoreSignals {
    * to measure whether the draft argues anything.
    */
   thesisStatesTopicOnly?: boolean
+  /**
+   * The 0-based paragraph the LOCAL reader believes closes the draft, when the
+   * role vector names no conclusion.
+   *
+   * The exact mirror of `thesisFallbackIndex`, and it exists for the same
+   * reason `significanceAnywhere` does: a paragraph carries ONE role, and the
+   * closing paragraph is routinely both the conclusion and the place the stakes
+   * are stated. When the classifier picks `significance` for it — which is a
+   * defensible reading — `roles.lastIndexOf('conclusion')` is -1 and the draft
+   * scores 0/10 for a conclusion that is plainly there.
+   *
+   * Measured on the owner's own essay, 2026-08-19: five paragraphs, the last
+   * labelled `significance`, conclusion 0/10. `looksLikeClosing` returns true
+   * on that paragraph, so nothing new had to be detected — the signal was
+   * already computed and simply not consulted.
+   */
+  conclusionFallbackIndex?: number | null
 }
 
 export interface DraftScore {
@@ -274,7 +291,23 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // reward. Both labellers agreed on calling it `evidence` — the model does it
   // by instruction, the heuristics by reaching their citation branch first —
   // so the better-argued the body, the more reliably this scored zero.
-  const body = paragraphs.slice(thesisAt === -1 ? 1 : thesisAt + 1, -1)
+  //
+  // A paragraph credited by ANOTHER component is out of the denominator as well
+  // as out of the numerator. `counterargument` and `significance` can never
+  // satisfy `governsAClaim` — deliberately, so the rubric does not pay twice —
+  // so leaving them in the divisor charged the draft for paragraphs it had
+  // already been rewarded for. Adding a counterargument to a four-paragraph
+  // essay took governing claims from 20 to 10, i.e. raising an objection made
+  // the score go DOWN, which was invisible until counterargument stopped
+  // filling the gap it created.
+  //
+  // `unknown` and `transition` deliberately STAY in the denominator. They earn
+  // nothing anywhere, and their dilution is the whole anti-padding property —
+  // see the length-invariance tests.
+  const CREDITED_ELSEWHERE = new Set<ParagraphRole>(['counterargument', 'significance'])
+  const body = paragraphs
+    .slice(thesisAt === -1 ? 1 : thesisAt + 1, -1)
+    .filter((p) => !CREDITED_ELSEWHERE.has(p.role))
   const claimBearing = body.filter(governsAClaim).length
   const expectedClaims = Math.max(1, Math.ceil(body.length * 0.5))
   const governingClaims = COMPONENT_MAX.governingClaims * clamp01(claimBearing / expectedClaims)
@@ -330,7 +363,18 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // Two independent halvings, and they compound: a conclusion in the wrong
   // place that also restates the thesis earns a quarter. Both are real faults
   // and neither excuses the other.
-  const conclusionAt = roles.lastIndexOf('conclusion')
+  // The fallback runs only when the vector names no conclusion at all, exactly
+  // like the thesis one. It is a POSITION, so it is scored by the same
+  // placement rule rather than credited flat.
+  const labelledConclusionAt = roles.lastIndexOf('conclusion')
+  const conclusionAt =
+    labelledConclusionAt !== -1
+      ? labelledConclusionAt
+      : typeof signals.conclusionFallbackIndex === 'number' &&
+          signals.conclusionFallbackIndex >= 0 &&
+          signals.conclusionFallbackIndex < paragraphs.length
+        ? signals.conclusionFallbackIndex
+        : -1
   const placed =
     conclusionAt === -1
       ? 0
@@ -348,9 +392,33 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
     conclusion
   }
 
-  const score = Math.round(
-    thesis + governingClaims + warrant + counterargument + significance + conclusion
-  )
+  // --- The total, and why counterargument is not always in the denominator --
+  //
+  // The rubric: "Do not require counterarguments for every essay; judge based
+  // on the prompt and genre", and "Do not penalize an essay for failing to
+  // include elements the assignment never requires." Tracely is never shown the
+  // prompt, so it cannot judge — and `no-counterargument` was deleted for
+  // exactly that reason on 2026-08-19.
+  //
+  // Deleting the finding while keeping the 15-point penalty was the worst of
+  // both: the draft still lost the marks, and the report no longer said why.
+  // Measured on the owner's own essay the same day — 75/100, with 0/15 here and
+  // nothing on screen about it.
+  //
+  // So the component is scored the way a rubric handles a criterion that does
+  // not apply: when the draft has no counterargument the component leaves the
+  // DENOMINATOR too, and the remaining 85 is rescaled to 100. A draft that
+  // raises one still earns it, so the move can only ever help — which is what
+  // "reward when appropriate" means. A draft that does not is graded on what it
+  // was actually trying to do.
+  //
+  // Deliberately not a reweighting of the other five. Their proportions were
+  // argued for individually and none of that reasoning changes because this one
+  // became conditional.
+  const earned = thesis + governingClaims + warrant + counterargument + significance + conclusion
+  const applicableMax =
+    counterargument > 0 ? 100 : 100 - COMPONENT_MAX.counterargument
+  const score = Math.round((earned / applicableMax) * 100)
 
   // For anyone re-adding a length floor here: the panel no longer has a
   // "cannot grade" state to fall back to. Suppressing the number now renders a

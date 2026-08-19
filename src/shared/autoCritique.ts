@@ -36,6 +36,52 @@ import type { Claim } from './types.ts'
 export const MAX_AUTO_CRITIQUE_CLAIMS = 6
 
 /**
+ * A concrete assertion a fact-check can actually bite on.
+ *
+ * `CRITIQUE_SYSTEM_PROMPT` Pass 1 checks "the claim's specific assertions
+ * (dates, numbers, names, statistics) against your own well-established
+ * knowledge" — and it is the ONLY thing in Tracely that can say a sentence is
+ * false. Retrieval cannot: it finds sources on the topic, and a topic is not a
+ * fact.
+ *
+ * Owner, 2026-08-19: *"I typed 'World War II ended in 1943,' and it just gave
+ * me a bunch of sources because it was uncited. But obviously, that's not a
+ * true statement."* Exactly right, and the cause was this module: auto-critique
+ * was cited-only, on the reasoning that "an uncited claim's verdict is already
+ * readable from its evidence score". That sentence disproves it. The search
+ * returns plenty of real WWII scholarship, the claim scores well on retrieval,
+ * and nothing anywhere asks whether 1943 is the right year.
+ *
+ * So a year, a date, a percentage or a quantity makes an uncited claim eligible
+ * too. These are the assertions Pass 1 can be confident about, and the ones a
+ * reader would expect a checker to catch.
+ *
+ * Deliberately NOT "any uncited claim". An unfalsifiable or interpretive
+ * sentence gives Pass 1 nothing to be confident about, so the call would buy a
+ * verdict about the evidence — which the strength score already reports for
+ * free.
+ */
+const CHECKABLE_ASSERTION = new RegExp(
+  [
+    // A year. The Hepburn and WWII cases both turn on one.
+    '\\b(?:1[0-9]\\d{2}|20\\d{2})\\b',
+    // A percentage, written either way.
+    '\\d+(?:\\.\\d+)?\\s?(?:%|per ?cent)',
+    // A quantity with a magnitude word, or any number of four digits or more.
+    '\\b\\d[\\d,]*\\s?(?:million|billion|trillion|thousand)\\b',
+    '\\b\\d{4,}\\b',
+    // A calendar date.
+    '\\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\\s+\\d{1,2}\\b'
+  ].join('|'),
+  'i'
+)
+
+/** Whether Pass 1 has something specific enough to be confident about. */
+export function hasCheckableAssertion(text: string): boolean {
+  return CHECKABLE_ASSERTION.test(text)
+}
+
+/**
  * Claim ids to critique, in document order, already capped.
  *
  * `documentText` is optional but should always be passed where it exists. A
@@ -57,11 +103,17 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
 
   return claims
     .filter((claim) => {
-      // The writer attached a source. An uncited claim's verdict is already
-      // readable from its evidence score, and it is the cited ones the report
-      // has gone quiet about.
+      // Two ways in, and they answer two different questions.
+      //
+      //   cited                  — is the source the writer named any good?
+      //                            Only the critique opens it.
+      //   checkable assertion    — is the sentence TRUE? Only Pass 1 asks.
+      //
+      // The second was missing until 2026-08-19 and "World War II ended in
+      // 1943" is what exposed it: uncited, so no critique ran, so the app
+      // answered a false sentence with a list of sources about the war.
       const cited = citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
-      if (!cited) return false
+      if (!cited && !hasCheckableAssertion(claim.text)) return false
       // The critique reasons over an evidence list. Handing it an empty one
       // produces a verdict about the search rather than about the sentence —
       // see isRetrievalMiss in problemKind.ts.

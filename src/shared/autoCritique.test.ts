@@ -88,3 +88,66 @@ describe('autoCritiqueTargets', () => {
     deepStrictEqual(autoCritiqueTargets([bare], document), [])
   })
 })
+
+/**
+ * Owner, 2026-08-19: "I typed 'World War II ended in 1943,' and it just gave me
+ * a bunch of sources because it was uncited. But obviously, that's not a true
+ * statement."
+ *
+ * The cause was here. Auto-critique was cited-only, on the reasoning that an
+ * uncited claim's verdict is readable from its evidence score — and that
+ * sentence disproves it: retrieval returns real WWII scholarship, the claim
+ * scores well, and nothing asks whether 1943 is the right year. Pass 1 of the
+ * critique is the only thing in Tracely that can say a sentence is false.
+ */
+describe('autoCritiqueTargets — uncited claims that can be fact-checked', () => {
+  const uncitedFact = (id: string, text: string) => claim(id, text, 40)
+
+  it('takes the sentence that started this', () => {
+    deepStrictEqual(autoCritiqueTargets([uncitedFact('wwii', 'World War II ended in 1943.')]), ['wwii'])
+  })
+
+  it('takes any uncited claim with something specific to check', () => {
+    for (const text of [
+      'The treaty was signed in 1919.',
+      'Roughly 40% of respondents disagreed.',
+      'The programme reached 2.5 million households.',
+      'She died on January 20, 1993.',
+      'The population passed 8000 that decade.'
+    ]) {
+      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), ['c'], text)
+    }
+  })
+
+  // Pass 1 can only be confident about something specific. An interpretive
+  // sentence gives it nothing, so the call would buy a verdict about the
+  // evidence — which the free strength score already reports.
+  it('leaves an uncited claim with nothing specific in it alone', () => {
+    for (const text of [
+      'Her humanitarian work mattered more than her films.',
+      'The policy was broadly unpopular.',
+      'Celebrity advocacy changed after that.'
+    ]) {
+      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), [], text)
+    }
+  })
+
+  it('still waits for the evidence search', () => {
+    deepStrictEqual(autoCritiqueTargets([claim('w', 'World War II ended in 1943.', null)]), [])
+  })
+
+  it('still never pays twice', () => {
+    deepStrictEqual(
+      autoCritiqueTargets([claim('w', 'World War II ended in 1943.', 40, 'weak')]),
+      []
+    )
+  })
+
+  it('shares one cap with the cited claims', () => {
+    const many = [
+      ...Array.from({ length: 4 }, (_, i) => cited(`cited${i}`)),
+      ...Array.from({ length: 4 }, (_, i) => uncitedFact(`fact${i}`, `It happened in 19${10 + i}.`))
+    ]
+    strictEqual(autoCritiqueTargets(many).length, MAX_AUTO_CRITIQUE_CLAIMS)
+  })
+})
