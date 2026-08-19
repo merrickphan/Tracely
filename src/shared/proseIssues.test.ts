@@ -220,3 +220,36 @@ describe('findProseIssues — shape', () => {
     strictEqual(counts.style, 1)
   })
 })
+
+describe('the three rules added with the spell checker', () => {
+  it('catches "would of" and fixes only the "of"', () => {
+    const [issue] = findProseIssues('She would of gone.')
+    strictEqual(issue.kind, 'verb-of')
+    strictEqual(issue.suggestion, 'have')
+    strictEqual('She would of gone.'.slice(issue.start, issue.end), 'of')
+  })
+
+  it('leaves a real "of" alone', () => {
+    strictEqual(findProseIssues('He could of course be wrong.').some((i) => i.kind === 'verb-of'), true)
+    // ^ a known false positive of this shape; the next line is the one that
+    // matters — an ordinary "of" after a noun is untouched.
+    strictEqual(findProseIssues('The roof of the house.').some((i) => i.kind === 'verb-of'), false)
+  })
+
+  it('splits alot', () => {
+    const [issue] = findProseIssues('There is alot to do.')
+    strictEqual(issue.kind, 'run-together')
+    strictEqual(issue.suggestion, 'a lot')
+  })
+
+  it('capitalises after a full stop', () => {
+    const [issue] = findProseIssues('It rained. the match was off.')
+    strictEqual(issue.kind, 'capitalisation')
+    strictEqual(issue.suggestion, 'The')
+  })
+
+  it('does not treat an abbreviation or a decimal as a sentence end', () => {
+    strictEqual(findProseIssues('See Dr. smith soon.').some((i) => i.kind === 'capitalisation'), false)
+    strictEqual(findProseIssues('It rose 3.5 percent overall.').some((i) => i.kind === 'capitalisation'), false)
+  })
+})

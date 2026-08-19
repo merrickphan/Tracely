@@ -76,19 +76,24 @@ export function adjustedScore(score: number, level: number = REFERENCE_LEVEL): n
  * design's position and says what the band means instead.
  */
 export const GRADE_BANDS: Array<[number, string, string]> = [
-  // A+ exists now. It did not, and the consequence was a ceiling nobody could
-  // reach: a draft that met every expectation of a third-grader banded "A"
-  // because "A" was the top of the table. A scale whose best grade is one a
-  // student cannot beat has no headroom to reward the work that earns it.
+  // The owner's scale, 2026-08-19: 90-100 an A, 80-89 a B, 70-79 a C, 60-69 a
+  // D, below 60 an F — with the thirds inside each decade that give the plus
+  // and minus. It replaces a hand-tuned table whose bands were set so 82 read
+  // "B+" exactly as the Figma frame draws it; on this scale 82 is a B-, and
+  // the frame's own example number is the one thing that had to give. A
+  // grading scale is the reader's, not the mockup's.
   [97, 'A+', 'Does everything the rubric asks, and does it well'],
-  [90, 'A', 'Built the way the rubric asks for'],
-  [85, 'A-', 'Strong throughout, with small gaps'],
-  [80, 'B+', 'Well built — a few gaps to close'],
-  [75, 'B', 'Solid, with parts left implied'],
-  [70, 'B-', 'The shape is there; the support is thin'],
-  [65, 'C+', 'Half the argument is doing the work'],
-  [60, 'C', 'Key moves are missing or unstated'],
-  [50, 'D', 'Reads as notes rather than an argument'],
+  [93, 'A', 'Built the way the rubric asks for'],
+  [90, 'A-', 'Strong throughout, with small gaps'],
+  [87, 'B+', 'Well built — a few gaps to close'],
+  [83, 'B', 'Solid, with parts left implied'],
+  [80, 'B-', 'The shape is there; the support is thin'],
+  [77, 'C+', 'Half the argument is doing the work'],
+  [73, 'C', 'Key moves are missing or unstated'],
+  [70, 'C-', 'More asserted than argued'],
+  [67, 'D+', 'Reads as notes rather than an argument'],
+  [63, 'D', 'The pieces of an argument are mostly absent'],
+  [60, 'D-', 'Barely an argument the rubric can follow'],
   [0, 'F', 'Not yet arguing anything the rubric can find']
 ]
 
@@ -103,6 +108,18 @@ export function gradeFor(score: number, level?: number): { letter: string; line:
   const banded = adjustedScore(score, level)
   const band = GRADE_BANDS.find(([floor]) => banded >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
   return { letter: band[1], line: band[2] }
+}
+
+/**
+ * The points a level is credited, before clamping.
+ *
+ * Separate from `adjustedScore` because the report shows the arithmetic — the
+ * six components add to the rubric score, and the reader is owed the step
+ * between that and the number in the ring.
+ */
+export function gradeLevelCredit(level: number = REFERENCE_LEVEL): number {
+  const safe = isGradeLevel(level) ? level : REFERENCE_LEVEL
+  return (REFERENCE_LEVEL - safe) * POINTS_PER_LEVEL
 }
 
 /** "Year 12" / "Grade 3" — the label the setting shows. */

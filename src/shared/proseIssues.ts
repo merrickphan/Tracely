@@ -32,6 +32,9 @@ export type ProseIssueKind =
   | 'filler'
   | 'passive-voice'
   | 'long-sentence'
+  | 'verb-of'
+  | 'run-together'
+  | 'capitalisation'
 
 export type ProseSeverity = 'error' | 'style'
 
@@ -122,6 +125,38 @@ function push(issues: ProseIssue[], issue: ProseIssue): void {
   issues.push(issue)
 }
 
+/** The correct spacing for each run-together word. */
+const RUN_TOGETHER: Record<string, string> = {
+  alot: 'a lot',
+  abit: 'a bit',
+  atleast: 'at least',
+  infact: 'in fact',
+  aswell: 'as well',
+  eachother: 'each other'
+}
+
+/**
+ * Words that end in a dot without ending a sentence.
+ *
+ * Titles, the citation abbreviations a bibliography is full of, and the two
+ * Latin ones. The list is short because everything on it earns its place by
+ * being a false positive this rule would otherwise produce on ordinary
+ * academic prose — "et al. reported", "Dr. smith", "Fig. 2 shows".
+ */
+const ABBREVIATIONS = new Set([
+  'dr', 'mr', 'mrs', 'ms', 'prof', 'st', 'jr', 'sr', 'vs', 'etc', 'al', 'cf',
+  'fig', 'figs', 'no', 'nos', 'pp', 'vol', 'ed', 'eds', 'approx', 'est', 'inc',
+  'ltd', 'co', 'dept', 'univ', 'trans', 'repr', 'rev'
+])
+
+/**
+ * Words that legitimately open a sentence in lower case.
+ *
+ * Short and deliberately so — every entry is a real convention (a gene, a
+ * brand, a variable) rather than a hedge against the rule being wrong.
+ */
+const LOWERCASE_SENTENCE_STARTS = new Set(['iOS', 'macOS', 'eBay', 'iPhone', 'iPad'].map((w) => w.toLowerCase()))
+
 /** Every mechanical and stylistic issue in `text`, in document order. */
 export function findProseIssues(text: string): ProseIssue[] {
   const issues: ProseIssue[] = []
@@ -161,6 +196,64 @@ export function findProseIssues(text: string): ProseIssue[] {
       // by a lowercase "an".
       suggestion: article[0] === article[0].toUpperCase() ? fixed[0].toUpperCase() + fixed.slice(1) : fixed,
       text: full
+    })
+  }
+
+  // -- would of / could of / should of / must of --------------------------
+  // A mishearing of the contraction, and one of the few grammar mistakes with
+  // exactly one correct fix whatever the sentence means: "of" is never a verb.
+  for (const m of text.matchAll(/\b(would|could|should|must|might)\s+(of)\b/gi)) {
+    const [full, modal, of_] = m
+    push(issues, {
+      start: m.index + full.length - of_.length,
+      end: m.index + full.length,
+      kind: 'verb-of',
+      severity: 'error',
+      message: `"${modal} of" is a mishearing of "${modal} have".`,
+      suggestion: of_[0] === of_[0].toUpperCase() ? 'Have' : 'have',
+      text: full
+    })
+  }
+
+  // -- alot / abit / atleast ----------------------------------------------
+  // Two words run together. Listed rather than detected, because a general
+  // "should this be split?" rule needs a dictionary — see main/spellcheck.ts
+  // for where that job actually belongs.
+  for (const m of text.matchAll(/\b(alot|abit|atleast|infact|aswell|eachother)\b/gi)) {
+    const fixed = RUN_TOGETHER[m[0].toLowerCase()]
+    push(issues, {
+      start: m.index,
+      end: m.index + m[0].length,
+      kind: 'run-together',
+      severity: 'error',
+      message: `"${m[0]}" is two words.`,
+      suggestion: m[0][0] === m[0][0].toUpperCase() ? fixed[0].toUpperCase() + fixed.slice(1) : fixed,
+      text: m[0]
+    })
+  }
+
+  // -- lowercase after a full stop ----------------------------------------
+  // Bounded hard on purpose, because the cost of being wrong here is telling a
+  // writer to capitalise a word that is correct:
+  //
+  //  - the word before the dot must not be an ABBREVIATION ("Dr. smith",
+  //    "et al. reported") or a single initial ("J. smith");
+  //  - `\s+` after the dot rules out a decimal (3.5) and a URL;
+  //  - the following word must be three letters or more, so a sentence opening
+  //    with "i" or "an" is left to the spell checker rather than guessed at.
+  for (const m of text.matchAll(/(\w+)\.\s+([a-z]{3,})/g)) {
+    const [, before, word] = m
+    if (before.length === 1 || ABBREVIATIONS.has(before.toLowerCase())) continue
+    if (LOWERCASE_SENTENCE_STARTS.has(word)) continue
+    const at = m.index + m[0].length - word.length
+    push(issues, {
+      start: at,
+      end: at + word.length,
+      kind: 'capitalisation',
+      severity: 'error',
+      message: `Sentences start with a capital — "${word}".`,
+      suggestion: word[0].toUpperCase() + word.slice(1),
+      text: word
     })
   }
 
