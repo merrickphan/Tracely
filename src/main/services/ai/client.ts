@@ -97,7 +97,13 @@ async function requestOnce<T>(endpoint: Parameters<typeof callRelay>[0], body: u
 // relay has not deployed. That check exists because v0.3.73 shipped a headline
 // feature whose endpoint 404'd.
 export async function callRelay<T>(
-  endpoint: 'detect-claims' | 'critique' | 'correction' | 'classify-structure' | 'tracer',
+  endpoint:
+    | 'detect-claims'
+    | 'critique'
+    | 'correction'
+    | 'classify-structure'
+    | 'grade-draft'
+    | 'tracer',
   body: unknown
 ): Promise<T> {
   if (!__RELAY_URL__) {
