@@ -92,6 +92,16 @@ asarUnpack:
   # services/ml disables itself and retrieval degrades silently to lexical
   # scoring, which is the same invisible failure v0.3.76 shipped with.
   - out/main/mlWorker.js
+  # And whatever the worker imports. electron-vite code-splits the main bundle,
+  # so mlWorker.js's first statement is `require("./chunks/protocol-*.js")` —
+  # unpacking the entry alone leaves it resolving a relative path inside
+  # app.asar.unpacked, where the chunk does not exist. Measured on the shipped
+  # v0.3.91/v0.3.92 installers: the chunk was in app.asar only, the worker threw
+  # `Cannot find module './chunks/protocol-Bivu33iP.js'`, ml/index.ts latched
+  # `unavailable` for the whole session, and 126 of 127 evidence searches in one
+  # day ranked on lexical word overlap instead of MiniLM. Exactly the v0.3.76
+  # failure again, one directory over.
+  - out/main/chunks/**
   # onnxruntime_binding.node loads onnxruntime.dll (and DirectML.dll) from
   # beside itself at runtime, and sharp's binding does the same with its own
   # DLLs. Unpacking a .node without its DLLs leaves the binding resolvable and

@@ -25,6 +25,9 @@ import { loadEnv } from './env.mjs'
 loadEnv({ quiet: true })
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
+// The REPO's worker bundle, kept only for the "did you run npm run build"
+// message below. The worker actually EXERCISED is the packaged one — see
+// PACKED_WORKER.
 const WORKER = join(REPO, 'out', 'main', 'mlWorker.js')
 // electron-builder's afterPack hook passes the app it just packed, which is
 // what makes this a gate rather than a report: it runs before the installer is
@@ -144,7 +147,25 @@ console.log(`PASS  one relay in app.asar — ${expectedRelay}`)
 // rather than being silently downloaded on a developer machine that has
 // network — which would make this check pass for a build that strands every
 // real user.
-const worker = new Worker(WORKER, {
+// THE PACKAGED WORKER, not the repo's.
+//
+// This ran `WORKER` — the copy in out/, where every chunk electron-vite emitted
+// sits right beside it — and so it passed for two releases whose packaged
+// worker could not start at all. electron-vite code-splits the main bundle, and
+// asarUnpack listed the entry without the chunk it imports, so the shipped
+// mlWorker.js threw `Cannot find module './chunks/protocol-*.js'` and retrieval
+// silently fell back to lexical ranking. A check that loads a different file
+// from the one the user runs is not a check.
+const PACKED_WORKER = join(RESOURCES, 'app.asar.unpacked', 'out', 'main', 'mlWorker.js')
+if (!existsSync(PACKED_WORKER)) {
+  fail(
+    `no unpacked worker at ${PACKED_WORKER}
+` +
+      `      asarUnpack must list out/main/mlWorker.js — see electron-builder.yml`
+  )
+}
+
+const worker = new Worker(PACKED_WORKER, {
   workerData: { cacheDir: join(RESOURCES, 'unused-cache'), localModelPath: MODELS, allowRemote: false }
 })
 
