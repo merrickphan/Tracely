@@ -737,6 +737,29 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                     ))}
                   </select>
                 </SettingsField>
+                {/*
+                  The only setting in here that spends money on its own, so it
+                  says what it costs rather than what it does. It is on by
+                  default (see settingsRepo) because the check it performs is
+                  the one that makes a cited claim's verdict honest — the
+                  evidence search never opens the work the writer named, and
+                  this call is the only thing in Tracely that does.
+                */}
+                <label className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-row-title">Check my citations automatically</div>
+                    <div className="settings-toggle-row-subtitle">
+                      {settings.autoCritiqueCited
+                        ? 'On — when you analyse a document, Tracely looks up the sources you cited and checks they say what you say they do. Uses AI credits.'
+                        : 'Off — cited claims are checked only when you press Critique.'}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.autoCritiqueCited}
+                    onChange={(e) => void save({ autoCritiqueCited: e.target.checked })}
+                  />
+                </label>
                 <SettingsField label={`Claim sensitivity — ${Math.round(settings.claimSensitivity * 100)}%`}>
                   <input
                     type="range"

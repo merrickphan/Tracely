@@ -130,7 +130,8 @@ const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
   'undeveloped-repetition': 'Point repeated, not developed',
   'generic-opening': 'Generic opening',
   'topic-not-thesis': 'A topic, not a thesis',
-  'summary-without-point': 'Summary without a point'
+  'summary-without-point': 'Summary without a point',
+  'malformed-citation': 'Citation problem'
 }
 
 const COMPONENT_LABEL: Array<[keyof StructureComponents, string, number]> = [

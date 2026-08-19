@@ -21,7 +21,8 @@ const setSchema = z.object({
   screenWatchHotkeyAccelerator: z.string().optional(),
   screenWatchAllowedApps: z.string().optional(),
   suppressSaveConfirm: z.boolean().optional(),
-  gradingLevel: z.number().int().min(3).max(12).optional()
+  gradingLevel: z.number().int().min(3).max(12).optional(),
+  autoCritiqueCited: z.boolean().optional()
 })
 
 function buildSettings(): AppSettings {
@@ -40,7 +41,8 @@ function buildSettings(): AppSettings {
     suppressSaveConfirm: raw.suppressSaveConfirm === 'true',
     // Number(), then the shared guard on the way out: a row written by a hand
     // edit or a future build must not reach the bands as NaN.
-    gradingLevel: isGradeLevel(Number(raw.gradingLevel)) ? Number(raw.gradingLevel) : REFERENCE_LEVEL
+    gradingLevel: isGradeLevel(Number(raw.gradingLevel)) ? Number(raw.gradingLevel) : REFERENCE_LEVEL,
+    autoCritiqueCited: raw.autoCritiqueCited === 'true'
   }
 }
 
@@ -69,6 +71,8 @@ export function registerSettingsHandlers(): void {
       setSetting('suppressSaveConfirm', String(patch.suppressSaveConfirm))
     }
     if (patch.gradingLevel !== undefined) setSetting('gradingLevel', String(patch.gradingLevel))
+    if (patch.autoCritiqueCited !== undefined)
+      setSetting('autoCritiqueCited', String(patch.autoCritiqueCited))
     // Persist only if the OS actually gave us the shortcut. globalShortcut
     // .register returns false when the accelerator is malformed or already
     // claimed by another app — and the return value was previously ignored, so

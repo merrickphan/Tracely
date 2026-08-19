@@ -34,7 +34,16 @@ const DEFAULTS: Record<string, string> = {
   suppressSaveConfirm: 'false',
   // Year 12 — the level GRADE_BANDS was written against, so an install that
   // never opens this setting grades exactly as it did before it existed.
-  gradingLevel: '12'
+  gradingLevel: '12',
+  // ON by default, and that is a deliberate departure from how Screen Watch
+  // treats the same call. The difference is consent: Screen Watch reads
+  // whatever is on screen forever without being asked, so an unprompted paid
+  // call there is a bill the user cannot watch being run up. This fires only
+  // inside a document the user opened, on claims they themselves attached a
+  // source to, capped per analysis, and cached on the claim text so re-opening
+  // costs nothing. Off by default would mean the citation check that makes the
+  // report honest is one almost nobody ever turns on.
+  autoCritiqueCited: 'true'
 }
 
 export function getSetting(key: string): string {

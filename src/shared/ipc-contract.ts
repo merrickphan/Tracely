@@ -152,6 +152,8 @@ export interface SettingsSetRequest {
   suppressSaveConfirm?: boolean
   /** School year, 3-12. Bands the letter; never touches the /100. */
   gradingLevel?: number
+  /** Auto-critique claims the writer cited. The paid call — see AppSettings. */
+  autoCritiqueCited?: boolean
 }
 export type SettingsSetResponse = AppSettings
 
