@@ -1,5 +1,6 @@
 import type { ParagraphOutline, StructureWeakness, StructureWeaknessKind } from '@shared/types'
 import type { ReasoningFinding } from './reasoningIssues.ts'
+import { lowerSubject, paragraphSubject } from '../../../shared/paragraphNames.ts'
 
 /**
  * Named weaknesses in a draft's argument.
@@ -70,25 +71,25 @@ const REASONING_TEMPLATE: Record<
 > = {
   'dropped-evidence': {
     message: (where) =>
-      `The ${where} ends on its evidence. A quotation or citation in the final sentence leaves the reader to work out what it proved.`,
+      `${where} ends on its evidence. A quotation or citation in the final sentence leaves the reader to work out what it proved.`,
     tracerPrompt:
       'One of my paragraphs ends on a quotation. What should I be saying after it that I am not saying now?'
   },
   'overreaching-claim': {
     message: (where) =>
-      `The ${where} states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.`,
+      `${where} states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.`,
     tracerPrompt:
       'I have used absolute words like "always" and "everyone" in my draft. How do I narrow those without sounding like I am hedging everything?'
   },
   'unsupported-emphasis': {
     message: (where) =>
-      `The ${where} asserts emphasis rather than earning it. "Obviously" and "massive" tell the reader the conclusion instead of arguing for it.`,
+      `${where} asserts emphasis rather than earning it. "Obviously" and "massive" tell the reader the conclusion instead of arguing for it.`,
     tracerPrompt:
       'I lean on words like "clearly" and "massive" in my essay. What should I write instead of the emphasis?'
   },
   'unclear-reference': {
     message: (where) =>
-      `The ${where} opens with "This" pointing back at the whole paragraph before it. The reader has to guess which part is meant.`,
+      `${where} opens with "This" pointing back at the whole paragraph before it. The reader has to guess which part is meant.`,
     tracerPrompt:
       'My paragraphs keep starting with "This shows". How do I open them so the reader knows what I am referring to?'
   },
@@ -100,7 +101,7 @@ const REASONING_TEMPLATE: Record<
   },
   'undeveloped-repetition': {
     message: (where) =>
-      `Two sentences in the ${where} make the same point in different words. The second one restates rather than adding a layer.`,
+      `Two sentences in ${lowerSubject(where)} make the same point in different words. The second one restates rather than adding a layer.`,
     tracerPrompt:
       'I keep repeating myself in a paragraph instead of developing the point. How do I tell the difference?'
   },
@@ -112,13 +113,13 @@ const REASONING_TEMPLATE: Record<
   },
   'summary-without-point': {
     message: (where) =>
-      `The ${where} reports what its sources say and never says what any of it establishes. Nothing in it connects the evidence to the argument.`,
+      `${where} reports what its sources say and never says what any of it establishes. Nothing in it connects the evidence to the argument.`,
     tracerPrompt:
       'One of my paragraphs just summarises my sources. What should I be adding so it argues something?'
   },
   'vague-significance': {
     message: (where) =>
-      `The ${where} claims a big change without saying what changed, for whom, or by how much. "Significantly" is doing the work a measurement should do.`,
+      `${where} claims a big change without saying what changed, for whom, or by how much. "Significantly" is doing the work a measurement should do.`,
     tracerPrompt:
       'I wrote that something changed things significantly. How do I turn that into a claim a reader could actually check?'
   },
@@ -143,25 +144,25 @@ const REASONING_FAULT_TEMPLATE: Partial<
 > = {
   'circular-reasoning': {
     message: (where) =>
-      `The ${where} supports its claim by restating it. The reason given assumes the point it is meant to establish, so a reader who doubted the claim has been given nothing new.`,
+      `${where} supports its claim by restating it. The reason given assumes the point it is meant to establish, so a reader who doubted the claim has been given nothing new.`,
     tracerPrompt:
       'One of my paragraphs apparently argues in a circle. How do I tell a real reason from a restatement of my own claim?'
   },
   'sequence-as-cause': {
     message: (where) =>
-      `The ${where} treats one thing as causing another on the strength of order or correlation alone. Nothing in it explains how the first produced the second.`,
+      `${where} treats one thing as causing another on the strength of order or correlation alone. Nothing in it explains how the first produced the second.`,
     tracerPrompt:
       'I claimed one thing caused another because they happened together. What do I need to show to make that a real causal claim?'
   },
   'single-case-generalisation': {
     message: (where) =>
-      `The ${where} draws a general conclusion from one case, without saying why that case is representative. A single counter-example would defeat it.`,
+      `${where} draws a general conclusion from one case, without saying why that case is representative. A single counter-example would defeat it.`,
     tracerPrompt:
       'I generalised from one example. How do I decide whether to justify the example or narrow the claim?'
   },
   'logical-leap': {
     message: (where) =>
-      `The ${where} reaches a conclusion the evidence does not quite carry. The evidence may be sound and the conclusion may be right; the step between them is not on the page.`,
+      `${where} reaches a conclusion the evidence does not quite carry. The evidence may be sound and the conclusion may be right; the step between them is not on the page.`,
     tracerPrompt:
       'There is a gap between my evidence and my conclusion. How do I find the step I skipped?'
   }
@@ -241,10 +242,6 @@ export interface WeaknessInput {
   offThesis?: number[]
 }
 
-function ordinal(index: number): string {
-  const suffix = index === 1 ? 'st' : index === 2 ? 'nd' : index === 3 ? 'rd' : 'th'
-  return `${index}${suffix}`
-}
 
 export function findWeaknesses({
   paragraphs,
@@ -261,6 +258,10 @@ export function findWeaknesses({
   if (paragraphs.length === 0) return []
 
   const found: StructureWeakness[] = []
+  // ONE name per paragraph, shared with every panel that draws these findings.
+  // This was an ordinal over the raw array — off by one against the headings on
+  // a titled essay, and unable to say "the conclusion" at all.
+  const subject = (index: number): string => paragraphSubject(paragraphs, titleParagraph, index)
   const roles = paragraphs.map((p) => p.role)
   // The title is not an unread paragraph — see `titleParagraph`.
   const unlabelled = roles.filter((role, i) => role === 'unknown' && !(titleParagraph && i === 0)).length
@@ -289,7 +290,7 @@ export function findWeaknesses({
       paragraphIndex: paragraph?.index ?? null,
       claimId,
       message: paragraph
-        ? `The claim in the ${ordinal(paragraph.index)} paragraph has no supporting source yet.`
+        ? `The claim in ${lowerSubject(subject(paragraph.index))} has no supporting source yet.`
         : 'This claim has no supporting source yet.',
       tracerPrompt: 'Tracely could not find evidence for one of my claims. How should I go about checking it?'
     })
@@ -302,12 +303,12 @@ export function findWeaknesses({
       kind: 'warrant-gap',
       paragraphIndex: paragraph.index,
       claimId: paragraph.claimIds[0] ?? null,
-      message: `The ${ordinal(paragraph.index)} paragraph presents ${
+      message: `${subject(paragraph.index)} presents ${
         paragraph.role === 'evidence' ? 'evidence' : 'a claim'
       } without explaining how it supports the argument.`,
-      tracerPrompt: `In my ${ordinal(
-        paragraph.index
-      )} paragraph, how do I explain what my evidence actually shows without just restating it?`
+      tracerPrompt: `In ${lowerSubject(
+        subject(paragraph.index)
+      )}, how do I explain what my evidence actually shows without just restating it?`
     })
   }
 
@@ -335,12 +336,12 @@ export function findWeaknesses({
       kind: 'evidence-stacking',
       paragraphIndex: paragraphs[i].index,
       claimId: null,
-      message: `The ${ordinal(paragraphs[i].index)} paragraph adds more evidence to the ${ordinal(
-        paragraphs[i - 1].index
+      message: `${subject(paragraphs[i].index)} adds more evidence to ${lowerSubject(
+        subject(paragraphs[i - 1].index)
       )} without a claim between them. Stacked sources read as a literature review rather than an argument.`,
-      tracerPrompt: `My ${ordinal(paragraphs[i].index)} and ${ordinal(
-        paragraphs[i - 1].index
-      )} paragraphs are both evidence. What claim should be joining them?`
+      tracerPrompt: `${subject(paragraphs[i].index)} and ${lowerSubject(
+        subject(paragraphs[i - 1].index)
+      )} are both evidence. What claim should be joining them?`
     })
   }
 
@@ -391,7 +392,7 @@ export function findWeaknesses({
       kind: 'off-thesis-paragraph',
       paragraphIndex,
       claimId: null,
-      message: `The ${ordinal(paragraphIndex)} paragraph is not about what this draft says it is arguing. It may be true and interesting and still be a tangent.`,
+      message: `${subject(paragraphIndex)} is not about what this draft says it is arguing. It may be true and interesting and still be a tangent.`,
       tracerPrompt:
         'One of my paragraphs apparently does not support my thesis. How do I decide whether to cut it or change the thesis?'
     })
@@ -404,7 +405,7 @@ export function findWeaknesses({
       kind: fault.kind,
       paragraphIndex: fault.paragraphIndex,
       claimId: null,
-      message: template.message(`${ordinal(fault.paragraphIndex)} paragraph`),
+      message: template.message(subject(fault.paragraphIndex)),
       tracerPrompt: template.tracerPrompt
     })
   }
@@ -428,7 +429,7 @@ export function findWeaknesses({
       paragraphIndex: finding.paragraphIndex,
       claimId: null,
       message: template.message(
-        finding.paragraphIndex === null ? 'draft' : `${ordinal(finding.paragraphIndex)} paragraph`
+        finding.paragraphIndex === null ? 'The draft' : subject(finding.paragraphIndex)
       ),
       tracerPrompt: template.tracerPrompt,
       quote: finding.quote

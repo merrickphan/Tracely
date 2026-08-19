@@ -40,7 +40,8 @@ import { retrievalScopeFor } from '@shared/retrievalScope'
 import { paragraphPreviews } from '@shared/paragraphPreview'
 import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
 import { sourceInitials } from './citationFlowCopy'
-import { paragraphNames } from './paragraphNames'
+import { paragraphNames, paragraphTag } from './paragraphNames'
+import { needsWork } from '@shared/weaknessSeverity'
 
 /**
  * What the document editor's "AI Insights" button opens.
@@ -196,7 +197,6 @@ function verdictFor(pct: number): string {
 /** 238 wpm — Brysbaert 2019, silent reading of English prose. */
 const READING_WPM = 238
 
-const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
 
 function countWords(text: string): number {
   return (text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
@@ -578,6 +578,7 @@ export default function ArgumentScoreModal({
           <BoundaryDetail
             finding={outline.cohesion?.findings[view.findingIndex] ?? null}
             paragraphTexts={paragraphTexts}
+            tag={(index) => paragraphTag(outline.paragraphs, outline.titleParagraph, index)}
             onReveal={onReveal}
             onBack={() => setView({ name: 'cohesion' })}
             onClose={onClose}
@@ -586,6 +587,7 @@ export default function ArgumentScoreModal({
           <CohesionCheck
             cohesion={outline.cohesion}
             paragraphTexts={paragraphTexts}
+            tag={(index) => paragraphTag(outline.paragraphs, outline.titleParagraph, index)}
             onOpen={(findingIndex) => setView({ name: 'boundary', findingIndex })}
             onBack={() => setView({ name: 'full' })}
             onClose={onClose}
@@ -742,16 +744,20 @@ function ScoreReport({
   const rows = outline.paragraphs.map((paragraph) => {
     const keys = (ROLE_COMPONENTS[paragraph.role] ?? []).filter((key) => !claimed.has(key))
     keys.forEach((key) => claimed.add(key))
-    const pcts = keys.map((key) => {
-      const meta = COMPONENT_LABEL.find(([k]) => k === key)!
-      return (outline.components[key] / meta[2]) * 100
-    })
+    const weaknesses = outline.weaknesses.filter((w) => w.paragraphIndex === paragraph.index)
     return {
       paragraph,
       name: names[paragraph.index - 1] ?? null,
       keys,
-      verdict: pcts.length > 0 ? verdictFor(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
-      weaknesses: outline.weaknesses.filter((w) => w.paragraphIndex === paragraph.index)
+      // This paragraph's own findings, which is what the badge claims to be
+      // about. It was the average of `outline.components` for this paragraph's
+      // ROLE — draft-level numbers, identical for every paragraph sharing a
+      // role — so a paragraph carrying an overreaching claim printed "Strong"
+      // beside the finding, and the same paragraph printed "Needs Work" in the
+      // full report, which asks the paragraph's own findings. Owner,
+      // 2026-08-19: the two disagreed on the same screen.
+      strong: !needsWork(weaknesses.map((w) => w.kind)),
+      weaknesses
     }
   }).filter((row) => row.name !== null)
   const missing = COMPONENT_LABEL.filter(([key]) => !claimed.has(key))
@@ -869,7 +875,11 @@ function ScoreReport({
             </div>
           </div>
 
-          <CohesionRow cohesion={outline.cohesion} onOpen={() => onView({ name: 'cohesion' })} />
+          <CohesionRow
+            cohesion={outline.cohesion}
+            tag={(index) => paragraphTag(outline.paragraphs, outline.titleParagraph, index)}
+            onOpen={() => onView({ name: 'cohesion' })}
+          />
 
           <div className="argscore-section-row">
             <h3 className="argscore-section">Breakdown by paragraph</h3>
@@ -895,7 +905,7 @@ function ScoreReport({
             buttons of its own, and a button inside a button is invalid HTML
             that Chromium silently un-nests.
           */}
-          {rows.map(({ paragraph, name, keys, verdict, weaknesses }) => {
+          {rows.map(({ paragraph, name, keys, strong, weaknesses }) => {
             const open = expanded === paragraph.index
             return (
               <div
@@ -911,12 +921,12 @@ function ScoreReport({
                   onClick={() => setExpanded(open ? null : paragraph.index)}
                 >
                   <span className="argscore-para-chevron" aria-hidden="true" />
-                  {/* The paragraph's number, leading. The row names the
-                      paragraph in the writer's terms ("Counterpoint"), and a
-                      name with no number is unfindable in a fourteen-paragraph
-                      draft — "Body — Evidence" describes four of them. The
-                      index is how a reader gets from this row to the text. */}
-                  <span className="argscore-para-index">P{paragraph.index}</span>
+                  {/* The raw array index used to lead the row as "P12". The
+                      name beside it is numbered across the BODY, so on a titled
+                      essay the row read "P12  Paragraph 11" — two numbers for
+                      one paragraph, and the reader has no way to know which one
+                      the findings underneath are using. The name carries the
+                      number now; "Show me in the document" carries the rest. */}
                   <span className="argscore-para-name">{name}</span>
                   {/* The role stays, demoted to the chip the index used to
                       occupy. It is what the whole /100 is computed from, so
@@ -944,11 +954,9 @@ function ScoreReport({
                       ))}
                     </span>
                   ) : null}
-                  {verdict ? (
-                    <span className={`argscore-verdict-pill tone-${verdict === 'Strong' ? 'good' : verdict === 'Developing' ? 'mid' : 'low'}`}>
-                      {verdict}
-                    </span>
-                  ) : null}
+                  <span className={`argscore-verdict-pill tone-${strong ? 'good' : 'low'}`}>
+                    {strong ? 'Strong' : 'Needs Work'}
+                  </span>
                 </button>
 
                 {open ? (
@@ -1160,9 +1168,12 @@ const FLOW_PREVIEW = 3
 
 function CohesionRow({
   cohesion,
+  tag,
   onOpen
 }: {
   cohesion: DraftCohesion | null
+  /** Names a paragraph the way every heading in this report does. */
+  tag: (index: number) => string
   onOpen: () => void
 }): JSX.Element | null {
   if (!cohesion || cohesion.boundaries === 0) return null
@@ -1201,7 +1212,7 @@ function CohesionRow({
             <li key={`${finding.kind}-${i}`}>
               <button className="argscore-flow-item" onClick={onOpen}>
                 <span className="argscore-flow-where">
-                  P{finding.fromIndex} → P{finding.toIndex}
+                  {tag(finding.fromIndex)} → {tag(finding.toIndex)}
                 </span>
                 <span className="argscore-flow-what">{finding.message}</span>
               </button>
@@ -1241,12 +1252,14 @@ function CohesionRow({
 function CohesionCheck({
   cohesion,
   paragraphTexts,
+  tag,
   onOpen,
   onBack,
   onClose
 }: {
   cohesion: DraftCohesion | null
   paragraphTexts: string[]
+  tag: (index: number) => string
   onOpen: (findingIndex: number) => void
   onBack: () => void
   onClose: () => void
@@ -1283,7 +1296,7 @@ function CohesionCheck({
                 onClick={() => onOpen(i)}
               >
                 <span className="argscore-boundary-pair">
-                  ¶{finding.fromIndex} → ¶{finding.toIndex}
+                  {tag(finding.fromIndex)} → {tag(finding.toIndex)}
                 </span>
                 <span className="argscore-boundary-body">
                   <span className="argscore-boundary-label">{COHESION_LABEL[finding.kind]}</span>
@@ -1334,12 +1347,14 @@ function headOf(text: string | undefined, words = 9): string {
 function BoundaryDetail({
   finding,
   paragraphTexts,
+  tag,
   onReveal,
   onBack,
   onClose
 }: {
   finding: CohesionFinding | null
   paragraphTexts: string[]
+  tag: (index: number) => string
   onReveal: (target: RevealTarget) => void
   onBack: () => void
   onClose: () => void
@@ -1364,7 +1379,7 @@ function BoundaryDetail({
       <ModalHead title="" onBack={onBack} backLabel="Back to Flow Check" onClose={onClose} />
       <div className="argscore-scroll argscore-detail">
         <h2 className="argscore-detail-title">
-          ¶{finding.fromIndex} → ¶{finding.toIndex} — {COHESION_LABEL[finding.kind]}
+          {tag(finding.fromIndex)} → {tag(finding.toIndex)} — {COHESION_LABEL[finding.kind]}
         </h2>
         <p className="argscore-problem-body">{finding.message}</p>
 
@@ -1372,12 +1387,12 @@ function BoundaryDetail({
             two halves. This is the whole evidence for the finding. */}
         <div className="argscore-seam">
           <div className="argscore-seam-side">
-            <span className="argscore-seam-label">End of ¶{finding.fromIndex}</span>
+            <span className="argscore-seam-label">End of {tag(finding.fromIndex)}</span>
             <p className="argscore-quote">…{tailOf(before, 34)}</p>
           </div>
           <div className="argscore-seam-gap" aria-hidden="true" />
           <div className="argscore-seam-side">
-            <span className="argscore-seam-label">Start of ¶{finding.toIndex}</span>
+            <span className="argscore-seam-label">Start of {tag(finding.toIndex)}</span>
             <p className="argscore-quote">{headOf(after, 34)}…</p>
           </div>
         </div>
@@ -1698,11 +1713,11 @@ function ParagraphDetail({
   const cited = paragraphClaims.filter((claim) => claim.strengthScore !== null)
 
   const keys = paragraph ? ROLE_COMPONENTS[paragraph.role] ?? [] : []
-  const pcts = keys.map((key) => {
-    const meta = COMPONENT_LABEL.find(([k]) => k === key)!
-    return (outline.components[key] / meta[2]) * 100
-  })
-  const verdict = pcts.length > 0 ? verdictFor(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null
+  // The same question the row this was opened from asks, and the same one the
+  // full report asks — see shared/weaknessSeverity.ts. Derived from the
+  // draft's role components before, which is why a row could say NEEDS WORK
+  // and the card behind it say STRONG about one paragraph.
+  const strong = !needsWork(weaknesses.map((w) => w.kind))
 
   return (
     <>
@@ -1716,14 +1731,14 @@ function ParagraphDetail({
           {paragraph ? ` — ${ROLE_LABEL[paragraph.role]}` : ''}
         </h2>
         <div className="argscore-detail-meta">
-          {verdict ? (
-            <span className={`argscore-verdict-pill tone-${verdict === 'Strong' ? 'good' : verdict === 'Developing' ? 'mid' : 'low'}`}>
-              {verdict}
-            </span>
-          ) : null}
-          <span>
-            {countWords(text)} words · {ORDINAL[index - 1] ?? `${index}th`} paragraph
+          <span className={`argscore-verdict-pill tone-${strong ? 'good' : 'low'}`}>
+            {strong ? 'Strong' : 'Needs Work'}
           </span>
+          {/* The ordinal that used to sit here counted the raw array — "118
+              words · 12th paragraph" under a heading reading "Paragraph 11".
+              The heading names the paragraph; a second name in a second scheme
+              only ever told the reader the two disagreed. */}
+          <span>{countWords(text)} words</span>
         </div>
 
         <blockquote className="argscore-quote">{text}</blockquote>

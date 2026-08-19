@@ -407,7 +407,7 @@ export const documentOutline: DocumentOutline = {
         kind: 'no-transition',
         fromIndex: 2,
         toIndex: 3,
-        message: 'Paragraph 3 opens without connecting back to the point paragraph 2 made.'
+        message: 'Nothing bridges these paragraphs; the next one starts cold.'
       }
     ]
   },
@@ -432,9 +432,9 @@ export const documentOutline: DocumentOutline = {
       paragraphIndex: 2,
       claimId: 'c2',
       message:
-        'The 2nd paragraph presents a claim without explaining how it supports the argument.',
+        'Paragraph 1 presents a claim without explaining how it supports the argument.',
       tracerPrompt:
-        'In my 2nd paragraph, how do I explain what my evidence actually shows without just restating it?'
+        'In Paragraph 1, how do I explain what my evidence actually shows without just restating it?'
     },
     // A finding read off the PROSE rather than the role vector — the only kind
     // that carries `quote`. Here so the preview covers the branch where a
@@ -446,7 +446,7 @@ export const documentOutline: DocumentOutline = {
       paragraphIndex: 3,
       claimId: null,
       message:
-        'The 3rd paragraph states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.',
+        'Paragraph 2 states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.',
       tracerPrompt:
         'I have used absolute words like "always" and "everyone" in my draft. How do I narrow those without sounding like I am hedging everything?',
       quote: 'Everyone who worked with her noticed the difference.'
@@ -463,7 +463,7 @@ export const documentOutline: DocumentOutline = {
       kind: 'unsupported-claim',
       paragraphIndex: 3,
       claimId: 'c5',
-      message: 'The claim in the 3rd paragraph has no supporting source yet.',
+      message: 'The claim in Paragraph 2 has no supporting source yet.',
       tracerPrompt:
         'Tracely could not find evidence for one of my claims. How should I go about checking it?'
     }
@@ -503,17 +503,17 @@ export const documentOutlineClassified: DocumentOutline = {
       paragraphIndex: 2,
       claimId: 'c2',
       message:
-        'The 2nd paragraph presents evidence without explaining how it supports the argument.',
+        'Paragraph 1 presents evidence without explaining how it supports the argument.',
       tracerPrompt:
-        'In my 2nd paragraph, how do I explain what my evidence actually shows without just restating it?'
+        'In Paragraph 1, how do I explain what my evidence actually shows without just restating it?'
     },
     {
       kind: 'evidence-stacking',
       paragraphIndex: 3,
       claimId: null,
       message:
-        'The 3rd paragraph adds more evidence to the 2nd without a claim between them. Stacked sources read as a literature review rather than an argument.',
-      tracerPrompt: 'My 3rd and 2nd paragraphs are both evidence. What claim should be joining them?'
+        'Paragraph 2 adds more evidence to Paragraph 1 without a claim between them. Stacked sources read as a literature review rather than an argument.',
+      tracerPrompt: 'Paragraph 2 and Paragraph 1 are both evidence. What claim should be joining them?'
     },
     // `no-counterargument` was the whole-draft fixture here. It is gone with
     // the kind — see shared/rubric.ts — and `no-significance` replaces it so
@@ -741,7 +741,7 @@ export const screenWatchStructure: ScreenWatchStructure = {
       kind: 'unsupported-claim',
       paragraphIndex: 6,
       claimId: 'c3',
-      message: 'The claim in the 6th paragraph has no supporting source yet.',
+      message: 'The claim in the conclusion has no supporting source yet.',
       tracerPrompt:
         'Tracely could not find evidence for one of my claims. How should I go about checking it?'
     },
@@ -750,9 +750,9 @@ export const screenWatchStructure: ScreenWatchStructure = {
       paragraphIndex: 3,
       claimId: null,
       message:
-        'The 3rd paragraph presents evidence without explaining how it supports the argument.',
+        'Paragraph 2 presents evidence without explaining how it supports the argument.',
       tracerPrompt:
-        'In my 3rd paragraph, how do I explain what my evidence actually shows without just restating it?'
+        'In Paragraph 2, how do I explain what my evidence actually shows without just restating it?'
     },
     {
       kind: 'new-claim-in-conclusion',
