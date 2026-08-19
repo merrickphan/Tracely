@@ -1,4 +1,4 @@
-import { strictEqual } from 'node:assert/strict'
+import { ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { normalizeCritique } from './normalizeCritique.ts'
 
@@ -140,5 +140,67 @@ describe('a revision must narrow the claim, not replace it', () => {
       } as never
     )
     strictEqual(result.suggestedRevision, 'Something about GPT-4 entirely.')
+  })
+})
+
+/**
+ * The gate that stops Tracely calling a real source invented.
+ *
+ * Measured on the owner's own database, 2026-08-19: 15 of 89 stored verdicts
+ * were `fabricated`, on an essay whose citations were real and merely missing
+ * an author. `CRITIQUE_SYSTEM_PROMPT` already forbids this — "If the section is
+ * absent, no lookup was possible … and (c) is unavailable" — and the model does
+ * it anyway, which is why the rule is enforced here instead of asked for there.
+ */
+describe('fabricated requires a lookup to have run', () => {
+  const fabricated = {
+    critique: 'No work by these authors in this year could be found; the reference carries the marks of generation.',
+    verdict: 'fabricated' as const,
+    suggestedRevision: null,
+    citationFix: null
+  }
+
+  it('withdraws the verdict when nothing was searched', () => {
+    const out = normalizeCritique(fabricated, 'A claim.', { referenceLookupRan: false })
+    strictEqual(out.verdict, 'unsupported')
+  })
+
+  it('replaces the prose, because it describes a search that never happened', () => {
+    const out = normalizeCritique(fabricated, 'A claim.', { referenceLookupRan: false })
+    ok(!/fabricat|invent|could not be found/i.test(out.critique), out.critique)
+    ok(out.critique.includes('could not check'))
+  })
+
+  it('keeps the verdict when a lookup really ran', () => {
+    const out = normalizeCritique(fabricated, 'A claim.', { referenceLookupRan: true })
+    strictEqual(out.verdict, 'fabricated')
+    strictEqual(out.critique, fabricated.critique)
+  })
+
+  it('leaves every other verdict alone when no lookup ran', () => {
+    for (const verdict of ['weak', 'unsupported', 'well-supported', 'partially-supported', 'contradicted'] as const) {
+      const out = normalizeCritique(
+        { critique: 'Body.', verdict, suggestedRevision: null, citationFix: null },
+        'A claim.',
+        { referenceLookupRan: false }
+      )
+      strictEqual(out.verdict, verdict, verdict)
+      strictEqual(out.critique, 'Body.', verdict)
+    }
+  })
+
+  // Omitting the facts is the pre-2026-08-19 behaviour, retained so a caller
+  // that has not been updated is not silently changed.
+  it('assumes a lookup ran when no facts are given', () => {
+    strictEqual(normalizeCritique(fabricated, 'A claim.').verdict, 'fabricated')
+  })
+
+  it('drops a revision along with the withdrawn verdict', () => {
+    const out = normalizeCritique(
+      { ...fabricated, suggestedRevision: 'A narrower claim.' },
+      'A claim.',
+      { referenceLookupRan: false }
+    )
+    strictEqual(out.suggestedRevision, null)
   })
 })

@@ -205,7 +205,13 @@ export async function generateCritique(
     ...(referenceCheck ? { referenceCheck } : {})
   })
 
-  const result = normalizeCritique(raw, claim.text)
+  // `referenceCheck` is null exactly when nothing was searched — the same
+  // condition that makes the relay's Pass 2(c) unavailable. Passing it here is
+  // what turns that from an instruction the model may ignore into a rule it
+  // cannot. See CritiqueFacts.referenceLookupRan.
+  const result = normalizeCritique(raw, claim.text, {
+    referenceLookupRan: referenceCheck !== null
+  })
   setCached(key, 'ai:critique', result)
   return result
 }
