@@ -41,6 +41,15 @@ export interface WeaknessInput {
    * the most useful thing this module says.
    */
   titleParagraph?: boolean
+  /**
+   * The local reader found a thesis even though the role vector names none.
+   *
+   * Same signal `scoreDraft` takes as `thesisFallbackIndex`, and it must be
+   * honoured in both places or the report contradicts itself: crediting the
+   * thesis in the score while printing "No paragraph states a thesis" beside it
+   * is worse than either answer alone.
+   */
+  thesisFound?: boolean
 }
 
 function ordinal(index: number): string {
@@ -52,7 +61,8 @@ export function findWeaknesses({
   paragraphs,
   claimsWithoutEvidence,
   soWhatInConclusion,
-  titleParagraph = false
+  titleParagraph = false,
+  thesisFound = false
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
@@ -67,7 +77,7 @@ export function findWeaknesses({
   // tool tells a student to add something they already wrote.
   const allLabelled = unlabelled === 0
 
-  if (allLabelled && !roles.includes('thesis')) {
+  if (allLabelled && !roles.includes('thesis') && !thesisFound) {
     found.push({
       kind: 'no-thesis',
       paragraphIndex: null,

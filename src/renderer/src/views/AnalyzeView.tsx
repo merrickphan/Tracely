@@ -15,6 +15,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import DocumentMarkLayer, { ProseMarkLayer } from '../components/DocumentMarkLayer'
 import type { DocCitationFlowState, DocFixState, DocProseFix } from '../components/DocumentMarkLayer'
 import type { ProseMark } from '../components/documentMarks'
+import { useGradeLevel } from '../lib/gradeLevel'
+import { gradeLevelLabel } from '@shared/gradeLevel'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
 import {
@@ -82,6 +84,7 @@ function DocumentEditor({
   docName,
   onDocNameChange,
   onBack,
+  onOpenSettings,
   onRunInsights,
   onRefreshClaims,
   insightsLoading,
@@ -93,6 +96,8 @@ function DocumentEditor({
   docName: string
   onDocNameChange: (v: string) => void
   onBack: () => void
+  /** Opens Settings, for the grading-level chip in the toolbar. */
+  onOpenSettings: () => void
   /**
    * Runs claim detection and resolves with the analysis id, so the Structure
    * rail can map the detected claims onto paragraphs without making the user
@@ -185,6 +190,9 @@ function DocumentEditor({
   // proposed rewrite can actually be applied: the document is open, so the
   // edit goes through execCommand and lands on the browser's undo stack.
   const [tracerOpen, setTracerOpen] = useState(false)
+  // Shown in the toolbar and used for nothing else here — the report bands its
+  // own letters. See the chip below.
+  const gradingLevel = useGradeLevel()
   const [wrapWidth, setWrapWidth] = useState(0)
   // The editor's visible box, as of the hover that opened the popover — see
   // handleBodyMouseMove for why it is sampled there and not on every measure.
@@ -1702,6 +1710,34 @@ function DocumentEditor({
         */}
       </div>
 
+      {/*
+        Above the page rather than in the toolbar.
+
+        The toolbar is already at its width: its formatting group scrolls at the
+        default window size, and a pill there costs the writer visible controls
+        every time they open a document. This is the top of the DOCUMENT, which
+        is what was asked for and what it is about.
+      */}
+      <div className="docedit-docmeta">
+        {/*
+          What year this document is being graded against.
+
+          At the top of the document because that is where the setting's
+          consequences are: the same draft is an A at grade 3 and a D at grade
+          12, and a letter with no statement of which one it is is a number
+          without units. It reads the same value every letter in this window
+          bands against (lib/gradeLevel.tsx), and opens Settings, because the
+          first thing anyone does on seeing the wrong year is change it.
+        */}
+        <button
+          className="docedit-gradelevel"
+          onClick={onOpenSettings}
+          title="Grading level — change it in Settings › Preferences"
+        >
+          {gradeLevelLabel(gradingLevel)}
+        </button>
+      </div>
+
       <div
         className="docedit-body-wrap"
         ref={wrapRef}
@@ -2096,6 +2132,7 @@ export default function AnalyzeView({
         setError(null)
         onNavigate('documents')
       }}
+      onOpenSettings={() => onNavigate('settings')}
       onRunInsights={runDetection}
       onRefreshClaims={refreshClaims}
       insightsLoading={loading}

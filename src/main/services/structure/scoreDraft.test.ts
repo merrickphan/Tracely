@@ -468,3 +468,74 @@ describe('warrant counts reasoning paragraphs', () => {
     )
   })
 })
+
+/**
+ * The Hepburn essay, 2026-08-19 — the case that produced this fallback.
+ *
+ * The classifier's real answer for it, read out of the preview build's stored
+ * outline: the introduction came back `claim` rather than `thesis`, and both
+ * body paragraphs came back `evidence` with `statesClaim` false even though
+ * each opens with its own topic sentence. That scored 48/100 — thesis 0/20 and
+ * governing claims 10/20 — on a draft with a thesis in the last sentence of its
+ * introduction and a claim at the head of every body paragraph.
+ *
+ * The numbers here are the two ends of that: what the vector alone scores, and
+ * what it scores once the local reader's two NON-ROLE signals are honoured.
+ */
+describe('a thesis the role vector did not name', () => {
+  // Role, statesClaim and warrant exactly as stored: the introduction is
+  // `claim` (not `thesis`), and neither body paragraph is credited with
+  // stating one.
+  const MODEL = ['unknown', 'claim*+', 'evidence-+', 'evidence-+', 'conclusion*+']
+
+  it('scores 0 for thesis when nothing is labelled thesis and there is no fallback', () => {
+    strictEqual(component(MODEL, 'thesis'), 0)
+  })
+
+  it('credits the local reader when the vector names no thesis', () => {
+    // Paragraph 2, 0-based 1 — the introduction behind the title.
+    strictEqual(
+      scoreDraft(outline(...MODEL), { ...NO_SIGNALS, titleParagraph: true, thesisFallbackIndex: 1 })
+        .components.thesis,
+      20
+    )
+  })
+
+  it('never overrides a thesis the vector DID name', () => {
+    // The fallback points at the conclusion; the label wins, and scores full
+    // marks for being up front rather than half for being last.
+    strictEqual(
+      scoreDraft(outline('thesis+', 'evidence+', 'conclusion+'), {
+        ...NO_SIGNALS,
+        thesisFallbackIndex: 2
+      }).components.thesis,
+      20
+    )
+  })
+
+  it('ignores a fallback outside the draft', () => {
+    strictEqual(
+      scoreDraft(outline('evidence+', 'evidence+'), { ...NO_SIGNALS, thesisFallbackIndex: 9 })
+        .components.thesis,
+      0
+    )
+    strictEqual(
+      scoreDraft(outline('evidence+', 'evidence+'), { ...NO_SIGNALS, thesisFallbackIndex: null })
+        .components.thesis,
+      0
+    )
+  })
+
+  it('scores the whole essay 48 before and 78 after', () => {
+    const signals = { ...NO_SIGNALS, titleParagraph: true, soWhatInConclusion: true }
+    strictEqual(scoreDraft(outline(...MODEL), signals).score, 48)
+
+    // statesClaim unioned with the local reader's answer, which sees a topic
+    // claim at the head of both body paragraphs.
+    const unioned = ['unknown', 'claim*+', 'evidence*+', 'evidence*+', 'conclusion*+']
+    strictEqual(
+      scoreDraft(outline(...unioned), { ...signals, thesisFallbackIndex: 1 }).score,
+      78
+    )
+  })
+})
