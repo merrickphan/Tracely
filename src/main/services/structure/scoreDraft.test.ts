@@ -526,16 +526,28 @@ describe('a thesis the role vector did not name', () => {
     )
   })
 
-  it('scores the whole essay 48 before and 78 after', () => {
+  /**
+   * The same real essay, re-pinned after counterargument stopped being
+   * mandatory (2026-08-19). It has none, so the component leaves the
+   * denominator and the remaining 85 is rescaled — see the note above `score`.
+   *
+   *   raw vector   0 + 10 + 20 + 0 + 7.5 + 10 = 47.5 / 85 -> 56   (was 48)
+   *   unioned      20 + 20 + 20 + 0 + 7.5 + 10 = 77.5 / 85 -> 91  (was 78)
+   *
+   * The 13-point jump on the second is the whole point of the change: the draft
+   * was losing 15 marks for not arguing against itself, on a biographical essay
+   * where nothing in the assignment asked it to.
+   */
+  it('scores the whole essay 56 before and 91 after', () => {
     const signals = { ...NO_SIGNALS, titleParagraph: true, soWhatInConclusion: true }
-    strictEqual(scoreDraft(outline(...MODEL), signals).score, 48)
+    strictEqual(scoreDraft(outline(...MODEL), signals).score, 56)
 
     // statesClaim unioned with the local reader's answer, which sees a topic
     // claim at the head of both body paragraphs.
     const unioned = ['unknown', 'claim*+', 'evidence*+', 'evidence*+', 'conclusion*+']
     strictEqual(
       scoreDraft(outline(...unioned), { ...signals, thesisFallbackIndex: 1 }).score,
-      78
+      91
     )
   })
 })
@@ -648,5 +660,96 @@ describe('scoreDraft — the components no longer saturate on presence alone', (
     strictEqual(components.thesis, 10)
     strictEqual(components.conclusion, 5)
     strictEqual(scoreDraft(outline(...SHAPED), NO_SIGNALS).score - score, 15)
+  })
+})
+
+/**
+ * The two changes that closed a 25-point gap on the owner's own essay
+ * (2026-08-19). Both were labelling artifacts, not writing quality: the draft
+ * scored 75/100 and every lost point came from one of these.
+ */
+describe('scoreDraft — a conclusion the role vector did not name', () => {
+  // Five paragraphs, the last labelled `significance` by the classifier —
+  // a defensible reading of a paragraph that closes by saying why it matters,
+  // and it scored conclusion 0/10.
+  const AS_LABELLED = ['unknown', 'thesis*+', 'claim*+', 'claim*+', 'significance*+']
+
+  it('scores 0 without the fallback, which is the bug', () => {
+    strictEqual(scoreDraft(outline(...AS_LABELLED), NO_SIGNALS).components.conclusion, 0)
+  })
+
+  it('credits the closing paragraph when the vector names no conclusion', () => {
+    strictEqual(
+      scoreDraft(outline(...AS_LABELLED), { ...NO_SIGNALS, conclusionFallbackIndex: 4 })
+        .components.conclusion,
+      10
+    )
+  })
+
+  it('never overrides a conclusion the vector DID name', () => {
+    // Labelled at index 1 — misplaced, so half credit. The fallback pointing at
+    // the last paragraph must not quietly upgrade that to 10.
+    const misplaced = ['thesis*+', 'conclusion*+', 'claim*+', 'claim*+', 'significance*+']
+    strictEqual(
+      scoreDraft(outline(...misplaced), { ...NO_SIGNALS, conclusionFallbackIndex: 4 })
+        .components.conclusion,
+      5
+    )
+  })
+
+  it('ignores a fallback outside the draft', () => {
+    strictEqual(
+      scoreDraft(outline(...AS_LABELLED), { ...NO_SIGNALS, conclusionFallbackIndex: 9 })
+        .components.conclusion,
+      0
+    )
+    strictEqual(
+      scoreDraft(outline(...AS_LABELLED), { ...NO_SIGNALS, conclusionFallbackIndex: null })
+        .components.conclusion,
+      0
+    )
+  })
+
+  it('still halves for a conclusion that restates the thesis', () => {
+    strictEqual(
+      scoreDraft(outline(...AS_LABELLED), {
+        ...NO_SIGNALS,
+        conclusionFallbackIndex: 4,
+        conclusionRestatesThesis: true
+      }).components.conclusion,
+      5
+    )
+  })
+})
+
+describe('scoreDraft — counterargument can help, never penalise', () => {
+  const WITHOUT = ['thesis*+', 'claim*+', 'significance*+', 'conclusion*+']
+  const WITH = ['thesis*+', 'claim*+', 'counterargument*+', 'significance*+', 'conclusion*+']
+
+  it('leaves the component out of the denominator when the draft has none', () => {
+    // 20 + 20 + 15 + 10 = 65 of an applicable 85, not of 100.
+    const { score, components } = scoreDraft(outline(...WITHOUT), NO_SIGNALS)
+    strictEqual(components.counterargument, 0)
+    strictEqual(score, Math.round((20 + 20 + 20 + 0 + 15 + 10) / 85 * 100))
+  })
+
+  it('lets a draft that does everything else reach 100 without one', () => {
+    strictEqual(scoreDraft(outline(...WITHOUT), NO_SIGNALS).score, 100)
+  })
+
+  it('still rewards a draft that raises one', () => {
+    // Same five components earned, plus the counterargument, out of 100.
+    strictEqual(scoreDraft(outline(...WITH), NO_SIGNALS).score, 100)
+  })
+
+  // The property that matters: adding a counterargument to a draft must never
+  // lower its score, and omitting one must never lower it either.
+  it('is monotonic — raising one cannot cost marks', () => {
+    const thin = ['thesis*+', 'claim*-', 'conclusion*+']
+    const thinWithCounter = ['thesis*+', 'claim*-', 'counterargument*+', 'conclusion*+']
+    ok(
+      scoreDraft(outline(...thinWithCounter), NO_SIGNALS).score >=
+        scoreDraft(outline(...thin), NO_SIGNALS).score
+    )
   })
 })

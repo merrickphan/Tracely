@@ -20,7 +20,13 @@ import {
   summaryOnlyParagraphs,
   thesisStatesTopicOnly
 } from './reasoningIssues'
-import { hasSignificanceMarker, hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
+import {
+  hasSignificanceMarker,
+  hasClosingSignificance,
+  heuristicRoles,
+  looksLikeClosing,
+  looksLikeTitle
+} from './roles'
 import { scoreDraft } from './scoreDraft'
 import { findWeaknesses } from './weaknesses'
 
@@ -62,7 +68,14 @@ import { findWeaknesses } from './weaknesses'
 // only, no score change — but a stored v5 outline would show a report with no
 // citation findings in it beside an app that produces them, and the whole
 // point of them is that they are free and immediate.
-export const STRUCTURE_SCHEMA_VERSION = 6
+//
+// v7 changes the SCORE three ways: the closing paragraph counts as the
+// conclusion when the vector names none, counterargument leaves the denominator
+// when the draft has none, and paragraphs credited by another component stop
+// diluting governing claims. A stored v6 outline would keep showing a number
+// this app no longer computes — on the owner's own essay, 75 where it now says
+// 100.
+export const STRUCTURE_SCHEMA_VERSION = 7
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -231,7 +244,16 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     significanceAnywhere,
     titleParagraph,
     conclusionRestatesThesis: conclusionRestatesThesis(reasoning),
-    thesisStatesTopicOnly: thesisStatesTopicOnly(reasoning)
+    thesisStatesTopicOnly: thesisStatesTopicOnly(reasoning),
+    // The LAST paragraph, when it reads as a close. Consulted by scoreDraft
+    // only if the role vector names no conclusion — see
+    // ScoreSignals.conclusionFallbackIndex. `looksLikeClosing` is the detector
+    // `roles.ts` already uses for the same question, so this adds no new
+    // judgement, only a second place the existing one is read.
+    conclusionFallbackIndex:
+      spans.length > 1 && looksLikeClosing(spans[spans.length - 1].text)
+        ? spans.length - 1
+        : null
   })
 
   return {
