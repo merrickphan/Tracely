@@ -75,6 +75,9 @@ export type VenueType =
   | 'other'
 
 export type SourceProvider =
+  // Found by searching the web rather than an index — see
+  // services/search/webSources.ts. Every URL is fetched before it is offered.
+  | 'web'
   | 'openalex'
   | 'crossref'
   | 'semanticscholar'

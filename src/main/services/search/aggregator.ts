@@ -16,6 +16,7 @@ import {
   type RelevanceMetric
 } from './scoring'
 import type { NormalizedSourceResult } from './types'
+import { findWebSources } from './webSources'
 
 const PER_PROVIDER_LIMIT = 6
 // How many sources the strength score is computed from. Deliberately NOT
@@ -320,7 +321,31 @@ export async function findEvidence(
     domain === 'general' ? safeSearch('wikipedia', wikipedia.search, query) : Promise.resolve([]),
     // The match threshold was calibrated against full claim sentences, not
     // the shorter search query generated for scholarly APIs.
-    domain === 'statistical' ? safeSearch('worldbank', worldBank.search, claimText) : Promise.resolve([])
+    domain === 'statistical' ? safeSearch('worldbank', worldBank.search, claimText) : Promise.resolve([]),
+    /**
+     * The web, for claims the four indexes structurally cannot answer.
+     *
+     * `general` is biography, history, definitions and institutions — the
+     * claims whose sources live on unicef.org, in a national biography, or in
+     * journalism, and in none of OpenAlex, Crossref, Semantic Scholar or
+     * PubMed. Measured on a real biography essay: every one of sixteen
+     * retrieved sources scored below the relevance floor, because the right
+     * ones were never in the candidate set to be ranked.
+     *
+     * The ONE paid provider here, which is why it is gated on the router
+     * rather than run for everything: a scholarly claim already has four free
+     * indexes that answer it well, and paying for a web search on top would buy
+     * very little. It is also why a misroute now costs money rather than a
+     * wasted free request — the argument for keeping the router honest just got
+     * stronger.
+     *
+     * `safeSearch` is not used: this is not a `(query, limit)` provider, it
+     * takes the claim and the draft's subject, and its own failure path already
+     * returns an empty list rather than throwing.
+     */
+    domain === 'general'
+      ? findWebSources(claimText, query).then((r) => r.sources)
+      : Promise.resolve([])
   ])
 
   const clusters: NormalizedSourceResult[] = []

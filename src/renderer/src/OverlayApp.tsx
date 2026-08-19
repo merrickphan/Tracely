@@ -642,6 +642,11 @@ const PROVIDER_LABEL: Record<SourceProvider, string> = {
   pubmed: 'PM',
   wikipedia: 'W',
   worldbank: 'WB',
+  // A web source is a page rather than an index entry, and unlike the others it
+  // has a real site behind it — the favicon path in the editor shows that site.
+  // Here the badge stands in, so it says "the web" rather than naming a
+  // provider that did not exist.
+  web: '↗',
   manual: '•'
 }
 
@@ -655,6 +660,9 @@ const PROVIDER_COLOR: Record<SourceProvider, string> = {
   // compete for attention with the peer-reviewed sources beside it.
   wikipedia: '#6b7280',
   worldbank: '#0071bc',
+  // The design's orange. A web source is the only kind here whose page the
+  // writer can actually open and read in full, which is worth showing.
+  web: '#ff5900',
   manual: '#6b7280'
 }
 
