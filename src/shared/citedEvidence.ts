@@ -142,6 +142,17 @@ export function buildEvidenceSummary(
 }
 
 /**
+ * How many topical sources still ride along once the cited one has its slot,
+ * when that cited source is READABLE — i.e. it came back with an abstract.
+ *
+ * One, not none. The fallback has to survive: an abstract routinely cannot
+ * speak to the specific figure a sentence quotes, and Pass 2.5 falls through
+ * precisely then. Zero would turn every such claim into "cannot tell", which is
+ * the answer that helps nobody and still costs a call.
+ */
+export const FALLBACK_SLOTS_WHEN_CITED_READABLE = 1
+
+/**
  * How many searched sources may still be sent once the cited one has its slot.
  *
  * Exported because the CACHE KEY is built from the sources actually sent, not
@@ -149,7 +160,36 @@ export function buildEvidenceSummary(
  * same first four papers, one of which also cited a resolvable work, are
  * different requests, and deriving the cut in two places is how they would
  * come to share one cached critique.
+ *
+ * ── Why the abstract decides the budget ────────────────────────────────────
+ * The evidence summary is the largest fresh input in a critique — ~40% of a
+ * warm call, against ~32% for the system prompt (which is cached at a quarter
+ * price) and ~26% for the completion. So it is where a saving has to come from.
+ *
+ * And for a CITED claim the prompt already says most of it goes unread. Pass
+ * 2.5: "IF THE CITED SOURCE BEARS THE CLAIM OUT, YOU ARE FINISHED... Do not
+ * read the other items, do not mention them, do not count them." We were
+ * sending three of them anyway, at ~225 tokens each, to be ignored in the
+ * common case — paying the reasoning model to receive material it is
+ * instructed to skip.
+ *
+ * The client knows which case it is in, because it knows whether the resolved
+ * work came back with an abstract. With one, the model can almost always answer
+ * from slot 1 and the extras are dead weight. Without one, Pass 2.5's own
+ * fall-through condition is already met before the call is made, so the full
+ * set goes.
+ *
+ * ~450 tokens off a cited claim's request, about a fifth of what one costs,
+ * and it makes the request agree with the prompt rather than contradict it.
+ * Nothing here changes what an UNCITED claim sends: that list is not a
+ * fallback, it is the evidence.
  */
-export function searchedSlots(hasCited: boolean, maxItems: number): number {
-  return Math.max(0, maxItems - (hasCited ? 1 : 0))
+export function searchedSlots(
+  hasCited: boolean,
+  maxItems: number,
+  citedHasAbstract = false
+): number {
+  if (!hasCited) return Math.max(0, maxItems)
+  const budget = Math.max(0, maxItems - 1)
+  return citedHasAbstract ? Math.min(budget, FALLBACK_SLOTS_WHEN_CITED_READABLE) : budget
 }

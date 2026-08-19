@@ -84,7 +84,13 @@ function cacheKey(
   // Keyed on the evidence actually sent, not the first N of the raw list —
   // otherwise two different evidence sets that happen to share their first
   // few entries would collide on one cached critique.
-  const evidenceIds = selectCritiqueEvidence(evidence, searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS))
+  // The abstract is part of the budget now (see searchedSlots), so it is part
+  // of the key: the same claim critiqued once before its citation resolved and
+  // once after sends different evidence and must not share a cached verdict.
+  const evidenceIds = selectCritiqueEvidence(
+    evidence,
+    searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS, citedWork?.abstract != null)
+  )
     .map((e) => e.source.id)
     .sort()
     .join(',')
@@ -179,7 +185,7 @@ export async function generateCritique(
 
   const topEvidence = selectCritiqueEvidence(
     evidence,
-    searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS)
+    searchedSlots(citedWork !== null, MAX_CRITIQUE_EVIDENCE_ITEMS, citedWork?.abstract != null)
   )
   const evidenceSummary = buildEvidenceSummary(
     citedWork,
