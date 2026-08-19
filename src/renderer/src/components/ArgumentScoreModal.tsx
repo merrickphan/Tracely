@@ -697,53 +697,6 @@ function ScoreReport({
 
             Collapsing any two of these is how the bug happened. Keep them apart.
           */}
-          {/* Not on the compact widget. 370:135 is a ring, an eyebrow, a grade
-              and one line — nothing else — and the claim counts pushed it two
-              rows taller than the frame. They live in the full report, which
-              has the room the design gave it. */}
-          {!compact ? (
-            <p className="argscore-verdict">
-              {detected === 0 ? (
-                'No checkable claims in this draft yet.'
-              ) : (
-                <>
-                  <b>
-                    {withOwnCitation} of {detected}
-                  </b>{' '}
-                  {detected === 1 ? 'claim carries' : 'claims carry'} a citation you wrote
-                </>
-              )}
-            </p>
-          ) : null}
-          {!compact && detected > 0 ? (
-            <p className="argscore-verdict-sub">
-              {checked === 0 ? (
-                'Not checked against the literature yet.'
-              ) : searchable === 0 ? (
-                'None of these claims are the kind academic databases hold.'
-              ) : (
-                <>
-                  Tracely found supporting evidence for {withRelevantSource} of the {searchable} it
-                  could search
-                  {/*
-                    Stated, never silently subtracted. The whole point of
-                    holding these out of the ratio is honesty about what the
-                    search covers, and a denominator that quietly shrank would
-                    be the same concealment pointing the other way.
-                  */}
-                  {outsideIndexes > 0 ? (
-                    <span className="argscore-unchecked">
-                      {' '}
-                      · {outsideIndexes} these databases don’t cover
-                    </span>
-                  ) : null}
-                  {unchecked > 0 ? (
-                    <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
-                  ) : null}
-                </>
-              )}
-            </p>
-          ) : null}
         </div>
       </div>
 
@@ -798,13 +751,6 @@ function ScoreReport({
               </button>
             ) : null}
           </div>
-
-          <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} />
-          <CheckReasoningRow
-            pending={uncritiqued}
-            critiquing={critiquing}
-            onCritiqueClaims={onCritiqueClaims}
-          />
 
           {/*
             One row per paragraph, collapsed to a header until opened. The row
@@ -944,6 +890,80 @@ function ScoreReport({
               detected
             })}
           </p>
+
+          {/*
+            The retrieval facts, under the summary rather than beside the ring.
+            The frame's score block (404:192) is a ring, an eyebrow, a grade
+            pill and ONE line — these two pushed it three rows taller than the
+            frame and made the first thing on the report a paragraph of
+            caveats. They are still here, and still three separate facts, for
+            the reason written where they used to live: collapsing any two of
+            them is what produced "0 of 7 claims have a source" over a fully
+            cited draft.
+          */}
+          {/* Not on the compact widget. 370:135 is a ring, an eyebrow, a grade
+              and one line — nothing else — and the claim counts pushed it two
+              rows taller than the frame. They live in the full report, which
+              has the room the design gave it. */}
+          {!compact ? (
+            <p className="argscore-verdict">
+              {detected === 0 ? (
+                'No checkable claims in this draft yet.'
+              ) : (
+                <>
+                  <b>
+                    {withOwnCitation} of {detected}
+                  </b>{' '}
+                  {detected === 1 ? 'claim carries' : 'claims carry'} a citation you wrote
+                </>
+              )}
+            </p>
+          ) : null}
+          {!compact && detected > 0 ? (
+            <p className="argscore-verdict-sub">
+              {checked === 0 ? (
+                'Not checked against the literature yet.'
+              ) : searchable === 0 ? (
+                'None of these claims are the kind academic databases hold.'
+              ) : (
+                <>
+                  Tracely found supporting evidence for {withRelevantSource} of the {searchable} it
+                  could search
+                  {/*
+                    Stated, never silently subtracted. The whole point of
+                    holding these out of the ratio is honesty about what the
+                    search covers, and a denominator that quietly shrank would
+                    be the same concealment pointing the other way.
+                  */}
+                  {outsideIndexes > 0 ? (
+                    <span className="argscore-unchecked">
+                      {' '}
+                      · {outsideIndexes} these databases don’t cover
+                    </span>
+                  ) : null}
+                  {unchecked > 0 ? (
+                    <span className="argscore-unchecked"> · {unchecked} not checked yet</span>
+                  ) : null}
+                </>
+              )}
+            </p>
+          ) : null}
+
+          {/*
+            The two whole-draft sweeps, below the summary rather than above the
+            paragraph list. The frame's breakdown section is a header, a link
+            and the cards — nothing between them — and these two rows sat in
+            that gap, which put a paragraph of explanation about per-claim cost
+            in the middle of the reading order. Both still render only when
+            there is something left to check, so a fully checked draft is the
+            frame exactly.
+          */}
+          <CheckAllRow pending={pending} checking={checking} onCheckClaims={onCheckClaims} />
+          <CheckReasoningRow
+            pending={uncritiqued}
+            critiquing={critiquing}
+            onCritiqueClaims={onCritiqueClaims}
+          />
 
           {draftWeaknesses.length > 0 ? (
             <>

@@ -3553,7 +3553,10 @@ textarea:disabled {
    the report body below are its own. */
 
 .argscore-card {
-  width: 460px;
+  /* 560, the frame's own width (404:185). 460 was a guess made before anyone
+     read the frame, and every measurement inside it — a 512px content column,
+     484px paragraph cards, two 251px buttons — is stated against 560. */
+  width: 560px;
   /* Divided by the font zoom, like `.app-shell`. `zoom` scales what is
      RENDERED while `vh` keeps resolving against the unzoomed viewport, so a
      raw `100vh` here let the card be taller than the window — it was clipped at
@@ -3572,21 +3575,22 @@ textarea:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 18px 12px;
+  padding: 22px 24px 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .argscore-title {
   margin: 0;
   flex: 1;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 650;
-  color: var(--text);
+  letter-spacing: -0.1px;
+  color: #1a1a1f;
 }
 
 .argscore-close {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -3702,18 +3706,19 @@ textarea:disabled {
 .argscore-summary {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px;
+  gap: 28px;
+  padding: 23px 24px 22px;
 }
 
 .argscore-summary-text { min-width: 0; }
 
 .argscore-eyebrow {
   display: block;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #9a9ba1;
 }
 
 .argscore-provisional {
@@ -3753,13 +3758,13 @@ textarea:disabled {
 .argscore-ring.tone-low  .argscore-ring-fill { stroke: var(--score-low); }
 
 .argscore-ring-score {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 700;
   fill: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-.argscore-ring-max { font-size: 10px; fill: var(--muted); }
+.argscore-ring-max { font-size: 12px; fill: #9a9ba1; }
 
 .argscore-scroll {
   flex: 1;
@@ -3779,25 +3784,25 @@ textarea:disabled {
 
 .argscore-stats b {
   display: block;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 650;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .argscore-stats span {
   display: block;
-  margin-top: 2px;
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
+  margin-top: 3px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #9a9ba1;
 }
 
 .argscore-section {
-  margin: 16px 0 8px;
-  font-size: 10.5px;
-  font-weight: 700;
+  margin: 18px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
@@ -3807,7 +3812,7 @@ textarea:disabled {
    the collapsible row lives. They used to be declared here too and the two
    disagreed about padding — the wrapper carried the closed row's padding into
    the open one, so an expanded row had a 10px gap above its body. */
-.argscore-para-name { flex: 1; font-size: 12.5px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.argscore-para-name { flex: 1; font-size: 13.5px; font-weight: 650; color: #1a1a1f; font-variant-numeric: tabular-nums; }
 .argscore-para-claims { font-size: 10.5px; color: var(--muted); }
 
 .argscore-para-preview {
@@ -3829,18 +3834,20 @@ textarea:disabled {
   margin-top: 6px;
 }
 
-.argscore-bar-label { flex: 1; min-width: 0; font-size: 11px; color: var(--muted-2); }
-.argscore-bar-pct { font-size: 11px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+/* Metric chip (404:228): 11.5px Medium label, SemiBold value, on a #eaeaea
+   fully-rounded 4px track. */
+.argscore-bar-label { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 500; color: #55565c; }
+.argscore-bar-pct { font-size: 11.5px; font-weight: 650; color: #1a1a1f; font-variant-numeric: tabular-nums; }
 
 .argscore-bar-track {
   flex-basis: 100%;
   height: 4px;
-  border-radius: 2px;
-  background: var(--surface-2);
+  border-radius: 999px;
+  background: #eaeaea;
   overflow: hidden;
 }
 
-.argscore-bar-fill { display: block; height: 100%; border-radius: 2px; }
+.argscore-bar-fill { display: block; height: 100%; border-radius: 999px; }
 .argscore-bar-fill.tone-good { background: var(--score-good); }
 .argscore-bar-fill.tone-mid  { background: var(--score-mid); }
 .argscore-bar-fill.tone-low  { background: var(--score-low); }
@@ -3868,14 +3875,16 @@ textarea:disabled {
 
 /* Full-height pills, not 10px-rounded rects — the shape on 370:135 and 404:129,
    where the primary is an orange→red gradient and the secondary a white outline. */
+/* Pills at the frame's height (404:327): 41px, fully rounded, orange filled
+   beside a 1.5px outlined white. */
 .argscore-btn {
   flex: 1;
-  height: 44px;
+  height: 41px;
   border-radius: 999px;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid #d3d8d4;
 }
 
 .argscore-btn.primary {
@@ -3888,13 +3897,17 @@ textarea:disabled {
 .argscore-btn.secondary:hover { background: var(--surface-2); }
 
 /* The letter chip, on its own row under OVERALL SCORE as the frames place it. */
+/* The frame's grade pill (404:200): fully rounded, 13px, on the wash of its
+   own band. */
+/* The frame's grade pill (404:200): fully rounded, 13px SemiBold, on the wash
+   of its own band. */
 .argscore-grade {
   display: inline-block;
-  margin-top: 6px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 12.5px;
-  font-weight: 700;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .argscore-grade.tone-good { color: var(--score-good); background: var(--score-good-wash); }
@@ -3902,11 +3915,11 @@ textarea:disabled {
 .argscore-grade.tone-low  { color: var(--score-low);  background: var(--score-low-wash); }
 
 .argscore-grade-line {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.4;
-  color: var(--text);
+  color: #55565c;
 }
 
 /* -- Argument Score: navigation between the four frames -------------------- */
@@ -4013,11 +4026,14 @@ textarea:disabled {
 /* A paragraph row is a collapsible card: a header button that toggles it, and a
    body that only exists while it is open. Everything used to be rendered for
    every paragraph at once, which made the report a wall. */
+/* Filled, not outlined (404:218). The frame's cards sit on the modal's white
+   as tinted blocks; an outline around each one turned the breakdown into a
+   table of boxes. */
 .argscore-para {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-bottom: 8px;
-  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #f8f9f8;
   overflow: hidden;
 }
 
@@ -4086,12 +4102,17 @@ textarea:disabled {
 .argscore-para-open { margin-top: 10px; }
 
 /* ---- Cohesion & flow (the block above the paragraph breakdown) ---------- */
+/* The frame's lavender block (449:165): #f6f3fe on a #d3c7f2 hairline at 16px
+   radius. It was surface-grey, which put it in the same visual class as the
+   paragraph cards below it — the frame separates the two deliberately, because
+   one is about the joins between paragraphs and the other is about the
+   paragraphs. */
 .argscore-flow {
   margin-top: 14px;
-  padding: 11px 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
+  padding: 15px;
+  border: 1px solid #d3c7f2;
+  border-radius: 16px;
+  background: #f6f3fe;
 }
 
 .argscore-flow-head {
@@ -4212,12 +4233,16 @@ textarea:disabled {
 }
 
 /* ---- A finding inside an expanded paragraph ---------------------------- */
+/* The frame's flag card (449:147): a bordered lavender block, not a left-rule
+   quote. Same family as the cohesion block above, which is right — both are
+   findings rather than measurements. The dot and the title take the problem's
+   own colour, so the card is neutral and the finding is what carries hue. */
 .argscore-problem {
   margin-top: 9px;
-  padding: 9px 10px 10px;
-  border-left: 2px solid var(--score-mid);
-  border-radius: 0 8px 8px 0;
-  background: var(--score-mid-wash);
+  padding: 10px 12px;
+  border: 1px solid #d3c7f2;
+  border-radius: 10px;
+  background: #f6f3fe;
 }
 
 .argscore-problem-head {
@@ -4238,9 +4263,9 @@ textarea:disabled {
 .argscore-problem-title {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 650;
-  color: var(--text);
+  color: #7b44d4;
 }
 
 .argscore-problem-score { font-weight: 500; color: var(--muted-2); }
@@ -4255,9 +4280,9 @@ textarea:disabled {
 
 .argscore-problem-body {
   margin: 6px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--muted-2);
+  color: #212429;
 }
 
 /* The Summary heading carries the frame's blue dot. A pseudo-element so the
@@ -4413,9 +4438,9 @@ textarea:disabled {
 
 .argscore-verdict-pill {
   flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -5453,16 +5478,17 @@ textarea:disabled {
 /* The paragraph's number, leading its row. Monospaced digits so P1 and P14 are
    the same width and the names beside them stay on one left edge — a ragged
    column of names is what makes a fourteen-row list read as a jumble. */
+/* The frame's tag badge (404:221): 28x19 at 6px radius, #e8e9ec, 11px. */
 .argscore-para-index {
   flex-shrink: 0;
-  min-width: 26px;
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--surface-2);
-  font-size: 10.5px;
-  font-weight: 700;
+  min-width: 28px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e8e9ec;
+  font-size: 11px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  color: var(--muted-2);
+  color: #55565c;
   text-align: center;
 }
 
