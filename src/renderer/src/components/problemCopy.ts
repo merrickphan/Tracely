@@ -33,6 +33,8 @@ import type { ClaimType } from '@shared/types'
  * that produced a purple statistic underline and an orange "missing citation"
  * one — the two the design has, with their colours swapped.
  */
+import { summariseCritique } from '@shared/critiqueSummary'
+
 export const DESIGN_ORANGE = '#ff5900'
 export const DESIGN_AMBER = '#ffb800'
 export const DESIGN_RED = '#d93636'
@@ -299,7 +301,7 @@ export function popoverCopyFor(
     return {
       title: 'Overstated — narrow this',
       description:
-        claim.critique ??
+        summariseCritique(claim.critique) ??
         'The substance here is defensible; the phrasing is not. No evidence could support it as strongly as it is stated.',
       action: 'Suggest fix'
     }
@@ -311,7 +313,7 @@ export function popoverCopyFor(
     return {
       title: 'Contradicted — check this fact',
       description:
-        claim.critique ??
+        summariseCritique(claim.critique) ??
         'A specific fact asserted here appears to be wrong. Check it against the original source before this goes any further.',
       action: 'Suggest fix'
     }
@@ -320,7 +322,7 @@ export function popoverCopyFor(
     return {
       title: 'Weak reasoning',
       description:
-        claim.critique ??
+        summariseCritique(claim.critique) ??
         "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
       action: 'Suggest fix'
     }

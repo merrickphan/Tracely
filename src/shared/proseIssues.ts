@@ -100,6 +100,25 @@ const WORDY: Array<[RegExp, string]> = [
  * whether a given "very" is doing work is the writer's call. Flagged so the
  * pattern is visible across a draft, which is where it actually shows.
  */
+/**
+ * A URL beginning where a sentence appears to. See the capitalisation rule.
+ *
+ * Matches the scheme and the bare-domain forms a reference list actually uses,
+ * anchored at the start of the candidate word so it only ever excuses the token
+ * being flagged.
+ */
+const URL_START = /^(?:https?|ftp|www\d?|doi)\b(?::\/\/|\.)/i
+
+/**
+ * Words before an intensifier that make it load-bearing rather than filler.
+ *
+ * "not really", "hardly ever actually" — the intensifier is the thing being
+ * negated, and removing it reverses or muddles the sentence rather than
+ * tightening it.
+ */
+const NEGATED_BEFORE =
+  /\b(?:not|never|hardly|scarcely|rarely|isn't|aren't|wasn't|weren't|don't|doesn't|didn't|can't|won't|nor|neither)\s+(?:\w+\s+)?$/i
+
 const FILLER =
   /\b(?:very|really|quite|extremely|actually|basically|literally|just|simply|totally|definitely|certainly|clearly|obviously)\b/gi
 
@@ -243,7 +262,14 @@ export function findProseIssues(text: string): ProseIssue[] {
     const [, before, word] = m
     if (before.length === 1 || ABBREVIATIONS.has(before.toLowerCase())) continue
     if (LOWERCASE_SENTENCE_STARTS.has(word)) continue
+    // A reference list ends every entry with a full stop and follows it with a
+    // link, so "…National Biography. https://doi.org/…" read as a sentence
+    // starting lowercase. Capitalising it BREAKS THE LINK, which makes this the
+    // worst kind of suggestion: confidently wrong and destructive if taken.
+    // Reported on a real draft, 2026-08-19.
     const at = m.index + m[0].length - word.length
+    const rest = text.slice(at)
+    if (URL_START.test(rest)) continue
     push(issues, {
       start: at,
       end: at + word.length,
@@ -344,6 +370,12 @@ export function findProseIssues(text: string): ProseIssue[] {
 
   // -- filler -------------------------------------------------------------
   for (const m of text.matchAll(FILLER)) {
+    // Negated, the word is doing work. "The stakes are not really about essays"
+    // means something different from "the stakes are not about essays" — the
+    // first denies a framing, the second denies the subject. Reported on a real
+    // draft, 2026-08-19: the suggestion was to cut it, and cutting it changed
+    // the sentence.
+    if (NEGATED_BEFORE.test(text.slice(Math.max(0, m.index - 24), m.index))) continue
     push(issues, {
       start: m.index,
       end: m.index + m[0].length,
