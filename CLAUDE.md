@@ -403,17 +403,20 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   nothing can test is how the scale shipped with no A+ at all: "A" was the top,
   so a draft that met every expectation of its level could not be told it had.
   That file is now a re-export.
-- **The grading LEVEL moves the letter, never the score** (`shared/gradeLevel.ts`,
-  Settings → Preferences, grades 3-12). The rubric measures the same six things
-  at every level and the report's breakdown adds to the number shown, so
-  scaling the score would both break that arithmetic and make the grade
-  unarguable — the property the deterministic formula exists to protect. It is
-  a band shift: 4 points of credit per year below 12, which is the level
-  `GRADE_BANDS` was tuned against, so an install that never opens the setting
-  grades exactly as it did before it existed. `gradeFor(score, level)` is
-  defaulted, and the main window reads the level from a context
-  (`lib/gradeLevel.tsx`) while the overlay passes it as a prop — that window
-  mounts no provider.
+- **The grading LEVEL moves the SCORE, and the letter follows it**
+  (`shared/gradeLevel.ts`, Settings → Preferences, grades 3-12). It moved the
+  letter only at first, on the argument that the report's six components add to
+  the number shown; the owner's answer was that the number is what a student
+  reads, and a 78 with an "A+" beside it is a card arguing with itself. So the
+  ring shows `adjustedScore` and the report prints the step — rubric score,
+  credit, total — as its own row, which is what keeps the arithmetic visible.
+  4 points per year below 12, the level the bands are written against, so an
+  install that never opens the setting grades exactly as before.
+- **The bands are the standard scale**: 90-100 A, 80-89 B, 70-79 C, 60-69 D,
+  below 60 F, with thirds inside each decade for the plus and minus. The Figma
+  frame's own example (82 reading "B+") is the one thing that gave — on this
+  scale 82 is a B-, and a grading scale belongs to the reader rather than to
+  the mockup.
 - **Evidence is deliberately NOT in the /100.** `strengthScore` already contains a `sourceCount` factor, so folding retrieval in would double-count it — and worse, would make the score track how *searchable* the topic is, capping a close reading of a novel near 50 because the academic APIs have nothing to say about it. `structure/evidenceCoverage.ts` reports it beside the score as a ratio instead. It reads `scoreBreakdown.sourceCount` rather than re-thresholding `claim_evidence.relevance_score`, because which metric produced those values (lexical 0.2 vs dense 0.35 floor) is *not* persisted with the rows.
 - **`unknown` is a real answer.** `structure/roles.ts` labels only what a marker or a detected claim justifies and returns `unknown` for everything else; `complete: false` then makes the panel say **"provisional"**, and `structure/weaknesses.ts` **withholds whole-draft findings entirely** while any paragraph is unlabelled — "this draft has no counterargument" is an assertion about paragraphs nothing read. A guessed label produces a confident number computed from nothing, which is worse than admitting the paragraph wasn't read.
 - **Exactly one relay call, and it is not wired up yet.** `ai/structureClassifier.ts` takes its endpoint as a parameter typed `Parameters<typeof callRelay>[0]`, and that union does not contain `'classify-structure'` — so it is uncallable by construction. `scripts/preflight.mjs` parses that union out of `client.ts` and requires each endpoint to answer non-404 in production, so widening it before the relay ships would block *every* release. Enabling it is three steps, written at the top of that file. The relay endpoint is committed in `../Tracely-relay` on `feat/classify-structure`, **not deployed**.
@@ -515,6 +518,27 @@ and this panel is `.tracer-*` classes in `index.css` like everything else.
 
 - Windows: `%APPDATA%\Tracely\tracely.db` (SQLite: analyses, claims, evidence, citations, library, request cache) and `config.json` (Semantic Scholar key only — never the relay URL/token, which are compiled in).
 - Settings → Privacy has two destructive ops: "Clear Analysis History" (`historyHandlers.ts` → `clearAnalysisHistory()`, keeps the library) vs. "Clear History + Library" (also wipes `sources`/`library_items`/`citations`). Both also clear `tracer_*` rows — Tracer conversations are real rows again (see above), and "clear my history" has to mean them too.
+
+### Spelling and grammar
+
+Two different mechanisms, deliberately:
+
+- **Spelling is Chromium's** (`main/spellcheck.ts`). The editor sets
+  `spellCheck` on its contentEditable, which draws the squiggle; main builds
+  the context menu Electron requires an app to build itself, carrying
+  `params.dictionarySuggestions` plus "Add to dictionary" and the ordinary
+  edit roles. The dictionary is downloaded per language and cached in the
+  user-data dir; offline it degrades to no squiggles rather than wrong ones.
+- **Grammar is `shared/proseIssues.ts`** — pattern matching over the text, no
+  dictionary and no parser. It can catch "teh the", "a apple", "would of" and
+  "alot"; it can never catch "ctaclysm", and shipping a dictionary to try would
+  be a worse copy of the checker already in the process.
+
+The rules there are bounded on purpose: a credibility flag that is wrong makes
+the tool look cautious, a grammar flag that is wrong makes it look illiterate,
+and writers forgive the first and switch off the second. The capitalisation
+rule's `ABBREVIATIONS` list is the shape of that — every entry is a false
+positive it would otherwise produce on ordinary academic prose.
 
 ## Known MVP simplifications (intentional, not bugs)
 

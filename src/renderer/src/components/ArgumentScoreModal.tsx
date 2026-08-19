@@ -27,6 +27,7 @@ import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
+import { adjustedScore } from '@shared/gradeLevel'
 import { useGradeLevel } from '../lib/gradeLevel'
 import {
   EssayGradeReportPanel,
@@ -766,7 +767,9 @@ function ScoreReport({
           used to suppress and why that was dropped. A short draft now scores
           low rather than going ungraded.
         */}
-        <ScoreRing score={outline.score} size={compact ? 132 : 116} />
+        {/* The adjusted number, matching the letter beside it and the ring in
+            the full report. See GradeScoreSection for why the two must agree. */}
+        <ScoreRing score={adjustedScore(outline.score, gradingLevel)} size={compact ? 132 : 116} />
         <div className="argscore-summary-text">
           <span className="argscore-eyebrow">Overall score</span>
           <span className={`argscore-grade tone-${toneFor(outline.score)}`}>{grade.letter}</span>

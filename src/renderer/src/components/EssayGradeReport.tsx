@@ -1,7 +1,7 @@
 import type { ParagraphRole, StructureComponents } from '@shared/types'
 import type { ScreenWatchProblemKind } from '@shared/ipc-contract'
 import { PROBLEM_LABEL } from './problemCopy'
-import { gradeFor } from './essayGrade'
+import { POINTS_PER_LEVEL, REFERENCE_LEVEL, adjustedScore, gradeFor, gradeLevelCredit } from '@shared/gradeLevel'
 import { paragraphNames } from './paragraphNames'
 
 /**
@@ -179,8 +179,15 @@ export function GradeScoreSection({
   /** The school year the letter is banded against — see shared/gradeLevel.ts. */
   gradingLevel?: number
 }): JSX.Element {
-  const score = structure?.score ?? 0
-  const { letter, line } = gradeFor(score, gradingLevel)
+  // THE score, which is the rubric's number moved to the writer's year — not
+  // the raw one with a different letter beside it. The two used to disagree on
+  // screen: a 78 with an "A+" under it is a card arguing with itself.
+  //
+  // The rubric's own measurement is not lost; the report prints it, and the
+  // adjustment, as their own line under the breakdown.
+  const raw = structure?.score ?? 0
+  const score = adjustedScore(raw, gradingLevel)
+  const { letter, line } = gradeFor(raw, gradingLevel)
   // 116px box, 10px stroke => r 53. The arc starts at 12 o'clock (the rotation
   // below) and runs clockwise, as the frame's does.
   const R = 53
@@ -669,6 +676,40 @@ export function EssayGradeReportPanel({
           )
         })}
       </div>
+
+      {/*
+        Where the number came from, whenever it is not the rubric's own.
+        Shown as arithmetic rather than as a badge: the six components above
+        add to the rubric score, and without this line they would not add to
+        the number in the ring — which is exactly the objection that keeps the
+        score arguable in the first place.
+      */}
+      {structure && gradeLevelCredit(gradingLevel) > 0 ? (
+        <div
+          style={{
+            width: '100%',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: '#f8f9f8',
+            fontSize: 12.5,
+            color: W_BODY,
+            boxSizing: 'border-box'
+          }}
+        >
+          <span>
+            Rubric score <b style={{ color: '#1a1a1f' }}>{structure.score}</b> · grade{' '}
+            {REFERENCE_LEVEL - gradeLevelCredit(gradingLevel) / POINTS_PER_LEVEL} credit{' '}
+            <b style={{ color: '#1a1a1f' }}>+{gradeLevelCredit(gradingLevel)}</b>
+          </span>
+          <span>
+            <b style={{ color: '#1a1a1f' }}>{adjustedScore(structure.score, gradingLevel)}</b> / 100
+          </span>
+        </div>
+      ) : null}
 
       <div style={{ width: '100%', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13, height: 17 }}>

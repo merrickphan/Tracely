@@ -16,6 +16,7 @@ import { getSetting, setSetting } from '../services/storage/settingsRepo'
 import { getAppIconPath } from '../icon'
 import { hideFloatingWindow } from './floatingWindow'
 import { hideOverlay } from './overlayWindow'
+import { installSpellcheck } from '../spellcheck'
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
@@ -208,6 +209,11 @@ export function createMainWindow(): BrowserWindow {
   // either — the work-area clamp in the resize path is the real bound, and a
   // fixed maximum would be wrong the moment a second monitor appeared.
   win.setMinimumSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+
+  // Chromium's spell checker, and the context menu that makes its suggestions
+  // reachable. The editor asks for the squiggle (`spellCheck` on the
+  // contentEditable); this is the half that has to live in main.
+  installSpellcheck(win)
 
   // Remember where the user put it, and how big. Debounced because `resize`
   // fires continuously through a drag and `setSetting` writes the whole SQLite

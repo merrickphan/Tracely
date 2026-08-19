@@ -1749,10 +1749,21 @@ function DocumentEditor({
           if (!insidePopoverRef.current && !flowPinnedRef.current) armClose()
         }}
       >
+        {/*
+          `spellCheck` turns on Chromium's OWN checker — red squiggles under
+          misspellings and, through the context menu wired in main
+          (`spellcheck.ts`), its suggestions and "Add to dictionary".
+
+          Not a rule in `proseIssues.ts`: that module is pattern matching over
+          the text and has no dictionary, so it can catch "teh the" and a/an
+          disagreement and can never catch "ctaclysm". Shipping a dictionary to
+          do what the browser already does well would be a worse copy of it.
+        */}
         <div
           ref={editorRef}
           className="docedit-body"
           contentEditable
+          spellCheck
           suppressContentEditableWarning
           data-placeholder="Start typing…"
           onInput={handleInput}

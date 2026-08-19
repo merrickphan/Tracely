@@ -42,11 +42,24 @@ describe('adjustedScore', () => {
 })
 
 describe('gradeFor', () => {
-  it('bands the reference level as the frame does', () => {
-    // The number the Figma card draws, and the letter it draws beside it.
-    strictEqual(gradeFor(82).letter, 'B+')
-    strictEqual(gradeFor(78).letter, 'B')
+  it('bands on the standard scale: 90 A, 80 B, 70 C, 60 D', () => {
+    strictEqual(gradeFor(90).letter, 'A-')
+    strictEqual(gradeFor(89).letter, 'B+')
+    strictEqual(gradeFor(80).letter, 'B-')
+    strictEqual(gradeFor(79).letter, 'C+')
+    strictEqual(gradeFor(70).letter, 'C-')
+    strictEqual(gradeFor(69).letter, 'D+')
+    strictEqual(gradeFor(60).letter, 'D-')
+    strictEqual(gradeFor(59).letter, 'F')
     strictEqual(gradeFor(48).letter, 'F')
+  })
+
+  it('every decade is one letter', () => {
+    for (const [from, letter] of [[90, 'A'], [80, 'B'], [70, 'C'], [60, 'D']] as const) {
+      for (let score = from; score < from + 10; score++) {
+        strictEqual(gradeFor(score).letter[0], letter, `${score} should be a ${letter}`)
+      }
+    }
   })
 
   it('has a top of the scale', () => {
@@ -55,6 +68,7 @@ describe('gradeFor', () => {
     strictEqual(gradeFor(97).letter, 'A+')
     strictEqual(gradeFor(100).letter, 'A+')
     strictEqual(gradeFor(96).letter, 'A')
+    strictEqual(gradeFor(93).letter, 'A')
   })
 
   it('is the Hepburn essay: A+ for a third-grader, B for a senior', () => {
@@ -62,13 +76,13 @@ describe('gradeFor', () => {
     // grade 3 the shift takes it past the top of the scale; at 12 it does not
     // move at all.
     strictEqual(gradeFor(78, 3).letter, 'A+')
-    strictEqual(gradeFor(78, 12).letter, 'B')
+    strictEqual(gradeFor(78, 12).letter, 'C+')
   })
 
   it('still has somewhere to fall at a low level', () => {
     // The shift is credit, not a floor: a draft with nothing the rubric can
     // find is still failing it, in year 3 as in year 12.
     strictEqual(gradeFor(0, 3).letter, 'F')
-    strictEqual(gradeFor(20, 3).letter, 'D')
+    strictEqual(gradeFor(20, 3).letter, 'F')
   })
 })
