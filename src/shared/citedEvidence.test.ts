@@ -5,6 +5,7 @@ import {
   CITED_SOURCE_MARKER,
   FALLBACK_HEADING,
   NO_EVIDENCE_SUMMARY,
+  FALLBACK_SLOTS_WHEN_CITED_READABLE,
   searchedSlots,
   truncateAtWordBoundary,
   type CritiqueSource
@@ -91,6 +92,37 @@ describe('searchedSlots', () => {
     strictEqual(searchedSlots(true, 4), 3)
     strictEqual(searchedSlots(false, 4), 4)
     strictEqual(searchedSlots(true, 0), 0)
+  })
+
+  /**
+   * The evidence summary is ~40% of a warm critique — the largest fresh input —
+   * and for a cited claim the prompt says most of it goes unread: Pass 2.5
+   * tells the model to stop at slot 1 when the cited source answers. These
+   * assert we stop SENDING it in exactly the case the prompt says to skip it,
+   * and keep sending it in the case Pass 2.5 falls through on.
+   */
+  it('sends one fallback when the cited source has an abstract to read', () => {
+    strictEqual(searchedSlots(true, 4, true), FALLBACK_SLOTS_WHEN_CITED_READABLE)
+  })
+
+  it('sends the full fallback set when the cited source has no abstract', () => {
+    // Pass 2.5's own fall-through condition ("it has no abstract") is already
+    // met before the call is made, so the extras are not dead weight here.
+    strictEqual(searchedSlots(true, 4, false), 3)
+  })
+
+  it('changes nothing for an uncited claim — that list is the evidence', () => {
+    strictEqual(searchedSlots(false, 4, true), 4)
+    strictEqual(searchedSlots(false, 4, false), 4)
+  })
+
+  it('never exceeds the overall budget', () => {
+    strictEqual(searchedSlots(true, 1, true), 0)
+    strictEqual(searchedSlots(true, 0, true), 0)
+  })
+
+  it('defaults to the old behaviour when the flag is not passed', () => {
+    strictEqual(searchedSlots(true, 4), searchedSlots(true, 4, false))
   })
 })
 
