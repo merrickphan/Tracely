@@ -7,10 +7,10 @@ import type {
   ParagraphOutline,
   ParagraphRole
 } from '@shared/types'
-import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
+import { bucketClaimsByParagraph } from '@shared/paragraphSplit'
+import { argumentParagraphs } from '@shared/structureText'
 import { findCitationDefects } from '@shared/citationShape'
 import { hasInlineCitation } from '@shared/inlineCitation'
-import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
 import {
   conclusionDrawsOnBody,
@@ -126,7 +126,10 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // paragraphs. Claims that fall inside the list simply bucket past the last
   // paragraph and are dropped, which is the same thing bucketClaimsByParagraph
   // already does for a claim between paragraphs.
-  const spans = splitParagraphs(withoutWorksCited(input.text))
+  // The SAME call ipc/structureHandlers makes before classifying. One function,
+  // so the labelling and the scoring cannot be given different paragraphs
+  // again — see shared/structureText.ts.
+  const spans = argumentParagraphs(input.text)
 
   // computeClaimSpans drops claims it cannot locate in the text, and
   // bucketClaimsByParagraph drops any whose start falls between paragraphs.
