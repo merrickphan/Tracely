@@ -12,6 +12,9 @@ import {
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
 import { classifyStructure } from '../services/ai/structureClassifier'
 import { argumentParagraphs } from '@shared/structureText'
+import { documentNames } from '@shared/documentNames'
+import { withoutWorksCited } from '@shared/worksCited'
+import { learnDocumentNames } from '../spellcheck'
 import { offThesisParagraphs } from '../services/structure/thesisSupport'
 import { looksLikeTitle } from '../services/structure/roles'
 
@@ -107,6 +110,17 @@ export function registerStructureHandlers(): void {
               r === 'conclusion' && spans[i] ? [spans[i].index] : []
             )
           })
+
+    // Teach Chromium's spellchecker this document's proper nouns, so real
+    // names stop being underlined as misspellings. Session-scoped: the next
+    // document's call replaces this set, and a clean quit removes it — see
+    // spellcheck.ts. Free and local; it reads text already in hand.
+    // The ARGUMENT, not the bibliography. A reference list is title-case noise
+    // — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and
+    // it is also where a broken citation's "Unknown Author" lives. Author
+    // surnames are still learned: a cited author appears in the body too, in
+    // the in-text citation.
+    learnDocumentNames(documentNames(withoutWorksCited(input.text)))
 
     const outline = analyzeStructure({
       documentId: input.documentId ?? null,
