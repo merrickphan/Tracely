@@ -14,7 +14,7 @@ describe('the fix card names what to do, not what is wrong', () => {
   // header repeating the title the writer just read makes the button look like
   // it did nothing — which is the complaint the whole card exists to answer.
   it('does not repeat the problem label as its own header', () => {
-    notStrictEqual(fixTitle('weak-reasoning'), 'Weak reasoning')
+    notStrictEqual(fixTitle('unsupported-by-evidence'), 'Weak reasoning')
     notStrictEqual(fixTitle('contradicted-claim'), 'Contradicted — check this fact')
     notStrictEqual(fixTitle('overstated-claim'), 'Overstated — narrow this')
   })
@@ -24,12 +24,12 @@ describe('the fix card names what to do, not what is wrong', () => {
   // promise one for the two kinds that never have anything to apply.
   it('separates the kind that has a revision from the two that do not', () => {
     const overstated = fixTitle('overstated-claim')
-    notStrictEqual(overstated, fixTitle('weak-reasoning'))
+    notStrictEqual(overstated, fixTitle('unsupported-by-evidence'))
     notStrictEqual(overstated, fixTitle('contradicted-claim'))
   })
 
   it('gives every kind a non-empty header, including ones that never open it', () => {
-    for (const kind of ['weak-reasoning', 'contradicted-claim', 'overstated-claim', 'missing-citation'] as const) {
+    for (const kind of ['unsupported-by-evidence', 'contradicted-claim', 'overstated-claim', 'missing-citation'] as const) {
       ok(fixTitle(kind).trim().length > 0, `empty title for ${kind}`)
     }
   })

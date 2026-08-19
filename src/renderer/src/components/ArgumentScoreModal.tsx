@@ -487,7 +487,7 @@ export default function ArgumentScoreModal({
    * Runs the critique over claims that already have evidence.
    *
    * The only route by which a REASONING problem can be underlined at all:
-   * problemKind.ts returns 'weak-reasoning', 'contradicted-claim',
+   * problemKind.ts returns 'unsupported-by-evidence', 'contradicted-claim',
    * 'overstated-claim' and 'fabricated-citation' only when critiqueVerdict is
    * set, and nothing in the editor was setting it.
    */

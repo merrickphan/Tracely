@@ -51,7 +51,11 @@ export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   'fabricated-citation': DESIGN_RED,
   // Reasoning: the sentence does not follow, or asserts something false.
   'contradicted-claim': DESIGN_RED,
-  'weak-reasoning': DESIGN_RED,
+  // Orange, with the evidence group. This was RED, the design's colour for weak
+  // reasoning, and the colour was the loudest part of the mislabelling: a
+  // sentence whose SOURCES do not carry it was drawn in the hue reserved for a
+  // sentence that does not think straight. See the kind's note in problemKind.ts.
+  'unsupported-by-evidence': DESIGN_ORANGE,
   // Neither reasoning nor evidence: the claim is defensible and the
   // quantifier is not. Amber because nothing here is wrong.
   'overstated-claim': DESIGN_AMBER,
@@ -82,7 +86,7 @@ export const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
   // that overstating it once would cost the whole feature its credibility.
   'fabricated-citation': 'Source not found — may be fabricated',
   'contradicted-claim': 'Contradicted — check this fact',
-  'weak-reasoning': 'Weak reasoning',
+  'unsupported-by-evidence': 'Evidence does not carry this',
   'overstated-claim': 'Overstated — narrow this',
   'unverified-statistic': 'Unverified statistic',
   'no-sources': 'No supporting sources',
@@ -318,12 +322,19 @@ export function popoverCopyFor(
       action: 'Suggest fix'
     }
   }
-  if (kind === 'weak-reasoning') {
+  if (kind === 'unsupported-by-evidence') {
+    // Was titled "Weak reasoning", which is what this kind is named after and
+    // what it is not. `weak` and `unsupported` come out of Pass 3, which judges
+    // whether the EVIDENCE backs the claim as phrased — a question about
+    // sources, not about thinking. Owner's case, 2026-08-19: a sentence
+    // conceding a failed replication and bounding its own claim, underlined in
+    // red as bad reasoning because its cited source turned out to be about
+    // something else.
     return {
-      title: 'Weak reasoning',
+      title: 'Evidence does not carry this',
       description:
         summariseCritique(claim.critique) ??
-        "This conclusion doesn't clearly follow from the evidence cited. Consider strengthening the argument.",
+        'The sources found do not support this claim as it is phrased. Narrow the claim, or find a source that speaks to it directly.',
       action: 'Suggest fix'
     }
   }
@@ -339,7 +350,7 @@ export function popoverCopyFor(
  * whose description is the critique text verbatim.
  */
 export function isReasoningProblem(kind: ScreenWatchProblemKind): boolean {
-  return kind === 'weak-reasoning' || kind === 'contradicted-claim'
+  return kind === 'unsupported-by-evidence' || kind === 'contradicted-claim'
 }
 
 /**
