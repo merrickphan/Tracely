@@ -27,6 +27,15 @@ import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
+import {
+  EssayGradeReportPanel,
+  type GradeClaim,
+  type GradeInput
+} from './EssayGradeReport'
+import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
+import { hasInlineCitation } from '@shared/inlineCitation'
+import { retrievalScopeFor } from '@shared/retrievalScope'
+import { paragraphPreviews } from '@shared/paragraphPreview'
 import { CLAIM_TYPE_LABEL } from './claimTypeLabel'
 import { sourceInitials } from './citationFlowCopy'
 import { paragraphNames } from './paragraphNames'
@@ -296,6 +305,65 @@ function ComponentBar({ value, max, label }: { value: number; max: number; label
 }
 
 /**
+ * The editor's claims, in the shape the shared report reads.
+ *
+ * `problemKindsFor` is the same function the underlines go through
+ * (components/documentMarks.ts), so a sentence the report calls an
+ * overreaching claim is the sentence the editor has underlined orange. It is
+ * run here rather than reused from the marks because marks only exist for text
+ * currently on screen — a report is about the whole draft.
+ */
+function gradeClaims(claims: Claim[]): GradeClaim[] {
+  return claims.map((claim) => ({
+    id: claim.id,
+    confidence: claim.confidence,
+    hasInlineCitation: hasInlineCitation(claim.text),
+    problemKinds:
+      claim.strengthScore === null
+        ? []
+        : problemKindsFor({
+            claimType: claim.claimType,
+            hasInlineCitation: hasInlineCitation(claim.text),
+            evidence: {
+              score: claim.strengthScore,
+              count: claim.scoreBreakdown?.sourceCount ?? 0,
+              hasRelevantSource: hasRelevantSource(claim.scoreBreakdown)
+            },
+            critiqueVerdict: claim.critiqueVerdict,
+            outOfIndexScope: retrievalScopeFor(claim.text)
+          })
+  }))
+}
+
+/**
+ * A `DocumentOutline` in the shape the shared Essay Grade report reads.
+ *
+ * The two fields the outline does not carry are the two it deliberately does
+ * not: `DocumentOutline` holds no prose (see its note in shared/types.ts), so
+ * the paragraph previews and the reading statistics are computed here from the
+ * editor's own text, which the overlay's main process has to send instead.
+ */
+function gradeInput(outline: DocumentOutline, paragraphTexts: string[]): GradeInput {
+  const stats = readingStats(paragraphTexts)
+  return {
+    score: outline.score,
+    complete: outline.complete,
+    components: outline.components,
+    weaknesses: outline.weaknesses,
+    paragraphs: outline.paragraphs,
+    titleParagraph: outline.titleParagraph,
+    // The SAME truncation main applies before sending Screen Watch a payload,
+    // not a second rule of this view's own. The first version of this passed
+    // the paragraphs through whole, which put an entire essay inside the first
+    // card and pushed every card below it off the report — the overlay never
+    // hit that because `DocumentOutline` carries no prose and main had to
+    // truncate to send any at all.
+    previews: paragraphPreviews(paragraphTexts),
+    stats
+  }
+}
+
+/**
  * Which view is showing. `paragraph` carries the 1-based index it is showing;
  * `evidence` the claim whose sources it is listing, and the view to go back to
  * — Find Evidence is reachable from a paragraph detail and from the argument
@@ -510,6 +578,42 @@ export default function ArgumentScoreModal({
             checking={checking}
             onClose={onClose}
           />
+        ) : view.name === 'full' ? (
+          /*
+            The SAME report Screen Watch draws over another application, not a
+            second reading of the same rubric in this window's own CSS. There
+            were two — this one built from index.css classes, the overlay's
+            built verbatim from the Figma frame — and they drifted apart at the
+            pace of whichever was edited last. Owner's call: the widget's
+            breakdown is the one to keep.
+
+            It brings its own header, divider and button row, so this wrapper
+            supplies only what the overlay's card supplies around it: the
+            frame's 22/24 padding, its 22px rhythm, and the scroll.
+          */
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: 22,
+              padding: '22px 24px',
+              overflowY: 'auto',
+              minHeight: 0
+            }}
+          >
+            <EssayGradeReportPanel
+              structure={gradeInput(outline, paragraphTexts)}
+              claims={gradeClaims(claims)}
+              onClose={onClose}
+              onBackToSummary={() => setView({ name: 'summary' })}
+              onArgumentCheck={() => setView({ name: 'argument' })}
+              onOpenParagraph={(index) => setView({ name: 'paragraph', index })}
+              onFindForClaim={(claimId) =>
+                setView({ name: 'evidence', claimId, from: { name: 'argument' } })
+              }
+            />
+          </div>
         ) : (
           <ScoreReport
             outline={outline}
