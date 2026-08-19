@@ -409,6 +409,21 @@ export const documentOutline: DocumentOutline = {
         'The 2nd paragraph presents a claim without explaining how it supports the argument.',
       tracerPrompt:
         'In my 2nd paragraph, how do I explain what my evidence actually shows without just restating it?'
+    },
+    // A finding read off the PROSE rather than the role vector — the only kind
+    // that carries `quote`. Here so the preview covers the branch where a
+    // weakness has no claim behind it and the card falls back to the writer's
+    // own words: without one, `argscore-problem-quote` renders for every
+    // fixture weakness through the claim path and never through this one.
+    {
+      kind: 'overreaching-claim',
+      paragraphIndex: 3,
+      claimId: null,
+      message:
+        'The 3rd paragraph states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.',
+      tracerPrompt:
+        'I have used absolute words like "always" and "everyone" in my draft. How do I narrow those without sounding like I am hedging everything?',
+      quote: 'Everyone who worked with her noticed the difference.'
     }
   ],
   analyzedAt: T0

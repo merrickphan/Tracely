@@ -1,4 +1,5 @@
 import type { ParagraphOutline, StructureWeakness, StructureWeaknessKind } from '@shared/types'
+import type { ReasoningFinding } from './reasoningIssues.ts'
 
 /**
  * Named weaknesses in a draft's argument.
@@ -17,15 +18,88 @@ import type { ParagraphOutline, StructureWeakness, StructureWeaknessKind } from 
 // Rendering order. Roughly "how much of the argument this breaks": a draft with
 // no thesis has a problem that outranks a missing counterargument, and the
 // panel should not bury it under three warrant gaps.
+//
+// The reasoning findings are interleaved rather than appended as a block, on
+// the same principle: `dropped-evidence` is the same failure `warrant-gap`
+// names, caught from the prose instead of from a label, so it sits beside it.
+// `unsupported-emphasis` and `generic-opening` sort last because they are the
+// two a strong draft can carry without being much worse for it.
 const SEVERITY: StructureWeaknessKind[] = [
   'no-thesis',
   'unsupported-claim',
+  'dropped-evidence',
   'warrant-gap',
+  'overreaching-claim',
   'new-claim-in-conclusion',
   'evidence-stacking',
   'no-counterargument',
-  'no-significance'
+  'no-significance',
+  'restated-conclusion',
+  'undeveloped-repetition',
+  'unclear-reference',
+  'unsupported-emphasis',
+  'generic-opening'
 ]
+
+/**
+ * The template for each finding read off the prose.
+ *
+ * Same rule as every message in this file: say what is wrong and where, never
+ * what to write instead. Each one ends by naming the test the writer can run,
+ * because these are findings about habits — an "always" removed from one
+ * sentence and left in four others is a fix that did not happen.
+ *
+ * The `quote` is carried separately rather than pasted into the message, so a
+ * surface with no room for it (the widget's paragraph rows) drops the words
+ * instead of truncating the sentence explaining them.
+ */
+const REASONING_TEMPLATE: Record<
+  ReasoningFinding['kind'],
+  { message: (where: string) => string; tracerPrompt: string }
+> = {
+  'dropped-evidence': {
+    message: (where) =>
+      `The ${where} ends on its evidence. A quotation or citation in the final sentence leaves the reader to work out what it proved.`,
+    tracerPrompt:
+      'One of my paragraphs ends on a quotation. What should I be saying after it that I am not saying now?'
+  },
+  'overreaching-claim': {
+    message: (where) =>
+      `The ${where} states something absolutely — "always", "everyone", "proves". A claim with no exceptions is one a single counter-example defeats.`,
+    tracerPrompt:
+      'I have used absolute words like "always" and "everyone" in my draft. How do I narrow those without sounding like I am hedging everything?'
+  },
+  'unsupported-emphasis': {
+    message: (where) =>
+      `The ${where} asserts emphasis rather than earning it. "Obviously" and "massive" tell the reader the conclusion instead of arguing for it.`,
+    tracerPrompt:
+      'I lean on words like "clearly" and "massive" in my essay. What should I write instead of the emphasis?'
+  },
+  'unclear-reference': {
+    message: (where) =>
+      `The ${where} opens with "This" pointing back at the whole paragraph before it. The reader has to guess which part is meant.`,
+    tracerPrompt:
+      'My paragraphs keep starting with "This shows". How do I open them so the reader knows what I am referring to?'
+  },
+  'restated-conclusion': {
+    message: () =>
+      'The conclusion repeats the thesis in the same words rather than saying what the argument established. A reader finishes where they started.',
+    tracerPrompt:
+      'My conclusion just restates my thesis. What should a conclusion do that the introduction has not already done?'
+  },
+  'undeveloped-repetition': {
+    message: (where) =>
+      `Two sentences in the ${where} make the same point in different words. The second one restates rather than adding a layer.`,
+    tracerPrompt:
+      'I keep repeating myself in a paragraph instead of developing the point. How do I tell the difference?'
+  },
+  'generic-opening': {
+    message: () =>
+      'The draft opens on a line that would fit any essay on any subject. The first sentence is doing no work for this argument.',
+    tracerPrompt:
+      'My introduction starts with a generic hook. What should the opening sentence of an argumentative essay actually do?'
+  }
+}
 
 export interface WeaknessInput {
   paragraphs: ParagraphOutline[]
@@ -50,6 +124,17 @@ export interface WeaknessInput {
    * is worse than either answer alone.
    */
   thesisFound?: boolean
+  /**
+   * Findings read off the prose — see `reasoningIssues.ts`.
+   *
+   * Deliberately NOT gated on `allLabelled`, unlike every whole-draft finding
+   * above it. The gate exists because "this draft has no counterargument" is an
+   * assertion about paragraphs nothing read; these are assertions about words
+   * that are demonstrably there, quoted back to the writer, and suppressing
+   * them because a model returned 'unknown' for paragraph 6 would withhold the
+   * only feedback that does not depend on the labelling at all.
+   */
+  reasoning?: ReasoningFinding[]
 }
 
 function ordinal(index: number): string {
@@ -62,7 +147,8 @@ export function findWeaknesses({
   claimsWithoutEvidence,
   soWhatInConclusion,
   titleParagraph = false,
-  thesisFound = false
+  thesisFound = false,
+  reasoning = []
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
@@ -162,6 +248,32 @@ export function findWeaknesses({
       claimId: null,
       message: 'The draft never says why this matters. A reader finishes knowing what is true but not what follows from it.',
       tracerPrompt: 'My essay proves its point but never says why it matters. How do I write that without overclaiming?'
+    })
+  }
+
+  // `dropped-evidence` and `warrant-gap` are the same complaint about the same
+  // paragraph — one read off the prose, one off the label — and a report that
+  // says both twice about the fourth paragraph reads as two problems. The
+  // quoted one wins, because a writer sent to a sentence they can see beats one
+  // sent to a paragraph and told something is missing from it.
+  const droppedAt = new Set(
+    reasoning.filter((f) => f.kind === 'dropped-evidence').map((f) => f.paragraphIndex)
+  )
+  for (let i = found.length - 1; i >= 0; i--) {
+    if (found[i].kind === 'warrant-gap' && droppedAt.has(found[i].paragraphIndex)) found.splice(i, 1)
+  }
+
+  for (const finding of reasoning) {
+    const template = REASONING_TEMPLATE[finding.kind]
+    found.push({
+      kind: finding.kind,
+      paragraphIndex: finding.paragraphIndex,
+      claimId: null,
+      message: template.message(
+        finding.paragraphIndex === null ? 'draft' : `${ordinal(finding.paragraphIndex)} paragraph`
+      ),
+      tracerPrompt: template.tracerPrompt,
+      quote: finding.quote
     })
   }
 

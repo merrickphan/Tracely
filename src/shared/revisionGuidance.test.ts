@@ -16,7 +16,14 @@ const KINDS = [
   'new-claim-in-conclusion',
   'evidence-stacking',
   'no-counterargument',
-  'no-significance'
+  'no-significance',
+  'dropped-evidence',
+  'overreaching-claim',
+  'unsupported-emphasis',
+  'unclear-reference',
+  'restated-conclusion',
+  'undeveloped-repetition',
+  'generic-opening'
 ] as const
 
 describe('REVISION_GUIDANCE', () => {

@@ -539,3 +539,54 @@ describe('a thesis the role vector did not name', () => {
     )
   })
 })
+
+/**
+ * The one prose finding that reaches this file directly. The other —
+ * `dropped-evidence` — never arrives as a signal at all: it vetoes `hasWarrant`
+ * in `analyzeStructure` before the outline is built, so from here it is
+ * indistinguishable from a model that said false. That asymmetry is deliberate;
+ * see the note on ScoreSignals.conclusionRestatesThesis.
+ */
+describe('scoreDraft — a conclusion that restates the thesis', () => {
+  const CLOSED = ['thesis', 'claim+', 'counterargument', 'significance', 'conclusion']
+
+  it('halves a well-placed conclusion', () => {
+    strictEqual(scoreDraft(outline(...CLOSED), NO_SIGNALS).components.conclusion, 10)
+    strictEqual(
+      scoreDraft(outline(...CLOSED), { ...NO_SIGNALS, conclusionRestatesThesis: true }).components
+        .conclusion,
+      5
+    )
+  })
+
+  it('compounds with a misplaced one rather than replacing it', () => {
+    const misplaced = ['thesis', 'conclusion', 'claim+', 'significance', 'counterargument']
+    strictEqual(scoreDraft(outline(...misplaced), NO_SIGNALS).components.conclusion, 5)
+    strictEqual(
+      scoreDraft(outline(...misplaced), { ...NO_SIGNALS, conclusionRestatesThesis: true })
+        .components.conclusion,
+      2.5
+    )
+  })
+
+  it('cannot invent credit for a draft with no conclusion at all', () => {
+    const none = ['thesis', 'claim+', 'counterargument', 'significance', 'evidence+']
+    strictEqual(
+      scoreDraft(outline(...none), { ...NO_SIGNALS, conclusionRestatesThesis: true }).components
+        .conclusion,
+      0
+    )
+  })
+
+  it('costs the draft five points and nothing else', () => {
+    const plain = scoreDraft(outline(...CLOSED), NO_SIGNALS)
+    const restated = scoreDraft(outline(...CLOSED), {
+      ...NO_SIGNALS,
+      conclusionRestatesThesis: true
+    })
+    strictEqual(plain.score - restated.score, 5)
+    for (const key of ['thesis', 'governingClaims', 'warrant', 'counterargument', 'significance'] as const) {
+      strictEqual(restated.components[key], plain.components[key], key)
+    }
+  })
+})

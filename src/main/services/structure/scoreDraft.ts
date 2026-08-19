@@ -76,6 +76,23 @@ export interface ScoreSignals {
    * it. Null when it did not, which is still an honest 0.
    */
   thesisFallbackIndex?: number | null
+  /**
+   * The closing paragraph says what the opening one already said.
+   *
+   * One of only two places a `reasoningIssues.ts` finding reaches the number
+   * (the other is the `hasWarrant` veto for dropped evidence). A conclusion is
+   * supposed to synthesise — to say what the individual points collectively
+   * established — and one that reuses the thesis's own vocabulary has closed
+   * the essay without doing that. Half credit rather than none, because it is
+   * still a conclusion in the right place: the essay ends where it should, it
+   * just ends by repeating itself.
+   *
+   * Kept OUT of the detector's reach in every other component on purpose. A
+   * rule that reads prose is a weaker instrument than a role label, and the
+   * rule of this rubric is that a point lost has to trace to something the
+   * writer can look at — which these two do, because both quote the sentence.
+   */
+  conclusionRestatesThesis?: boolean
 }
 
 export interface DraftScore {
@@ -289,13 +306,18 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // Lowest weight on purpose. It is the easiest component to satisfy and the
   // least diagnostic — an essay with a tidy conclusion and no counterargument
   // is in worse shape than the reverse, and the weights should say so.
+  //
+  // Two independent halvings, and they compound: a conclusion in the wrong
+  // place that also restates the thesis earns a quarter. Both are real faults
+  // and neither excuses the other.
   const conclusionAt = roles.lastIndexOf('conclusion')
-  const conclusion =
+  const placed =
     conclusionAt === -1
       ? 0
       : conclusionAt === roles.length - 1
         ? COMPONENT_MAX.conclusion
         : COMPONENT_MAX.conclusion / 2
+  const conclusion = signals.conclusionRestatesThesis === true ? placed / 2 : placed
 
   const components: StructureComponents = {
     thesis,
