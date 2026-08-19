@@ -377,6 +377,49 @@ Opt-in (Settings → Screen Watch, off by default, also toggleable from the tray
 
 ### Structure (`main/services/structure/`, `shared/paragraphSplit.ts`, `renderer/src/components/ArgumentScoreModal.tsx`)
 
+> **READ THIS FIRST — the editor's report is ONE relay call now.**
+>
+> `ipc/structureHandlers.ts` calls `ai/gradeDraft.ts` (`/api/grade-draft`) and
+> builds the outline from what comes back (`structure/gradedOutline.ts`). There
+> is **no local fallback**: when the call fails the handler throws and the panel
+> shows the error. Owner, 2026-08-19: *"lets reset the whole reasoning system
+> into a simple chatgpt answers it and it kicks back to tracely. Extremely
+> simple and efficient."*
+>
+> Most of the section below describes the rule engine that used to compute it —
+> ten prose detectors, a lexical cohesion pass, a hand-written role classifier
+> and a six-component formula. **That engine is still in the tree and still
+> runs, but only for Screen Watch** (`screenWatch/watchOutline.ts` →
+> `analyzeStructure`), which is passive and may not make paid calls. Read
+> anything below as "how the OVERLAY grades", not the editor.
+>
+> What is still local on the editor's path, and why:
+>
+> - **The arithmetic.** The model returns six component sub-scores; the client
+>   sums them (`shared/gradedDraft.ts`, `scoreFromComponents`). An unchanged
+>   draft scores an unchanged number and every point traces to a quoted
+>   sentence. The model judges, the client adds up.
+> - **Quote verification.** `verifyGrade` discards any finding whose quote is
+>   not in the draft, whose paragraph does not exist, or whose `rubricSection`
+>   is not one of the owner's. That replaces "every word a student reads comes
+>   from a local template" — a finding cannot describe a paragraph they did not
+>   write if it has to quote a sentence they did — and it is what produces the
+>   underline offsets.
+> - **`shared/citationShape.ts` and the prose rules.** Free, instant, and about
+>   the surface of a reference rather than about the argument.
+>
+> `structure/thesisSupport.ts` and its rules module are **deleted** — the model
+> answers "does this paragraph support the thesis" directly. `STRUCTURE_SCHEMA_VERSION`
+> is 9; a v8 row is a report from an engine the editor no longer runs, and
+> `structureRepo` refuses it.
+>
+> **Not done:** Screen Watch still grades with the heuristics. The owner's call
+> (2026-08-19) is that it gets a manual "Grade this draft" button running the
+> same relay call, so passive reading never bills anyone — until then the two
+> surfaces grade one draft differently, which is the disagreement class fixed in
+> #156 on the same day.
+
+
 A reading of the draft as an *argument* rather than as sentences: it labels what each paragraph is doing, scores the draft out of 100, and names what is missing. Everything else in the app asks whether a sentence is true; this asks whether the essay works.
 
 It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was removed when the report modal took over the flow, and the component sat orphaned for a while afterwards — with it went the only bulk **"Check all N"** evidence sweep, leaving `checkClaims` reachable only from a mark popover that needs an already-scored claim to exist. That button now lives in the report's paragraph breakdown (`ScoreReport`, `onCheckClaims`/`checking` threaded down from `AnalyzeView`); the panel and its `docedit-structure`/`docedit-score`/`docedit-evidence`/`docedit-para` CSS are deleted. The sweep stays owned by `AnalyzeView` because it is serial with a visible count and must survive the modal closing mid-run.

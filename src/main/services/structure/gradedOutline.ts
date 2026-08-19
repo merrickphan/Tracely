@@ -4,7 +4,7 @@ import { argumentParagraphs } from '@shared/structureText'
 import { findCitationDefects } from '@shared/citationShape'
 import { bucketClaimsByParagraph } from '@shared/paragraphSplit'
 import { computeClaimSpans } from '@shared/claimSpans'
-import { sourceHashFor, STRUCTURE_SCHEMA_VERSION } from './analyzeStructure'
+import { sourceHashFor, STRUCTURE_SCHEMA_VERSION } from './outlineIdentity'
 import { looksLikeTitle } from './roles'
 
 /**
