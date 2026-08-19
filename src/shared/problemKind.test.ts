@@ -45,20 +45,20 @@ describe('problemKindFor', () => {
 
   it('separates a factual contradiction from weak reasoning', () => {
     // CRITIQUE_SYSTEM_PROMPT reserves 'contradicted' for "a specific fact you
-    // are confident is wrong". It used to fold into 'weak-reasoning', which
+    // are confident is wrong". It used to fold into 'unsupported-by-evidence', which
     // printed "Weak reasoning" over the one verdict that is not about
     // reasoning — and ranked it below a citation problem.
     strictEqual(
       problemKindFor({ ...base, critiqueVerdict: 'contradicted' }),
       'contradicted-claim'
     )
-    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'weak' }), 'weak-reasoning')
-    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'unsupported' }), 'weak-reasoning')
+    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'weak' }), 'unsupported-by-evidence')
+    strictEqual(problemKindFor({ ...base, critiqueVerdict: 'unsupported' }), 'unsupported-by-evidence')
   })
 
   it('ranks a contradicted fact above everything else, including a bad citation', () => {
     ok(problemSeverity('contradicted-claim') < problemSeverity('cited-unverified'))
-    ok(problemSeverity('contradicted-claim') < problemSeverity('weak-reasoning'))
+    ok(problemSeverity('contradicted-claim') < problemSeverity('unsupported-by-evidence'))
     deepStrictEqual(
       problemKindsFor({ ...base, hasInlineCitation: true, evidence: found(0, 0), critiqueVerdict: 'contradicted' })[0],
       'contradicted-claim'
@@ -70,7 +70,7 @@ describe('problemKindFor', () => {
     // still not follow from what those sources say.
     strictEqual(
       problemKindFor({ ...base, evidence: found(95, 8), critiqueVerdict: 'weak' }),
-      'weak-reasoning'
+      'unsupported-by-evidence'
     )
   })
 
@@ -150,14 +150,14 @@ describe('problemKindFor', () => {
   })
 
   it('ranks a wrong citation above every other problem', () => {
-    ok(problemSeverity('cited-unverified') < problemSeverity('weak-reasoning'))
+    ok(problemSeverity('cited-unverified') < problemSeverity('unsupported-by-evidence'))
   })
 })
 
 describe('problemKindsFor — a sentence can be in more than one kind of trouble', () => {
   it('reports reasoning AND the citation gap together', () => {
     deepStrictEqual(problemKindsFor({ ...base, critiqueVerdict: 'weak' }), [
-      'weak-reasoning',
+      'unsupported-by-evidence',
       'missing-citation'
     ])
   })
@@ -179,7 +179,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
       // Both, in severity order: the citation finding leads, and the verdict
       // that produced it is reported too. `unsupported` over evidence that IS
       // on topic is a finding about the reasoning — see isRetrievalMiss.
-      ['cited-unverified', 'weak-reasoning']
+      ['cited-unverified', 'unsupported-by-evidence']
     )
   })
 
@@ -192,7 +192,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
         evidence: found(20, 5),
         critiqueVerdict: 'weak'
       }),
-      ['weak-reasoning', 'cited-unverified'].sort(
+      ['unsupported-by-evidence', 'cited-unverified'].sort(
         (a, b) => problemSeverity(a as never) - problemSeverity(b as never)
       )
     )
@@ -216,7 +216,7 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
 
 describe('problemSeverity', () => {
   it('ranks reasoning and unfindable numbers above a tidy claim wanting a citation', () => {
-    ok(problemSeverity('weak-reasoning') < problemSeverity('missing-citation'))
+    ok(problemSeverity('unsupported-by-evidence') < problemSeverity('missing-citation'))
     ok(problemSeverity('unverified-statistic') < problemSeverity('partial-evidence'))
   })
 
@@ -228,7 +228,7 @@ describe('problemSeverity', () => {
     const kinds = [
       'searching',
       'contradicted-claim',
-      'weak-reasoning',
+      'unsupported-by-evidence',
       'unverified-statistic',
       'no-sources',
       'weak-evidence',
@@ -250,7 +250,7 @@ describe('fabricated-citation — a source that does not exist', () => {
 
   it('is the sole reasoning kind, never doubled with weak-reasoning', () => {
     const kinds = problemKindsFor({ ...base, critiqueVerdict: 'fabricated' })
-    strictEqual(kinds.filter((k) => k === 'weak-reasoning').length, 0)
+    strictEqual(kinds.filter((k) => k === 'unsupported-by-evidence').length, 0)
     strictEqual(kinds[0], 'fabricated-citation')
   })
 
@@ -285,7 +285,7 @@ describe('fabricated-citation — a source that does not exist', () => {
 describe('overstated-claim — defensible substance, indefensible quantifier', () => {
   it('is not folded in with weak reasoning', () => {
     const kinds = problemKindsFor({ ...base, critiqueVerdict: 'overstated' })
-    strictEqual(kinds.includes('weak-reasoning'), false)
+    strictEqual(kinds.includes('unsupported-by-evidence'), false)
     strictEqual(kinds[0], 'overstated-claim')
   })
 
@@ -318,7 +318,7 @@ describe('unsupported — a verdict about the claim, or about the search?', () =
   // "Weak reasoning" over them.
   it('does not call a sentence weak because the search came back empty', () => {
     const kinds = problemKindsFor({ ...base, evidence: found(0, 0), critiqueVerdict: 'unsupported' })
-    strictEqual(kinds.includes('weak-reasoning'), false, 'a retrieval miss is not a reasoning finding')
+    strictEqual(kinds.includes('unsupported-by-evidence'), false, 'a retrieval miss is not a reasoning finding')
     // Reported honestly instead — same state, and the copy for this one says
     // "It may still be true — but you have nothing to cite for it yet."
     deepStrictEqual(kinds, ['no-sources'])
@@ -329,7 +329,7 @@ describe('unsupported — a verdict about the claim, or about the search?', () =
     // relevant sources in front of it and they do not carry the claim.
     deepStrictEqual(
       problemKindsFor({ ...base, evidence: found(30, 6), critiqueVerdict: 'unsupported' }),
-      ['weak-reasoning', 'weak-evidence']
+      ['unsupported-by-evidence', 'weak-evidence']
     )
   })
 
@@ -352,7 +352,7 @@ describe('unsupported — a verdict about the claim, or about the search?', () =
     // from the sentence itself. Only `unsupported` is the word doing two jobs.
     deepStrictEqual(
       problemKindsFor({ ...base, evidence: found(0, 0), critiqueVerdict: 'weak' }),
-      ['weak-reasoning', 'no-sources']
+      ['unsupported-by-evidence', 'no-sources']
     )
   })
 
@@ -538,5 +538,75 @@ describe('a cited claim is not flagged by what other papers say', () => {
     deepStrictEqual(problemKindsFor({ ...base, evidence: found(22, 8) }), ['weak-evidence'])
     deepStrictEqual(problemKindsFor({ ...base, evidence: found(55, 8) }), ['partial-evidence'])
     deepStrictEqual(problemKindsFor({ ...base, evidence: found(85, 8) }), ['missing-citation'])
+  })
+})
+
+/**
+ * The owner's own sentence, 2026-08-19:
+ *
+ *   "The study has since had a rough time — Morehead, Dunlosky and Rawson
+ *    failed to replicate the headline effect in 2019, and anyone citing the
+ *    original as settled science is overreaching (Shelly J. Schmidt, 2019)."
+ *
+ * Some of the best reasoning in the draft: it concedes a failed replication and
+ * then bounds the claim. The critique read the cited work and reported —
+ * correctly — that it "is a reflective piece on classroom management and
+ * note-taking practices, not a research article reporting on replication
+ * studies". A true finding, and one about the CITATION.
+ *
+ * Retrieval scored 47. The old `evidence.score < MIXED` gate on
+ * `cited-unverified` is 40, so it missed by seven points, `weak-reasoning`
+ * fired instead, and the sentence was underlined in red as bad thinking.
+ */
+describe('a doubted citation is a citation finding at any retrieval score', () => {
+  const sentence = {
+    claimType: 'factual' as const,
+    hasInlineCitation: true,
+    evidence: { score: 47, count: 6, hasRelevantSource: true },
+    critiqueVerdict: 'unsupported' as const
+  }
+
+  it('names the citation, not the reasoning', () => {
+    strictEqual(problemKindFor(sentence), 'cited-unverified')
+  })
+
+  it('does the same across the whole middle band the gate used to split', () => {
+    // 39 and 47 are the same finding about the same sentence. A seven-point
+    // difference in a TOPICAL search score cannot change what is wrong with a
+    // citation nothing in the retrieval path ever opened.
+    for (const score of [0.1, 20, 39, 40, 47, 55, 69]) {
+      strictEqual(
+        problemKindFor({ ...sentence, evidence: { ...sentence.evidence, score } }),
+        'cited-unverified',
+        `score ${score}`
+      )
+    }
+  })
+
+  it('does not also raise the weaker way of saying it', () => {
+    const kinds = problemKindsFor(sentence)
+    strictEqual(kinds.includes('partial-evidence'), false, kinds.join(','))
+  })
+
+  // The gate that still matters. Nothing relevant came back, so there is no
+  // literature to make a statement about and the citation stays unjudged.
+  it('still says nothing when retrieval found nothing relevant', () => {
+    const kinds = problemKindsFor({
+      ...sentence,
+      evidence: { score: 0, count: 8, hasRelevantSource: false }
+    })
+    strictEqual(kinds.includes('cited-unverified'), false, kinds.join(','))
+  })
+
+  it('still says nothing when no critique has doubted the citation', () => {
+    const kinds = problemKindsFor({ ...sentence, critiqueVerdict: null })
+    strictEqual(kinds.includes('cited-unverified'), false, kinds.join(','))
+  })
+
+  it('leaves an UNCITED claim on the evidence path', () => {
+    strictEqual(
+      problemKindFor({ ...sentence, hasInlineCitation: false }),
+      'unsupported-by-evidence'
+    )
   })
 })

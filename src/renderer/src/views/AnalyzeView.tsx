@@ -1342,7 +1342,7 @@ function DocumentEditor({
    * Runs the critique over claims that already have evidence.
    *
    * This is the only route by which a REASONING problem can ever be underlined
-   * in the editor. `problemKindsFor` returns 'weak-reasoning',
+   * in the editor. `problemKindsFor` returns 'unsupported-by-evidence',
    * 'contradicted-claim', 'overstated-claim' and 'fabricated-citation' only
    * when `critiqueVerdict` is set, and nothing in this app was setting it
    * outside Screen Watch's manual popover — so the document editor could tell a

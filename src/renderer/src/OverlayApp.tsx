@@ -2218,7 +2218,7 @@ function NoReadingView(): JSX.Element {
 // main. It has had no call site since main became the single source of truth
 // (services/screenWatch/problemKind.ts) and the payload started carrying
 // `problemKinds` — and it was actively dangerous to leave lying around: it
-// still folded the `contradicted` verdict into 'weak-reasoning', so
+// still folded the `contradicted` verdict into 'unsupported-by-evidence', so
 // reintroducing one call to it would have quietly restored the bug of telling
 // a writer their reasoning is weak when the model said a fact is wrong.
 //
@@ -2286,7 +2286,7 @@ function FixCard({
    * `popoverCopyFor` already keeps a sentence for that case, and this card
    * needs the same one: `critiqueIssues('')` returns an empty array, so without
    * a fallback "Suggest fix" opened onto a header and a Back button. Reached in
-   * the preview harness against a claim flagged 'weak-reasoning' with a null
+   * the preview harness against a claim flagged 'unsupported-by-evidence' with a null
    * critique.
    */
   fallbackDetail: string

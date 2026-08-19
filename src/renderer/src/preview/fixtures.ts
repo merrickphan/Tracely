@@ -538,7 +538,7 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
     claimType: 'causal',
     confidence: 0.93,
     hasInlineCitation: false,
-    problemKinds: ['weak-reasoning', 'partial-evidence'],
+    problemKinds: ['unsupported-by-evidence', 'partial-evidence'],
     evidence: {
       score: 34,
       count: 6,
@@ -574,8 +574,8 @@ export const screenWatchClaims: ScreenWatchClaimSummary[] = [
       ]
     },
     // A verdict and its prose, together. This carried `problemKinds:
-    // ['weak-reasoning']` with a NULL critique — a pair main cannot produce
-    // (problemKindsFor only reaches 'weak-reasoning' from a critiqueVerdict, and
+    // ['unsupported-by-evidence']` with a NULL critique — a pair main cannot produce
+    // (problemKindsFor only reaches 'unsupported-by-evidence' from a critiqueVerdict, and
     // screenWatchService writes the two in one step), so the harness showed the
     // popover's no-critique fallback sentence and the fix card had nothing at
     // all to open onto. Same class of fixture bug as the one c3's comment
@@ -831,7 +831,7 @@ export const screenWatchCritique =
 
 export const overlayUpdate: ScreenWatchOverlayUpdateEvent = {
   underlines: [
-    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal', problemKinds: ['weak-reasoning', 'partial-evidence'] },
+    { id: 'c1', rects: [{ x: 60, y: 90, width: 280, height: 18 }], claimType: 'causal', problemKinds: ['unsupported-by-evidence', 'partial-evidence'] },
     {
       id: 'c2',
       rects: [

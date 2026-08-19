@@ -31,8 +31,29 @@ export type ScreenWatchProblemKind =
    * it rather than fold it into 'nothing found'.
    */
   | 'fabricated-citation'
-  /** The critique found the reasoning does not follow from the evidence. */
-  | 'weak-reasoning'
+  /**
+   * The critique read the evidence and it does not back the claim as phrased.
+   *
+   * NOT a finding about reasoning, and it was called `weak-reasoning` until
+   * 2026-08-19. The verdicts behind it — `weak` and `unsupported` — come out of
+   * CRITIQUE_SYSTEM_PROMPT's Pass 3, which asks "does the evidence actually
+   * back the claim as phrased?" That is a question about SOURCES.
+   *
+   * Measured on the owner's draft, on a sentence that concedes a failed
+   * replication and then bounds its own claim — some of the best reasoning in
+   * the document. Its cited work turned out to be about a different subject, so
+   * Pass 3 returned `unsupported`, and the app printed "Weak reasoning" in red
+   * over it. The critique was right and the label was a category error.
+   *
+   * "Weak reasoning" now belongs to the classifier's named faults —
+   * `circular-reasoning`, `sequence-as-cause`, `single-case-generalisation`,
+   * `logical-leap` in `StructureWeaknessKind` — which are the only things in
+   * this app that judge an argument rather than its sources. They are
+   * paragraph-level and live in the report; a sentence-level reasoning fault
+   * would need Pass 3 to name what it found, the same change the classifier
+   * got. Until then this kind must not borrow the word.
+   */
+  | 'unsupported-by-evidence'
   /**
    * The critique's fact-check said a specific assertion in the sentence is
    * wrong — a different finding from weak reasoning, and a worse one.
@@ -40,8 +61,8 @@ export type ScreenWatchProblemKind =
    * CRITIQUE_SYSTEM_PROMPT reserves the `contradicted` verdict for "the claim
    * asserts a specific fact you're confident is factually wrong", and instructs
    * the model to fall through to the rigor pass whenever it is merely unsure.
-   * Folding it in with 'weak-reasoning' printed "Weak reasoning" over the one
-   * verdict that is not about reasoning at all, and ranked the most serious
+   * Folding it in with 'unsupported-by-evidence' printed an evidence-fit label
+   * over the one verdict that is not about evidence at all, and ranked the most serious
    * thing this product can say below a citation problem.
    */
   | 'contradicted-claim'
@@ -268,7 +289,7 @@ export function problemKindsFor({
   else if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
   else if (critiqueVerdict === 'overstated') kinds.push('overstated-claim')
   else if (critiqueVerdict && !retrievalMiss && WEAK_VERDICTS.includes(critiqueVerdict)) {
-    kinds.push('weak-reasoning')
+    kinds.push('unsupported-by-evidence')
   }
 
   // Cited, and the literature we DID find does not back what was attributed.
@@ -290,7 +311,32 @@ export function problemKindsFor({
   // eight results about other subjects cleared this guard and the accusation
   // went out anyway — the exact case the paragraph above says it must not fire
   // on.
-  if (hasInlineCitation && !nothingFound && evidence.score < MIXED && citationDoubted) {
+  // ── No score gate, and removing it is the fix ──────────────────────────────
+  // This required `evidence.score < MIXED` (40) until 2026-08-19. Measured on
+  // the owner's own draft, on a sentence whose reasoning is the best in its
+  // paragraph:
+  //
+  //   "The study has since had a rough time — Morehead, Dunlosky and Rawson
+  //    failed to replicate the headline effect in 2019, and anyone citing the
+  //    original as settled science is overreaching (Shelly J. Schmidt, 2019)."
+  //
+  // The critique read the cited work and reported, correctly, that it "is a
+  // reflective piece on classroom management and note-taking practices, not a
+  // research article reporting on replication studies". A citation finding, and
+  // a true one. The retrieval score was 47. Seven points over the gate, so this
+  // did not fire, `weak-reasoning` did, and a sentence that concedes a failed
+  // replication and bounds its own claim was underlined in red as bad thinking.
+  //
+  // The gate was never defensible: `evidence.score` measures a TOPICAL SEARCH
+  // of four indexes, and this kind is about the source the WRITER named. Those
+  // are different questions about different documents. The same argument is
+  // already made twice in the comment above for `nothingFound`, and it applies
+  // to the band as much as to the floor — a low score and a middling score are
+  // equally silent about a citation nothing in the retrieval path ever opened.
+  //
+  // What licenses the finding is `citationDoubted`: a verdict reached by the
+  // one call that resolves the cited work and reads its abstract.
+  if (hasInlineCitation && !nothingFound && citationDoubted) {
     kinds.push('cited-unverified')
   }
 
@@ -313,18 +359,10 @@ export function problemKindsFor({
     else if (evidence.score < STRONG) kinds.push('partial-evidence')
     else kinds.push('missing-citation')
   }
-  // A cited claim scoring in the middle band is neither settled nor alarming.
-  // Same gate as above: it is a statement about the OTHER papers, and raising
-  // it over a citation nothing has read is the behaviour this rule removes.
-  if (
-    !nothingFound &&
-    hasInlineCitation &&
-    evidence.score >= MIXED &&
-    evidence.score < STRONG &&
-    citationDoubted
-  ) {
-    kinds.push('partial-evidence')
-  }
+  // The middle-band `partial-evidence` branch for a CITED claim was here, and
+  // it is gone with the score gate above. Its condition was a strict subset of
+  // the one `cited-unverified` now has, so it could only ever add a second,
+  // weaker way of saying the same thing about the same sentence.
 
   // An empty list is a real answer, and the caller treats it as "say nothing
   // about this sentence": a cited claim that is well supported, and a cited
@@ -356,7 +394,7 @@ const SEVERITY: ScreenWatchProblemKind[] = [
   // Above weak reasoning: a claim whose own citation does not support it is
   // the one error a reader has no prompt to go and check.
   'cited-unverified',
-  'weak-reasoning',
+  'unsupported-by-evidence',
   // Above the evidence findings on purpose. An overstated claim looks exactly
   // like a badly-sourced one from the retrieval side — the sources will not
   // support "100%" — and ranking it below them means the writer is told to go
