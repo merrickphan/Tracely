@@ -180,8 +180,35 @@ export function sentenceAround(text: string, start: number, end: number): string
   }
 
   let stop = Math.max(0, Math.min(end, text.length))
+
+  /**
+   * A span that already ENDS on its own sentence's terminator stops there.
+   *
+   * Without this the forward walk below begins at `stop` — i.e. one past that
+   * terminator — so it never sees it, runs on, and takes the whole NEXT
+   * sentence with it. Measured on the owner's draft, 2026-08-19: *"She devolved
+   * anemia, respiratory difficulties, and oedema … full-time dancer."* has no
+   * citation of any kind, and the window ran on to *"…gratitude for what UNICEF
+   * does" ("Audrey" UNICEF)."* The `titled` pattern matched that, so an uncited
+   * sentence was reported as cited and the popover offered "Compare sources"
+   * over a claim with nothing to compare.
+   *
+   * The relay returns whole sentences for a great many claims, so this was not
+   * an edge case — it was the common one, borrowing whatever the next sentence
+   * happened to cite.
+   */
+  const alreadyAtBoundary = ((): number => {
+    let i = stop
+    while (i > 0 && /\s/.test(text[i - 1])) i--
+    if (i > 0 && isTerminator(text[i - 1])) {
+      const at = sentenceEndAt(i - 1)
+      if (at !== -1) return at
+    }
+    return -1
+  })()
+
   let depth = 0
-  while (stop < text.length) {
+  while (alreadyAtBoundary === -1 && stop < text.length) {
     const ch = text[stop]
     if (ch === '(' || ch === '[') depth++
     else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
@@ -194,6 +221,7 @@ export function sentenceAround(text: string, start: number, end: number): string
     }
     stop++
   }
+  if (alreadyAtBoundary !== -1) stop = alreadyAtBoundary
 
   let from = Math.max(0, Math.min(start, text.length))
   depth = 0

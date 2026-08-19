@@ -175,6 +175,8 @@ export interface DocCitationFlow {
   onSetStyle: (style: CitationStyle) => void
   onSearchAgain: () => void
   onPreview: () => void
+  /** Opens the selected source's page in the writer's browser. */
+  onOpenArticle: () => void
   onInsert: () => void
   onCancel: () => void
   onDone: () => void
@@ -978,6 +980,7 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
   }
 
   const { candidates, selectedId, style, preview } = state
+  const selectedUrl = candidates.find((c) => c.sourceId === selectedId)?.url ?? null
 
   if (candidates.length === 0) {
     return (
@@ -1084,12 +1087,20 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
           >
             {flow.inserting ? 'Inserting…' : 'Insert citation'}
           </button>
+          {/* Was "Preview", which formatted the citation — and the citation
+              block is now generated the moment a source is selected, so the
+              button was a second click for something already on screen. Owner,
+              2026-08-19: *"when I click preview I want the article to pop up."*
+              Reasonable: the one thing a writer cannot check from this card is
+              whether the page actually says what they are about to attribute
+              to it. */}
           <button
             className="docmark-btn-secondary"
-            onClick={flow.onPreview}
-            disabled={flow.previewing || !selectedId}
+            onClick={flow.onOpenArticle}
+            disabled={!selectedId || !selectedUrl}
+            title={selectedUrl ?? undefined}
           >
-            {flow.previewing ? 'Formatting…' : 'Preview'}
+            Open article ↗
           </button>
         </div>
       )}
