@@ -74,7 +74,7 @@ export function registerStructureHandlers(): void {
       analysisId: input.analysisId ?? null,
       text: input.text,
       claims,
-      claimsWithoutEvidence: claimsWithoutEvidence(claims),
+      claimsWithoutEvidence: claimsWithoutEvidence(claims, input.text),
       coverage: computeEvidenceCoverage(claims, input.text),
       classified,
       analyzedAt: new Date().toISOString()

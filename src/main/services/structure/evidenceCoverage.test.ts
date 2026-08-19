@@ -139,3 +139,49 @@ describe('claimsWithoutEvidence', () => {
     deepStrictEqual(claimsWithoutEvidence([claim('score-and-breakdown', 81, 0.5)]), [])
   })
 })
+
+/**
+ * Searched, nothing cleared the relevance floor — and the writer cited a source
+ * in the sentence itself.
+ *
+ * The owner's case, 2026-08-19: this was reported as "Unsupported claim ·
+ * 0/100 evidence — no supporting source yet" over a sentence carrying a real
+ * reference. The claim is not unsupported; four scholarly indexes simply do
+ * not hold it, and nothing in the retrieval path ever opened the work named.
+ */
+const searchedEmptyButCited = claim(
+  'cited-empty',
+  0,
+  0,
+  'She had largely contributed to the resistance by delivering underground newspapers (Lähteenmäki, 2006).'
+)
+
+describe('claimsWithoutEvidence — the writer already cited a source', () => {
+  it('does not call a cited claim unsupported just because retrieval found nothing', () => {
+    deepStrictEqual(claimsWithoutEvidence([searchedEmptyButCited]), [])
+  })
+
+  it('still reports an uncited claim that came back empty', () => {
+    deepStrictEqual(claimsWithoutEvidence([searchedEmpty, searchedEmptyButCited]), ['empty'])
+  })
+
+  // The claim is a sub-span of its sentence, so the reference can sit outside
+  // the claim text. Without the document the claim-only test misses it, which
+  // is what made the report and the underline disagree about one sentence.
+  it('sees a citation that follows the claim in the document', () => {
+    const bare = claim('bare', 0, 0, 'She delivered underground newspapers for the resistance')
+    const document =
+      'She delivered underground newspapers for the resistance, at real risk to herself (Lähteenmäki, 2006).'
+    deepStrictEqual(claimsWithoutEvidence([bare]), ['bare'])
+    deepStrictEqual(claimsWithoutEvidence([bare], document), [])
+  })
+
+  it('agrees with the coverage ratio computed beside it', () => {
+    const claims = [searchedEmptyButCited]
+    const coverage = computeEvidenceCoverage(claims)
+    strictEqual(coverage.withOwnCitation, 1)
+    // A claim counted under "has its own citation" must not also be named under
+    // "no supporting source" — the two lines sat in the same panel.
+    deepStrictEqual(claimsWithoutEvidence(claims), [])
+  })
+})

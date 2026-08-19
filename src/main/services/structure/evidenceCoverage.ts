@@ -68,12 +68,20 @@ function isOutsideIndexes(claim: Claim): boolean {
  * Without the text this falls back to the claim-only test, which is the old
  * behaviour and still right for a stored claim with no snapshot to read.
  */
-export function computeEvidenceCoverage(claims: Claim[], documentText?: string): EvidenceCoverage {
-  const resolved = claims.filter(isResolved)
-  const strengths = resolved
-    .map((claim) => claim.strengthScore)
-    .filter((score): score is number => score !== null)
-
+/**
+ * Did the WRITER attach a source to this sentence?
+ *
+ * Span-aware when the document is available: a detected claim is a sub-span of
+ * a sentence, so testing the claim text alone misses an "(Author, Year)" that
+ * follows the assertion. Falls back to the claim-only test for a stored claim
+ * with no snapshot to read.
+ *
+ * Extracted so `claimsWithoutEvidence` can ask the same question the coverage
+ * ratio asks. The two disagreeing is what produced a report that counted a
+ * claim under "has its own citation" and named it under "no supporting source"
+ * in the same panel.
+ */
+function citationLookup(claims: Claim[], documentText?: string): (claim: Claim) => boolean {
   const citedById = documentText
     ? new Map(
         computeClaimSpans(documentText, claims).map(
@@ -81,8 +89,16 @@ export function computeEvidenceCoverage(claims: Claim[], documentText?: string):
         )
       )
     : null
-  const isCited = (claim: Claim): boolean =>
-    citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
+  return (claim) => citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
+}
+
+export function computeEvidenceCoverage(claims: Claim[], documentText?: string): EvidenceCoverage {
+  const resolved = claims.filter(isResolved)
+  const strengths = resolved
+    .map((claim) => claim.strengthScore)
+    .filter((score): score is number => score !== null)
+
+  const isCited = citationLookup(claims, documentText)
 
   return {
     detected: claims.length,
@@ -104,9 +120,43 @@ export function computeEvidenceCoverage(claims: Claim[], documentText?: string):
  * nothing" and "we have not looked" are different statements, and only the
  * first is a weakness in the draft — telling a student their claim is
  * unsupported before checking would be an accusation the app cannot back.
+ *
+ * ── And excludes claims the writer already cited ───────────────────────────
+ * Owner, 2026-08-19, over a sentence carrying "(Lähteenmäki, 2006)" and
+ * reported as **"Unsupported claim · 0/100 evidence — no supporting source
+ * yet"**: *"if that claim came from the website, you don't need to flag it
+ * anymore because it works — unless the citation is wrong... no need to check
+ * more websites if the one already cited matches."*
+ *
+ * That is right, and the sentence this produced was not merely unhelpful, it
+ * was false: there IS a supporting source, named in the sentence. What the app
+ * actually established is that a topical search of four scholarly indexes
+ * returned nothing — and nothing in the retrieval path ever opens the work the
+ * writer named, so it is not a finding about their citation at all.
+ *
+ * This is the SAME rule `problemKindsFor` has applied to the underline since
+ * 2026-08-16, where `nothingFound` gates `cited-unverified` for exactly this
+ * reason. The two surfaces were reading the same claim and disagreeing: the
+ * mark stayed quiet and the report called it unsupported.
+ *
+ * The cost, stated as plainly as it is stated there: a genuinely miscited claim
+ * now says nothing HERE until the critique runs on it. That is the right way
+ * round, and it is not a gap — `citedEvidence.ts` puts the writer's own
+ * resolved source in slot 1 and `CRITIQUE_SYSTEM_PROMPT`'s Pass 2 and 2.5 are
+ * built to judge the citation itself, which is the only path in this app that
+ * ever reads it. A malformed reference comes back `citationFix`, an invented
+ * one `fabricated`. Retrieval cannot reach either verdict and should stop
+ * implying it has.
  */
-export function claimsWithoutEvidence(claims: Claim[]): string[] {
+export function claimsWithoutEvidence(claims: Claim[], documentText?: string): string[] {
+  const isCited = citationLookup(claims, documentText)
   return claims
-    .filter((claim) => isResolved(claim) && !hasRelevantSource(claim) && !isOutsideIndexes(claim))
+    .filter(
+      (claim) =>
+        isResolved(claim) &&
+        !hasRelevantSource(claim) &&
+        !isOutsideIndexes(claim) &&
+        !isCited(claim)
+    )
     .map((claim) => claim.id)
 }

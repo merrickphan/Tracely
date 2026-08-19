@@ -98,7 +98,7 @@ export function computeWatchOutline({
     analysisId: null,
     text,
     claims,
-    claimsWithoutEvidence: claimsWithoutEvidence(claims),
+    claimsWithoutEvidence: claimsWithoutEvidence(claims, text),
     coverage,
     analyzedAt
   })
