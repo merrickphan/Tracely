@@ -397,6 +397,17 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   payload — the two fields it must supply itself, previews and stats, are the
   two `DocumentOutline` deliberately has no prose for.
 - **The score is a deterministic formula, not a model output** (`structure/scoreDraft.ts`) — the same stance `search/scoring.ts` takes for evidence strength, and for the same reason: a number a student is asked to act on has to be one they can argue with. Six components (thesis 20, governing claims 20, warrant 20, counterargument 15, significance 15, conclusion 10). Governing claims is a **fraction of the body, never a count**, which is what stops the score being a length proxy — padding an essay lowers it. The panel displays every paragraph's role label beside the number so a wrong label is visibly wrong rather than mysteriously costly.
+- **The grading LEVEL moves the letter, never the score** (`shared/gradeLevel.ts`,
+  Settings → Preferences, grades 3-12). The rubric measures the same six things
+  at every level and the report's breakdown adds to the number shown, so
+  scaling the score would both break that arithmetic and make the grade
+  unarguable — the property the deterministic formula exists to protect. It is
+  a band shift: 4 points of credit per year below 12, which is the level
+  `GRADE_BANDS` was tuned against, so an install that never opens the setting
+  grades exactly as it did before it existed. `gradeFor(score, level)` is
+  defaulted, and the main window reads the level from a context
+  (`lib/gradeLevel.tsx`) while the overlay passes it as a prop — that window
+  mounts no provider.
 - **Evidence is deliberately NOT in the /100.** `strengthScore` already contains a `sourceCount` factor, so folding retrieval in would double-count it — and worse, would make the score track how *searchable* the topic is, capping a close reading of a novel near 50 because the academic APIs have nothing to say about it. `structure/evidenceCoverage.ts` reports it beside the score as a ratio instead. It reads `scoreBreakdown.sourceCount` rather than re-thresholding `claim_evidence.relevance_score`, because which metric produced those values (lexical 0.2 vs dense 0.35 floor) is *not* persisted with the rows.
 - **`unknown` is a real answer.** `structure/roles.ts` labels only what a marker or a detected claim justifies and returns `unknown` for everything else; `complete: false` then makes the panel say **"provisional"**, and `structure/weaknesses.ts` **withholds whole-draft findings entirely** while any paragraph is unlabelled — "this draft has no counterargument" is an assertion about paragraphs nothing read. A guessed label produces a confident number computed from nothing, which is worse than admitting the paragraph wasn't read.
 - **Exactly one relay call, and it is not wired up yet.** `ai/structureClassifier.ts` takes its endpoint as a parameter typed `Parameters<typeof callRelay>[0]`, and that union does not contain `'classify-structure'` — so it is uncallable by construction. `scripts/preflight.mjs` parses that union out of `client.ts` and requires each endpoint to answer non-404 in production, so widening it before the relay ships would block *every* release. Enabling it is three steps, written at the top of that file. The relay endpoint is committed in `../Tracely-relay` on `feat/classify-structure`, **not deployed**.
@@ -407,6 +418,18 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
 - **The `contradicted` verdict is its own problem kind, not weak reasoning.** `CRITIQUE_SYSTEM_PROMPT` reserves it for "a specific fact you're confident is factually wrong" and tells the model to fall through to the rigor pass whenever it is merely unsure — so it is a claim about truth, while every other kind is a claim about support. `problemKind.ts` ranks `contradicted-claim` above everything, including `cited-unverified`.
 - **The critique cache is keyed on the claim's TEXT, not its id** (`ai/critique.ts`, v6). Screen Watch mints a fresh `randomUUID()` per detection, so an id-keyed entry could never be hit there: re-detecting an unchanged sentence paid a fresh call on the reasoning model, the most expensive call in the product. `strengthScore` is in the key too, because it is in the request body.
 - **Screen Watch claims need BOTH evidence fields folded in.** `withEvidenceScores` in `screenWatchService.ts` sets `strengthScore` *and* `scoreBreakdown`, because `computeEvidenceCoverage` decides "has a relevant source" from `scoreBreakdown.sourceCount`. Folding only the score marks every searched claim resolved-but-unsourced, producing an `unsupported-claim` weakness for every claim that in fact *has* sources. `evidenceCoverage.test.ts` pins this.
+- **The editor searches evidence automatically, and that is what draws the
+  underlines.** `measureMarks` skips any claim with no evidence (null means
+  "never looked", and underlining an unchecked claim reports a verdict Tracely
+  has not reached), so before this a freshly analysed document had claims, a
+  score and NOT ONE mark until the writer found "Check all N" two screens away
+  inside the full report. `AnalyzeView` now sweeps unsearched claims once per
+  analysis, tracked in `autoSearchedRef` so a search that comes back empty
+  cannot loop. The rule that allows it is the same one Screen Watch runs under:
+  evidence search hits the four free public APIs and never the relay. Critique
+  — the paid call — stays manual on both surfaces. The sweep shows its progress
+  (`.docedit-checking`), because a 30-second wait that shows nothing is
+  indistinguishable from marks that never come.
 - **Tested modules are leaves.** `npm test` runs these through Node's type stripping, whose ESM resolver rejects the extensionless relative imports used throughout this codebase — so a module with a relative *value* import cannot be unit tested. That is why `roles.ts` duplicates three lines of sentence splitting instead of importing `splitSentences`, why the paragraph-bucketing logic lives in `shared/paragraphSplit.ts`, and why `analyzeStructure.ts` is thin: every decision with a wrong answer available sits somewhere the runner can load it.
 - **`splitParagraphs` treats ANY newline run as a boundary**, not just a blank line. It runs on the contentEditable editor's `innerText`, where execCommand wraps each Enter in a `<div>` that Chromium renders as a single `\n`; requiring `\n\n` would see a normal essay as one giant paragraph. It lives in `shared/` because the renderer must re-derive the same paragraphs to draw text beside the labels — a `DocumentOutline` carries **no prose**, only indices, roles, booleans and ids.
 - **`document_structure` is a cache of a pure function that still has to be persisted**, because it cannot be recomputed on demand: the analysis runs on `innerText`, and `documents.body_html` cannot be turned back into that string from main without parsing HTML. `source_hash` is over the innerText, so reformatting leaves the analysis valid while an edit to the words marks it stale.

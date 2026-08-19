@@ -1,3 +1,5 @@
+import { adjustedScore } from '@shared/gradeLevel'
+
 /**
  * The letter band shown beside the argument score.
  *
@@ -25,7 +27,16 @@ export const GRADE_BANDS: Array<[number, string, string]> = [
   [0, 'F', 'Not yet arguing anything the rubric can find']
 ]
 
-export function gradeFor(score: number): { letter: string; line: string } {
-  const band = GRADE_BANDS.find(([floor]) => score >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
+/**
+ * The letter for a score, at a school year.
+ *
+ * `level` shifts what the number is WORTH, never the number itself — see
+ * shared/gradeLevel.ts for why the /100 must not move. Defaulted, so every
+ * caller that has no business knowing the setting (and every test) keeps the
+ * pre-setting behaviour: year 12, no shift.
+ */
+export function gradeFor(score: number, level?: number): { letter: string; line: string } {
+  const banded = adjustedScore(score, level)
+  const band = GRADE_BANDS.find(([floor]) => banded >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
   return { letter: band[1], line: band[2] }
 }

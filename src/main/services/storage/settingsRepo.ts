@@ -31,7 +31,10 @@ const DEFAULTS: Record<string, string> = {
   // 212:65). Off by default so the dialog appears until the user opts out of
   // it — a confirm nobody can turn off is one they learn to click through
   // without reading, which is worse than not having it.
-  suppressSaveConfirm: 'false'
+  suppressSaveConfirm: 'false',
+  // Year 12 — the level GRADE_BANDS was written against, so an install that
+  // never opens this setting grades exactly as it did before it existed.
+  gradingLevel: '12'
 }
 
 export function getSetting(key: string): string {

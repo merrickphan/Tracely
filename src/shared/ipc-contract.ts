@@ -150,6 +150,8 @@ export interface SettingsSetRequest {
   screenWatchHotkeyAccelerator?: string
   screenWatchAllowedApps?: string
   suppressSaveConfirm?: boolean
+  /** School year, 3-12. Bands the letter; never touches the /100. */
+  gradingLevel?: number
 }
 export type SettingsSetResponse = AppSettings
 

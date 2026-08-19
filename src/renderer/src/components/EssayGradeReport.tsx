@@ -171,9 +171,16 @@ export function GradeDivider(): JSX.Element {
 }
 
 /** The ring + band block, byte-identical between 370:191 and 404:185. */
-export function GradeScoreSection({ structure }: { structure: GradeInput | null }): JSX.Element {
+export function GradeScoreSection({
+  structure,
+  gradingLevel
+}: {
+  structure: GradeInput | null
+  /** The school year the letter is banded against — see shared/gradeLevel.ts. */
+  gradingLevel?: number
+}): JSX.Element {
   const score = structure?.score ?? 0
-  const { letter, line } = gradeFor(score)
+  const { letter, line } = gradeFor(score, gradingLevel)
   // 116px box, 10px stroke => r 53. The arc starts at 12 o'clock (the rotation
   // below) and runs clockwise, as the frame's does.
   const R = 53
@@ -375,6 +382,7 @@ export function miniBarColor(percent: number): string {
 export function EssayGradeReportPanel({
   structure,
   claims,
+  gradingLevel,
   onClose,
   onBackToSummary,
   onArgumentCheck,
@@ -383,6 +391,15 @@ export function EssayGradeReportPanel({
 }: {
   structure: GradeInput | null
   claims: GradeClaim[]
+  /**
+   * The school year the LETTER is banded against, not the score.
+   *
+   * A prop rather than context because this renders in the overlay window too,
+   * which mounts no provider — it reads the setting from its own bridge and
+   * passes it in. Undefined bands at the reference level, which is what the app
+   * did before the setting existed.
+   */
+  gradingLevel?: number
   onClose: () => void
   onBackToSummary: () => void
   onArgumentCheck: () => void
@@ -404,7 +421,7 @@ export function EssayGradeReportPanel({
     <>
       <GradeHeader title="Writing Grade — Full Report" onClose={onClose} />
       <GradeDivider />
-      <GradeScoreSection structure={structure} />
+      <GradeScoreSection structure={structure} gradingLevel={gradingLevel} />
 
       {/*
         The frame spaces these four by their own x positions (404:203), which a
@@ -667,7 +684,7 @@ export function EssayGradeReportPanel({
           {draftWeaknesses.length > 0
             ? draftWeaknesses.map((w) => w.message).join(' ')
             : structure
-              ? `${gradeFor(structure.score).line}. Nothing outstanding across the draft as a whole.`
+              ? `${gradeFor(structure.score, gradingLevel).line}. Nothing outstanding across the draft as a whole.`
               : 'No reading of this draft yet.'}
         </div>
       </div>

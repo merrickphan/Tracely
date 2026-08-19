@@ -10,6 +10,7 @@ import SettingsView from './views/SettingsView'
 import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize, trackWindowZoom } from './lib/appearance'
 import { tracelyApi } from './lib/api'
+import { GradeLevelProvider } from './lib/gradeLevel'
 
 export type Tab = 'home' | 'documents' | 'analyze' | 'library' | 'settings'
 
@@ -120,6 +121,10 @@ export default function App(): JSX.Element {
   }
 
   return (
+    // Every letter grade in this window is banded against the school year in
+    // Settings > Preferences. The provider reads it once; the six places that
+    // draw a letter take it from context rather than from four layers of props.
+    <GradeLevelProvider>
     <div className="app-shell">
       {/* The window has no title bar to drag by — see mainWindow.ts. This is
           the strip that replaces its caption area; it stops short of the
@@ -161,5 +166,6 @@ export default function App(): JSX.Element {
         {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
       </main>
     </div>
+    </GradeLevelProvider>
   )
 }
