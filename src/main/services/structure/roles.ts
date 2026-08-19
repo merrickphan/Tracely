@@ -589,6 +589,13 @@ export interface HeuristicRoleInput {
 }
 
 export interface HeuristicRoles {
+  /**
+   * Which paragraph the local reader puts the thesis in, 1-based, or 0 when it
+   * found none. Exported so `analyzeStructure` can hand it to `scoreDraft` as a
+   * FALLBACK when the classifier's role vector names no thesis — see
+   * ScoreSignals.thesisFallbackIndex. It never overwrites a role.
+   */
+  thesisIndex: number
   roles: ParagraphRole[]
   warranted: boolean[]
   /**
@@ -633,7 +640,7 @@ export function heuristicRoles({
     statesClaim.push(hasClaim || looksLikeTopicClaim(firstSentence(paragraph.text), hasCitation))
   }
 
-  return { roles, warranted, statesClaim }
+  return { thesisIndex, roles, warranted, statesClaim }
 }
 
 /**

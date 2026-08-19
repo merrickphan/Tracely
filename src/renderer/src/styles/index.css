@@ -6644,3 +6644,30 @@ textarea:disabled {
   -webkit-app-region: no-drag;
   pointer-events: none;
 }
+
+/* The grading level, on its own row above the page. Quiet — a label with a way
+   to change it, not an action. Right-aligned so it sits over the page's corner
+   and reads as a property of the document rather than a control. */
+.docedit-docmeta {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 24px 0;
+}
+
+.docedit-gradelevel {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-2);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.docedit-gradelevel:hover { border-color: var(--accent); color: var(--accent); }

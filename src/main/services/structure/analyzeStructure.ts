@@ -32,12 +32,17 @@ import { findWeaknesses } from './weaknesses'
 // `getStoredOutline` filters on this, and the alternative is a report that
 // shows no flow score for every document opened after an update.
 //
+// v4 borrows two non-role signals from the local reader when the classifier
+// answered — `statesClaim` as a union, and the thesis position as a fallback.
+// Both change the SCORE, so a stored v3 outline would keep showing a number the
+// app would no longer compute for the same text.
+//
 // v3 adds `statesClaim`, which `governingClaims` now scores from. A v2 outline
 // would still render — the fallback to `role === 'claim'` is exactly what it
 // was scored with — but it would keep showing the OLD number beside the new
 // rubric, so a student who reopened a document would see a score that no
 // longer matches what the app would compute for the same text.
-export const STRUCTURE_SCHEMA_VERSION = 3
+export const STRUCTURE_SCHEMA_VERSION = 4
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -110,9 +115,28 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // `npm test` can load — it cannot value-import the shared detector itself,
   // and its own fallback pattern finds none of the MLA or author-and-year
   // forms a real paper uses.
-  const { roles, warranted, statesClaim } =
-    input.classified ??
-    heuristicRoles({ paragraphs: spans, claimsByParagraph, hasCitation: hasInlineCitation })
+  // The local reader runs either way. When the classifier answered, its ROLES
+  // are still used whole — but two of its outputs are not roles, and where it
+  // under-reports them the draft loses points for work it plainly did:
+  //
+  //   statesClaim  a separate axis by construction (see HeuristicRoles), so
+  //                the union is taken. Measured on a real essay: two body
+  //                paragraphs each opening with a topic sentence came back
+  //                `evidence` with statesClaim false, halving governing claims.
+  //   thesisIndex  a FALLBACK, consulted by scoreDraft only when the role
+  //                vector names no thesis at all. Same essay: the introduction
+  //                came back `claim`, scoring thesis 0/20 and emitting a
+  //                `no-thesis` weakness over a draft whose thesis is the last
+  //                sentence of that paragraph.
+  //
+  // Neither touches the role vector, so `rolesFrom` stays a true description of
+  // where the labels came from.
+  const local = heuristicRoles({ paragraphs: spans, claimsByParagraph, hasCitation: hasInlineCitation })
+  const roles = input.classified?.roles ?? local.roles
+  const warranted = input.classified?.warranted ?? local.warranted
+  const statesClaim = input.classified
+    ? input.classified.statesClaim.map((flag, i) => flag || local.statesClaim[i] === true)
+    : local.statesClaim
 
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
@@ -144,6 +168,9 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   const significanceAnywhere = spans.some((span) => hasSignificanceMarker(span.text))
 
   const { score, components, complete, applicable } = scoreDraft(paragraphs, {
+    // 0 means the local reader found none; scoreDraft treats out-of-range as
+    // absent, and 1-based -> 0-based is the -1.
+    thesisFallbackIndex: local.thesisIndex > 0 ? local.thesisIndex - 1 : null,
     soWhatInConclusion,
     significanceAnywhere,
     titleParagraph
@@ -165,7 +192,9 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
       paragraphs,
       claimsWithoutEvidence: input.claimsWithoutEvidence,
       soWhatInConclusion,
-      titleParagraph
+      titleParagraph,
+      // The same fallback the score uses. Both or neither — see thesisFound.
+      thesisFound: roles.includes('thesis') || local.thesisIndex > 0
     }),
     // Measured over the same spans the roles were computed from, so a boundary
     // finding and the role labels either side of it can never describe

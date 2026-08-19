@@ -60,6 +60,22 @@ export interface ScoreSignals {
    * could not read a paragraph when the paragraph was a heading.
    */
   titleParagraph?: boolean
+  /**
+   * The 0-based paragraph the LOCAL reader believes carries the thesis, when
+   * the role vector names none.
+   *
+   * Only consulted when no paragraph is labelled 'thesis'. The classifier's
+   * answer is still used whole — this does not overwrite a role — but a model
+   * that labels the introduction 'claim' instead of 'thesis' should not cost a
+   * draft the entire component when the sentence is right there.
+   *
+   * Measured on a real essay (Hepburn, 2026-08-19): the model returned
+   * `claim` for a first paragraph ending "…which set her apart from celebrities
+   * in her time", scoring thesis 0/20 and emitting a `no-thesis` weakness over
+   * a draft with a perfectly good one. The local `looksLikeThesis` reader found
+   * it. Null when it did not, which is still an honest 0.
+   */
+  thesisFallbackIndex?: number | null
 }
 
 export interface DraftScore {
@@ -174,7 +190,19 @@ export function scoreDraft(paragraphs: ParagraphOutline[], signals: ScoreSignals
   // A third, and never less than the first two paragraphs — so every draft
   // short enough for the original rule to have been written about scores
   // exactly as it did.
-  const thesisAt = roles.indexOf('thesis')
+  //
+  // The fallback runs only when the vector names no thesis at all — see
+  // ScoreSignals.thesisFallbackIndex. It is a position, so it is scored by the
+  // same up-front rule as a labelled one rather than credited flat.
+  const labelledThesisAt = roles.indexOf('thesis')
+  const thesisAt =
+    labelledThesisAt !== -1
+      ? labelledThesisAt
+      : typeof signals.thesisFallbackIndex === 'number' &&
+          signals.thesisFallbackIndex >= 0 &&
+          signals.thesisFallbackIndex < paragraphs.length
+        ? signals.thesisFallbackIndex
+        : -1
   const upFront = Math.max(1, Math.floor(paragraphs.length / 3))
   const thesis =
     thesisAt === -1 ? 0 : thesisAt <= upFront ? COMPONENT_MAX.thesis : COMPONENT_MAX.thesis / 2
