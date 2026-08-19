@@ -441,8 +441,18 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
           id: `mock-reply-${previewTracerMessages.length}`,
           conversationId: req.conversationId,
           role: 'tracer' as const,
-          content:
-            'In the harness I answer from a fixture rather than the relay, so this is the same reply every time. The panel, the bubbles and the typing indicator are all real.',
+          // Carries a rewrite block whose FIND is the first sentence of
+          // documents[0], so the Apply path is reachable here at all. Without
+          // it the card could only be reviewed against a live relay, which is
+          // exactly the kind of state this harness exists to make reachable.
+          content: [
+            'In the harness I answer from a fixture rather than the relay, so this is the same reply every time. That opening sentence claims more than the studies support — it asserts cause where the evidence only shows association.',
+            '',
+            '<<<REWRITE',
+            'FIND: Screen time causes depression in teenagers.',
+            'REPLACE: Screen time is associated with depression in teenagers.',
+            '>>>'
+          ].join('\n'),
           createdAt: fx.T0
         }
         previewTracerMessages = [...previewTracerMessages, userMessage, reply]

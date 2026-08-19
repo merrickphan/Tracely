@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TracerMessage } from '@shared/types'
+import { parseTracerReply, type TracerRewrite } from '@shared/tracerRewrite'
 import { tracelyApi, TracelyApiError } from '../lib/api'
 import tracerBadge from '../assets/tracer-badge.png'
 
@@ -20,7 +21,22 @@ import tracerBadge from '../assets/tracer-badge.png'
 const PENDING_ID = '__pending__'
 const GREETING_ID = '__greeting__'
 
-export default function TracerChat({ onClose }: { onClose: () => void }): JSX.Element {
+export default function TracerChat({
+  onClose,
+  onApplyRewrite
+}: {
+  onClose: () => void
+  /**
+   * Apply a proposed rewrite to the document, returning whether it landed.
+   *
+   * Optional, and its absence is what makes the offer disappear: on Home there
+   * is no open document to edit, so a card with an Apply button would be a
+   * button that cannot work. In the editor it is provided, and the rewrite goes
+   * in through the same execCommand path as every other edit — one Ctrl+Z
+   * takes it back out.
+   */
+  onApplyRewrite?: (rewrite: TracerRewrite) => boolean
+}): JSX.Element {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<TracerMessage[]>([])
   const [draftTitle, setDraftTitle] = useState<string | null>(null)
@@ -28,6 +44,10 @@ export default function TracerChat({ onClose }: { onClose: () => void }): JSX.El
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
+  // Message id -> what happened when its rewrite was applied. Keyed by id
+  // rather than held on the message so re-fetching the conversation cannot
+  // resurrect an offer the writer has already taken.
+  const [applied, setApplied] = useState<Record<string, 'done' | 'missing' | 'dismissed'>>({})
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -132,11 +152,64 @@ export default function TracerChat({ onClose }: { onClose: () => void }): JSX.El
       </header>
 
       <div className="tracer-log" ref={scrollRef}>
-        {shown.map((m) => (
-          <p key={m.id} className={`tracer-msg ${m.role === 'user' ? 'from-user' : 'from-tracer'}`}>
-            {m.content}
-          </p>
-        ))}
+        {shown.map((m) => {
+          // Parsed at render, not at receipt, so a conversation reopened
+          // tomorrow still offers the rewrite it offered today — the block is
+          // stored with the message rather than stripped before saving.
+          const { prose, rewrite } = m.role === 'tracer'
+            ? parseTracerReply(m.content)
+            : { prose: m.content, rewrite: null }
+          const state = applied[m.id]
+          return (
+            <div key={m.id} className="tracer-turn">
+              <p className={`tracer-msg ${m.role === 'user' ? 'from-user' : 'from-tracer'}`}>
+                {prose}
+              </p>
+              {rewrite && onApplyRewrite ? (
+                <div className="tracer-rewrite">
+                  <b>Suggested rewrite</b>
+                  <p className="tracer-rewrite-was">{rewrite.find}</p>
+                  <p className="tracer-rewrite-now">{rewrite.replace}</p>
+                  {state === 'done' ? (
+                    <span className="tracer-rewrite-done">
+                      Applied — Ctrl+Z undoes it.
+                    </span>
+                  ) : state === 'missing' ? (
+                    <span className="tracer-rewrite-gone">
+                      That sentence is not in the document any more — nothing was changed.
+                    </span>
+                  ) : state === 'dismissed' ? (
+                    <span className="tracer-rewrite-gone">Dismissed.</span>
+                  ) : (
+                    <div className="tracer-rewrite-actions">
+                      <button
+                        className="tracer-apply"
+                        onClick={() => {
+                          // The edit runs HERE, not inside the state updater.
+                          // React invokes an updater twice under StrictMode, so
+                          // the second call re-ran the rewrite against a
+                          // document that had already taken it: the text was
+                          // correct and the card said "that sentence is not in
+                          // the document any more". Caught in the harness.
+                          const landed = onApplyRewrite(rewrite)
+                          setApplied((prev) => ({ ...prev, [m.id]: landed ? 'done' : 'missing' }))
+                        }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        className="tracer-dismiss"
+                        onClick={() => setApplied((prev) => ({ ...prev, [m.id]: 'dismissed' }))}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
         {sending ? (
           <p className="tracer-msg from-tracer tracer-typing" aria-label="Tracer is typing">
             <i />

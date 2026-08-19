@@ -8,6 +8,7 @@ import { createHoverCloser } from '@shared/hoverIntent'
 import { formatInTextCitation } from '@shared/citationInText'
 import ClaimCard from '../components/ClaimCard'
 import Button from '../components/Button'
+import TracerChat from '../components/TracerChat'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -17,6 +18,7 @@ import type { ProseMark } from '../components/documentMarks'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
 import {
+  applyTracerRewrite,
   addWorksCitedEntry,
   applyProseIssue,
   insertCitationForClaim,
@@ -175,6 +177,10 @@ function DocumentEditor({
   /** A grammar fix that could not be applied. Local, because `error` is a prop
    *  owned by the parent and this is not that kind of failure. */
   const [proseNotice, setProseNotice] = useState<string | null>(null)
+  // Tracer, in the editor rather than on Home. This is the surface where a
+  // proposed rewrite can actually be applied: the document is open, so the
+  // edit goes through execCommand and lands on the browser's undo stack.
+  const [tracerOpen, setTracerOpen] = useState(false)
   const [wrapWidth, setWrapWidth] = useState(0)
   // The editor's visible box, as of the hover that opened the popover — see
   // handleBodyMouseMove for why it is sampled there and not on every measure.
@@ -725,6 +731,27 @@ function DocumentEditor({
     }
     queueSave()
     setMeasureTick((n) => n + 1)
+  }
+
+  /**
+   * Applies a rewrite Tracer proposed.
+   *
+   * The same shape as `applyProseFix` and for the same reasons: through
+   * `execCommand` so one Ctrl+Z takes it back out, `queueSave` so the document
+   * on disk matches what is on screen, and a re-measure so the marks follow the
+   * sentence that just changed.
+   *
+   * Returns whether it landed, because the chat panel says so in the card
+   * rather than leaving the writer to check — the sentence may have been edited
+   * away since Tracer read it.
+   */
+  function applyRewriteFromTracer(rewrite: { find: string; replace: string }): boolean {
+    const body = editorRef.current
+    if (!body) return false
+    if (!applyTracerRewrite(body, rewrite.find, rewrite.replace)) return false
+    queueSave()
+    setMeasureTick((n) => n + 1)
+    return true
   }
 
   /**
@@ -1601,6 +1628,20 @@ function DocumentEditor({
           paragraphTexts. The claim list under the document still appears, since
           that detection is the same call — nothing was taken away.
         */}
+        {/*
+          Tracer, beside AI Insights. It is in the toolbar rather than floating
+          over the page like Home's launcher because this row is where the
+          document's own actions live, and because the panel it opens is the
+          only one that can edit the draft — an affordance that writes into the
+          text belongs next to the other things that do.
+        */}
+        <button
+          className="docedit-tracer"
+          onClick={() => setTracerOpen((open) => !open)}
+          title="Chat with Tracer about this draft"
+        >
+          Tracer
+        </button>
         <button
           className="docedit-insights"
           onClick={() => {
@@ -1832,6 +1873,13 @@ function DocumentEditor({
           onCancel={() => setConfirmingDelete(false)}
         />
       ) : null}
+
+      {tracerOpen ? (
+
+        <TracerChat onClose={() => setTracerOpen(false)} onApplyRewrite={applyRewriteFromTracer} />
+
+      ) : null}
+
 
       {scoreOpen ? (
         <ArgumentScoreModal
