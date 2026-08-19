@@ -28,9 +28,27 @@ export function getCitation(sourceId: string, style: CitationStyle): Citation | 
   return row ? toDomain(row) : null
 }
 
+/**
+ * Store the formatted citation, replacing what is there when it has changed.
+ *
+ * This used to return the existing row untouched, which made the table a cache
+ * of a pure function with no way to invalidate it. When the formatters stopped
+ * putting a DOI on books (2026-08-19), every source already cited once kept its
+ * old text forever — the owner installed the fix and the reference list still
+ * read `https://doi.org/…`, because the row predated it.
+ *
+ * Formatting is string concatenation. There was never anything to cache.
+ */
 export function saveCitation(sourceId: string, style: CitationStyle, formattedText: string): Citation {
   const existing = getCitation(sourceId, style)
-  if (existing) return existing
+  if (existing) {
+    if (existing.formattedText === formattedText) return existing
+    run('UPDATE citations SET formatted_text = $text WHERE id = $id', {
+      $id: existing.id,
+      $text: formattedText
+    })
+    return { ...existing, formattedText }
+  }
 
   const id = randomUUID()
   const createdAt = new Date().toISOString()

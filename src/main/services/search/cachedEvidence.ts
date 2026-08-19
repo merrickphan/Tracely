@@ -14,6 +14,17 @@ export interface EvidenceResult {
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
 function cacheKey(query: string, claimText: string): string {
+  // v6: the returned evidence is now filtered by MIN_COUNTABLE_RELEVANCE and
+  // capped at five (see aggregator.ts). A v5 hit serves the old unfiltered
+  // list of sixteen for up to 24 hours — which is exactly what happened: the
+  // fix shipped, and the owner's next screenshot still showed eleven sources
+  // at 0% match, because every claim in that draft had already been searched.
+  //
+  // BUMP THIS ON ANY CHANGE TO WHAT findEvidence RETURNS. Not just to how it
+  // ranks — to what comes back, how much of it, or how it is scored. A
+  // retrieval change that does not move this key is a retrieval change nobody
+  // will see for a day, on precisely the documents being used to judge it.
+  //
   // v5: World Bank results no longer enter stance classification and datasets
   // have a lower quality weight. A v4 hit would preserve both old behaviours
   // for up to 24 hours.
@@ -21,7 +32,7 @@ function cacheKey(query: string, claimText: string): string {
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v5::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v6::${query}::${claimText}`).digest('hex')
 }
 
 /**
