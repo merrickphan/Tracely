@@ -32,11 +32,70 @@ import { isNarrowing } from '../../../shared/narrowing.ts'
  * the malformed-response case.
  */
 /**
+ * What Tracely established locally, independent of what the model said.
+ *
+ * One field so far, and it exists because the model does not honour the guard
+ * that was supposed to make `fabricated` unreachable without evidence — see
+ * `referenceLookupRan`.
+ */
+export interface CritiqueFacts {
+  /**
+   * A reference lookup actually ran for this sentence.
+   *
+   * `checkReferences` returns nothing at all unless the sentence names a
+   * reference it can search — `isCheckable` requires two surnames and a year —
+   * so for a single-author citation, an "et al.", or a placeholder author NO
+   * LOOKUP HAPPENS and no reference section is sent to the relay.
+   *
+   * `CRITIQUE_SYSTEM_PROMPT` Pass 2 is explicit about what that means: "If the
+   * section is absent, no lookup was possible … and (c) is unavailable." The
+   * model returns `fabricated` anyway.
+   *
+   * Measured on the owner's own database, 2026-08-19: **15 of 89 stored
+   * verdicts are `fabricated`** — 17% — and on one five-paragraph biographical
+   * essay three of eight claims were, including "Audrey Hepburn was born to an
+   * English father and a Dutch mother in Brussels", which is true, ordinary and
+   * correctly attributed. Every one of those sentences cited
+   * `(Unknown Author, 2025)`, which parses to a single surname, so
+   * `isCheckable` refused it and nothing was ever searched.
+   *
+   * The prompt's guard is advisory; this one is not. The rule it enforces is
+   * the prompt's own: a fabrication verdict with nothing searched is an
+   * accusation rather than a finding, and it is the most damaging thing this
+   * product can say to a writer.
+   */
+  referenceLookupRan: boolean
+}
+
+/**
+ * What the writer is told when a fabrication verdict is withdrawn.
+ *
+ * A local template REPLACING the model's prose rather than sitting beside it,
+ * because that prose asserts a search that never happened — the prompt requires
+ * a `fabricated` verdict to "state what was searched for and what came back",
+ * so the paragraph is unusable the moment the verdict is. Keeping it and
+ * quietly recolouring the badge would leave the accusation on screen under a
+ * softer label, which is worse than either alone.
+ *
+ * It says the thing that is actually true, and that is a real finding: the
+ * citation does not carry enough to look up.
+ */
+export const UNCHECKABLE_REFERENCE_CRITIQUE =
+  'Tracely could not check the source this sentence names. A reference needs at least two author surnames and a year before it can be looked up, and this one gives less — so nothing was searched, and nothing here is a judgement about whether the source is real. Check that the reference is complete; if the work genuinely has no named author, cite it by title and publisher instead.'
+
+/**
  * @param claimText The sentence being critiqued. Omitted, the revision is taken
  *   on trust, which is the pre-2026-08-16 behaviour and is retained only so a
  *   caller without the claim to hand is not forced to invent one.
+ * @param facts What Tracely established locally. Omitted, `referenceLookupRan`
+ *   is assumed TRUE — the pre-2026-08-19 behaviour — so an existing caller is
+ *   unchanged by this parameter arriving. Every real caller should pass it.
  */
-export function normalizeCritique(raw: CritiqueResult, claimText?: string): CritiqueResult {
+export function normalizeCritique(
+  raw: CritiqueResult,
+  claimText?: string,
+  facts?: CritiqueFacts
+): CritiqueResult {
   const trimmed = typeof raw.suggestedRevision === 'string' && raw.suggestedRevision.trim()
     ? raw.suggestedRevision.trim()
     : null
@@ -50,10 +109,25 @@ export function normalizeCritique(raw: CritiqueResult, claimText?: string): Crit
   const citationFix =
     typeof raw.citationFix === 'string' && raw.citationFix.trim() ? raw.citationFix.trim() : null
 
+  // A fabrication verdict reached with nothing searched. See CritiqueFacts.
+  //
+  // Downgraded to `unsupported` rather than to `weak`: the sentence may be
+  // perfectly well reasoned, and what is actually established is only that
+  // Tracely could not confirm the source. `unsupported` is also the verdict
+  // `isRetrievalMiss` already knows how to keep quiet about when nothing
+  // relevant came back, so a claim in this state stops shouting on both
+  // surfaces rather than swapping one accusation for another.
+  const withdrawnFabrication =
+    raw.verdict === 'fabricated' && facts !== undefined && !facts.referenceLookupRan
+
   return {
-    critique: raw.critique,
-    verdict: raw.verdict === 'overstated' && !suggestedRevision ? 'weak' : raw.verdict,
-    suggestedRevision,
+    critique: withdrawnFabrication ? UNCHECKABLE_REFERENCE_CRITIQUE : raw.critique,
+    verdict: withdrawnFabrication
+      ? 'unsupported'
+      : raw.verdict === 'overstated' && !suggestedRevision
+        ? 'weak'
+        : raw.verdict,
+    suggestedRevision: withdrawnFabrication ? null : suggestedRevision,
     // A fabricated verdict and a citation fix are mutually exclusive by
     // construction: one says the source does not exist, the other corrects how
     // it was written down. If both arrive, the fix is the safer of the two to
