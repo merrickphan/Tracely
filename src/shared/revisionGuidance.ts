@@ -126,6 +126,11 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
     move: 'After each source, write one sentence of your own saying what it establishes for your argument. Then read the paragraph back and cut whatever the new sentences made redundant — usually most of the summarising.',
     why: 'Reporting what three sources found puts research on the page and leaves your argument exactly where it was. A marker reading this paragraph learns what you read; they still do not know what you think, and they can only give credit for the second thing.',
     done: 'Strike out every sentence that reports what somebody else said. If nothing is left, the paragraph was a summary. What remains after you fix it should be an argument the sources happen to support.'
+  },
+  'malformed-citation': {
+    move: 'Open the source and copy the four things a reader needs from it: who wrote it, when, what it is called, and where it lives. Then write the in-text marker and the reference-list entry from those, in one style, and use that style everywhere.',
+    why: 'A citation exists so a reader can go and check you. One they cannot follow does the opposite of what it is for — and a marker who cannot find your source has no way to tell a formatting slip from an invented reference, so they mark it as the worse of the two.',
+    done: 'Hand your marker to someone with a library search box and ask them to find the source. If they can, the citation works. If they come back asking you which one you meant, something a reader needs is still missing.'
   }
 }
 

@@ -51,6 +51,12 @@ export const MAX_STRUCTURE_PARAGRAPHS = 24
 export const MAX_STRUCTURE_PARAGRAPH_CHARS = 420
 export const MAX_STRUCTURE_INPUT_CHARS = 8000
 
+// The auto-critique cap. Defined in `@shared/autoCritique.ts` beside the
+// eligibility rule it bounds, because the sweep is driven from the renderer and
+// the renderer must not import from `main/`. Re-exported here so this file
+// stays the one place to look for an AI limit, as CLAUDE.md says it is.
+export { MAX_AUTO_CRITIQUE_CLAIMS } from '@shared/autoCritique'
+
 export function truncateForClaimDetection(text: string): string {
   return text.length > MAX_CLAIM_DETECTION_INPUT_CHARS
     ? text.slice(0, MAX_CLAIM_DETECTION_INPUT_CHARS)

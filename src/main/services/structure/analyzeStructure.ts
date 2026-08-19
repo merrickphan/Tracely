@@ -8,6 +8,7 @@ import type {
   ParagraphRole
 } from '@shared/types'
 import { bucketClaimsByParagraph, splitParagraphs } from '@shared/paragraphSplit'
+import { findCitationDefects } from '@shared/citationShape'
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
@@ -56,7 +57,12 @@ import { findWeaknesses } from './weaknesses'
 // warrant, and a conclusion that restates the thesis halves — so a stored v4
 // outline would keep showing a number this app no longer computes for the same
 // text, which is the exact failure every bump above was written for.
-export const STRUCTURE_SCHEMA_VERSION = 5
+//
+// v6 adds `malformed-citation` from `shared/citationShape.ts`. Weakness list
+// only, no score change — but a stored v5 outline would show a report with no
+// citation findings in it beside an app that produces them, and the whole
+// point of them is that they are free and immediate.
+export const STRUCTURE_SCHEMA_VERSION = 6
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -247,6 +253,17 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
       titleParagraph,
       // The same fallback the score uses. Both or neither — see thesisFound.
       thesisFound: roles.includes('thesis') || local.thesisIndex > 0,
+      // Run per paragraph rather than over the whole draft, so each defect
+      // arrives already knowing which paragraph to name — and over the
+      // works-cited-trimmed spans, because a reference list is a page of
+      // parentheses and every rule here would fire down it.
+      citationDefects: spans.flatMap((span) =>
+        findCitationDefects(span.text).map((defect) => ({
+          paragraphIndex: span.index,
+          message: defect.message,
+          quote: defect.text
+        }))
+      ),
       reasoning,
       conclusionDrawsOnBody: conclusionDrawsOnBody(reasoningParagraphs)
     }),

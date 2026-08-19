@@ -242,6 +242,21 @@ export interface AppSettings {
    * has never touched this grades exactly as it did before the setting existed.
    */
   gradingLevel: number
+  /**
+   * Run the reasoning critique automatically on claims the writer CITED.
+   *
+   * The paid relay call, so this is the one setting in here that spends money
+   * without being pressed. Bounded three ways and every bound matters:
+   * only claims carrying the writer's own reference, only in the document
+   * editor (never Screen Watch, which is passive and always-on), and capped per
+   * analysis by MAX_AUTO_CRITIQUE_CLAIMS.
+   *
+   * It exists because `claimsWithoutEvidence` stopped calling a cited claim
+   * unsupported — correctly, since retrieval never opens the cited work — and
+   * the only thing in this app that DOES open it is this call. Without it a
+   * broken citation and a good one are equally silent.
+   */
+  autoCritiqueCited: boolean
 }
 
 // The document editor's saved work. Rich text rather than plain: the editor is
@@ -357,6 +372,11 @@ export type StructureWeaknessKind =
   | 'generic-opening'
   | 'topic-not-thesis'
   | 'summary-without-point'
+  // Visible in the SHAPE of a reference, decided by `shared/citationShape.ts`
+  // with nothing read. The paid half of this question is the critique's Pass 2,
+  // which resolves the work; this is the free half, and it exists because
+  // `claimsWithoutEvidence` now stays quiet about a cited claim.
+  | 'malformed-citation'
 
 export interface StructureWeakness {
   kind: StructureWeaknessKind

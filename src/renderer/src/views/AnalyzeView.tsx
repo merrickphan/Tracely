@@ -37,6 +37,7 @@ import { scheduleFrame } from '../frameScheduler'
 import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
+import { autoCritiqueTargets } from '@shared/autoCritique'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
@@ -147,6 +148,28 @@ function DocumentEditor({
   // it, a search that comes back empty for every claim leaves them all
   // unscored and the effect below fires again on the next render, forever.
   const autoSearchedRef = useRef<Set<string>>(new Set())
+  // The same guard for the paid pass, and here it is not a nicety: without it
+  // a critique that fails, or one whose verdict does not persist, re-fires on
+  // every render — on the reasoning model, at roughly a cent a call.
+  const autoCritiquedRef = useRef<Set<string>>(new Set())
+  // Null until it loads, and null must not read as false: an effect that fires
+  // before the answer arrives would skip the sweep for the whole session.
+  const [autoCritiqueCited, setAutoCritiqueCited] = useState<boolean | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void tracelyApi
+      .getSettings()
+      .then((s) => {
+        if (!cancelled) setAutoCritiqueCited(s.autoCritiqueCited)
+      })
+      .catch(() => {
+        // A settings read that fails must not start spending. Stays null, the
+        // sweep never runs, and the manual button is unaffected.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   // Progress of a reasoning pass. Separate from `checking` because the two
   // sweeps cost wildly different amounts and must never be conflated in the UI.
   const [critiquing, setCritiquing] = useState<{ done: number; total: number } | null>(null)
@@ -1392,6 +1415,54 @@ function DocumentEditor({
     // `checking` is in the deps so this re-evaluates when a sweep finishes,
     // which is when a second batch (a claim added by an edit) becomes visible.
   }, [claims, checking])
+
+  /**
+   * Critique the claims the writer CITED, automatically.
+   *
+   * The one place this app spends relay money without being asked, and it is
+   * here because of what stopped happening elsewhere: `claimsWithoutEvidence`
+   * no longer calls a cited claim unsupported, since a topical search of four
+   * scholarly indexes never opens the work the writer named. That was the right
+   * fix and it left a hole — a broken citation and a good one both went quiet.
+   * This call is the only thing in Tracely that reads the cited source
+   * (`citedEvidence.ts` puts it in slot 1; Pass 2 resolves it against Crossref
+   * and Open Library), so it is the only thing that can tell them apart.
+   *
+   * Four bounds, and each one is doing work:
+   *
+   *   cited only     an uncited claim's verdict is already available from the
+   *                  evidence score, and it is the cited ones the report has
+   *                  gone silent about.
+   *   evidence first the critique reasons over an evidence list; handing it an
+   *                  empty one produces a verdict about the search rather than
+   *                  the sentence (see isRetrievalMiss).
+   *   no critique yet re-critiquing is a second charge for an answer already on
+   *                  the claim.
+   *   MAX_AUTO_CRITIQUE_CLAIMS, in document order, so a long draft checks the
+   *                  top of itself rather than an arbitrary subset.
+   *
+   * Plus the setting, which is the user's own bound. Screen Watch still never
+   * does this — it is passive and always-on, so an unprompted paid call there
+   * is a bill nobody can watch being run up. A document the writer opened and
+   * analysed is a different kind of consent.
+   *
+   * Cached on the claim TEXT (`ai/critique.ts`, v6), so re-opening an unedited
+   * document is free.
+   */
+  useEffect(() => {
+    const analysisId = analysisIdRef.current
+    if (!analysisId || !claims || checking || critiquing) return
+    if (!autoCritiqueCited) return
+    if (autoCritiquedRef.current.has(analysisId)) return
+
+    const eligible = autoCritiqueTargets(claims, bodyText())
+    if (eligible.length === 0) return
+
+    autoCritiquedRef.current.add(analysisId)
+    void critiqueClaims(eligible)
+    // `checking` is in the deps so this waits for the evidence sweep: every
+    // eligible claim needs a resolved score, and firing first would find none.
+  }, [claims, checking, critiquing, autoCritiqueCited])
 
   async function checkClaims(ids: string[]): Promise<void> {
     if (ids.length === 0) return

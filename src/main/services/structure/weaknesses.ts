@@ -28,6 +28,9 @@ const SEVERITY: StructureWeaknessKind[] = [
   'no-thesis',
   'topic-not-thesis',
   'unsupported-claim',
+  // Above every reasoning finding: a reference a reader cannot follow is the
+  // one defect here that costs marks on its own, whatever the argument does.
+  'malformed-citation',
   'summary-without-point',
   'dropped-evidence',
   'warrant-gap',
@@ -159,6 +162,16 @@ export interface WeaknessInput {
    * measure would delete the finding rather than narrow it.
    */
   conclusionDrawsOnBody?: boolean
+  /**
+   * Defects in the shape of a reference — `shared/citationShape.ts`.
+   *
+   * Carried as finished messages rather than as kinds, because unlike every
+   * other weakness here the wording differs per defect ("this year has not
+   * happened yet" and "the author is a placeholder" are not variants of one
+   * sentence). The module still owns the text, and it is still a local
+   * template: no model wrote any of it.
+   */
+  citationDefects?: Array<{ paragraphIndex: number; message: string; quote: string }>
 }
 
 function ordinal(index: number): string {
@@ -173,7 +186,8 @@ export function findWeaknesses({
   titleParagraph = false,
   thesisFound = false,
   reasoning = [],
-  conclusionDrawsOnBody = false
+  conclusionDrawsOnBody = false,
+  citationDefects = []
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
@@ -292,6 +306,18 @@ export function findWeaknesses({
   )
   for (let i = found.length - 1; i >= 0; i--) {
     if (found[i].kind === 'warrant-gap' && droppedAt.has(found[i].paragraphIndex)) found.splice(i, 1)
+  }
+
+  for (const defect of citationDefects) {
+    found.push({
+      kind: 'malformed-citation',
+      paragraphIndex: defect.paragraphIndex,
+      claimId: null,
+      message: defect.message,
+      tracerPrompt:
+        'One of my citations is not formatted properly. What does a complete reference need in it?',
+      quote: defect.quote
+    })
   }
 
   for (const finding of reasoning) {

@@ -59,7 +59,8 @@ export const settings: AppSettings = {
   screenWatchAllowedApps: 'WINWORD.EXE\nchrome.exe',
   // Off, so the harness shows the Save changes dialog rather than skipping it.
   suppressSaveConfirm: false,
-  gradingLevel: 12
+  gradingLevel: 12,
+  autoCritiqueCited: true
 }
 
 export const sources: Source[] = [
