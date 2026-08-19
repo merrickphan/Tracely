@@ -69,11 +69,6 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
     why: 'Two evidence paragraphs in a row read as a literature review: here is what was found, and here is what else was found. An argument moves, and the sentences that move it are yours, not your sources\'.',
     done: 'Read only your own sentences, skipping every quotation and citation. If they still make an argument in order, the spine is there. If they read as a list of introductions, it is not.'
   },
-  'no-counterargument': {
-    move: 'Find the strongest objection to your thesis — the one that would worry you if a reader raised it — give it a paragraph in its own best form, and then answer it.',
-    why: 'An argument that never meets resistance reads as one that was never tested, and a weak objection is worse than none: it tells a reader you looked for the easiest thing to knock down. The strongest version is also the useful one, because answering it is usually where a thesis gets sharper.',
-    done: 'Show the objection paragraph to someone who disagrees with you. If they say "that is not quite my point", you have written the easy version. They should recognise it as theirs.'
-  },
   'no-significance': {
     move: 'Say what follows from your argument being true — for whom, and what changes. Give it a place of its own, near the end but before the conclusion restates.',
     why: 'A reader can finish an essay convinced and still not know why they were asked to read it. This is not decoration; it is the claim about consequence that the rest of the draft has earned the right to make.',

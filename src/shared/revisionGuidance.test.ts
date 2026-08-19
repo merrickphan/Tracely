@@ -15,7 +15,6 @@ const KINDS = [
   'warrant-gap',
   'new-claim-in-conclusion',
   'evidence-stacking',
-  'no-counterargument',
   'no-significance',
   'dropped-evidence',
   'overreaching-claim',

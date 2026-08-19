@@ -27,10 +27,8 @@ export type ProseIssueKind =
   | 'article-agreement'
   | 'possessive-its'
   | 'subject-verb'
-  | 'spacing'
   | 'wordiness'
   | 'filler'
-  | 'passive-voice'
   | 'long-sentence'
   | 'verb-of'
   | 'run-together'
@@ -322,18 +320,10 @@ export function findProseIssues(text: string): ProseIssue[] {
   )
   agreement(/\b(he|she|it)\s+(were|have|do)\b/gi, { were: 'was', have: 'has', do: 'does' })
 
-  // -- spacing / mechanics ------------------------------------------------
-  for (const m of text.matchAll(/\s+([,.;:!?])/g)) {
-    push(issues, {
-      start: m.index,
-      end: m.index + m[0].length,
-      kind: 'spacing',
-      severity: 'error',
-      message: `Remove the space before "${m[1]}".`,
-      suggestion: m[1],
-      text: m[0]
-    })
-  }
+  // The space-before-punctuation rule was here. Removed 2026-08-19 with the
+  // rubric scoping: it is a typographic slip that changes no meaning, and the
+  // rubric is explicit — "Do not heavily penalize an occasional typo or comma
+  // mistake". Nothing in the list asks for it. See shared/rubric.ts.
 
   // -- wordiness ----------------------------------------------------------
   for (const [pattern, replacement] of WORDY) {
@@ -364,17 +354,13 @@ export function findProseIssues(text: string): ProseIssue[] {
     })
   }
 
-  // -- agentive passive ---------------------------------------------------
-  for (const m of text.matchAll(AGENTIVE_PASSIVE)) {
-    push(issues, {
-      start: m.index,
-      end: m.index + m[0].length,
-      kind: 'passive-voice',
-      severity: 'style',
-      message: 'Passive with a named agent — the active version is usually shorter.',
-      text: m[0]
-    })
-  }
+  // The agentive-passive rule was here, and it is the clearest case the rubric
+  // scoping removed. Passive voice appears nowhere in the list — and the list's
+  // opening line is that a grader should judge "the quality of the THINKING and
+  // ARGUMENT, not just vocabulary, grammar, or how sophisticated the essay
+  // sounds". "The study was conducted by Walker" is not worse thinking than
+  // "Walker conducted the study"; it is a house-style preference, and in
+  // academic writing frequently the correct one. See shared/rubric.ts.
 
   // -- long sentences -----------------------------------------------------
   let cursor = 0

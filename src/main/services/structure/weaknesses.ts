@@ -37,7 +37,6 @@ const SEVERITY: StructureWeaknessKind[] = [
   'overreaching-claim',
   'new-claim-in-conclusion',
   'evidence-stacking',
-  'no-counterargument',
   'no-significance',
   'restated-conclusion',
   'undeveloped-repetition',
@@ -275,16 +274,15 @@ export function findWeaknesses({
     })
   }
 
-  if (allLabelled && !roles.includes('counterargument')) {
-    found.push({
-      kind: 'no-counterargument',
-      paragraphIndex: null,
-      claimId: null,
-      message:
-        'Nothing in this draft engages an opposing view. An argument that never meets resistance reads as one that has not been tested.',
-      tracerPrompt: 'What is the strongest objection to my argument, and how do I address it fairly?'
-    })
-  }
+  // `no-counterargument` was here, and is gone. The rubric is explicit:
+  // "Do not require counterarguments for every essay; judge based on the prompt
+  // and genre." Tracely is never shown the prompt, so it cannot make that
+  // judgement — and a tool that cannot judge must not require. A biographical
+  // essay was being told it had failed to engage an opposing view.
+  //
+  // What survives is `unanswered-counterargument` in cohesion.ts, which is a
+  // different finding: the writer RAISED an objection and never answered it.
+  // That one is about work the draft actually started.
 
   if (allLabelled && !roles.includes('significance') && !soWhatInConclusion) {
     found.push({

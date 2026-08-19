@@ -103,8 +103,11 @@ describe('subject-verb agreement', () => {
 })
 
 describe('mechanics', () => {
-  it('catches a space before punctuation', () => {
-    strictEqual(first('The result was clear , and it held.').kind, 'spacing')
+  // The space-before-punctuation rule was removed with the rubric scoping: it
+  // changes no meaning, and the rubric says not to lean on an occasional typo
+  // or comma mistake. See shared/rubric.ts.
+  it('no longer flags a space before punctuation', () => {
+    clean('The result was clear , and it held.')
   })
 
   it('leaves ordinary punctuation alone', () => {
@@ -133,15 +136,22 @@ describe('wordiness and filler', () => {
   })
 })
 
-describe('passive voice', () => {
-  it('flags only the agentive passive', () => {
-    strictEqual(first('The report was written by the committee.').kind, 'passive-voice')
+describe('passive voice — removed, and this pins it', () => {
+  /**
+   * The clearest casualty of the rubric scoping, and the right one.
+   *
+   * Passive voice appears nowhere in the owner's list, and the list opens by
+   * saying a grader should judge "the quality of the THINKING and ARGUMENT, not
+   * just vocabulary, grammar, or how sophisticated the essay sounds". "The
+   * study was conducted by Walker" is not worse thinking than "Walker conducted
+   * the study" — it is a house-style preference, and in academic prose often
+   * the correct one.
+   */
+  it('does not flag the agentive passive', () => {
+    clean('The report was written by the committee.')
   })
 
-  // The version every general passive check gets wrong. "The data were
-  // collected in 2019" puts the data first because the data is the subject of
-  // the paragraph, and there is no agent to promote.
-  it('leaves an agentless passive alone', () => {
+  it('still leaves an agentless passive alone', () => {
     clean('The data were collected in 2019.')
     clean('The samples are stored at room temperature.')
   })
