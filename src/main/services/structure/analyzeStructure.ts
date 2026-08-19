@@ -5,7 +5,8 @@ import type {
   DocumentOutline,
   EvidenceCoverage,
   ParagraphOutline,
-  ParagraphRole
+  ParagraphRole,
+  StructureWeaknessKind
 } from '@shared/types'
 import { bucketClaimsByParagraph } from '@shared/paragraphSplit'
 import { argumentParagraphs } from '@shared/structureText'
@@ -75,7 +76,11 @@ import { findWeaknesses } from './weaknesses'
 // diluting governing claims. A stored v6 outline would keep showing a number
 // this app no longer computes — on the owner's own essay, 75 where it now says
 // 100.
-export const STRUCTURE_SCHEMA_VERSION = 7
+//
+// v8 adds the classifier's named reasoning faults. They are new weaknesses AND
+// they veto hasWarrant, so a stored v7 outline shows a different number and a
+// blunter finding than the app now produces.
+export const STRUCTURE_SCHEMA_VERSION = 8
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the
@@ -110,7 +115,23 @@ export interface AnalyzeStructureInput {
    * local heuristics, and `rolesFrom` records which was used so the panel can
    * say so rather than presenting both as the same kind of answer.
    */
-  classified?: { roles: ParagraphRole[]; warranted: boolean[]; statesClaim: boolean[] } | null
+  /**
+   * 1-based paragraphs the local embedder found do not speak to the thesis —
+   * see `structure/thesisSupport.ts`. Absent means no measurement was possible
+   * (no thesis, no ML worker, too little text), which stays silent.
+   */
+  offThesis?: number[]
+  classified?: {
+    roles: ParagraphRole[]
+    warranted: boolean[]
+    statesClaim: boolean[]
+    /**
+     * The named reasoning fault per paragraph — see
+     * ReconciledRoles.reasoningFailure. Optional so a caller built against the
+     * older shape still compiles and simply names no faults.
+     */
+    reasoningFailure?: Array<'none' | 'circular' | 'sequence-as-cause' | 'single-case' | 'leap'>
+  } | null
 }
 
 export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline {
@@ -215,10 +236,35 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // label and the text disagree, the text is the one that can be checked.
   const summaryOnly = summaryOnlyParagraphs(reasoning)
 
+  // The classifier named a specific fault in the reasoning. Two consequences,
+  // and both are the point of asking for the name at all:
+  //
+  //   1. It becomes its own finding, with its own message and its own fix —
+  //      see REASONING_FAULT_TEMPLATE. Before this every one of them arrived as
+  //      `warranted: false` and printed the same generic sentence.
+  //   2. It VETOES `hasWarrant`, the same way `dropped-evidence` does. A
+  //      paragraph whose link is circular has not explained the link, whatever
+  //      the boolean beside it says — and without this the finding would be
+  //      free, which is the shape the owner has already been burned by twice.
+  const FAULT_KIND: Record<string, StructureWeaknessKind> = {
+    circular: 'circular-reasoning',
+    'sequence-as-cause': 'sequence-as-cause',
+    'single-case': 'single-case-generalisation',
+    leap: 'logical-leap'
+  }
+  const reasoningFaults = (input.classified?.reasoningFailure ?? []).flatMap((failure, i) => {
+    const index = spans[i]?.index
+    const kind = FAULT_KIND[failure]
+    // The vector can be longer than the spans when the caps truncated, and
+    // 'none' is the common answer. Both drop out here.
+    return index === undefined || !kind ? [] : [{ paragraphIndex: index, kind }]
+  })
+  const faultedParagraphs = new Set(reasoningFaults.map((f) => f.paragraphIndex))
+
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
     role: roles[i],
-    hasWarrant: warranted[i] && !dropped.has(span.index),
+    hasWarrant: warranted[i] && !dropped.has(span.index) && !faultedParagraphs.has(span.index),
     statesClaim: statesClaim[i] === undefined ? undefined : statesClaim[i] && !summaryOnly.has(span.index),
     claimIds: claimsByParagraph.get(span.index) ?? []
   }))
@@ -290,6 +336,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
         }))
       ),
       reasoning,
+      reasoningFaults,
+      offThesis: input.offThesis ?? [],
       conclusionDrawsOnBody: conclusionDrawsOnBody(reasoningParagraphs)
     }),
     // Measured over the same spans the roles were computed from, so a boundary

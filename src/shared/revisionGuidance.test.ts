@@ -25,7 +25,13 @@ const KINDS = [
   'generic-opening',
   'topic-not-thesis',
   'summary-without-point',
-  'malformed-citation'
+  'malformed-citation',
+  'circular-reasoning',
+  'sequence-as-cause',
+  'single-case-generalisation',
+  'logical-leap',
+  'vague-significance',
+  'off-thesis-paragraph'
 ] as const
 
 describe('REVISION_GUIDANCE', () => {

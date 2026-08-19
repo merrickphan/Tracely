@@ -371,11 +371,23 @@ export type StructureWeaknessKind =
   | 'generic-opening'
   | 'topic-not-thesis'
   | 'summary-without-point'
+  | 'vague-significance'
+  // Measured with the local embedder, not by a rule — see
+  // structure/thesisSupport.ts. The only finding in this union that needs to
+  // know what a paragraph MEANS.
+  | 'off-thesis-paragraph'
   // Visible in the SHAPE of a reference, decided by `shared/citationShape.ts`
   // with nothing read. The paid half of this question is the critique's Pass 2,
   // which resolves the work; this is the free half, and it exists because
   // `claimsWithoutEvidence` now stays quiet about a cited claim.
   | 'malformed-citation'
+  // Named by the CLASSIFIER, not by a rule — the four faults it was already
+  // judging to answer `hasWarrant` and whose names were being discarded. See
+  // ReconciledRoles.reasoningFailure.
+  | 'circular-reasoning'
+  | 'sequence-as-cause'
+  | 'single-case-generalisation'
+  | 'logical-leap'
 
 export interface StructureWeakness {
   kind: StructureWeaknessKind

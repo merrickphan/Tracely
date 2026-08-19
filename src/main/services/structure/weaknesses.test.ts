@@ -255,3 +255,42 @@ describe('findWeaknesses — findings read off the prose', () => {
     strictEqual(found.includes('no-counterargument'), false)
   })
 })
+
+describe('findWeaknesses — reasoning faults the classifier named', () => {
+  const fault = (paragraphIndex: number, kind: string) => ({ paragraphIndex, kind }) as never
+
+  it('raises the named fault with its own message', () => {
+    const [found] = findWeaknesses({
+      paragraphs: outline(...COMPLETE),
+      claimsWithoutEvidence: [],
+      soWhatInConclusion: false,
+      reasoningFaults: [fault(2, 'sequence-as-cause')]
+    }).filter((w) => w.kind === 'sequence-as-cause')
+    strictEqual(found.paragraphIndex, 2)
+    strictEqual(found.message.includes('2nd paragraph'), true)
+    // The message must say what the fault IS, not repeat its name — "circular
+    // reasoning" is a term many writers have heard and few can act on.
+    strictEqual(/order or correlation/.test(found.message), true)
+  })
+
+  // Two resolutions of one complaint. Printing both reads as two problems and
+  // buries the one that actually says something.
+  it('replaces the generic warrant gap on the same paragraph', () => {
+    const specs = ['thesis', 'claim', 'counterargument', 'significance', 'conclusion']
+    const found = kinds(specs, { reasoningFaults: [fault(2, 'circular-reasoning')] })
+    strictEqual(found.includes('circular-reasoning'), true)
+    strictEqual(found.includes('warrant-gap'), false)
+  })
+
+  it('keeps a warrant gap on a paragraph with no named fault', () => {
+    const specs = ['thesis', 'claim', 'evidence', 'counterargument', 'significance', 'conclusion']
+    const found = kinds(specs, { reasoningFaults: [fault(2, 'logical-leap')] })
+    strictEqual(found.includes('logical-leap'), true)
+    // Paragraph 3 is still unwarranted and unnamed.
+    strictEqual(found.includes('warrant-gap'), true)
+  })
+
+  it('says nothing when the classifier named none', () => {
+    strictEqual(kinds(COMPLETE, { reasoningFaults: [] }).some((k) => k === 'logical-leap'), false)
+  })
+})

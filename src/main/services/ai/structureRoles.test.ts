@@ -111,7 +111,8 @@ describe('reconcileRoles — degenerate input', () => {
     deepStrictEqual(reconcileRoles(payload({ index: 1, role: 'thesis', hasWarrant: true }), 0), {
       roles: [],
       warranted: [],
-      statesClaim: []
+      statesClaim: [],
+      reasoningFailure: []
     })
   })
 
