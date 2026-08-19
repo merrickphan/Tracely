@@ -80,25 +80,10 @@ import { findWeaknesses } from './weaknesses'
 // v8 adds the classifier's named reasoning faults. They are new weaknesses AND
 // they veto hasWarrant, so a stored v7 outline shows a different number and a
 // blunter finding than the app now produces.
-export const STRUCTURE_SCHEMA_VERSION = 8
-
-/**
- * The equivalence class the analysis actually cares about: two texts with the
- * same hash split into the same paragraphs with the same words.
- *
- * Runs of spaces and tabs collapse, and runs of newlines collapse to one,
- * because `splitParagraphs` already treats any newline run as a single
- * boundary — so a blank line added between two paragraphs changes nothing and
- * should not invalidate the analysis, while a new paragraph break does.
- *
- * The caller must pass the editor's `innerText`, never its `bodyHtml`. Bolding
- * a word rewrites the HTML and leaves the text identical, and re-running a
- * relay call because someone italicised a title would be a pure waste.
- */
-export function sourceHashFor(text: string): string {
-  const normalized = text.replace(/[ \t]+/g, ' ').replace(/[\r\n]+/g, '\n').trim()
-  return createHash('sha256').update(`structure::v${STRUCTURE_SCHEMA_VERSION}::${normalized}`).digest('hex')
-}
+// Moved to ./outlineIdentity — see there. Re-exported because Screen Watch
+// and documentsRepo import them from here.
+import { STRUCTURE_SCHEMA_VERSION, sourceHashFor } from './outlineIdentity'
+export { STRUCTURE_SCHEMA_VERSION, sourceHashFor }
 
 export interface AnalyzeStructureInput {
   documentId: string | null

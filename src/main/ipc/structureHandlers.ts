@@ -5,20 +5,16 @@ import type { StructureAnalyzeResponse, StructureGetResponse } from '@shared/ipc
 import { getClaimsByAnalysis } from '../services/storage/claimsRepo'
 import { getStoredOutline, saveOutline } from '../services/storage/structureRepo'
 import {
-  analyzeStructure,
   sourceHashFor,
   STRUCTURE_SCHEMA_VERSION
-} from '../services/structure/analyzeStructure'
-import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
-import { classifyStructure } from '../services/ai/structureClassifier'
+} from '../services/structure/outlineIdentity'
+import { computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
 import { gradeDraft } from '../services/ai/gradeDraft'
 import { buildGradedOutline } from '../services/structure/gradedOutline'
 import { argumentParagraphs } from '@shared/structureText'
 import { documentNames } from '@shared/documentNames'
 import { withoutWorksCited } from '@shared/worksCited'
 import { learnDocumentNames } from '../spellcheck'
-import { offThesisParagraphs } from '../services/structure/thesisSupport'
-import { looksLikeTitle } from '../services/structure/roles'
 
 // Matches documentsHandlers' MAX_BODY_CHARS. The analysis is linear in the
 // document, but the database is fully re-serialized on every write, so a
@@ -36,152 +32,81 @@ const getSchema = z.object({
   text: z.string().max(MAX_TEXT_CHARS)
 })
 
+/**
+ * The editor's report: ONE relay call, reading the whole draft against the
+ * owner's rubric. There is no local path any more.
+ *
+ * ── What was here, and why it is gone ──────────────────────────────────────
+ * A rule engine: ten prose detectors, a lexical cohesion pass, an
+ * embedding-based tangent check, a hand-written role classifier and a weakness
+ * generator, feeding a six-component formula. Owner, 2026-08-19, across a day
+ * of false positives: *"if I just gave an essay to ChatGPT and had it graded
+ * with a detailed prompt, it would give a pretty good response on what to
+ * change"* and then *"lets reset the whole reasoning system into a simple
+ * chatgpt answers it and it kicks back to tracely. Extremely simple and
+ * efficient."*
+ *
+ * The rules covered the easy half of the rubric and produced most of the noise.
+ * The half a rule genuinely cannot reach — does this evidence support this
+ * claim, is this counterargument the strongest available — was already in a
+ * prompt. Keeping both meant a report whose contents depended on whether a
+ * network call happened to succeed.
+ *
+ * ── What is still local, and why ───────────────────────────────────────────
+ * - **The arithmetic.** The model returns six component sub-scores; the client
+ *   sums them (`scoreFromComponents`). An unchanged draft scores an unchanged
+ *   number and every point traces to a quoted sentence.
+ * - **Quote verification.** `verifyGrade` discards any finding whose quote is
+ *   not in the draft. That is what replaces "every word a student reads comes
+ *   from a local template", and it is what produces the underline offsets.
+ * - **Citation shape** (`shared/citationShape.ts`) and the prose/grammar rules,
+ *   which are free, instant, and about the surface of a reference rather than
+ *   about the argument.
+ *
+ * ── Failing loudly ─────────────────────────────────────────────────────────
+ * When the graded read cannot be obtained this throws. It used to fall through
+ * to the rule engine, which meant a relay outage silently swapped the report
+ * for a worse one with no way to tell from the screen. An error the writer can
+ * retry is the honest version of "no grade right now".
+ */
 export function registerStructureHandlers(): void {
   ipcMain.handle(IPC.STRUCTURE_ANALYZE, async (_event, raw): Promise<StructureAnalyzeResponse> => {
     const input = analyzeSchema.parse(raw)
 
-    // Claims come from the store rather than over the wire so the renderer
-    // cannot hand main a claim it never detected, and so the strength scores
-    // and breakdowns coverage reads are the persisted ones.
+    // Claims come from the store rather than over the wire, so the renderer
+    // cannot hand main a claim it never detected and the strength scores
+    // coverage reads are the persisted ones.
     const claims = input.analysisId ? getClaimsByAnalysis(input.analysisId) : []
 
-    /**
-     * The graded read — one relay call over the whole draft, against the
-     * owner's rubric.
-     *
-     * This is the primary path now. It replaces ten prose detectors, a cohesion
-     * pass, an embedding tangent check and most of a weakness generator with a
-     * model that reads the argument and quotes the sentence it means. Owner,
-     * 2026-08-19: *"if I just gave an essay to ChatGPT and had it graded with a
-     * detailed prompt, it would give a pretty good response on what to
-     * change."*
-     *
-     * Whole paragraphs go up, unlike `classify-structure`, which windows each
-     * one to its edges. A role is visible from the edges; whether the evidence
-     * in the middle supports the claim is not, and a finding quoting text that
-     * was never sent gets discarded by `verifyGrade` rather than shown wrong.
-     *
-     * Null falls through to everything below, which is the read this replaces.
-     * Keeping it is not indecision: a graded read that degrades to the previous
-     * behaviour beats one that fails the whole analysis because a network call
-     * did, and it is what makes the two comparable on real essays before
-     * anything is deleted.
-     */
-    const spansForGrade = argumentParagraphs(input.text)
+    // The ARGUMENT, not the bibliography — `argumentParagraphs` trims the
+    // works-cited section. Measured before this existed: 42% of the paragraphs
+    // sent to the model were reference lines, and 24% of the input tokens.
+    const paragraphs = argumentParagraphs(input.text)
+
     const grade = await gradeDraft(
-      spansForGrade.map((p) => p.text),
+      paragraphs.map((p) => p.text),
       input.text
     )
-    if (grade) {
-      const graded = buildGradedOutline({
-        documentId: input.documentId ?? null,
-        analysisId: input.analysisId ?? null,
-        text: input.text,
-        claims,
-        coverage: computeEvidenceCoverage(claims, input.text),
-        grade
-      })
-      // Still taught, and for the same reason: the squiggle under a real name
-      // is Chromium's, not ours, and it is drawn whichever read produced the
-      // report. See spellcheck.ts — session-scoped, argument only.
-      learnDocumentNames(documentNames(withoutWorksCited(input.text)))
-      saveOutline(graded)
-      return { outline: graded }
+    if (!grade) {
+      throw new Error('Could not grade this draft. Check your connection and try again.')
     }
 
-    /**
-     * What each paragraph is DOING, from the model rather than from regexes.
-     *
-     * This is the one relay call the structural read makes, and it is the
-     * reason the read is worth trusting: `structure/roles.ts` decides thesis
-     * vs claim vs counterargument from hand-written patterns, and those labels
-     * drive all six score components, every weakness, and everything the
-     * report says. A pattern list needs a new pattern for every essay shape it
-     * has not seen — adding five thesis shapes moved one real draft from 45 to
-     * 83, which is the measurement of how brittle the approach is rather than
-     * a fix for it.
-     *
-     * Cost is one CHEAP_MODEL call per analysis, capped at 8k input chars and
-     * 600 output tokens, and cached in SQLite on a hash of the assembled
-     * prompt — so re-analysing an unchanged draft is free, which is what keeps
-     * an always-available "Re-grade" button honest.
-     *
-     * Null on any failure, and null is a supported answer: analyzeStructure
-     * falls back to the local heuristics and reports `rolesFrom: 'heuristic'`.
-     * A structural read that degrades to the old behaviour beats one that
-     * fails the whole analysis because a network call did.
-     *
-     * `argumentParagraphs` is the SAME function analyzeStructure scores, and
-     * that is now enforced by both calling it rather than by this comment. It
-     * used to say the same thing over `splitParagraphs(input.text)` while
-     * analyzeStructure scored `splitParagraphs(withoutWorksCited(input.text))`
-     * — same function, different input — so the classifier was paid to label
-     * the reference list. Measured across five real documents: 42% of the
-     * paragraphs sent were reference lines, 24% of the input tokens.
-     */
-    const classified = await classifyStructure(
-      'classify-structure',
-      argumentParagraphs(input.text).map((p) => p.text)
-    )
-
-
-    /**
-     * Which paragraphs are not about the thesis, measured with the LOCAL
-     * embedder — see structure/thesisSupport.ts. Two rubric lines that had no
-     * implementation at all: "Flag if the body paragraphs do not actually
-     * support the thesis" and "Flag tangents."
-     *
-     * Runs after the classifier because it needs the thesis position, and only
-     * ever from the model's answer: the local reader's thesis guess is a
-     * fallback for SCORING a component, and it is not a firm enough basis for
-     * telling a student a paragraph does not belong in their essay.
-     *
-     * Free — in-process MiniLM, no relay, no network — which is what makes it
-     * safe to run on every analysis. Null when it could not be measured, and
-     * null is passed on as "say nothing".
-     */
-    const thesisAt = classified ? classified.roles.indexOf('thesis') : -1
-    const spans = argumentParagraphs(input.text)
-    const offThesis =
-      thesisAt === -1
-        ? null
-        : await offThesisParagraphs({
-            paragraphs: spans.map((p) => ({ index: p.index, text: p.text })),
-            thesisIndex: thesisAt,
-            titleParagraph: spans.length > 1 && looksLikeTitle(spans[0].text),
-            // A conclusion restates rather than develops, so it sits closer to
-            // the thesis than a body paragraph does and is never the tangent
-            // this is looking for.
-            skip: (classified?.roles ?? []).flatMap((r, i) =>
-              r === 'conclusion' && spans[i] ? [spans[i].index] : []
-            )
-          })
-
-    // Teach Chromium's spellchecker this document's proper nouns, so real
-    // names stop being underlined as misspellings. Session-scoped: the next
-    // document's call replaces this set, and a clean quit removes it — see
-    // spellcheck.ts. Free and local; it reads text already in hand.
-    // The ARGUMENT, not the bibliography. A reference list is title-case noise
-    // — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and
-    // it is also where a broken citation's "Unknown Author" lives. Author
-    // surnames are still learned: a cited author appears in the body too, in
-    // the in-text citation.
+    // Teach Chromium's spellchecker this document's proper nouns, so real names
+    // stop being underlined as misspellings. Session-scoped; see spellcheck.ts.
+    // Learned from the argument only: a reference list is title-case noise and
+    // is also where a broken citation's placeholder author lives.
     learnDocumentNames(documentNames(withoutWorksCited(input.text)))
 
-    const outline = analyzeStructure({
+    const outline = buildGradedOutline({
       documentId: input.documentId ?? null,
       analysisId: input.analysisId ?? null,
       text: input.text,
       claims,
-      claimsWithoutEvidence: claimsWithoutEvidence(claims, input.text),
       coverage: computeEvidenceCoverage(claims, input.text),
-      classified,
-      ...(offThesis ? { offThesis } : {}),
-      analyzedAt: new Date().toISOString()
+      grade
     })
 
     saveOutline(outline)
-
     return { outline }
   })
 
