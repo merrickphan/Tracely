@@ -22,6 +22,7 @@ import type {
   ScreenWatchWidget
 } from '@shared/ipc-contract'
 import { hasRelevantSource, isRetrievalMiss } from '@shared/problemKind'
+import { REFERENCE_LEVEL, isGradeLevel } from '@shared/gradeLevel'
 // The mark's look and motion. Shared with the document editor's marks
 // (DocumentMarkLayer.tsx), which draw the same thing over Tracely's own
 // contentEditable — the values live in one place so the two surfaces cannot
@@ -1375,9 +1376,12 @@ function ScoreChip({
 
 function EssayGradePanel({
   structure,
+  gradingLevel,
   onClose,
   onFullReport
 }: {
+  /** Settings > Preferences — bands the letter, never the score. */
+  gradingLevel?: number
   structure: ScreenWatchStructure | null
   onClose: () => void
   onFullReport: () => void
@@ -1386,7 +1390,7 @@ function EssayGradePanel({
     <>
       <GradeHeader title="Writing Grade" onClose={onClose} />
       <GradeDivider />
-      <GradeScoreSection structure={structure} />
+      <GradeScoreSection structure={structure} gradingLevel={gradingLevel} />
       <GradeDivider />
       <GradeButtonRow primaryLabel="View Full Report" onPrimary={onFullReport} />
     </>
@@ -3090,11 +3094,19 @@ export default function OverlayApp(): JSX.Element {
    */
   const [gradeFlowClaimId, setGradeFlowClaimId] = useState<string | null>(null)
   const [defaultStyle, setDefaultStyle] = useState<CitationStyle>('APA')
+  // Settings > Preferences, read the same way the citation style is. The
+  // overlay mounts no React context of its own, so the grade panels take this
+  // as a prop; REFERENCE_LEVEL until the read lands, which is what the app did
+  // before the setting existed.
+  const [gradingLevel, setGradingLevel] = useState<number>(REFERENCE_LEVEL)
 
   useEffect(() => {
     window.tracely.settings
       .get()
-      .then((s) => setDefaultStyle(s.defaultCitationStyle))
+      .then((s) => {
+        setDefaultStyle(s.defaultCitationStyle)
+        setGradingLevel(isGradeLevel(s.gradingLevel) ? s.gradingLevel : REFERENCE_LEVEL)
+      })
       .catch(() => {})
   }, [])
 
@@ -3920,6 +3932,7 @@ export default function OverlayApp(): JSX.Element {
                     <EssayGradeReportPanel
                       structure={widget.structure}
                       claims={widget.claims}
+                      gradingLevel={gradingLevel}
                       onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
                       onBackToSummary={showGrade}
                       onArgumentCheck={showAll}
@@ -3929,6 +3942,7 @@ export default function OverlayApp(): JSX.Element {
                   ) : (
                     <EssayGradePanel
                       structure={widget.structure}
+                      gradingLevel={gradingLevel}
                       onClose={() => void window.tracely.screenWatch.setWidgetExpanded({ expanded: false })}
                       onFullReport={showReport}
                     />

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
+import { REFERENCE_LEVEL, isGradeLevel } from '@shared/gradeLevel'
 import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
 import type { AccentColor, AppSettings, CitationStyle, Density, FontSize, Theme } from '@shared/types'
 import { scanInstalledApps } from '../services/appScan'
@@ -19,7 +20,8 @@ const setSchema = z.object({
   claimSensitivity: z.number().min(0).max(1).optional(),
   screenWatchHotkeyAccelerator: z.string().optional(),
   screenWatchAllowedApps: z.string().optional(),
-  suppressSaveConfirm: z.boolean().optional()
+  suppressSaveConfirm: z.boolean().optional(),
+  gradingLevel: z.number().int().min(3).max(12).optional()
 })
 
 function buildSettings(): AppSettings {
@@ -35,7 +37,10 @@ function buildSettings(): AppSettings {
     claimSensitivity: Number(raw.claimSensitivity),
     screenWatchHotkeyAccelerator: raw.screenWatchHotkeyAccelerator,
     screenWatchAllowedApps: raw.screenWatchAllowedApps,
-    suppressSaveConfirm: raw.suppressSaveConfirm === 'true'
+    suppressSaveConfirm: raw.suppressSaveConfirm === 'true',
+    // Number(), then the shared guard on the way out: a row written by a hand
+    // edit or a future build must not reach the bands as NaN.
+    gradingLevel: isGradeLevel(Number(raw.gradingLevel)) ? Number(raw.gradingLevel) : REFERENCE_LEVEL
   }
 }
 
@@ -63,6 +68,7 @@ export function registerSettingsHandlers(): void {
     if (patch.suppressSaveConfirm !== undefined) {
       setSetting('suppressSaveConfirm', String(patch.suppressSaveConfirm))
     }
+    if (patch.gradingLevel !== undefined) setSetting('gradingLevel', String(patch.gradingLevel))
     // Persist only if the OS actually gave us the shortcut. globalShortcut
     // .register returns false when the accelerator is malformed or already
     // claimed by another app — and the return value was previously ignored, so

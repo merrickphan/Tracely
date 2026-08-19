@@ -234,6 +234,14 @@ export interface AppSettings {
   screenWatchAllowedApps: string
   /** The Save changes dialog's "Do not show anymore" has been ticked. */
   suppressSaveConfirm: boolean
+  /**
+   * The school year the writing is graded against, 3-12.
+   *
+   * It moves the LETTER, never the /100 — see shared/gradeLevel.ts. Defaults to
+   * 12, which is the level the bands were written against, so an install that
+   * has never touched this grades exactly as it did before the setting existed.
+   */
+  gradingLevel: number
 }
 
 // The document editor's saved work. Rich text rather than plain: the editor is

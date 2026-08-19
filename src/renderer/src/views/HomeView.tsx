@@ -13,6 +13,7 @@ import iconSources from '../assets/resource-sources.svg'
 import homeArrow from '../assets/home-arrow.svg'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
+import { useGradeLevel } from '../lib/gradeLevel'
 import GuideReader from '../components/GuideReader'
 import TracerChat from '../components/TracerChat'
 import { GUIDES, guideById } from '../content/guides'
@@ -100,6 +101,7 @@ export default function HomeView({
   onOpenDocument: (id: string) => void
   firstName: string | null
 }): JSX.Element {
+  const gradingLevel = useGradeLevel()
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
   const [openGuide, setOpenGuide] = useState<string | null>(null)
   const [tracerOpen, setTracerOpen] = useState(false)
@@ -198,7 +200,7 @@ export default function HomeView({
             <span>Documents graded this month</span>
           </div>
           <div className="home-stat">
-            <b>{stats.averageScore === null ? '—' : gradeFor(stats.averageScore).letter}</b>
+            <b>{stats.averageScore === null ? '—' : gradeFor(stats.averageScore, gradingLevel).letter}</b>
             <span>Average grade</span>
           </div>
           <div className="home-stat">
@@ -269,7 +271,7 @@ export default function HomeView({
                     <i />
                     {doc.score !== null ? (
                       <span className={`home-doc-grade tone-${doc.score >= 80 ? 'good' : doc.score >= 65 ? 'mid' : 'low'}`}>
-                        {gradeFor(doc.score).letter}
+                        {gradeFor(doc.score, gradingLevel).letter}
                       </span>
                     ) : null}
                   </span>

@@ -138,6 +138,10 @@ function DocumentEditor({
   const [outlineError, setOutlineError] = useState<string | null>(null)
   const [activeParagraph, setActiveParagraph] = useState<number | null>(null)
   const [checking, setChecking] = useState<{ done: number; total: number } | null>(null)
+  // Analyses whose claims have already been searched automatically. Without
+  // it, a search that comes back empty for every claim leaves them all
+  // unscored and the effect below fires again on the next render, forever.
+  const autoSearchedRef = useRef<Set<string>>(new Set())
   // Progress of a reasoning pass. Separate from `checking` because the two
   // sweeps cost wildly different amounts and must never be conflated in the UI.
   const [critiquing, setCritiquing] = useState<{ done: number; total: number } | null>(null)
@@ -1350,6 +1354,37 @@ function DocumentEditor({
     if (analysisId) await onRefreshClaims(analysisId)
   }
 
+  /**
+   * Search evidence for claims nothing has looked at yet — automatically.
+   *
+   * This is what makes the underlines appear. `measureMarks` draws no mark for
+   * a claim with no evidence (see the note there: null means "never looked",
+   * and underlining an unchecked claim reports a verdict Tracely has not
+   * reached). Nothing in this editor searched automatically, so a freshly
+   * analysed document had claims, a score, and NOT ONE underline until the
+   * writer found "Check all N" inside the full report — which is two screens
+   * away from the sentence it is about.
+   *
+   * Screen Watch has always done this for the document it watches, and the
+   * rule that allows it applies here unchanged: evidence search hits the four
+   * free public APIs and never the relay, so it costs nothing to run without
+   * being asked. Critique — which is the paid call — stays manual on both
+   * surfaces.
+   */
+  useEffect(() => {
+    const analysisId = analysisIdRef.current
+    if (!analysisId || !claims || checking) return
+    if (autoSearchedRef.current.has(analysisId)) return
+
+    const unsearched = claims.filter((claim) => claim.strengthScore === null).map((c) => c.id)
+    if (unsearched.length === 0) return
+
+    autoSearchedRef.current.add(analysisId)
+    void checkClaims(unsearched)
+    // `checking` is in the deps so this re-evaluates when a sweep finishes,
+    // which is when a second batch (a claim added by an edit) becomes visible.
+  }, [claims, checking])
+
   async function checkClaims(ids: string[]): Promise<void> {
     if (ids.length === 0) return
     setChecking({ done: 0, total: ids.length })
@@ -1825,6 +1860,17 @@ function DocumentEditor({
 
       {/* 234:85. Every row here is computable from the document already open,
           so unlike Share and More this menu has nothing disabled in it. */}
+      {/*
+        The sweep is automatic now, and a search nobody asked for that takes
+        30 seconds and shows nothing is indistinguishable from a broken app —
+        the marks simply appear late. This says what is happening, in the one
+        place in the editor that already holds status.
+      */}
+      {checking ? (
+        <div className="docedit-checking">
+          Checking sources · {checking.done} of {checking.total}
+        </div>
+      ) : null}
       <div className="docedit-wordcount docedit-menu-wrap" ref={wordMenuRef}>
         <button className="docedit-wordcount-trigger" onClick={() => setWordMenuOpen((o) => !o)}>
           <b>{wordCount}</b> words

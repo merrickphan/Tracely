@@ -27,6 +27,7 @@ import { tracelyApi } from '../lib/api'
 import MarkdownText from './MarkdownText'
 import Spinner from './Spinner'
 import { gradeFor } from './essayGrade'
+import { useGradeLevel } from '../lib/gradeLevel'
 import {
   EssayGradeReportPanel,
   type GradeClaim,
@@ -502,6 +503,9 @@ export default function ArgumentScoreModal({
   // reached from it. Argument check is one click away under "Open Argument
   // Check", which is where the design puts it.
   const [view, setView] = useState<View>({ name: 'summary' })
+  // Settings > Preferences. The report shows the same /100 at every level and
+  // bands the LETTER against this — see shared/gradeLevel.ts.
+  const gradingLevel = useGradeLevel()
 
   // Its own card, not a state inside the report's card — Figma 391:540
   // ("Analyzing Card") is 340 wide against the report's full width, with its own
@@ -605,6 +609,7 @@ export default function ArgumentScoreModal({
             <EssayGradeReportPanel
               structure={gradeInput(outline, paragraphTexts)}
               claims={gradeClaims(claims)}
+              gradingLevel={gradingLevel}
               onClose={onClose}
               onBackToSummary={() => setView({ name: 'summary' })}
               onArgumentCheck={() => setView({ name: 'argument' })}
@@ -707,7 +712,8 @@ function ScoreReport({
   // runner can reach them.
   const searchable = searchableClaims(checked, outsideIndexes, withRelevantSource)
   const { words, sentences, uniqueWords } = readingStats(paragraphTexts)
-  const grade = gradeFor(outline.score)
+  const gradingLevel = useGradeLevel()
+  const grade = gradeFor(outline.score, gradingLevel)
 
   const claimed = new Set<keyof StructureComponents>()
   // Named by position, and the title dropped entirely — see paragraphNames.

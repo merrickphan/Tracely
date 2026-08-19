@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DocumentListItem } from '@shared/types'
 import type { Tab } from '../App'
+import { useGradeLevel } from '../lib/gradeLevel'
 import { gradeFor } from '../components/essayGrade'
 import { tracelyApi } from '../lib/api'
 import { documentSort, gradedOn, type DocumentSort } from '../components/documentSort'
@@ -62,7 +63,8 @@ function DocumentCard({
   onOpen: () => void
   onDelete: () => void
 }): JSX.Element {
-  const grade = doc.score === null ? null : gradeFor(doc.score)
+  const gradingLevel = useGradeLevel()
+  const grade = doc.score === null ? null : gradeFor(doc.score, gradingLevel)
   const chip = grade ? chipColors(grade.letter) : null
   // The menu, not a bare delete on the card. Opening it IS the deliberate
   // step: a destructive item chosen from a menu you had to open is the

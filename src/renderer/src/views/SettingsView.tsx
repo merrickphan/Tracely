@@ -32,6 +32,8 @@ import {
   BackIcon
 } from '../components/icons'
 import { tracelyApi } from '../lib/api'
+import { useSetGradeLevel } from '../lib/gradeLevel'
+import { GRADE_LEVELS, gradeLevelLabel } from '@shared/gradeLevel'
 import { applyTheme } from '../lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize } from '../lib/appearance'
 import type { Tab } from '../App'
@@ -137,6 +139,11 @@ const NAV: { id: Section; label: string; icon: (props: { size?: number }) => JSX
 export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) => void }): JSX.Element {
   const [section, setSection] = useState<Section>('profile')
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  // The provider caches the level for every letter in this window, and there
+  // is no settings-changed event to invalidate it — so the dropdown tells it
+  // directly. Without this, Home's average grade kept the old letter until the
+  // app was restarted.
+  const setGradingLevel = useSetGradeLevel()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -704,6 +711,32 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                     <option value="Chicago">Chicago</option>
                   </select>
                 </SettingsField>
+                {/*
+                  The school year the LETTER is graded against.
+
+                  It does not touch the /100: the rubric measures the same six
+                  things at every level, and the report's own breakdown adds up
+                  to that number. What changes is what the number is worth — see
+                  shared/gradeLevel.ts. Saying so here matters, because a
+                  dropdown that silently moved a score would make the whole
+                  report unarguable.
+                */}
+                <SettingsField label="Grading level">
+                  <select
+                    value={settings.gradingLevel}
+                    onChange={(e) => {
+                      const level = Number(e.target.value)
+                      setGradingLevel(level)
+                      void save({ gradingLevel: level })
+                    }}
+                  >
+                    {GRADE_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {gradeLevelLabel(level)}
+                      </option>
+                    ))}
+                  </select>
+                </SettingsField>
                 <SettingsField label={`Claim sensitivity — ${Math.round(settings.claimSensitivity * 100)}%`}>
                   <input
                     type="range"
@@ -716,6 +749,11 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 </SettingsField>
               </div>
               {hotkeyError ? <p className="error-text">{hotkeyError}</p> : null}
+              <p className="muted settings-app-note">
+                Grading level moves the letter, not the score out of 100 — the rubric measures the same six
+                things at every level. The same draft that earns an A in grade 3 is a D in grade 12, because the
+                expectations are what changed, and the breakdown in the report still explains every point.
+              </p>
               <p className="muted settings-app-note">
                 A lower sensitivity flags more sentences, including borderline ones. Screen Watch underlines
                 passively, without you asking about any one sentence, so over-flagging is more annoying here than
