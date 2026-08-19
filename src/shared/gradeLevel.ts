@@ -60,6 +60,51 @@ export function adjustedScore(score: number, level: number = REFERENCE_LEVEL): n
   return Math.max(0, Math.min(100, Math.round(score + shift)))
 }
 
+/**
+ * The letter bands, worst floor last.
+ *
+ * These lived in `renderer/src/components/essayGrade.ts`, which cannot be unit
+ * tested — it imports through the `@shared` alias and Node's type-stripping
+ * runner does not resolve it. They are here because this module already owns
+ * the other half of the same question, and because a band table nothing can
+ * test is how the top of the scale went missing for as long as it did.
+ *
+ * Bands are set so 82 reads "B+" exactly as the Figma frame does. The second
+ * string fills the frame's "Above average for this assignment type" slot: that
+ * line asserts a comparison against other students' work, and there is no
+ * cohort and no assignment type here to compare against, so the slot keeps the
+ * design's position and says what the band means instead.
+ */
+export const GRADE_BANDS: Array<[number, string, string]> = [
+  // A+ exists now. It did not, and the consequence was a ceiling nobody could
+  // reach: a draft that met every expectation of a third-grader banded "A"
+  // because "A" was the top of the table. A scale whose best grade is one a
+  // student cannot beat has no headroom to reward the work that earns it.
+  [97, 'A+', 'Does everything the rubric asks, and does it well'],
+  [90, 'A', 'Built the way the rubric asks for'],
+  [85, 'A-', 'Strong throughout, with small gaps'],
+  [80, 'B+', 'Well built — a few gaps to close'],
+  [75, 'B', 'Solid, with parts left implied'],
+  [70, 'B-', 'The shape is there; the support is thin'],
+  [65, 'C+', 'Half the argument is doing the work'],
+  [60, 'C', 'Key moves are missing or unstated'],
+  [50, 'D', 'Reads as notes rather than an argument'],
+  [0, 'F', 'Not yet arguing anything the rubric can find']
+]
+
+/**
+ * The letter for a score, at a school year.
+ *
+ * `level` shifts what the number is WORTH, never the number itself. Defaulted,
+ * so every caller with no business knowing the setting keeps the pre-setting
+ * behaviour: year 12, no shift.
+ */
+export function gradeFor(score: number, level?: number): { letter: string; line: string } {
+  const banded = adjustedScore(score, level)
+  const band = GRADE_BANDS.find(([floor]) => banded >= floor) ?? GRADE_BANDS[GRADE_BANDS.length - 1]
+  return { letter: band[1], line: band[2] }
+}
+
 /** "Year 12" / "Grade 3" — the label the setting shows. */
 export function gradeLevelLabel(level: number): string {
   return `Grade ${isGradeLevel(level) ? level : REFERENCE_LEVEL}`

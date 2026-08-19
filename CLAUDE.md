@@ -397,6 +397,12 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   payload — the two fields it must supply itself, previews and stats, are the
   two `DocumentOutline` deliberately has no prose for.
 - **The score is a deterministic formula, not a model output** (`structure/scoreDraft.ts`) — the same stance `search/scoring.ts` takes for evidence strength, and for the same reason: a number a student is asked to act on has to be one they can argue with. Six components (thesis 20, governing claims 20, warrant 20, counterargument 15, significance 15, conclusion 10). Governing claims is a **fraction of the body, never a count**, which is what stops the score being a length proxy — padding an essay lowers it. The panel displays every paragraph's role label beside the number so a wrong label is visibly wrong rather than mysteriously costly.
+- **`shared/gradeLevel.ts` owns score → letter end to end** — the bands AND the
+  level shift. The bands were in `renderer/components/essayGrade.ts`, which
+  `npm test` cannot load (it resolves the `@shared` alias), and a band table
+  nothing can test is how the scale shipped with no A+ at all: "A" was the top,
+  so a draft that met every expectation of its level could not be told it had.
+  That file is now a re-export.
 - **The grading LEVEL moves the letter, never the score** (`shared/gradeLevel.ts`,
   Settings → Preferences, grades 3-12). The rubric measures the same six things
   at every level and the report's breakdown adds to the number shown, so
