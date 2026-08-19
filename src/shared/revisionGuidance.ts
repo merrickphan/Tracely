@@ -116,6 +116,16 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
     move: 'Delete the first sentence and start on the second. Then check whether the new opening is specific to your subject — if it could still introduce a different essay, delete that one too.',
     why: '"Since the beginning of time" and a dictionary definition are the two openings a marker has read most often, and neither tells them anything about your argument. The opening sentence is the one place you have the reader\'s full attention, and spending it on filler spends it on nothing.',
     done: 'Show the first sentence to someone and ask what the essay is about. If they cannot narrow it past "history" or "society", the sentence is not yet yours.'
+  },
+  'topic-not-thesis': {
+    move: 'Rewrite the opening so it says what you believe about the subject, not which subject you picked. Ask yourself what you would say if a reader replied "so what do you think?" — and refuse to answer by naming the topic again.',
+    why: 'Announcing a subject makes no claim, so nothing in the essay can succeed or fail at defending it. It also costs you the reader: they have no idea what to watch for, and every paragraph after arrives as more information rather than as support for something.',
+    done: 'Write the opposite of your opening sentence. If the opposite is a position a reasonable person might hold, you have a thesis. If the opposite is meaningless, you are still describing a topic.'
+  },
+  'summary-without-point': {
+    move: 'After each source, write one sentence of your own saying what it establishes for your argument. Then read the paragraph back and cut whatever the new sentences made redundant — usually most of the summarising.',
+    why: 'Reporting what three sources found puts research on the page and leaves your argument exactly where it was. A marker reading this paragraph learns what you read; they still do not know what you think, and they can only give credit for the second thing.',
+    done: 'Strike out every sentence that reports what somebody else said. If nothing is left, the paragraph was a summary. What remains after you fix it should be an argument the sources happen to support.'
   }
 }
 

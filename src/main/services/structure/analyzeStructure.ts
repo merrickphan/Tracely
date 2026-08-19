@@ -12,9 +12,12 @@ import { hasInlineCitation } from '@shared/inlineCitation'
 import { withoutWorksCited } from '@shared/worksCited'
 import { measureCohesion } from './cohesion'
 import {
+  conclusionDrawsOnBody,
   conclusionRestatesThesis,
   droppedEvidenceParagraphs,
-  findReasoningIssues
+  findReasoningIssues,
+  summaryOnlyParagraphs,
+  thesisStatesTopicOnly
 } from './reasoningIssues'
 import { hasSignificanceMarker, hasClosingSignificance, heuristicRoles, looksLikeTitle } from './roles'
 import { scoreDraft } from './scoreDraft'
@@ -164,8 +167,13 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // in the score while telling the conclusion it has nothing to restate would
   // be the report disagreeing with itself again.
   const labelledThesis = roles.indexOf('thesis')
+  const reasoningParagraphs = spans.map((span, i) => ({
+    index: span.index,
+    text: span.text,
+    role: roles[i]
+  }))
   const reasoning = findReasoningIssues({
-    paragraphs: spans.map((span, i) => ({ index: span.index, text: span.text, role: roles[i] })),
+    paragraphs: reasoningParagraphs,
     thesisIndex:
       labelledThesis !== -1 ? labelledThesis : local.thesisIndex > 0 ? local.thesisIndex - 1 : null,
     titleParagraph
@@ -178,11 +186,18 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
   // disagree the text wins, because the text is checkable and the label is not.
   const dropped = droppedEvidenceParagraphs(reasoning)
 
+  // The second veto, on the other axis. `statesClaim` asks whether a paragraph
+  // asserts a contestable sub-point of its own; a paragraph that relays what
+  // three sources found and never says what any of it establishes does not,
+  // however confidently a classifier labelled it. Same rule as above: where the
+  // label and the text disagree, the text is the one that can be checked.
+  const summaryOnly = summaryOnlyParagraphs(reasoning)
+
   const paragraphs: ParagraphOutline[] = spans.map((span, i) => ({
     index: span.index,
     role: roles[i],
     hasWarrant: warranted[i] && !dropped.has(span.index),
-    statesClaim: statesClaim[i],
+    statesClaim: statesClaim[i] === undefined ? undefined : statesClaim[i] && !summaryOnly.has(span.index),
     claimIds: claimsByParagraph.get(span.index) ?? []
   }))
 
@@ -209,7 +224,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
     soWhatInConclusion,
     significanceAnywhere,
     titleParagraph,
-    conclusionRestatesThesis: conclusionRestatesThesis(reasoning)
+    conclusionRestatesThesis: conclusionRestatesThesis(reasoning),
+    thesisStatesTopicOnly: thesisStatesTopicOnly(reasoning)
   })
 
   return {
@@ -231,7 +247,8 @@ export function analyzeStructure(input: AnalyzeStructureInput): DocumentOutline 
       titleParagraph,
       // The same fallback the score uses. Both or neither — see thesisFound.
       thesisFound: roles.includes('thesis') || local.thesisIndex > 0,
-      reasoning
+      reasoning,
+      conclusionDrawsOnBody: conclusionDrawsOnBody(reasoningParagraphs)
     }),
     // Measured over the same spans the roles were computed from, so a boundary
     // finding and the role labels either side of it can never describe

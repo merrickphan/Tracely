@@ -54,6 +54,22 @@ export type ReasoningIssueKind =
   | 'undeveloped-repetition'
   /** "Since the beginning of time", "Webster's dictionary defines". */
   | 'generic-opening'
+  /**
+   * The opening announces a SUBJECT where a thesis should assert a position.
+   *
+   * Scored: halves the thesis component. "This essay will discuss the effects
+   * of social media" is a table of contents, and the rubric was giving it the
+   * full 20 because a thesis-shaped paragraph existed in the right place.
+   */
+  | 'topic-not-thesis'
+  /**
+   * A paragraph that reports sources and asserts nothing about them.
+   *
+   * Scored: vetoes `statesClaim`, so it stops counting toward governing claims.
+   * Two or more citations, three or more sentences, and not one word anywhere
+   * in it connecting any of that to the argument.
+   */
+  | 'summary-without-point'
 
 export interface ReasoningParagraph {
   /** 1-based, matching ParagraphOutline.index. */
@@ -223,6 +239,53 @@ const TRAILING_CITATION =
 /** A quotation of real length — four words or more between quote marks. */
 const SUBSTANTIAL_QUOTE = /["“”'‘’]\s*(?:\S+\s+){3,}\S+\s*["“”'‘’]/
 
+/**
+ * A reference anywhere in a sentence, not only at its end.
+ *
+ * Same shapes TRAILING_CITATION requires, unanchored, for counting how much of
+ * a paragraph is somebody else's material.
+ */
+const CITATION_ANYWHERE =
+  /\([^)]{0,80}\b(?:1[5-9]|20)\d{2}[a-z]?\s*\)|\(\s*[A-Z][^),]{0,40}\s+\d{1,4}\s*\)|\[\d{1,3}(?:[-–,]\s?\d{1,3})*\]/
+
+/**
+ * An opening that names a subject instead of taking a position on one.
+ *
+ * Every pattern is an explicit announcement — the writer saying what the essay
+ * will be ABOUT — or a placeholder assertion that survives its own negation.
+ * "Social media is an important issue" is not a thesis because "social media is
+ * not an important issue" is not a position anybody holds; nothing has been
+ * claimed either way.
+ *
+ * Nothing here tries to judge whether a real assertion is *defensible* or
+ * *interesting*. That is the part of the rubric a rule cannot reach, and
+ * guessing at it would flag every plainly-written thesis in the corpus. This
+ * catches the case where there is no assertion at all, which is the one a
+ * pattern can be right about.
+ */
+const TOPIC_NOT_THESIS: RegExp[] = [
+  /\bthis (?:essay|paper|report|article|piece) will\b/i,
+  /\bthis (?:essay|paper|report) (?:is about|looks at|covers|discusses|explores|examines)\b/i,
+  /\bin this (?:essay|paper|report),? (?:I|we) will\b/i,
+  /\bthe (?:purpose|goal|aim|point|focus) of this (?:essay|paper|report)\b/i,
+  /\b(?:I|we) will (?:be )?(?:discuss|discussing|explore|exploring|examine|examining|talk about|talking about|writing about|look at|looking at|show|showing)\b/i,
+  /\bis an (?:important|interesting|significant|controversial) (?:topic|issue|subject|question|matter)\b/i,
+  /\bhas (?:long )?been (?:a (?:topic|subject|matter) of |the subject of )?(?:much |widely |hotly )?(?:debated?|discussed|argued)\b/i,
+  /\bthere are (?:many|several|a lot of|two|three) (?:reasons|factors|causes|arguments|sides|opinions|views)\b/i
+]
+
+/**
+ * Words that connect evidence to an argument.
+ *
+ * Duplicated rather than imported from `roles.ts` for the leaf reason in the
+ * header. Deliberately generous — this list is used to EXCUSE a paragraph, so a
+ * missing entry costs a false accusation while a spurious one costs only a
+ * missed finding. That asymmetry is the right way round for a rule that says
+ * "you never explained any of this".
+ */
+const REASONING_MARKER =
+  /\b(?:therefore|thus|hence|consequently|because|since|so that|as a result|which (?:shows?|suggests?|means?|indicates?|reveals?|implies|demonstrates?|explains?)|this (?:shows?|suggests?|means?|indicates?|reveals?|implies|explains?)|that is why|in other words|the (?:reason|implication|significance|point) (?:is|being)|what this (?:shows?|means?|suggests?)|demonstrat\w+|suggest\w+|implies|reflect(?:s|ed|ing)?|reveal(?:s|ed|ing)?|explain(?:s|ed|ing)?|matters? because|follows that|underscore\w*|illustrat\w+)\b/i
+
 function contentWords(text: string): string[] {
   const words = text.toLowerCase().match(/[a-z][a-z'-]*/g) ?? []
   return words.filter((word) => word.length > 2 && !STOPWORDS.has(word))
@@ -362,6 +425,40 @@ export function findReasoningIssues({
       if (emphasis) push('unsupported-emphasis', paragraph.index, trimQuote(sentence))
     }
 
+    // --- summary without a point ------------------------------------------
+    // "Source A found X. Source B found Y. Source C found Z." — three or more
+    // sentences, at least two of them somebody else's material, and nowhere in
+    // the paragraph a word joining any of it to the argument.
+    //
+    // All three conditions are needed. Two citations alone is a well-evidenced
+    // paragraph; no marker alone is a paragraph of the writer's own reasoning
+    // with nothing to connect. It is the combination that describes a paragraph
+    // doing nothing but reporting.
+    //
+    // Excluded roles are the ones where relaying a source IS the job: a
+    // counterargument states somebody else's position, and a conclusion does not
+    // owe fresh analysis.
+    const reportsOnly =
+      paragraph.role !== 'counterargument' &&
+      paragraph.role !== 'conclusion' &&
+      paragraph.role !== 'thesis'
+    if (reportsOnly && sentences.length >= 3 && !REASONING_MARKER.test(paragraph.text)) {
+      const own = sentences.filter((s) => !CITATION_ANYWHERE.test(s) && !SUBSTANTIAL_QUOTE.test(s))
+      // EVERY sentence carries a source. That is the condition, not "most of
+      // them do": the discriminator is whether the writer contributed a
+      // sentence of their own at all, and one unsourced sentence is a place
+      // analysis could be living.
+      //
+      // Counting sourced sentences instead was the first version, backstopped
+      // by REASONING_MARKER, and the marker list is the wrong instrument for
+      // this — a paragraph closing "the agreement between two biographers
+      // working from different archives is what makes the figure usable" is
+      // plainly analysis and contains no marker in any list worth maintaining.
+      // Every word added to catch it widens a pattern used to EXCUSE a
+      // paragraph. The structural test needs no vocabulary.
+      if (own.length === 0) push('summary-without-point', paragraph.index, trimQuote(sentences[0]))
+    }
+
     // --- undeveloped repetition -------------------------------------------
     // Adjacent sentences only, and both must carry real content. The threshold
     // is high (four fifths of the second sentence's vocabulary already used by
@@ -373,6 +470,30 @@ export function findReasoningIssues({
       if (previous.length < 6 || current.length < 6) continue
       if (overlapInto(current, previous) < 0.8) continue
       push('undeveloped-repetition', paragraph.index, trimQuote(sentences[s]))
+      break
+    }
+  }
+
+  // --- topic where a thesis should be ------------------------------------
+  // Read on the paragraph the thesis was located in, or — when nothing located
+  // one — on the draft's first real paragraph, which is where a thesis would
+  // be. That fallback is the case this rule most often has to catch: an essay
+  // that announces its subject frequently has no thesis to label in the first
+  // place.
+  const thesisParagraph =
+    thesisIndex !== null && thesisIndex >= 0 && thesisIndex < paragraphs.length
+      ? thesisIndex
+      : first < paragraphs.length
+        ? first
+        : -1
+  if (thesisParagraph !== -1) {
+    const text = withoutQuotations(paragraphs[thesisParagraph].text)
+    for (const pattern of TOPIC_NOT_THESIS) {
+      const hit = pattern.exec(text)
+      if (!hit) continue
+      const sentence =
+        splitSentences(paragraphs[thesisParagraph].text).find((s) => pattern.test(s)) ?? hit[0]
+      push('topic-not-thesis', paragraphs[thesisParagraph].index, trimQuote(sentence))
       break
     }
   }
@@ -419,7 +540,72 @@ export function droppedEvidenceParagraphs(findings: ReasoningFinding[]): Set<num
   return indexes
 }
 
+/**
+ * The opening announces a subject rather than asserting a position. Halves the
+ * thesis component.
+ */
+export function thesisStatesTopicOnly(findings: ReasoningFinding[]): boolean {
+  return findings.some((finding) => finding.kind === 'topic-not-thesis')
+}
+
+/**
+ * The 1-based paragraphs that report sources without asserting anything.
+ *
+ * A veto on `statesClaim`, the same shape as `droppedEvidenceParagraphs` is on
+ * `hasWarrant`, and for the same reason: `governingClaims` asks which body
+ * paragraphs are governed by a contestable point of the writer's own, and a
+ * paragraph that only relays what three sources found is not one — whatever a
+ * classifier called it.
+ */
+export function summaryOnlyParagraphs(findings: ReasoningFinding[]): Set<number> {
+  const indexes = new Set<number>()
+  for (const finding of findings) {
+    if (finding.kind === 'summary-without-point' && finding.paragraphIndex !== null) {
+      indexes.add(finding.paragraphIndex)
+    }
+  }
+  return indexes
+}
+
 /** Whether the draft's conclusion merely restates its thesis. Halves the conclusion component. */
 export function conclusionRestatesThesis(findings: ReasoningFinding[]): boolean {
   return findings.some((finding) => finding.kind === 'restated-conclusion')
+}
+
+/**
+ * Whether the conclusion is built out of the draft that precedes it.
+ *
+ * This exists to STOP a finding, not to raise one. `new-claim-in-conclusion`
+ * fired whenever a detected claim landed in the closing paragraph, on the
+ * reasoning that an assertion made there has no room left to be supported —
+ * and that reasoning is simply wrong about the paragraph a conclusion is
+ * supposed to be. Drawing a claim the body has earned is the whole job:
+ * "these three findings together mean X" is a new sentence, not new evidence,
+ * and by the time a reader reaches it everything under it has already been
+ * argued. The rule was flagging synthesis, which is the one move only a
+ * conclusion can make.
+ *
+ * So the question is not "is there a claim here" but "is this claim made of
+ * anything above it". Measured as vocabulary the draft has already used: a
+ * conclusion assembled from the body's own terms is drawing on it, while one
+ * that introduces a subject nothing else in the draft mentions is the case the
+ * original rule was written about and still catches.
+ *
+ * Half is a deliberately low bar. A false "new claim in the conclusion" tells a
+ * student to delete the best sentence in their essay, so this fails toward
+ * silence — the same direction `retrievalScope.ts` fails in, for the same
+ * reason.
+ */
+export function conclusionDrawsOnBody(paragraphs: ReasoningParagraph[]): boolean {
+  const conclusionAt = paragraphs.map((p) => p.role).lastIndexOf('conclusion')
+  if (conclusionAt <= 0) return false
+
+  const conclusion = contentWords(paragraphs[conclusionAt].text)
+  // Under a sentence's worth of content there is nothing to measure, and a
+  // three-word conclusion is not the paragraph this rule is about. Treated as
+  // drawing on the body, because the finding has to earn its way in.
+  if (conclusion.length < 8) return true
+
+  const body = paragraphs.slice(0, conclusionAt).flatMap((p) => contentWords(p.text))
+  return overlapInto(conclusion, body) >= 0.5
 }

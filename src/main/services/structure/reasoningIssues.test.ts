@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import { deepStrictEqual, strictEqual, ok } from 'node:assert'
 import {
+  conclusionDrawsOnBody,
   conclusionRestatesThesis,
   droppedEvidenceParagraphs,
   findReasoningIssues,
@@ -373,5 +374,126 @@ describe('the two findings that reach the score', () => {
 
   it('conclusionRestatesThesis is false for a draft with no such finding', () => {
     strictEqual(conclusionRestatesThesis(findingsFor([para(FILLER), para(FILLER)])), false)
+  })
+})
+
+describe('findReasoningIssues — a topic where a thesis should be', () => {
+  it('flags an opening that announces a subject', () => {
+    for (const opener of [
+      'This essay will discuss the causes of the Dutch famine.',
+      'In this paper, I will examine how celebrity advocacy developed.',
+      'The purpose of this essay is to look at wartime relief work.',
+      'Celebrity humanitarianism is an important topic.',
+      'There are many reasons why the campaign succeeded.'
+    ]) {
+      ok(run([para(`${opener} ${FILLER}`, 'thesis'), para(FILLER)], { thesisIndex: 0 }).includes('topic-not-thesis'), opener)
+    }
+  })
+
+  it('does not flag an opening that asserts a position', () => {
+    for (const opener of [
+      'Hepburn\u2019s humanitarian work reshaped how celebrity advocacy operates.',
+      'The famine of 1944 did more to shape her later politics than her film career did.',
+      'Wartime relief work explains a shift that her biographers have read as temperament.'
+    ]) {
+      ok(!run([para(`${opener} ${FILLER}`, 'thesis'), para(FILLER)], { thesisIndex: 0 }).includes('topic-not-thesis'), opener)
+    }
+  })
+
+  it('reads the first real paragraph when nothing located a thesis', () => {
+    ok(
+      run([para('This essay will discuss the famine. ' + FILLER, 'unknown'), para(FILLER)], {
+        thesisIndex: null
+      }).includes('topic-not-thesis')
+    )
+  })
+})
+
+describe('findReasoningIssues — summary without a point', () => {
+  it('flags a paragraph that reports sources and concludes nothing', () => {
+    const kinds = run([
+      para(FILLER, 'thesis'),
+      para(
+        'Walker describes the winter of 1944 (Walker, 2010). Paris records the same shortages in her own account (Paris, 1996). Spoto puts the daily ration at four hundred calories (Spoto, 2006).',
+        'evidence'
+      )
+    ])
+    ok(kinds.includes('summary-without-point'))
+  })
+
+  it('does not flag a paragraph that says what the sources establish', () => {
+    const kinds = run([
+      para(FILLER, 'thesis'),
+      para(
+        'Walker describes the winter of 1944 (Walker, 2010). Paris records the same shortages (Paris, 1996). The agreement between two biographers working from different archives is what makes the figure usable rather than anecdotal.',
+        'evidence'
+      )
+    ])
+    ok(!kinds.includes('summary-without-point'))
+  })
+
+  it('does not flag a paragraph with only one source', () => {
+    const kinds = run([
+      para(FILLER, 'thesis'),
+      para(
+        'Walker describes the winter of 1944 (Walker, 2010). The shortages lasted until the spring. Relief convoys reached the west of the country in May.',
+        'evidence'
+      )
+    ])
+    ok(!kinds.includes('summary-without-point'))
+  })
+
+  it('does not ask a counterargument to conclude — relaying a position is its job', () => {
+    const kinds = run([
+      para(FILLER, 'thesis'),
+      para(
+        'Walker reads the appointment as publicity (Walker, 2010). Paris takes the same view of the early tours (Paris, 1996). Both point to the timing of the first press conference.',
+        'counterargument'
+      )
+    ])
+    ok(!kinds.includes('summary-without-point'))
+  })
+})
+
+describe('conclusionDrawsOnBody — the finding it exists to stop', () => {
+  it('is true for a conclusion assembled from the body', () => {
+    ok(
+      conclusionDrawsOnBody([
+        { index: 1, role: 'thesis', text: 'Her humanitarian work reshaped celebrity advocacy.' },
+        {
+          index: 2,
+          role: 'evidence',
+          text: 'The fundraising records show donations rising by a third across the two years of the tour, driven by first-time givers rather than by larger gifts.'
+        },
+        {
+          index: 3,
+          role: 'conclusion',
+          text: 'Taken together, the fundraising records and the tour donations describe first-time givers reshaping how advocacy work was funded.'
+        }
+      ])
+    )
+  })
+
+  it('is false for a conclusion that introduces a subject the draft never raised', () => {
+    strictEqual(
+      conclusionDrawsOnBody([
+        { index: 1, role: 'thesis', text: 'Her humanitarian work reshaped celebrity advocacy.' },
+        {
+          index: 2,
+          role: 'evidence',
+          text: 'The fundraising records show donations rising by a third across the two years of the tour.'
+        },
+        {
+          index: 3,
+          role: 'conclusion',
+          text: 'Modern streaming platforms have transformed contemporary political organising through algorithmic recommendation and micro-targeted advertising budgets.'
+        }
+      ]),
+      false
+    )
+  })
+
+  it('is false when there is no conclusion to measure', () => {
+    strictEqual(conclusionDrawsOnBody([{ index: 1, role: 'thesis', text: FILLER }]), false)
   })
 })

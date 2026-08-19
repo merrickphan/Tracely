@@ -26,7 +26,9 @@ import type { ReasoningFinding } from './reasoningIssues.ts'
 // two a strong draft can carry without being much worse for it.
 const SEVERITY: StructureWeaknessKind[] = [
   'no-thesis',
+  'topic-not-thesis',
   'unsupported-claim',
+  'summary-without-point',
   'dropped-evidence',
   'warrant-gap',
   'overreaching-claim',
@@ -93,6 +95,18 @@ const REASONING_TEMPLATE: Record<
     tracerPrompt:
       'I keep repeating myself in a paragraph instead of developing the point. How do I tell the difference?'
   },
+  'topic-not-thesis': {
+    message: () =>
+      'The opening announces a subject rather than claiming anything about it. A reader cannot tell what this draft argues, only what it is about.',
+    tracerPrompt:
+      'My introduction says what my essay is about instead of arguing something. How do I turn a topic into a thesis?'
+  },
+  'summary-without-point': {
+    message: (where) =>
+      `The ${where} reports what its sources say and never says what any of it establishes. Nothing in it connects the evidence to the argument.`,
+    tracerPrompt:
+      'One of my paragraphs just summarises my sources. What should I be adding so it argues something?'
+  },
   'generic-opening': {
     message: () =>
       'The draft opens on a line that would fit any essay on any subject. The first sentence is doing no work for this argument.',
@@ -135,6 +149,16 @@ export interface WeaknessInput {
    * only feedback that does not depend on the labelling at all.
    */
   reasoning?: ReasoningFinding[]
+  /**
+   * The closing paragraph is built out of the draft above it — see
+   * `conclusionDrawsOnBody`. Suppresses `new-claim-in-conclusion`.
+   *
+   * Defaults to FALSE so a caller that does not pass it keeps the old
+   * behaviour, which is the wrong default for the app and the right one for
+   * this module: silently excusing every conclusion because a caller forgot to
+   * measure would delete the finding rather than narrow it.
+   */
+  conclusionDrawsOnBody?: boolean
 }
 
 function ordinal(index: number): string {
@@ -148,7 +172,8 @@ export function findWeaknesses({
   soWhatInConclusion,
   titleParagraph = false,
   thesisFound = false,
-  reasoning = []
+  reasoning = [],
+  conclusionDrawsOnBody = false
 }: WeaknessInput): StructureWeakness[] {
   if (paragraphs.length === 0) return []
 
@@ -203,8 +228,14 @@ export function findWeaknesses({
     })
   }
 
+  // `conclusionDrawsOnBody` is the gate, and it is why this is now rare. The
+  // rule used to fire on ANY claim in the closing paragraph, which flags the
+  // move a conclusion exists to make: a claim assembled from evidence the body
+  // has already presented is supported by everything above it, and telling a
+  // student to cut it is telling them to end on a summary. Only a claim made of
+  // material the draft never introduced is the smuggling this was written for.
   const conclusion = paragraphs.find((p) => p.role === 'conclusion')
-  if (conclusion && conclusion.claimIds.length > 0) {
+  if (conclusion && conclusion.claimIds.length > 0 && !conclusionDrawsOnBody) {
     found.push({
       kind: 'new-claim-in-conclusion',
       paragraphIndex: conclusion.index,
