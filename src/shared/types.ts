@@ -354,7 +354,6 @@ export type StructureWeaknessKind =
   | 'no-thesis'
   | 'warrant-gap'
   | 'evidence-stacking'
-  | 'no-counterargument'
   | 'unsupported-claim'
   | 'new-claim-in-conclusion'
   | 'no-significance'

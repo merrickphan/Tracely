@@ -91,28 +91,26 @@ describe('findCitationDefects — dates', () => {
     deepStrictEqual(findCitationDefects('A recent study confirms it (Walker, 2026).', YEAR), [])
   })
 
-  it('names an undated source without calling it an error', () => {
-    const [defect] = findCitationDefects('The page gives no date (Walker, n.d.).', YEAR)
-    strictEqual(defect.kind, 'undated')
-    // Correct APA style, so the message has to say "check", not "fix".
-    ok(defect.message.includes('correct style'))
+  // "n.d." is correct APA for a genuinely undated source, and the rubric has no
+  // clause for citation FORMATTING — SOURCE USE asks only whether a source
+  // supports the claim. Removed with the rubric scoping; see shared/rubric.ts.
+  it('says nothing about an undated source', () => {
+    deepStrictEqual(findCitationDefects('The page gives no date (Walker, n.d.).', YEAR), [])
   })
 })
 
-describe('findCitationDefects — duplicates', () => {
-  // The owner's own draft, 2026-08-19: the report quoted the sentence back
-  // with its reference pasted twice.
-  it('flags the same reference twice in a row', () => {
+describe('findCitationDefects — duplicates, removed', () => {
+  /**
+   * This one was real and it was in the owner's own draft. It is gone anyway,
+   * because a reference pasted twice is formatting and nothing in the rubric
+   * asks for it — the honest cost of "ONLY flag stuff that comes out of this
+   * list". If it should come back, the route is a new rubric clause, not a
+   * widened EVIDENCE one.
+   */
+  it('says nothing about the same reference twice in a row', () => {
     const text =
       'She delivered newspapers and took messages to downed Allied flyers (Lähteenmäki, 2006) (Lähteenmäki, 2006).'
-    const [defect] = findCitationDefects(text, YEAR).filter((d) => d.kind === 'duplicated')
-    ok(defect)
-    ok(defect.text.includes('(Lähteenmäki, 2006) (Lähteenmäki, 2006)'))
-  })
-
-  it('does not flag two real citations separated by prose', () => {
-    const text = 'One account (Walker, 2010) and, writing later, another (Walker, 2010) agree.'
-    strictEqual(kinds(text).includes('duplicated'), false)
+    deepStrictEqual(findCitationDefects(text, YEAR), [])
   })
 })
 

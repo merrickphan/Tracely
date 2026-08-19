@@ -67,8 +67,20 @@ describe('findWeaknesses — structural gaps', () => {
     strictEqual(kinds(['claim+', 'counterargument', 'significance', 'conclusion']).includes('no-thesis'), true)
   })
 
-  it('flags a missing counterargument', () => {
-    strictEqual(kinds(['thesis', 'claim+', 'significance', 'conclusion']).includes('no-counterargument'), true)
+  /**
+   * The inverse of the test that used to be here.
+   *
+   * The rubric is explicit: "Do not require counterarguments for every essay;
+   * judge based on the prompt and genre." Tracely is never shown the prompt, so
+   * it cannot make that judgement — and a tool that cannot judge must not
+   * require. See shared/rubric.ts.
+   */
+  it('never asserts that a draft is missing a counterargument', () => {
+    const found = kinds(['thesis', 'claim+', 'significance', 'conclusion'])
+    strictEqual(
+      found.some((k) => k.includes('counterargument')),
+      false
+    )
   })
 
   it('flags a missing significance', () => {

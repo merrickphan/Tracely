@@ -515,13 +515,18 @@ export const documentOutlineClassified: DocumentOutline = {
         'The 3rd paragraph adds more evidence to the 2nd without a claim between them. Stacked sources read as a literature review rather than an argument.',
       tracerPrompt: 'My 3rd and 2nd paragraphs are both evidence. What claim should be joining them?'
     },
+    // `no-counterargument` was the whole-draft fixture here. It is gone with
+    // the kind — see shared/rubric.ts — and `no-significance` replaces it so
+    // the report's SUMMARY block (which renders only paragraphIndex === null
+    // findings) still has something to draw.
     {
-      kind: 'no-counterargument',
+      kind: 'no-significance',
       paragraphIndex: null,
       claimId: null,
       message:
-        'Nothing in this draft engages an opposing view. An argument that never meets resistance reads as one that has not been tested.',
-      tracerPrompt: 'What is the strongest objection to my argument, and how do I address it fairly?'
+        'The draft never says why this matters. A reader finishes knowing what is true but not what follows from it.',
+      tracerPrompt:
+        'My essay proves its point but never says why it matters. How do I write that without overclaiming?'
     }
   ]
 }

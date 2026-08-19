@@ -33,10 +33,6 @@ export type CitationDefectKind =
   | 'placeholder-citation'
   /** A publication year later than the year the draft is being written in. */
   | 'future-year'
-  /** "(Smith, n.d.)" — valid style, but the source carries no date. */
-  | 'undated'
-  /** The same reference twice in a row. */
-  | 'duplicated'
   /** A raw URL standing in for a reference. */
   | 'bare-url'
 
@@ -159,37 +155,21 @@ export function findCitationDefects(text: string, currentYear = new Date().getFu
       })
     }
 
-    if (/\bn\.?\s?d\.?\b/i.test(reference.inner)) {
-      found.push({
-        kind: 'undated',
-        start: reference.start,
-        end: reference.end,
-        text: reference.text,
-        // Correct style, deliberately not called an error. "n.d." is what APA
-        // asks for when a source genuinely carries no date; it is also what an
-        // undated web page looks like, and only the writer knows which.
-        message:
-          '"n.d." means the source carries no date. That is correct style if the source really is undated — check that it is, since an undated source is harder to weigh.'
-      })
-    }
-
-    // Adjacent duplicates only. The same work cited in three different
-    // paragraphs is normal and correct; the same reference twice in a row is a
-    // paste that happened twice.
-    const previous = references[i - 1]
-    if (previous && normalise(previous.text) === normalise(reference.text)) {
-      // Only when nothing but whitespace separates them — "(Smith, 2006) and
-      // later (Smith, 2006)" is two real citations in one sentence.
-      if (text.slice(previous.end, reference.start).trim() === '') {
-        found.push({
-          kind: 'duplicated',
-          start: previous.start,
-          end: reference.end,
-          text: text.slice(previous.start, reference.end),
-          message: 'The same reference appears twice in a row. One of them is a duplicate.'
-        })
-      }
-    }
+    // The "n.d." and adjacent-duplicate rules were here. Removed 2026-08-19
+    // with the rubric scoping, and they are the honest casualties of it — both
+    // were real defects and I had just added them.
+    //
+    // Neither is on the list. SOURCE USE asks only whether a source SUPPORTS
+    // the statement attributed to it, which no shape rule can answer; a
+    // reference pasted twice and a correctly-formatted "n.d." are both
+    // formatting, and GRAMMAR / MECHANICS says not to lean on typos. What
+    // survives above is the subset that means there is no followable source at
+    // ALL — a placeholder author, a bracketed note, a bare link, an impossible
+    // year — which maps to EVIDENCE: "Flag unsupported factual claims when
+    // factual support is expected."
+    //
+    // If duplicates should come back, the route is to add a clause to the
+    // rubric, not to widen the EVIDENCE one to cover them.
   }
 
   return found.sort((a, b) => a.start - b.start)

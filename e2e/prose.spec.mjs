@@ -22,7 +22,7 @@ const REPO = resolve(import.meta.dirname, '..')
 
 // One sentence per rule, plus a correct sentence that must stay unmarked.
 const TEXT =
-  'They was late to the the meeting. This is a error, and due to the fact that funding ran out the report was written by the committee. The data were collected in 2019.'
+  'They was late to the the meeting. This is a error, and due to the fact that funding ran out the very long report was written by the committee. The data were collected in 2019.'
 
 function launchIsolated() {
   const userData = mkdtempSync(join(tmpdir(), 'tracely-e2e-'))
@@ -75,7 +75,7 @@ test('grammar and wordiness are underlined in the editor', async (t) => {
 
   console.log(`  ${drawn.kinds.length} marks: ${drawn.kinds.join(', ')}`)
 
-  for (const kind of ['subject-verb', 'repeated-word', 'article-agreement', 'wordiness', 'passive-voice']) {
+  for (const kind of ['subject-verb', 'repeated-word', 'article-agreement', 'wordiness', 'filler']) {
     assert.ok(drawn.kinds.includes(kind), `no mark drawn for ${kind}`)
   }
   assert.ok(drawn.allPositioned, 'a mark measured to a zero-width rect')
@@ -86,15 +86,17 @@ test('grammar and wordiness are underlined in the editor', async (t) => {
   assert.equal(severityOf('subject-verb'), 'error')
   assert.equal(severityOf('article-agreement'), 'error')
   assert.equal(severityOf('wordiness'), 'style')
-  assert.equal(severityOf('passive-voice'), 'style')
+  assert.equal(severityOf('filler'), 'style')
 
-  // The agentless passive in the last sentence must NOT be marked. "The data
-  // were collected in 2019" is correct writing, and flagging it is what makes
-  // people turn grammar tools off.
+  // Passive voice is no longer flagged AT ALL — neither the agentive form the
+  // rule used to catch nor the agentless one it was careful to leave alone.
+  // Nothing in the owner's rubric asks for it, and the rubric's first line says
+  // to judge thinking rather than how sophisticated the writing sounds. See
+  // shared/rubric.ts, and the pinning test in shared/rubric.test.ts.
   assert.equal(
     drawn.kinds.filter((k) => k === 'passive-voice').length,
-    1,
-    'the agentless passive was flagged too'
+    0,
+    'passive voice is back, and the rubric has no clause for it'
   )
 
   // The explanation used to be a native `title` on the mark, which is what

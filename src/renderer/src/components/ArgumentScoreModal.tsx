@@ -118,7 +118,6 @@ const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
   'warrant-gap': 'Evidence left unexplained',
   'new-claim-in-conclusion': 'New claim in the conclusion',
   'evidence-stacking': 'Stacked evidence',
-  'no-counterargument': 'No counterargument',
   'no-significance': 'No significance',
   // The prose findings. Named for what the writing DOES, not for what is
   // absent, because each of these quotes the sentence it is about.
