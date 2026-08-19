@@ -72,3 +72,18 @@ export function truncateForClaimDetection(text: string): string {
 export const MAX_TRACER_MESSAGE_CHARS = 2000
 export const MAX_TRACER_HISTORY_MESSAGES = 12
 export const MAX_TRACER_DOCUMENT_CHARS = 4000
+
+// The graded read — one call per analysis, the whole draft in.
+//
+// Bigger on both axes than the classifier caps above, and deliberately. That
+// call labels paragraphs, so windowing each one to its opening and closing
+// moves is free: a role lives at the edges. This one judges whether the
+// evidence in the MIDDLE supports the claim, and quotes the sentence it means —
+// a quote from text that was never sent cannot be located in the draft and is
+// discarded by verifyGrade, so a finding would be lost rather than merely
+// imprecise. Paragraphs therefore go whole, and the budget is spent by dropping
+// whole paragraphs off the end.
+//
+// Mirrors MAX_GRADE_* in the relay's lib/limits.ts, which is the enforced copy.
+export const MAX_GRADE_PARAGRAPHS = 40
+export const MAX_GRADE_INPUT_CHARS = 16000

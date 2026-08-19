@@ -348,6 +348,12 @@ export interface StructureComponents {
 }
 
 export type StructureWeaknessKind =
+  // A finding from the graded read (services/ai/gradeDraft.ts). One kind rather
+  // than twenty, because the model names what it found in `label` and cites the
+  // rubric section in `rubricSection` — an enum it cannot return a value
+  // outside of. Adding a closed union member per possible finding would be a
+  // second, weaker vocabulary for a judgement already constrained upstream.
+  | 'model-finding'
   // What the draft is MISSING. Every one of these is an absence, found by
   // reading the role vector, and each is withheld while any paragraph is
   // unlabelled — see weaknesses.ts.
@@ -408,6 +414,37 @@ export interface StructureWeakness {
    * `src/shared/*` is additive.
    */
   quote?: string
+  /**
+   * Whether a marker would take marks off, or whether this is a note.
+   *
+   * Optional because every stored outline predating the graded read has none —
+   * `src/shared/*` is additive. When absent, `weaknessSeverity.ts` decides from
+   * the kind, exactly as it always has. When present it wins: the graded read
+   * asks the model this directly, which is a better answer than a
+   * hand-maintained set of "minor" kinds.
+   */
+  severity?: 'major' | 'minor'
+  /**
+   * A short name for the finding, when the kind alone does not supply one.
+   *
+   * The local kinds each have a fixed label (`WEAKNESS_LABEL`). A
+   * `'model-finding'` does not — naming what it found is part of what the
+   * graded read produces, and one label for all of them would read as one
+   * repeated complaint.
+   */
+  label?: string
+  /**
+   * Which section of the owner's rubric this finding comes from.
+   *
+   * For a locally-generated kind that is `FLAG_RUBRIC_SOURCE[kind].section` and
+   * need not be stored. For a `'model-finding'` it is the ONLY attribution
+   * there is, it arrives per finding, and `gradedDraft.ts` discards any finding
+   * whose section is not a real one — which is what keeps "only flag what the
+   * rubric names" true once the flags stop being a closed union.
+   */
+  rubricSection?: string
+  /** The revision move to make. Never a replacement sentence. */
+  fix?: string
 }
 
 export type CohesionFindingKind = 'no-transition' | 'topic-jump' | 'unanswered-counterargument'

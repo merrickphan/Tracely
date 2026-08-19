@@ -11,6 +11,8 @@ import {
 } from '../services/structure/analyzeStructure'
 import { claimsWithoutEvidence, computeEvidenceCoverage } from '../services/structure/evidenceCoverage'
 import { classifyStructure } from '../services/ai/structureClassifier'
+import { gradeDraft } from '../services/ai/gradeDraft'
+import { buildGradedOutline } from '../services/structure/gradedOutline'
 import { argumentParagraphs } from '@shared/structureText'
 import { documentNames } from '@shared/documentNames'
 import { withoutWorksCited } from '@shared/worksCited'
@@ -42,6 +44,50 @@ export function registerStructureHandlers(): void {
     // cannot hand main a claim it never detected, and so the strength scores
     // and breakdowns coverage reads are the persisted ones.
     const claims = input.analysisId ? getClaimsByAnalysis(input.analysisId) : []
+
+    /**
+     * The graded read — one relay call over the whole draft, against the
+     * owner's rubric.
+     *
+     * This is the primary path now. It replaces ten prose detectors, a cohesion
+     * pass, an embedding tangent check and most of a weakness generator with a
+     * model that reads the argument and quotes the sentence it means. Owner,
+     * 2026-08-19: *"if I just gave an essay to ChatGPT and had it graded with a
+     * detailed prompt, it would give a pretty good response on what to
+     * change."*
+     *
+     * Whole paragraphs go up, unlike `classify-structure`, which windows each
+     * one to its edges. A role is visible from the edges; whether the evidence
+     * in the middle supports the claim is not, and a finding quoting text that
+     * was never sent gets discarded by `verifyGrade` rather than shown wrong.
+     *
+     * Null falls through to everything below, which is the read this replaces.
+     * Keeping it is not indecision: a graded read that degrades to the previous
+     * behaviour beats one that fails the whole analysis because a network call
+     * did, and it is what makes the two comparable on real essays before
+     * anything is deleted.
+     */
+    const spansForGrade = argumentParagraphs(input.text)
+    const grade = await gradeDraft(
+      spansForGrade.map((p) => p.text),
+      input.text
+    )
+    if (grade) {
+      const graded = buildGradedOutline({
+        documentId: input.documentId ?? null,
+        analysisId: input.analysisId ?? null,
+        text: input.text,
+        claims,
+        coverage: computeEvidenceCoverage(claims, input.text),
+        grade
+      })
+      // Still taught, and for the same reason: the squiggle under a real name
+      // is Chromium's, not ours, and it is drawn whichever read produced the
+      // report. See spellcheck.ts — session-scoped, argument only.
+      learnDocumentNames(documentNames(withoutWorksCited(input.text)))
+      saveOutline(graded)
+      return { outline: graded }
+    }
 
     /**
      * What each paragraph is DOING, from the model rather than from regexes.

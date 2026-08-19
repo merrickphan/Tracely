@@ -179,7 +179,25 @@ export interface RubricClause {
 }
 
 /** Every kind of flag this product can raise at the writer. */
-export type FlagKind = StructureWeaknessKind | CohesionFindingKind | ProseIssueKind
+/**
+ * Every kind of flag this product raises from a LOCAL rule.
+ *
+ * `'model-finding'` is excluded, and that is the honest answer rather than a
+ * gap. A compile-time Record maps one kind to one clause; a graded read raises
+ * findings across the whole rubric, so any clause chosen here would be an
+ * arbitrary one standing in for twenty. Its attribution is per finding, in
+ * `StructureWeakness.rubricSection`, enforced twice: the relay constrains it to
+ * a schema enum of the section names, and `shared/gradedDraft.ts` discards any
+ * finding whose section is not one of them.
+ *
+ * So the guarantee is unchanged — nothing reaches the writer that the rubric
+ * does not name — but for that one kind it is checked when the finding arrives
+ * instead of when the code compiles.
+ */
+export type FlagKind =
+  | Exclude<StructureWeaknessKind, 'model-finding'>
+  | CohesionFindingKind
+  | ProseIssueKind
 
 /**
  * Where each flag comes from in the rubric.

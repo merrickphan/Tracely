@@ -43,7 +43,10 @@ export interface RevisionGuidance {
   done: string
 }
 
-export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> = {
+export const REVISION_GUIDANCE: Record<
+  Exclude<StructureWeaknessKind, 'model-finding'>,
+  RevisionGuidance
+> = {
   'no-thesis': {
     move: 'Write one sentence someone could disagree with, and put it at the end of your opening.',
     why: 'A thesis is the position you defend, not the subject you picked.',
@@ -158,8 +161,16 @@ export const REVISION_GUIDANCE: Record<StructureWeaknessKind, RevisionGuidance> 
 
 /** Guidance for a weakness kind. Total over the union, so a new kind added to
  *  `types.ts` fails the typecheck here rather than silently rendering nothing. */
-export function guidanceFor(kind: StructureWeaknessKind): RevisionGuidance {
-  return REVISION_GUIDANCE[kind]
+/**
+ * Null for a `'model-finding'`, which carries its own `fix` on the weakness.
+ *
+ * Not a missing entry: these three fields are a local template for a KIND, and
+ * a graded read's finding is not one of a fixed set of kinds. Writing a generic
+ * template for it would print the same advice under every model finding, which
+ * is worse than printing the specific one the finding already has.
+ */
+export function guidanceFor(kind: StructureWeaknessKind): RevisionGuidance | null {
+  return kind === 'model-finding' ? null : REVISION_GUIDANCE[kind]
 }
 
 /**

@@ -113,7 +113,7 @@ const ROLE_LABEL: Record<ParagraphRole, string> = {
  * underneath. These name the same seven kinds `weaknesses.ts` produces and add
  * no judgement of their own; the sentence under each one is still that module's.
  */
-const WEAKNESS_LABEL: Record<StructureWeaknessKind, string> = {
+const WEAKNESS_LABEL: Record<Exclude<StructureWeaknessKind, 'model-finding'>, string> = {
   'no-thesis': 'No thesis',
   'unsupported-claim': 'Unsupported claim',
   'warrant-gap': 'Evidence left unexplained',
@@ -1458,7 +1458,13 @@ function ParagraphProblem({
       <div className="argscore-problem-head">
         <span className="argscore-problem-dot" aria-hidden="true" />
         <span className="argscore-problem-title">
-          {WEAKNESS_LABEL[weakness.kind]}
+          {/* A graded-read finding names itself; the local kinds have a fixed
+              label. Falling back to the kind rather than to a generic string
+              so a finding that somehow arrives without one is visibly odd
+              instead of silently anonymous. */}
+          {weakness.kind === 'model-finding'
+            ? weakness.label || 'Finding'
+            : WEAKNESS_LABEL[weakness.kind]}
           {/* Only when something was actually weighed.
               `hasRelevantSource` is the same gate the Argument Check card got
               on 2026-08-19, applied here a day late: every factor of the
@@ -1531,7 +1537,7 @@ function ParagraphProblem({
           <p className="argscore-problem-rewrite-text">{claim.suggestedRevision}</p>
         </div>
       ) : null}
-      <GuidanceBlock kind={weakness.kind} />
+      <GuidanceBlock kind={weakness.kind} fix={weakness.fix} />
     </div>
   )
 }
@@ -1552,9 +1558,37 @@ function ParagraphProblem({
  *
  * The guidance never contains a sentence to paste — see revisionGuidance.ts.
  */
-function GuidanceBlock({ kind }: { kind: StructureWeaknessKind }): JSX.Element {
+function GuidanceBlock({
+  kind,
+  fix
+}: {
+  kind: StructureWeaknessKind
+  /** The graded read's own one-sentence move, when the finding carried one. */
+  fix?: string
+}): JSX.Element | null {
   const [open, setOpen] = useState(false)
   const guidance = guidanceFor(kind)
+
+  // A model finding has no local template — it carries its own `fix`, which is
+  // specific to the sentence rather than generic to a kind. Shown plainly
+  // rather than folded into move/why/done: inventing the other two fields would
+  // be writing guidance nobody produced.
+  if (!guidance) {
+    if (!fix) return null
+    return (
+      <div className="argscore-guidance" data-open={open ? 'true' : 'false'}>
+        <button className="argscore-guidance-toggle" onClick={() => setOpen((o) => !o)}>
+          {open ? '− How to fix this' : '+ How to fix this'}
+        </button>
+        {open ? (
+          <dl className="argscore-guidance-body">
+            <dt>Do this</dt>
+            <dd>{fix}</dd>
+          </dl>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <div className="argscore-guidance" data-open={open ? 'true' : 'false'}>
