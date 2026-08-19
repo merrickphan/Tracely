@@ -363,3 +363,49 @@ export function computeStrengthScore(
 
   return { score, breakdown }
 }
+
+/**
+ * Which sources a student is actually OFFERED, out of everything retrieved.
+ *
+ * Separate from scoring on purpose, and the separation is the point. The score
+ * reads the calibrated top N whatever their relevance — `computeStrengthScore`
+ * applies the floor itself, to the sourceCount factor, and eval/baseline.md was
+ * fitted against exactly that set. This decides a different question: what goes
+ * in a list someone picks a citation from.
+ *
+ * A source below the floor is one this module has already decided does not
+ * speak to the claim. Offering it as something to CITE is worse than offering
+ * nothing, because a student who takes the offer attaches a real reference to a
+ * paper about a different subject. Owner, 2026-08-19: *"a lot of them don't
+ * even match whatsoever."*
+ *
+ * Measured over 36 hand-labelled claims / 288 labelled sources
+ * (`node eval/retrieval/floor.mjs`), floor 0.42 and cap 5:
+ *
+ *     precision of the shown list   54% -> 77% relevant-or-marginal
+ *     irrelevant sources shown      133 -> 31
+ *     relevant sources kept         40/51 (78%)
+ *     claims shown nothing at all   2/36
+ *
+ * The two knobs do different jobs, which the sweep makes plain — the floor
+ * removes irrelevant sources and the CAP is what costs relevant ones:
+ *
+ *     floor  0.30  0.34  0.38  0.42  0.46      cap    3    5    8
+ *     rel     80%   80%   78%   78%   78%      rel   61%  78%  94%
+ *     irr     39%   35%   30%   23%   20%      irr   14%  23%  38%
+ *
+ * So 0.42 is the right floor by measurement rather than by inheritance: it
+ * keeps every relevant source a floor of 0.30 would, and shows 40% fewer
+ * irrelevant ones. The cap of 5 is the owner's call, and its cost is visible
+ * above — cap 8 would keep 94% of relevant sources and show 60% more junk.
+ *
+ * Input must already be sorted by whatever the caller ranks on.
+ */
+export function selectShownEvidence<T extends { textRelevance: number }>(
+  sortedCandidates: readonly T[],
+  metric: RelevanceMetric,
+  cap: number
+): T[] {
+  const floor = MIN_COUNTABLE_RELEVANCE[metric]
+  return sortedCandidates.filter((item) => item.textRelevance >= floor).slice(0, cap)
+}

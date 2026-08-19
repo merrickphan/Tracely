@@ -12,6 +12,7 @@ import {
   computeStrengthScore,
   computeTextRelevance,
   MIN_COUNTABLE_RELEVANCE,
+  selectShownEvidence,
   type RelevanceMetric
 } from './scoring'
 import type { NormalizedSourceResult } from './types'
@@ -24,10 +25,20 @@ const PER_PROVIDER_LIMIT = 6
 // every score in the app against eval/baseline.md. The scored set stays the
 // calibrated top 8; showing more sources is a display change, not a scoring one.
 const MAX_SCORED_RESULTS = 8
-// How many sources the user actually sees. Eight was the binding constraint on
-// breadth — four providers returning six each were merged down to eight, so
-// most of what was retrieved was discarded before anyone could look at it.
-const MAX_EVIDENCE_RESULTS = 16
+// How many sources the user actually sees, AFTER the relevance floor below.
+//
+// Was 16, with no floor at all, and that combination is what the owner was
+// looking at on 2026-08-19: *"a lot of the articles you've given to insert a
+// citation are kind of bad. A lot of them don't even match whatsoever."*
+// Measured on their database, 3,726 of 3,789 displayed sources (98%) sat below
+// the floor the SCORER itself refuses to count, and a claim about German
+// casualties at Stalingrad was offered "Paediatric Battle Casualties" and "The
+// DSM and Its Discontents" to cite.
+//
+// Five, because that is what they asked for, and because a citation flow is a
+// list someone picks from: past about five the extra rows are not more choice,
+// they are more to reject.
+const MAX_EVIDENCE_RESULTS = 5
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -342,35 +353,51 @@ export async function findEvidence(
   const { values, metric } = await computeRelevances(claimText, clusters)
   const scored = clusters.map((item, index) => ({ item, textRelevance: values[index] }))
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
-  const topScored = scored.slice(0, MAX_EVIDENCE_RESULTS)
 
-  // After the cut to what will be shown, not before: stance is the most
-  // expensive local step and there is no point asking it about candidates that
-  // were never going to be seen. Widening the cut does not widen this
-  // proportionally — attachStance only asks about sources above the relevance
-  // floor, so the added results cost nothing unless they are genuinely relevant.
-  const stances = await attachStance(claimText, topScored, metric)
+  // ── Two different sets, for two different questions ──────────────────────
+  //
+  // SCORING reads the calibrated top 8 whatever their relevance, unchanged:
+  // computeStrengthScore applies the floor itself, to the sourceCount factor,
+  // and eval/baseline.md was fitted against exactly this set. Filtering here
+  // would silently recalibrate every score in the app.
+  //
+  // DISPLAY is the set a student picks a citation from, and it now has a floor.
+  // A source below it is one the scorer has already decided does not speak to
+  // the claim; offering it as something to CITE is worse than offering nothing,
+  // because a student who takes the offer attaches a real citation to a paper
+  // about a different subject.
+  const scoredSet = scored.slice(0, MAX_SCORED_RESULTS)
+  const shown = selectShownEvidence(scored, metric, MAX_EVIDENCE_RESULTS)
 
-  // Link repair, once, on exactly the set being returned. Turns doi.org
+  // The union, because the two sets overlap but neither contains the other: a
+  // relevant source can rank 9th on the blend (which is 25% provider rank), and
+  // the top 8 can hold sources below the floor that still need a stance for the
+  // score. Deduped by identity — these are the same objects.
+  const needsWork = [...new Set([...scoredSet, ...shown])]
+
+  // Stance is the most expensive local step, and attachStance only asks about
+  // sources above the relevance floor, so the union costs no more than the old
+  // single set did.
+  const stances = await attachStance(claimText, needsWork, metric)
+  const stanceOf = new Map(needsWork.map((s, i) => [s, stances[i]]))
+
+  // Link repair, once, on exactly what is being returned. Turns doi.org
   // resolvers into open-access pages where one exists; see unpaywall.ts for
   // why closed papers deliberately keep the resolver.
-  await attachOpenAccessLinks(topScored.map((s) => s.item))
+  await attachOpenAccessLinks(shown.map((s) => s.item))
 
-  const evidence: RankedSourceResult[] = topScored.map((s, index) => ({
+  const evidence: RankedSourceResult[] = shown.map((s) => ({
     ...s.item,
     textRelevance: s.textRelevance,
-    stance: stances[index]
+    stance: stanceOf.get(s) ?? null
   }))
-  // Scored on the calibrated top 8, not on everything shown — see
-  // MAX_SCORED_RESULTS. `scored` is already sorted, so this is the same set,
-  // in the same order, that this call received before the display cap moved.
   const { score, breakdown } = computeStrengthScore(
-    topScored.slice(0, MAX_SCORED_RESULTS).map((s, index) => ({
+    scoredSet.map((s) => ({
       venueType: s.item.venueType,
       year: s.item.year,
       relevanceRank: s.item.relevanceRank,
       textRelevance: s.textRelevance,
-      stance: stances[index]?.stance ?? null
+      stance: stanceOf.get(s)?.stance ?? null
     })),
     metric
   )
