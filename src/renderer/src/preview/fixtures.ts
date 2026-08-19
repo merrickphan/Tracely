@@ -449,6 +449,22 @@ export const documentOutline: DocumentOutline = {
       tracerPrompt:
         'I have used absolute words like "always" and "everyone" in my draft. How do I narrow those without sounding like I am hedging everything?',
       quote: 'Everyone who worked with her noticed the difference.'
+    },
+    // Points at c5, whose search cleared nothing, so the card must NOT print
+    // "· 0/100 evidence" beside the title.
+    //
+    // `claimsWithoutEvidence` no longer PRODUCES this for a cited claim — that
+    // is the fix — but every outline stored before 2026-08-19 still carries
+    // one, and those render until the document is re-analysed. So this is not
+    // a stale fixture: it is the state a returning user's report is in, and the
+    // renderer has to be honest about it without a re-run.
+    {
+      kind: 'unsupported-claim',
+      paragraphIndex: 3,
+      claimId: 'c5',
+      message: 'The claim in the 3rd paragraph has no supporting source yet.',
+      tracerPrompt:
+        'Tracely could not find evidence for one of my claims. How should I go about checking it?'
     }
   ],
   analyzedAt: T0

@@ -1438,7 +1438,16 @@ function ParagraphProblem({
         <span className="argscore-problem-dot" aria-hidden="true" />
         <span className="argscore-problem-title">
           {WEAKNESS_LABEL[weakness.kind]}
-          {claim?.strengthScore !== null && claim?.strengthScore !== undefined ? (
+          {/* Only when something was actually weighed.
+              `hasRelevantSource` is the same gate the Argument Check card got
+              on 2026-08-19, applied here a day late: every factor of the
+              breakdown is computed over the sources that cleared the relevance
+              floor, so "0/100 evidence" beside a claim nothing came back for
+              is a report on the search wearing the grammar of a verdict.
+              Reported over a correctly cited sentence, twice in one panel. */}
+          {claim?.strengthScore !== null &&
+          claim?.strengthScore !== undefined &&
+          hasRelevantSource(claim.scoreBreakdown) ? (
             <span className="argscore-problem-score"> · {claim.strengthScore}/100 evidence</span>
           ) : null}
         </span>
