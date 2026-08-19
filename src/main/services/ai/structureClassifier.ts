@@ -11,24 +11,29 @@ import { buildStructurePrompt, reconcileRoles, type ReconciledRoles } from './st
 /**
  * Asks the relay what each paragraph is doing.
  *
- * ── NOT YET REACHABLE ──────────────────────────────────────────────────────
- * `endpoint` is typed as `callRelay`'s own endpoint union, which does NOT
- * currently contain 'classify-structure'. That makes this function impossible
- * to call: there is no value a caller can pass. That is deliberate, and it is
- * the safe half of a two-repo change.
+ * ── LIVE. This block used to say it was not. ───────────────────────────────
+ * All three of the enabling steps it listed have been taken:
+ * `api/classify-structure.ts` is deployed on the relay's `main` and `staging`,
+ * `'classify-structure'` is in `callRelay`'s union, and
+ * `ipc/structureHandlers.ts` calls this for every editor analysis and passes
+ * the result to `analyzeStructure`'s `classified` input.
  *
- * `scripts/preflight.mjs` parses that union literal out of client.ts and
- * refuses to publish unless every endpoint in it answers something other than
- * a 404 in production. Widening it before `api/classify-structure.ts` is
- * deployed would therefore block EVERY release of the app, including ones with
- * nothing to do with this feature — the v0.3.73 incident inverted.
+ * The comment outlived the work by some months and was still read as current
+ * on 2026-08-19, which produced a confident wrong answer to the owner about
+ * where this feature's grading weakness lives — the endpoint was said to be
+ * undeployed while it was serving every analysis. A probe settled it in one
+ * command (401 rather than 404 on both environments). **A comment is not
+ * evidence about a deployment; check the route.**
  *
- * To turn this on, in this order:
- *   1. Deploy the relay (the endpoint is committed on feat/classify-structure).
- *   2. Add 'classify-structure' to the union in client.ts:100.
- *   3. Call this from structureHandlers and pass the result to
- *      analyzeStructure's `classified` input.
- * Step 2 is what preflight then verifies for you.
+ * `scripts/preflight.mjs` is what actually guarantees the invariant this block
+ * was describing. It parses the union literal out of client.ts and refuses to
+ * publish unless every endpoint in it answers something other than a 404 in
+ * production, so the union widening in step 2 cannot get ahead of the deploy
+ * in step 1 — the v0.3.73 incident, inverted and then automated.
+ *
+ * Screen Watch deliberately does not come through here — see
+ * `screenWatch/watchOutline.ts`. Its roles are `structure/roles.ts`, so the
+ * overlay's grade and the editor's are computed from different label quality.
  * ───────────────────────────────────────────────────────────────────────────
  */
 export type RelayEndpoint = Parameters<typeof callRelay>[0]
