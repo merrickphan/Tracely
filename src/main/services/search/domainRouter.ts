@@ -38,7 +38,19 @@ const ANCHORS: Record<Exclude<ClaimDomain, 'scholarly'>, string[]> = {
   general: [
     'a historical fact, date, or definition of a well-known thing',
     'a description of who someone was or what an organisation does',
-    'general background knowledge found in an encyclopedia'
+    'general background knowledge found in an encyclopedia',
+    // Biography, added 2026-08-19 from a real failure. The three anchors above
+    // describe who a person WAS — an identity, a definition — and an essay
+    // about a person is mostly claims about what they DID. Measured on the
+    // owner's Audrey Hepburn draft: "She had largely contributed to the
+    // resistance by participating in underground activities" routed
+    // 'scholarly', and "She also volunteered in a hospital that was involved
+    // with resistance activity" routed BIOMEDICAL — so PubMed was queried
+    // about a WWII biography and returned clinical psychopharmacology papers,
+    // which is most of what the owner was looking at when they said the
+    // sources had "literally no correlation".
+    'what a named person did during a particular period of their life',
+    'a biographical detail about a specific individual, such as where they lived, worked, or served'
   ]
 }
 

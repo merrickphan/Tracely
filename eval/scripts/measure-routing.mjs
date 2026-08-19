@@ -14,29 +14,68 @@ import { REPO, reportPath } from './paths.mjs'
 
 const REPORT = reportPath()
 
-const ANCHORS = {
-  biomedical: [
-    'a clinical study of human health, disease, medicine, or physiology',
-    'research on sleep, nutrition, mental health, or the human body',
-    'a medical trial measuring a health outcome in patients'
-  ],
-  statistical: [
-    'an official statistic about an economy, population, or labour market',
-    'a measured rate, percentage, or index published by a government agency',
-    'national data on employment, prices, housing, trade, or development'
-  ],
-  general: [
-    'a historical fact, date, or definition of a well-known thing',
-    'a description of who someone was or what an organisation does',
-    'general background knowledge found in an encyclopedia'
-  ]
-}
+// The anchors are READ OUT OF domainRouter.ts, not copied here.
+//
+// They were a duplicate, under a "keep in sync with domainRouter.ts" comment,
+// and on 2026-08-19 that comment was the only thing keeping them in sync — a
+// change to the module's anchors was measured against this file's stale copy
+// and reported as "no regressions" for a router it had never run. A comment is
+// not a mechanism. Parsing the source is ugly and it cannot silently disagree.
+const ROUTER_SRC = readFileSync(`${REPO}/src/main/services/search/domainRouter.ts`, 'utf8')
+const anchorBlock = ROUTER_SRC.slice(
+  ROUTER_SRC.indexOf('const ANCHORS'),
+  ROUTER_SRC.indexOf('const DOMAIN_MARGIN')
+)
+const ANCHORS = Object.fromEntries(
+  ['biomedical', 'statistical', 'general'].map((domain) => {
+    const at = anchorBlock.indexOf(`${domain}: [`)
+    if (at === -1) throw new Error(`no ${domain} anchors in domainRouter.ts`)
+    const body = anchorBlock.slice(at, anchorBlock.indexOf(']', at))
+    // The anchors are plain single-quoted prose with no escapes in them, so a
+    // non-greedy literal match is enough and avoids an escape-handling regex
+    // that would be one more thing to get subtly wrong.
+    const found = [...body.matchAll(/'([^']+)'/g)].map((m) => m[1])
+    if (found.length === 0) throw new Error(`no ${domain} anchor strings parsed`)
+    return [domain, found]
+  })
+)
+console.log(
+  `anchors from domainRouter.ts: ` +
+    Object.entries(ANCHORS)
+      .map(([d, a]) => `${d} ${a.length}`)
+      .join(', ')
+)
 const ORDER = ['biomedical', 'statistical', 'general']
 // Keep in sync with domainRouter.ts. Override from the command line to compare
 // thresholds: `node eval/scripts/measure-routing.mjs "" 0.03`
 const DOMAIN_MARGIN = Number(process.argv[3] ?? 0.05)
 
 const claims = Object.values(JSON.parse(readFileSync(REPORT, 'utf8'))).flatMap((e) => e.claims)
+
+// Biography claims from the owner's Audrey Hepburn draft, 2026-08-19. Not in
+// the labelled report — they are here because they are the failure that
+// motivated the biography anchors, and a routing change that fixes them has to
+// be visible in the same place a routing regression would be. Marked so nobody
+// mistakes them for labelled data.
+if (process.env.WITH_BIOGRAPHY) {
+  claims.push(
+    {
+      text: 'She had largely contributed to the resistance by participating in underground activities such as delivering newspapers and taking messages and food to downed Allied flyers.',
+      searchQuery: 'Audrey Hepburn underground activities Dutch resistance',
+      unlabelled: true
+    },
+    {
+      text: 'She also volunteered in a hospital that was involved with resistance activity.',
+      searchQuery: 'Audrey Hepburn hospital resistance activity',
+      unlabelled: true
+    },
+    {
+      text: 'She devolved anemia, respiratory difficulties',
+      searchQuery: 'Audrey Hepburn anemia respiratory malnutrition',
+      unlabelled: true
+    }
+  )
+}
 
 const tf = await import(
   pathToFileURL(`${REPO}/node_modules/@huggingface/transformers/dist/transformers.node.mjs`).href
@@ -46,7 +85,14 @@ const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0)
 
 const flat = ORDER.flatMap((d) => ANCHORS[d])
 
-console.log(`routing ${claims.length} labelled claims\n`)
+const labelledCount = claims.filter((c) => !c.unlabelled).length
+console.log(
+  `routing ${labelledCount} labelled claims` +
+    (claims.length > labelledCount
+      ? ` + ${claims.length - labelledCount} unlabelled biography claims`
+      : '') +
+    '\n'
+)
 console.log('  domain       margin  claim')
 console.log('  ' + '-'.repeat(86))
 
@@ -77,7 +123,9 @@ for (const claim of claims) {
   const decided = margin > DOMAIN_MARGIN ? winner.domain : 'scholarly'
   counts[decided]++
 
-  const flag = decided === 'scholarly' ? ' ' : '>'
+  // Unlabelled rows are marked so a reader never counts them as evidence of
+  // routing quality — they are a fixture for one known failure.
+  const flag = claim.unlabelled ? '?' : decided === 'scholarly' ? ' ' : '>'
   console.log(
     `${flag} ${decided.padEnd(12)} ${margin.toFixed(3).padStart(6)}  ${claim.text.slice(0, 64)}`
   )
