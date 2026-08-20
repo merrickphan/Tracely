@@ -187,7 +187,10 @@ export const claims: Claim[] = [
   {
     id: 'c2',
     analysisId: 'a1',
-    text: '70% of adolescents who use social media for more than three hours a day report symptoms of anxiety.',
+    // No trailing full stop: the sentence now ends '…anxiety (Unknown Author,
+    // 2025).', and a detected claim is a sub-span that stops before the
+    // citation — which is exactly why sentenceAround exists.
+    text: '70% of adolescents who use social media for more than three hours a day report symptoms of anxiety',
     claimType: 'statistic',
     confidence: 0.87,
     searchQuery: 'adolescents social media three hours anxiety prevalence',
@@ -336,7 +339,12 @@ export const documents: DocumentListItem[] = [
     title: 'Screen time essay — draft 2',
     bodyHtml:
       '<div>Screen time causes depression in teenagers.</div><div><br></div>' +
-      '<div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety.</div><div><br></div>' +
+            // Carries a DEFECTIVE citation, so the harness can reach the
+      // 'citation-defect' card and its Replace button. A placeholder author
+      // and a year that has not happened are both decidable from the shape
+      // alone — see shared/citationShape.ts — so this needs no search, no
+      // critique and no relay to light up.
+      '<div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety (Unknown Author, 2025).</div><div><br></div>' +
       '<div>Longitudinal data from Norway tracked 2,000 students over four years. The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
       '<div>Schools in three districts have already moved to ban phones during instructional hours.</div><div><br></div>' +
       '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +

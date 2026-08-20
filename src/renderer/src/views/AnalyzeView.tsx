@@ -30,7 +30,8 @@ import {
   proseMarkAt,
   replaceClaimText,
   revealClaim,
-  revealWorksCited
+  revealWorksCited,
+  replaceCitationText
 } from '../components/documentMarks'
 import type { WorksCitedResult } from '../components/documentMarks'
 import { scheduleFrame } from '../frameScheduler'
@@ -936,7 +937,17 @@ function DocumentEditor({
    * prompted the insertion is still sitting there, still saying the sentence is
    * unattributed, over a sentence that now carries a citation.
    */
-  async function insertCitation(claim: Claim, source: Source, style: CitationStyle): Promise<CitationInsert> {
+  async function insertCitation(
+    claim: Claim,
+    source: Source,
+    style: CitationStyle,
+    /**
+     * A defective citation to REPLACE, exactly as typed, instead of appending
+     * a marker. Appending beside a broken one leaves both in the sentence —
+     * `(Unknown Author, 2025) (Walker, 2004)`.
+     */
+    replaces: string | null = null
+  ): Promise<CitationInsert> {
     const body = editorRef.current
     if (!body) throw new Error('The editor is not open.')
 
@@ -964,7 +975,11 @@ function DocumentEditor({
     // is a pure function of a Source the renderer already holds (it came back
     // with the evidence), so a channel for it would be a channel that reads
     // nothing main knows and the renderer does not.
-    if (!insertCitationForClaim(body, claim, formatInTextCitation(source, style))) {
+    const marker = formatInTextCitation(source, style)
+    const wrote = replaces
+      ? replaceCitationText(body, replaces, marker)
+      : insertCitationForClaim(body, claim, marker)
+    if (!wrote) {
       // Roll the reference back out. A works-cited entry for a citation that
       // never reached the sentence is an orphan, and it would be one the writer
       // was never told about — the throw below is about the marker.
@@ -974,7 +989,9 @@ function DocumentEditor({
         handleInput()
       }
       throw new Error(
-        'Could not find that sentence in the document any more — it may have been edited since the search.'
+        replaces
+          ? `Could not find ${replaces} in the document any more — it may have been edited since the card opened.`
+          : 'Could not find that sentence in the document any more — it may have been edited since the search.'
       )
     }
     handleInput()
@@ -1123,7 +1140,11 @@ function DocumentEditor({
     }
   }
 
-  async function insertFlowCitation(claim: Claim): Promise<void> {
+  async function insertFlowCitation(
+    claim: Claim,
+    /** A defective citation to swap out, rather than appending beside it. */
+    replaces: string | null = null
+  ): Promise<void> {
     const flow = citationFlow
     if (flow?.state.step !== 'picking' || !flow.state.selectedId) return
     const { selectedId, style } = flow.state
@@ -1131,7 +1152,7 @@ function DocumentEditor({
     if (!source) return
     setCitationBusy('inserting')
     try {
-      const result = await insertCitation(claim, source, style)
+      const result = await insertCitation(claim, source, style, replaces)
       undoStepsRef.current = result.undoSteps
       setCitationFlow({
         claimId: claim.id,
@@ -1919,6 +1940,7 @@ function DocumentEditor({
                   claimId: citationFlow.claimId,
                   state: citationFlow.state,
                   readOnly: citationFlow.readOnly,
+                  replaces: activeMark.mark.citationDefectText ?? null,
                   inserting: citationBusy === 'inserting',
                   previewing: citationBusy === 'previewing',
                   undoing: citationBusy === 'undoing',
@@ -1956,7 +1978,11 @@ function DocumentEditor({
                     // in a browser.
                     if (url) void window.tracely.shell.openExternal({ url })
                   },
-                  onInsert: () => void insertFlowCitation(activeMark.mark.claim),
+                  onInsert: () =>
+                    void insertFlowCitation(
+                      activeMark.mark.claim,
+                      activeMark.mark.citationDefectText ?? null
+                    ),
                   onCancel: closeCitationFlow,
                   onDone: closeCitationFlow,
                   // Goes to the list rather than folding a block. Closing the

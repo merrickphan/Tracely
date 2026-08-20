@@ -21,7 +21,14 @@
  */
 
 /** The two actions that are asking the writer for a citation. */
-const INSERTING: ReadonlySet<string> = new Set(['Add citation', 'Find a source'])
+const INSERTING: ReadonlySet<string> = new Set([
+  'Add citation',
+  'Find a source',
+  // Added 2026-08-19. It was absent, so "Fix the citation" opened the read-only
+  // list — a card headed "your citation is broken" with no way to fix it.
+  // Owner: *"there is no replace button to replace the citation."*
+  'Fix the citation'
+])
 
 export function insertsCitation(action: string): boolean {
   return INSERTING.has(action)

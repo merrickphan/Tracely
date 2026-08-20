@@ -36,9 +36,22 @@ describe('documentNames', () => {
     deepStrictEqual(documentNames(text), [])
   })
 
-  it('ignores a name used only once', () => {
-    // Used once is the case the writer is least likely to have proof-read.
-    deepStrictEqual(documentNames('The report by Smithe was published in 1990.'), [])
+  // Changed from "ignores" on 2026-08-19. In a biography essay most proper
+  // nouns appear once — English, Otto, Limburger, Stirim, Belgium, Brussels and
+  // Allied were ALL blocked by the old two-occurrence bar on the owner's draft.
+  // The protection it bought was narrow: Chromium cannot spellcheck a name it
+  // has never heard of, so a misspelling of "Stirim" is no more underlined than
+  // the correct spelling, and where the word IS in the dictionary teaching it
+  // changes nothing.
+  it('learns a name used once, mid-sentence', () => {
+    deepStrictEqual(documentNames('The report by Smithe was published in 1990.'), ['Smithe'])
+  })
+
+  // The cost of the above, stated. A name typed once and misspelled stops being
+  // underlined — but it was underlined for being UNKNOWN, not for being wrong,
+  // so the writer could not have acted on it either way.
+  it('still requires the mid-sentence signal, which is what does the work', () => {
+    deepStrictEqual(documentNames('Smithe published in 1990. Smithe was ignored.'), [])
   })
 
   it('ignores ordinary capitalised English', () => {
@@ -46,9 +59,20 @@ describe('documentNames', () => {
     deepStrictEqual(documentNames(text), [])
   })
 
-  it('ignores acronyms and shouting', () => {
+  // ALL-CAPS is held to the OLD two-occurrence bar rather than excluded. Upper
+  // case is weaker evidence — a heading is capitalised for being a heading — so
+  // recurrence is what separates an acronym the draft uses from a line that was
+  // shouted once. UNICEF appeared six times in the owner's essay and was
+  // rejected outright, which is the wrong reading of that evidence.
+  it('learns an acronym the draft actually uses', () => {
     const text = 'The UNICEF report was clear. UNICEF said so. NATO agreed, and NATO said so.'
-    deepStrictEqual(documentNames(text), [])
+    const names = documentNames(text)
+    ok(names.includes('UNICEF'), names.join(','))
+    ok(names.includes('NATO'), names.join(','))
+  })
+
+  it('ignores a heading that was shouted once', () => {
+    deepStrictEqual(documentNames('The METHODS section follows. It describes the sample.'), [])
   })
 
   it('ignores words too short to be worth learning', () => {
