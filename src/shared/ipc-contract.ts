@@ -80,6 +80,64 @@ export interface CitationListResponse {
   citations: Citation[]
 }
 
+/**
+ * The work a sentence CITES, looked up.
+ *
+ * "Compare sources" showed one list — what a topical search returned — with
+ * nothing to compare it against. Owner, 2026-08-19: *"I want it to pull up the
+ * source before and the source it recommends now, because that's what comparing
+ * sources means."* Correct: a card headed "Compare sources" that never shows
+ * the writer's own source is a list wearing the wrong title.
+ *
+ * `search/referenceCheck.ts` already resolves this — the critique needs it, and
+ * has since #155. Nothing surfaced it.
+ *
+ * ── `found: false` is NOT "this source is fake" ────────────────────────────
+ * Crossref registers DOIs for the scholarly record and Open Library holds
+ * books; a UNICEF page, a newspaper, a museum catalogue and a government report
+ * are in neither. Measured on eval/fabrication's labelled set the lookup
+ * separated 10 invented author pairs from 16 real articles perfectly and then
+ * missed 2 of 8 real BOOKS. So the card says what was searched and what came
+ * back, and never draws the conclusion — the same rule
+ * `describeReferenceChecks` writes under for the model.
+ */
+export interface ResolvedCitedWork {
+  /** The reference as the writer typed it: "(Walker, 2010)", "[3]". */
+  raw: string
+  /** Parsed out of it — what the writer claimed to be citing. */
+  surnames: string[]
+  year: number | null
+  /** The title named in the reference or its list entry, when there was one. */
+  citedTitle: string | null
+  /** Did an index return a work carrying every cited surname in that year? */
+  found: boolean
+  /** The work that matched. Null unless `found`. */
+  title: string | null
+  /**
+   * The matched work's year, which is NOT always the cited one — they differ by
+   * one routinely (see YEAR_TOLERANCE in shared/citedReference.ts), and showing
+   * both is half the point of putting the two side by side.
+   */
+  matchedYear: number | null
+  doi: string | null
+  /** Where the reader can open it, when the match carries a locator. */
+  url: string | null
+  /** Which index carried it — a book match and a journal match differ. */
+  index: 'crossref' | 'openlibrary' | null
+}
+
+export interface CitationResolveCitedRequest {
+  claimId: string
+}
+export interface CitationResolveCitedResponse {
+  /**
+   * Null when the sentence names nothing the lookup can check — a quoted title,
+   * a bare URL, an institution with no year. That is a limit of ours and the
+   * card says so rather than reporting an absence.
+   */
+  cited: ResolvedCitedWork | null
+}
+
 export interface CritiqueGenerateRequest {
   claimId: string
 }
@@ -458,6 +516,13 @@ export interface ScreenWatchSourceCandidate {
 }
 export interface ScreenWatchFindSourceResponse {
   candidates: ScreenWatchSourceCandidate[]
+  /**
+   * The work the sentence already cites, so the overlay's card can compare
+   * rather than merely list. Returned here rather than from its own channel
+   * because Screen Watch claims are never persisted — there is no `claimId` to
+   * look one up by later, only the in-memory claim this call already has.
+   */
+  cited: ResolvedCitedWork | null
 }
 
 /**

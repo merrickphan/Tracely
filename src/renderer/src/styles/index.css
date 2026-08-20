@@ -1433,6 +1433,35 @@ textarea:disabled {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
+/* Everything in the card holds its size; `.docmark-scroll` is the one part that
+   gives. Without this the flex column shrinks its children evenly under
+   max-height, so the header and the buttons get squeezed along with the list.
+*/
+.docmark-card > * {
+  flex: 0 0 auto;
+}
+
+/* The middle of a Compare Sources card: the blurb, the cited-source block and
+   the results list, scrolling as one.
+ *
+ * Making the RESULTS LIST the scroller was the obvious move and it does not
+ * work, measured in the harness: with the cited block at 182px the fixed
+ * content alone came to 415px in a 341px card, so the list collapsed to zero
+ * and the buttons were STILL drawn 60px past the bottom of the editor. The
+ * header and the actions are what must never move; everything between them is
+ * what gives.
+ *
+ * `min-height: 0` is what lets a flex item shrink below its content at all —
+ * without it `overflow-y` never engages and the card grows past its own cap. */
+.docmark-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .docmark-head {
   display: flex;
   align-items: center;
@@ -1785,6 +1814,43 @@ textarea:disabled {
   font-size: 12px;
   line-height: 1.4;
   color: #737373;
+}
+
+/* The cited-source block inside a Compare Sources card. Reuses .docmark-block
+   wholesale — it is the same grey panel the citation preview draws in — and
+   adds only the three things that panel has no equivalent for. */
+.docmark-cited-title {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #1c1c1c;
+}
+
+.docmark-cited-ok {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+/* Not red. An empty lookup is not a failure of the citation — the two indexes
+   behind it hold journal articles and books and nothing else — so the mark that
+   sits beside it must not read as one. */
+.docmark-cited-miss {
+  color: #9a9ba1;
+  font-weight: 600;
+}
+
+.docmark-cited-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ff5900;
+  cursor: pointer;
+}
+
+.docmark-cited-link:hover {
+  text-decoration: underline;
 }
 
 .docmark-resolved {

@@ -556,6 +556,33 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
 - **`weak` and `unsupported` are EVIDENCE-FIT verdicts and must not wear a reasoning label.** The kind was called `weak-reasoning` until 2026-08-19 and is now `unsupported-by-evidence`, drawn in orange with the other evidence findings rather than in the red the design reserves for weak reasoning. Both verdicts come out of `CRITIQUE_SYSTEM_PROMPT` Pass 3, which asks *"does the evidence actually back the claim as phrased?"* — a question about sources.
   - Measured on the owner's draft: *"The study has since had a rough time — Morehead, Dunlosky and Rawson failed to replicate the headline effect in 2019, and anyone citing the original as settled science is overreaching (Shelly J. Schmidt, 2019)."* Some of the best reasoning in the document — a conceded replication failure and a bounded claim — underlined in red as bad thinking, because its cited work turned out to be about a different subject. The critique was right; the label was a category error.
   - **"Weak reasoning" now belongs to the classifier's named faults** (`circular-reasoning`, `sequence-as-cause`, `single-case-generalisation`, `logical-leap`), which are the only things in this app that judge an argument rather than its sources. They are paragraph-level and live in the report. A SENTENCE-level reasoning fault would need Pass 3 to name what it found, the same change the classifier got — until then this kind must not borrow the word.
+- **"Compare sources" shows BOTH sources now** (`shared/citedComparison.ts`,
+  `CitedSourceBlock` on each surface). It drew one list — what a topical search
+  returned — under a heading promising two. Owner, 2026-08-19: *"I want it to
+  pull up the source before and the source it recommends now, because that's
+  what comparing sources means."* The lookup has existed since #155 because the
+  critique needs it; nothing surfaced it.
+  - **Free, so it does not wait for a critique.** Crossref and Open Library, no
+    relay and no key — which is what lets it run whenever the card opens. The
+    card is pressed on sentences nobody has critiqued.
+  - **`found: false` must never render as "your source is fake".** Those two
+    indexes hold journal articles and books; a UNICEF page, a newspaper, a
+    government report and an archive record are in neither, and the lookup
+    already misses 2 of 8 real BOOKS on eval/fabrication's set. The block reports
+    what was searched and says the empty answer settles nothing — grey, never
+    red. That wording lives in one place and both surfaces read it.
+  - **Two channels, because Screen Watch persists nothing.** The editor asks
+    `citation:resolveCited` by `claimId`; the overlay gets `cited` back on
+    `screenWatch:findSource`, since its claims have no id to look up later.
+  - **The card's header and buttons are pinned; `.docmark-scroll` is what
+    gives.** Making the RESULTS LIST the scroller was the obvious move and does
+    not work: measured in the harness, the fixed content came to 415px in a
+    341px card, so the list collapsed to zero and the buttons were still drawn
+    60px past the editor. `maxCardHeight` (a tested leaf beside `placePopover`,
+    which deliberately lets a too-tall card clip rather than flip it) caps the
+    card, and it must subtract the tail — eight pixels of card hung past the
+    bottom until it did. This is also the answer to owner, 2026-08-19: *"there
+    is no dismiss button once I am in it."* There was; it was off the screen.
 - **`cited-unverified` and `unsupported-by-evidence` now require that the
   critique actually OPENED the work the sentence cites** (`citedWorkRead` on
   `Claim`, `problemKind.ts`, migration v5). `referenceCheck.ts` resolves the

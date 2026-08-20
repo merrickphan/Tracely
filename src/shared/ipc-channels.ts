@@ -7,6 +7,7 @@ export const IPC = {
 
   CITATION_GENERATE: 'citation:generate',
   CITATION_LIST: 'citation:list',
+  CITATION_RESOLVE_CITED: 'citation:resolveCited',
 
   CRITIQUE_GENERATE: 'critique:generate',
 

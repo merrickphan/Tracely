@@ -315,6 +315,24 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence })
     },
     citation: {
+      /**
+       * The work a sentence cites — the left half of "Compare sources".
+       *
+       * Answers by CLAIM, because the two fixtures are the two outcomes: c6
+       * cites a work Crossref holds, c2 cites "(Unknown Author, 2025)", which
+       * nothing holds and which the card must report as an empty lookup rather
+       * than as a verdict. Every other claim resolves to null — the state where
+       * the sentence cites nothing the lookup can check.
+       */
+      resolveCited: (req) =>
+        ok('citation.resolveCited', {
+          cited:
+            req.claimId === 'c6'
+              ? fx.citedFound
+              : req.claimId === 'c2'
+                ? fx.citedMissing
+                : null
+        }),
       // Looks the source UP, rather than always answering with the first
       // citation. It did the latter, and the consequence was that the picker's
       // "WILL BE INSERTED" block showed one source's in-text marker beside a
@@ -594,6 +612,15 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       },
       findSource: () =>
         ok('screenWatch.findSource', {
+          // Both halves in one round trip — Screen Watch claims are never
+          // persisted, so there is no id to look the citation up by later.
+          //
+          // The MISSING fixture, on purpose: the editor's card reaches
+          // `citedFound` through claim c6, and without this the branch where the
+          // lookup comes back empty — the one the card must not turn into an
+          // accusation — is unreachable in the harness. It is also the likelier
+          // case here, since Screen Watch reads whatever is on screen.
+          cited: fx.citedMissing,
           candidates: fx.sources.map((s, i) => ({
             sourceRef: s.id,
             title: s.title,

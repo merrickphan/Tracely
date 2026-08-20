@@ -23,6 +23,8 @@ import type {
   ScreenWatchStructure,
   ScreenWatchWidget
 } from '@shared/ipc-contract'
+import type { ResolvedCitedWork } from '@shared/ipc-contract'
+import { CITED_HEADING, describeCitedWork } from '@shared/citedComparison'
 import { hasRelevantSource, isRetrievalMiss } from '@shared/problemKind'
 import { REFERENCE_LEVEL, isGradeLevel } from '@shared/gradeLevel'
 // The mark's look and motion. Shared with the document editor's marks
@@ -2474,6 +2476,13 @@ type CitationFlowState =
   | {
       step: 'picking'
       candidates: ScreenWatchSourceCandidate[]
+      /**
+       * The work the sentence already cites, so this card can COMPARE rather
+       * than merely list. Arrives with the candidates in one response — Screen
+       * Watch claims are never persisted, so there is no id to look the
+       * citation up by after the fact.
+       */
+      cited: ResolvedCitedWork | null
       selectedRef: string | null
       style: CitationStyle
       /**
@@ -2619,6 +2628,63 @@ function CandidateRow({
       </div>
       <Radio selected={selected} />
     </button>
+  )
+}
+
+/**
+ * The source the writer already cited, drawn above the search results.
+ *
+ * The overlay's half of the same change the editor got — see
+ * `CitedSourceBlock` in components/DocumentMarkLayer.tsx and the shared wording
+ * in shared/citedComparison.ts. Inline styles rather than classes, because this
+ * window loads no stylesheet; the DECISIONS are shared and the markup is not,
+ * which is the rule every card on both surfaces follows.
+ *
+ * Renders nothing when the sentence cites nothing the lookup can check. On this
+ * surface that is common — Screen Watch reads whatever is on screen, often
+ * mid-paragraph — and an empty panel explaining itself would push the source
+ * list below the fold of a card that is already tight for room.
+ *
+ * No link. This window is click-through and unfocusable by design; the editor's
+ * copy offers "Open the source you cited" because it can.
+ */
+function CitedSourceBlock({ cited }: { cited: ResolvedCitedWork | null }): JSX.Element | null {
+  const described = describeCitedWork(cited)
+  if (!described) return null
+  return (
+    <div
+      style={{
+        width: '100%',
+        boxSizing: 'border-box',
+        background: CHIP_BG,
+        borderRadius: 10,
+        padding: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4
+      }}
+    >
+      <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, letterSpacing: 0.6 }}>
+        {CITED_HEADING}
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 500, color: INK }}>{described.reference}</div>
+      {described.title ? (
+        <div style={{ fontSize: 12, lineHeight: 1.35, color: INK }}>{described.title}</div>
+      ) : null}
+      <div style={{ fontSize: 11.5, lineHeight: 1.4, color: MUTED }}>
+        {/* Grey, never red, when nothing came back. Crossref and Open Library
+            hold journal articles and books; a web page or a government report
+            is in neither, and a warning colour would turn a limit of ours into
+            an accusation about their source. */}
+        <span style={{ color: described.found ? POSITIVE : MUTED, fontWeight: 600 }}>
+          {described.found ? '✓' : '?'}
+        </span>{' '}
+        {described.detail}
+      </div>
+      {described.note ? (
+        <div style={{ fontSize: 11.5, lineHeight: 1.4, color: MUTED }}>{described.note}</div>
+      ) : null}
+    </div>
   )
 }
 
@@ -2805,7 +2871,7 @@ function CitationFlowCard({
   }
 
   // "Find a Source (Results)" — 295:349.
-  const { candidates, selectedRef, style, preview } = state
+  const { candidates, cited, selectedRef, style, preview } = state
   if (candidates.length === 0) {
     return (
       <>
@@ -2849,6 +2915,7 @@ function CitationFlowCard({
         </span>
       </div>
       <div style={POPOVER_BODY}>{resultsBody(claimText)}</div>
+      <CitedSourceBlock cited={cited} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
         {candidates.map((candidate) => (
           <CandidateRow
@@ -3350,7 +3417,7 @@ export default function OverlayApp(): JSX.Element {
   async function startCitationFlow(claimId: string): Promise<void> {
     setFlow(claimId, { step: 'searching' })
     try {
-      const { candidates } = await window.tracely.screenWatch.findSource({ claimId })
+      const { candidates, cited } = await window.tracely.screenWatch.findSource({ claimId })
       // The user may have cancelled (flow entry removed) while this was in
       // flight — a stale result landing after that shouldn't reopen it.
       setCitationFlowByClaimId((prev) => {
@@ -3359,6 +3426,7 @@ export default function OverlayApp(): JSX.Element {
         next.set(claimId, {
           step: 'picking',
           candidates,
+          cited,
           selectedRef: candidates[0]?.sourceRef ?? null,
           style: defaultStyle,
           preview: null
