@@ -3,6 +3,8 @@ import { computeClaimSpans } from '@shared/claimSpans'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { findProseIssues, replacementRange, type ProseIssue } from '@shared/proseIssues'
 import { isCitedInScope } from '@shared/citationScope'
+import { findCitationDefects } from '@shared/citationShape'
+import { hasInlineCitationNear, inlineCitationKind, sentenceAround } from '@shared/inlineCitation'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { retrievalScopeFor } from '@shared/retrievalScope'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
@@ -51,6 +53,8 @@ export interface DocumentMark {
   /** Worst first. The mark is coloured by [0]; length > 1 shows a count. */
   problemKinds: MarkProblemKind[]
   hasInlineCitation: boolean
+  /** citationShape.ts's sentence for a defect in this sentence's citation. */
+  citationDefect: string | null
   /**
    * Never null: a claim whose search has not resolved is not marked at all —
    * see the note in measureMarks. Typed non-null so the popover cannot be
@@ -102,6 +106,30 @@ export function measureMarks(
     // Paragraph scope, not sentence scope — a sentence carrying an earlier
     // citation forward does not need one of its own. See citationScope.ts.
     const cited = isCitedInScope(text, span.start, span.end)
+    // Does THIS sentence carry a citation, as opposed to being covered by one
+    // in its paragraph? Both answers are needed and they mean different things
+    // — see the note on `hasOwnCitation` in shared/problemKind.ts.
+    const ownCitation = hasInlineCitationNear(text, span.start, span.end)
+
+    /**
+     * A citation that is visibly wrong, decided from its SHAPE.
+     *
+     * Free, instant, certain, and — unlike everything else on this card — true
+     * the moment the writer types it. `(Unknown Author, 2025)` needs no search
+     * and no critique to be wrong: the author is a placeholder and the year has
+     * not happened. Owner, 2026-08-19: *"this one says it is partially
+     * supported, when it should call out faulty citation"*, and separately
+     * *"I want you to implement another detection system that detects if a
+     * citation is wrong at the end of a sentence."*
+     *
+     * Run over the sentence rather than the claim span, for the same reason
+     * `cited` is: the citation sits after the assertion the relay returned.
+     */
+    const sentence = sentenceAround(text, span.start, span.end)
+    const defect = findCitationDefects(sentence)[0] ?? null
+    // Which SHAPE the writer used, so problemKindsFor knows whether the
+    // reference lookup could have checked it at all.
+    const citationKind = inlineCitationKind(sentence)
     const evidence = claimEvidenceFor(span.claim, articleCounts.get(span.claim.id))
 
     // A claim nothing has been searched for yet gets no mark at all.
@@ -127,6 +155,9 @@ export function measureMarks(
     const problemKinds = problemKindsFor({
       claimType: span.claim.claimType,
       hasInlineCitation: cited,
+      hasOwnCitation: ownCitation,
+      citationDefect: defect?.message ?? null,
+      citationKind,
       evidence: {
         score: evidence.score,
         count: evidence.count,
@@ -164,7 +195,14 @@ export function measureMarks(
       }))
     if (rects.length === 0) continue
 
-    marks.push({ claim: span.claim, problemKinds, hasInlineCitation: cited, evidence, rects })
+    marks.push({
+      claim: span.claim,
+      problemKinds,
+      hasInlineCitation: cited,
+      citationDefect: defect?.message ?? null,
+      evidence,
+      rects
+    })
   }
 
   return marks

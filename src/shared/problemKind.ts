@@ -32,6 +32,23 @@ export type ScreenWatchProblemKind =
    */
   | 'fabricated-citation'
   /**
+   * The citation is visibly wrong on its face — no model involved.
+   *
+   * A placeholder where a name should be, a year that has not happened, a note
+   * to self left in the draft, a bare URL standing in for a reference. All of
+   * it is decidable from the SHAPE of what the writer typed (see
+   * `shared/citationShape.ts`), which is what makes it different from every
+   * other kind here: it costs nothing, it needs no search, and it is certain.
+   *
+   * Ranked directly under 'fabricated-citation' because it is the same class of
+   * problem caught earlier and cheaper. Owner, 2026-08-19, on
+   * "(Unknown Author, 2025)": *"this one says it is partially supported, when
+   * it should call out faulty citation."* Correct — and the critique had in
+   * fact said exactly that, in prose, after a paid call the writer had to wait
+   * for. The shape was decidable the moment they typed it.
+   */
+  | 'citation-defect'
+  /**
    * The critique read the evidence and it does not back the claim as phrased.
    *
    * NOT a finding about reasoning, and it was called `weak-reasoning` until
@@ -109,6 +126,34 @@ export interface ProblemKindInput {
   claimType: ClaimType
   /** The writer's own citation in this sentence — see inlineCitation.ts. */
   hasInlineCitation: boolean
+  /**
+   * Does THIS sentence carry a citation, rather than merely being covered by
+   * one in its paragraph?
+   *
+   * Optional, and falls back to `hasInlineCitation` — Screen Watch reads a
+   * claim with no surrounding document, so the two questions collapse there.
+   */
+  hasOwnCitation?: boolean
+  /**
+   * A defect visible in the SHAPE of the citation, from `citationShape.ts`.
+   *
+   * Its own sentence, or null. Present means the citation is wrong on its face
+   * — a placeholder author, a year that has not happened, a note to self — and
+   * no search or model call was needed to know it.
+   */
+  citationDefect?: string | null
+  /**
+   * Which citation shape this sentence used — `inlineCitationKind`'s answer.
+   *
+   * Needed because `cited-unverified` asserts something about the work the
+   * WRITER named, and `referenceCheck` can only resolve an author-and-year
+   * reference. A web citation like `("Audrey" Wikipedia)` is a perfectly good
+   * MLA citation that Crossref will never find, so a critique reaching
+   * `unsupported` over it is reporting on the retrieved evidence, not on that
+   * source. Null means unknown, which is treated as checkable — Screen Watch
+   * has no document to read the shape from.
+   */
+  citationKind?: string | null
   /** Null until the background search resolves. */
   evidence: {
     score: number
@@ -214,6 +259,22 @@ const WEAK_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported']
  * is where that belongs; adding "your citation may not support this" underneath
  * would send the writer looking for a better source for a wording problem.
  */
+/**
+ * Citation shapes `search/referenceCheck.ts` can actually resolve.
+ *
+ * It searches Crossref for an author and a year. The other shapes name a work
+ * without either — a quoted title, a bare URL, a numeric marker, a footnote —
+ * and every one of them is a correct citation in some style. Not being able to
+ * check one is a limit of ours, and must not be reported as a doubt about it.
+ */
+const CHECKABLE_CITATION_SHAPES = new Set(['parenthetical', 'narrative', 'author-page'])
+
+export function isCheckableCitationShape(kind: string | null | undefined): boolean {
+  // Null is "not known" — Screen Watch reads a claim with no document behind
+  // it — and the pre-existing behaviour there is to allow the finding.
+  return kind == null || CHECKABLE_CITATION_SHAPES.has(kind)
+}
+
 const DOUBTING_VERDICTS: CritiqueVerdict[] = ['weak', 'unsupported', 'contradicted', 'fabricated']
 
 /** The 70/40 bands used everywhere else in the product. */
@@ -236,6 +297,9 @@ const MIXED = 40
 export function problemKindsFor({
   claimType,
   hasInlineCitation,
+  hasOwnCitation = hasInlineCitation,
+  citationDefect = null,
+  citationKind = null,
   evidence,
   critiqueVerdict,
   outOfIndexScope = null
@@ -285,6 +349,13 @@ export function problemKindsFor({
   // Checked before 'contradicted' and outside the cited/uncited branches below,
   // because a fabricated reference is a fact about the citation itself: the
   // evidence bands have nothing to say about a source that was never written.
+  // Before every verdict-driven kind, because it needed no verdict: a
+  // placeholder author is wrong the moment it is typed, and waiting for a paid
+  // critique to say so in prose is a worse version of the same finding. Not
+  // `else`-chained with them either — a fabricated reference and a malformed
+  // one are different facts and a sentence can have both.
+  if (citationDefect) kinds.push('citation-defect')
+
   if (critiqueVerdict === 'fabricated') kinds.push('fabricated-citation')
   else if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
   else if (critiqueVerdict === 'overstated') kinds.push('overstated-claim')
@@ -336,7 +407,26 @@ export function problemKindsFor({
   //
   // What licenses the finding is `citationDoubted`: a verdict reached by the
   // one call that resolves the cited work and reads its abstract.
-  if (hasInlineCitation && !nothingFound && citationDoubted) {
+  //
+  // `hasOwnCitation`, not `hasInlineCitation`. The latter is PARAGRAPH-scoped
+  // (see shared/citationScope.ts) — a sentence with no citation of its own is
+  // "covered" by one nearby, which is right for deciding whether to ask for a
+  // citation and wrong for saying something about one. Owner, 2026-08-19:
+  // *"this one said citation may not support it, yet there is no citation"* —
+  // a sentence about Hepburn's malnutrition, covered by the ("Audrey" UNICEF)
+  // at the end of the sentence AFTER it. You cannot doubt a citation that is
+  // not there.
+  //
+  // And only for a citation the lookup could actually have checked. Measured on
+  // the owner's draft, 2026-08-19: two sentences, identical `sourceCount` of
+  // 0.167, both `unsupported`. On one the critique had the writer's cited work
+  // in front of it and said it was about a different subject — a real finding.
+  // On the other it said *"The cited source is Wikipedia, which is not included
+  // in the evidence list"*, which is a fact about our own retrieval. Nothing in
+  // the verdict or the score separates them; the citation's SHAPE does.
+  // Owner: *"this one also says citation may not support it, even though it
+  // does."*
+  if (hasOwnCitation && !nothingFound && citationDoubted && isCheckableCitationShape(citationKind)) {
     kinds.push('cited-unverified')
   }
 

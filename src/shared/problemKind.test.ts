@@ -610,3 +610,77 @@ describe('a doubted citation is a citation finding at any retrieval score', () =
     )
   })
 })
+
+/**
+ * The three findings the owner reported on 2026-08-19, each pinned to the
+ * sentence that produced it.
+ */
+describe('problemKindsFor — the three wrong cards', () => {
+  const base = {
+    claimType: 'factual' as const,
+    evidence: { score: 33, count: 4, hasRelevantSource: true },
+    critiqueVerdict: null,
+    suggestedRevision: null,
+    claimText: 'x'
+  }
+
+  // "This one said citation may not support it, yet there is no citation."
+  // The sentence is COVERED by a citation later in its paragraph, which is the
+  // right rule for "does this need a citation" and the wrong one for saying
+  // anything about one.
+  it('will not doubt a citation the sentence does not have', () => {
+    const kinds = problemKindsFor({
+      ...base,
+      hasInlineCitation: true,
+      hasOwnCitation: false,
+      critiqueVerdict: 'unsupported',
+      citationKind: null
+    })
+    strictEqual(kinds.includes('cited-unverified'), false, kinds.join(','))
+  })
+
+  // "This one also says citation may not support it, even though it does."
+  // ("Audrey" Wikipedia) is a correct MLA citation that Crossref will never
+  // resolve, so an `unsupported` verdict over it is about our retrieval.
+  it('will not doubt a citation the lookup could never have checked', () => {
+    const shaped = { ...base, hasInlineCitation: true, hasOwnCitation: true, critiqueVerdict: 'unsupported' as const }
+    strictEqual(
+      problemKindsFor({ ...shaped, citationKind: 'titled' }).includes('cited-unverified'),
+      false
+    )
+    // The #155 case — an author-and-year reference the critique DID resolve —
+    // must still be reported.
+    strictEqual(
+      problemKindsFor({ ...shaped, citationKind: 'parenthetical' }).includes('cited-unverified'),
+      true
+    )
+  })
+
+  // "This one says it is partially supported, when it should call out faulty
+  // citation." (Unknown Author, 2025) is wrong on its face.
+  it('names a defective citation with no verdict and no search', () => {
+    const kinds = problemKindsFor({
+      ...base,
+      hasInlineCitation: true,
+      hasOwnCitation: true,
+      citationKind: 'parenthetical',
+      citationDefect: 'The author is a placeholder rather than a name.'
+    })
+    strictEqual(kinds[0], 'citation-defect', kinds.join(','))
+  })
+
+  // A fabricated reference and a malformed one are different facts, and a
+  // sentence can have both.
+  it('reports a defect alongside a fabricated verdict rather than instead of it', () => {
+    const kinds = problemKindsFor({
+      ...base,
+      hasInlineCitation: true,
+      hasOwnCitation: true,
+      citationKind: 'parenthetical',
+      citationDefect: 'The year has not happened yet.',
+      critiqueVerdict: 'fabricated'
+    })
+    strictEqual(kinds.includes('citation-defect'), true, kinds.join(','))
+    strictEqual(kinds.includes('fabricated-citation'), true, kinds.join(','))
+  })
+})
