@@ -83,6 +83,12 @@ export function registerStructureHandlers(): void {
     // sent to the model were reference lines, and 24% of the input tokens.
     const paragraphs = argumentParagraphs(input.text)
 
+    // BEFORE the relay call, not after. It was after, and a failed grade throws
+    // — so on any network blip the writer got no report AND every proper noun
+    // in their draft underlined as a misspelling. This is free, local, and has
+    // nothing to do with whether the grade succeeded.
+    learnDocumentNames(documentNames(withoutWorksCited(input.text)))
+
     const grade = await gradeDraft(
       paragraphs.map((p) => p.text),
       input.text
@@ -90,12 +96,6 @@ export function registerStructureHandlers(): void {
     if (!grade) {
       throw new Error('Could not grade this draft. Check your connection and try again.')
     }
-
-    // Teach Chromium's spellchecker this document's proper nouns, so real names
-    // stop being underlined as misspellings. Session-scoped; see spellcheck.ts.
-    // Learned from the argument only: a reference list is title-case noise and
-    // is also where a broken citation's placeholder author lives.
-    learnDocumentNames(documentNames(withoutWorksCited(input.text)))
 
     const outline = buildGradedOutline({
       documentId: input.documentId ?? null,
@@ -112,6 +112,24 @@ export function registerStructureHandlers(): void {
 
   ipcMain.handle(IPC.STRUCTURE_GET, (_event, raw): StructureGetResponse => {
     const { documentId, text } = getSchema.parse(raw)
+
+    /**
+     * Teach the spellchecker on OPEN, not only on analyse.
+     *
+     * This ran in the analyse handler alone, so every proper noun in a draft
+     * stayed underlined until the writer pressed AI Insights — and a document
+     * they only ever read was underlined forever. Owner, 2026-08-19: *"it is
+     * currently underlining 'Audrey', 'Nazi', 'Dutch', 'Hepburn' … as unknown
+     * words, which is just not true."* Measured on that draft,
+     * `documentNames` finds all of them; nothing was ever asking it.
+     *
+     * This handler is the earliest place main is handed the document's plain
+     * TEXT — the save path carries `bodyHtml`, and main has no HTML parser.
+     * Free, local, and idempotent: re-learning an unchanged set diffs to
+     * nothing (see spellcheck.ts).
+     */
+    learnDocumentNames(documentNames(withoutWorksCited(text)))
+
     const outline = getStoredOutline(documentId, STRUCTURE_SCHEMA_VERSION)
 
     // `stale` is reported rather than the outline being withheld: a previous

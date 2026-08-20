@@ -1,4 +1,5 @@
 import type { Author } from '@shared/types'
+import { realAuthors } from '@shared/placeholderAuthor'
 
 /**
  * An author list with nobody in it returns null, and every formatter moves the
@@ -35,7 +36,14 @@ function apaSingle(author: Author): string {
   return init ? `${author.family}, ${init}` : author.family
 }
 
-export function formatAuthorsAPA(authors: Author[]): string | null {
+export function formatAuthorsAPA(authorsIn: Author[]): string | null {
+  // Placeholders are stripped BEFORE anything counts them, so a list whose
+  // only "author" was `{ family: 'Unknown' }` empties to null here and the
+  // caller moves the TITLE into the author slot, which is what APA, MLA and
+  // Chicago all prescribe for an unattributed work. The earlier fix handled
+  // an EMPTY list; the providers send the placeholder as an author instead.
+  // See shared/placeholderAuthor.ts.
+  const authors = realAuthors(authorsIn)
   if (authors.length === 0) return null
   if (authors.length === 1) return apaSingle(authors[0])
 
@@ -54,14 +62,28 @@ function mlaFull(author: Author, isFirst: boolean): string {
   return isFirst ? `${author.family}, ${author.given}` : `${author.given} ${author.family}`
 }
 
-export function formatAuthorsMLA(authors: Author[]): string | null {
+export function formatAuthorsMLA(authorsIn: Author[]): string | null {
+  // Placeholders are stripped BEFORE anything counts them, so a list whose
+  // only "author" was `{ family: 'Unknown' }` empties to null here and the
+  // caller moves the TITLE into the author slot, which is what APA, MLA and
+  // Chicago all prescribe for an unattributed work. The earlier fix handled
+  // an EMPTY list; the providers send the placeholder as an author instead.
+  // See shared/placeholderAuthor.ts.
+  const authors = realAuthors(authorsIn)
   if (authors.length === 0) return null
   if (authors.length === 1) return mlaFull(authors[0], true)
   if (authors.length === 2) return `${mlaFull(authors[0], true)}, and ${mlaFull(authors[1], false)}`
   return `${mlaFull(authors[0], true)}, et al.`
 }
 
-export function formatAuthorsChicago(authors: Author[]): string | null {
+export function formatAuthorsChicago(authorsIn: Author[]): string | null {
+  // Placeholders are stripped BEFORE anything counts them, so a list whose
+  // only "author" was `{ family: 'Unknown' }` empties to null here and the
+  // caller moves the TITLE into the author slot, which is what APA, MLA and
+  // Chicago all prescribe for an unattributed work. The earlier fix handled
+  // an EMPTY list; the providers send the placeholder as an author instead.
+  // See shared/placeholderAuthor.ts.
+  const authors = realAuthors(authorsIn)
   if (authors.length === 0) return null
   if (authors.length === 1) return mlaFull(authors[0], true)
   if (authors.length > ET_AL_THRESHOLD) return `${mlaFull(authors[0], true)}, et al.`
