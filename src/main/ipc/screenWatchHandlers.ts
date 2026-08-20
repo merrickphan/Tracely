@@ -18,7 +18,7 @@ import type {
 } from '@shared/ipc-contract'
 import {
   critiqueClaim,
-  findSourceForClaim,
+  findSourceWithCited,
   getScreenWatchStatus,
   insertCitationForClaim,
   previewCitationForClaim,
@@ -100,7 +100,9 @@ export function registerScreenWatchHandlers(): void {
 
   ipcMain.handle(IPC.SCREENWATCH_FIND_SOURCE, async (_event, raw): Promise<ScreenWatchFindSourceResponse> => {
     const { claimId, query } = findSourceSchema.parse(raw)
-    return { candidates: await findSourceForClaim(claimId, query) }
+    // Both halves: the sources found, and the source already cited. See
+    // ResolvedCitedWork — a card headed "Compare sources" needs two things.
+    return await findSourceWithCited(claimId, query)
   })
 
   // Same shape as insert, and the same schema on purpose: previewing what would

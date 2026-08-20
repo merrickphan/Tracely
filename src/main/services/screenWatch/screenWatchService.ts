@@ -8,6 +8,7 @@ import type {
   ScreenWatchClaimSummary,
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchSourceCandidate,
+  ResolvedCitedWork,
   ScreenWatchStatus,
   ScreenWatchStructure
 } from '@shared/ipc-contract'
@@ -28,6 +29,7 @@ import { formatInTextCitation } from '@shared/citationInText'
 import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
+import { checkReferences, resolveCitedWork } from '../search/referenceCheck'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
@@ -1121,6 +1123,47 @@ function withEvidenceScores(claim: Claim): Claim {
     strengthScore: evidence?.score ?? null,
     scoreBreakdown: evidence?.breakdown ?? null
   }
+}
+
+/**
+ * The work this claim's sentence already cites — the left-hand side of the
+ * overlay's "Compare sources".
+ *
+ * Returns null rather than throwing when the claim has aged out. A comparison
+ * that cannot be drawn is a card with one list in it, which is what it was
+ * before; a thrown error would take the source list down with it.
+ *
+ * Free: Crossref and Open Library, no relay. That is what makes it safe to run
+ * from a passive surface at all — the rule Screen Watch lives by is that
+ * nothing here spends money without being asked.
+ */
+async function resolveCitedForClaim(claimId: string): Promise<ResolvedCitedWork | null> {
+  const claim = currentClaims.find((c) => c.id === claimId)
+  if (!claim) return null
+  const span = computeClaimSpans(lastAnalyzedText, [claim])[0]
+  const sentence = span ? sentenceAround(lastAnalyzedText, span.start, span.end) : claim.text
+  try {
+    return resolveCitedWork(await checkReferences(sentence, lastAnalyzedText))
+  } catch (error) {
+    console.warn(
+      `[screenWatch] cited-work lookup failed: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
+  }
+}
+
+/** Both halves of the comparison, in one round trip from the overlay. */
+export async function findSourceWithCited(
+  claimId: string,
+  query?: string
+): Promise<{ candidates: ScreenWatchSourceCandidate[]; cited: ResolvedCitedWork | null }> {
+  // In parallel: the lookup is two unmetered HTTP requests and the search is
+  // already the slow half, so the comparison costs nothing in wall clock.
+  const [candidates, cited] = await Promise.all([
+    findSourceForClaim(claimId, query),
+    resolveCitedForClaim(claimId)
+  ])
+  return { candidates, cited }
 }
 
 // User-initiated only (the overlay's "Check Claim" button) — unlike

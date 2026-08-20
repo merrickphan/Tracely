@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { placePopover } from '@shared/popoverPlacement'
+import { maxCardHeight, placePopover } from '@shared/popoverPlacement'
 // The mark's own look and motion, shared with the Screen Watch overlay so the
 // two surfaces cannot drift into drawing the same problem differently.
 import {
@@ -50,6 +50,8 @@ import {
   searchingBody,
   worksCitedLabel
 } from './citationFlowCopy'
+import { CITED_HEADING, UNCHECKABLE_SHAPE_NOTE, describeCitedWork } from '@shared/citedComparison'
+import type { ResolvedCitedWork } from '@shared/ipc-contract'
 import type { WorksCitedResult } from './documentMarks'
 
 /**
@@ -77,6 +79,16 @@ const POPOVER_WIDTH_FLOW = 380
 const POPOVER_GAP = 10
 const TAIL_WIDTH = 16
 const TAIL_HEIGHT = 10
+/**
+ * What the tail actually adds to the popover's height.
+ *
+ * It overlaps the card's 2px border so the strokes meet (see CLAUDE.md), so it
+ * is not TAIL_HEIGHT of extra box — and the card's cap has to know, because the
+ * cap is measured from where the POPOVER starts while `maxHeight` bounds the
+ * CARD below it. Eight pixels of card hanging past the editor is exactly what
+ * this was, measured in the harness.
+ */
+const TAIL_NET_HEIGHT = TAIL_HEIGHT - 2
 
 /** Skeleton bar widths, from the design — the uneven pair is what makes a
  *  loading row read as two lines of a citation rather than a progress widget. */
@@ -166,6 +178,15 @@ export interface DocCitationFlow {
    * sources do not confirm it.
    */
   readOnly: boolean
+  /**
+   * The work the sentence ALREADY cites — the left half of a comparison.
+   *
+   * Only fetched for a read-only flow, which is the one opened by "Compare
+   * sources" and "Review the sources". An "Add citation" card is about a
+   * sentence with nothing to compare against.
+   */
+  cited: ResolvedCitedWork | null
+  citedLoading: boolean
   inserting: boolean
   previewing: boolean
   undoing: boolean
@@ -184,6 +205,8 @@ export interface DocCitationFlow {
   replaces: string | null
   /** Opens the selected source's page in the writer's browser. */
   onOpenArticle: () => void
+  /** The same, for a URL the card holds rather than a selected candidate. */
+  onOpenUrl: (url: string) => void
   onInsert: () => void
   onCancel: () => void
   onDone: () => void
@@ -648,6 +671,20 @@ function MarkPopover({
     scrollTop: wrapScrollTop
   })
 
+  // How tall it may be where it was just placed. Applied with the scrolling
+  // source list in index.css — see maxCardHeight, which owns the arithmetic and
+  // its tests.
+  const cardCap = wrapHeight > 0
+    ? maxCardHeight({
+        markTop: rect.top,
+        markHeight: rect.height,
+        gap: POPOVER_GAP,
+        viewportHeight: wrapHeight,
+        scrollTop: wrapScrollTop,
+        above: wantsAbove
+      }) - TAIL_NET_HEIGHT
+    : 0
+
   const { title, description, action } = popoverCopyFor(
     {
       claimType: mark.claim.claimType,
@@ -671,7 +708,23 @@ function MarkPopover({
       onMouseLeave={onMouseLeave}
     >
       {!wantsAbove ? <Tail left={tailLeft} pointing="up" above={false} /> : null}
-      <div ref={cardRef} className="docmark-card">
+      {/*
+        Capped to the editor's own height, because a card taller than either
+        side of the sentence STAYS BELOW and clips — see the note in
+        shared/popoverPlacement.ts, which explains why flipping it would be
+        worse. What clips is the bottom, and the bottom is where the buttons
+        are. Owner, 2026-08-19: *"there is no dismiss button once I am in it."*
+        There was; it was drawn past the end of the window.
+
+        The cap alone is not the fix — `.docmark-rows` has to be the part that
+        gives, or a capped card just clips its own buttons from the inside. See
+        the flex rules in index.css.
+
+        `wrapHeight - 24` leaves the gap the card already sits in. Zero before
+        the first measuring pass, which reads as "no cap" rather than as a
+        zero-height card.
+      */}
+      <div ref={cardRef} className="docmark-card" style={cardCap > 0 ? { maxHeight: cardCap } : undefined}>
         {flow ? (
           <CitationFlowCard flow={flow} claimText={mark.claim.text} />
         ) : fix ? (
@@ -881,6 +934,68 @@ function FixCard({
  * out. Preview is offered anyway, because the works-cited entry is the half
  * that does NOT appear in the sentence.
  */
+/**
+ * The source the writer already cited, drawn above the search results.
+ *
+ * The half "Compare sources" was missing. Owner, 2026-08-19: *"I want it to
+ * pull up the source before and the source it recommends now, because that's
+ * what comparing sources means."*
+ *
+ * Three states, all of them real and none of them an error:
+ *  - looking it up (two unmetered Crossref/Open Library requests);
+ *  - a work was found, which is the comparison;
+ *  - nothing came back, which is a fact about two indexes and NOT about the
+ *    citation — see shared/citedComparison.ts, which owns that wording.
+ *
+ * `onOpen` rather than an anchor: this window is Electron, and a bare href
+ * would navigate the app away from the document being written.
+ */
+function CitedSourceBlock({
+  cited,
+  loading,
+  onOpen
+}: {
+  cited: ResolvedCitedWork | null
+  loading: boolean
+  onOpen: (url: string) => void
+}): JSX.Element {
+  const described = describeCitedWork(cited)
+  return (
+    <div className="docmark-block">
+      <div className="docmark-block-label">{CITED_HEADING}</div>
+      {loading ? (
+        <div className="docmark-block-body">Looking it up…</div>
+      ) : !described ? (
+        // The sentence cites something in a shape the lookup cannot resolve, or
+        // cites nothing at all. Stated as our limit, which is what it is.
+        <div className="docmark-block-body">{UNCHECKABLE_SHAPE_NOTE}</div>
+      ) : (
+        <>
+          <div className="docmark-block-marker">{described.reference}</div>
+          {described.title ? <div className="docmark-cited-title">{described.title}</div> : null}
+          <div className="docmark-block-body">
+            <span className={described.found ? 'docmark-cited-ok' : 'docmark-cited-miss'}>
+              {described.found ? '✓' : '?'}
+            </span>{' '}
+            {described.detail}
+          </div>
+          {described.note ? <div className="docmark-block-body">{described.note}</div> : null}
+          {described.url ? (
+            <button
+              type="button"
+              className="docmark-cited-link"
+              onClick={() => onOpen(described.url as string)}
+              title={described.url}
+            >
+              Open the source you cited ↗
+            </button>
+          ) : null}
+        </>
+      )}
+    </div>
+  )
+}
+
 function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimText: string }): JSX.Element {
   // Hooks run before any of the early returns below, which is why this is here
   // rather than beside the rows it feeds: the card returns a different tree per
@@ -1021,7 +1136,20 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
         </span>
         {flow.readOnly ? null : <span className="docmark-chip">{CITATION_STYLE_LABEL[style]}</span>}
       </div>
+      {/* The header above and the buttons below stay put; this is the part that
+          scrolls. See .docmark-scroll — the version that scrolled only the
+          results list left the buttons off the bottom of the editor. */}
+      <div className="docmark-scroll">
       <p className="docmark-body">{resultsBody(claimText)}</p>
+      {/* Only in read-only. This card is titled "Compare sources" there; the
+          insert card is about a sentence with nothing to compare against. */}
+      {flow.readOnly ? (
+        <CitedSourceBlock
+          cited={flow.cited}
+          loading={flow.citedLoading}
+          onOpen={flow.onOpenUrl}
+        />
+      ) : null}
       <div className="docmark-rows">
         {candidates.map((candidate) => (
           <button
@@ -1055,6 +1183,7 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
             />
           </button>
         ))}
+      </div>
       </div>
       {/* Every option at once, as the frame draws them — not one cycling
           button, which hid two thirds of the control behind a second click.

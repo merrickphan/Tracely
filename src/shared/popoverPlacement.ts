@@ -59,3 +59,39 @@ export function placePopover({
   const above = cardHeight > 0 && cardHeight > spaceBelow && cardHeight <= spaceAbove
   return { above, top: above ? markTop - gap - cardHeight : below }
 }
+
+/**
+ * The tallest the card may be and still fit where `placePopover` put it.
+ *
+ * `placePopover` chooses a SIDE and deliberately does not shrink anything: a
+ * card too tall for either side stays below and clips, because flipping it
+ * would put it above the top of the document where no amount of scrolling
+ * brings it back. That was the right call about placement and it left the card
+ * clipping at the bottom — which is where its buttons are. Owner, 2026-08-19,
+ * on the Compare Sources card: *"there is no dismiss button once I am in it."*
+ * There was one; it was drawn past the end of the window.
+ *
+ * So the card is capped and its source list scrolls inside it (see
+ * `.docmark-rows` in index.css). The two have to be applied together — a cap
+ * with no scrolling region just clips the same buttons from the inside.
+ *
+ * `MIN_CARD_HEIGHT` is a floor rather than a hard truth: below it the card
+ * clips again, and it is better to clip than to render a card too short to
+ * contain a single row. It is only reachable in an editor pane a couple of
+ * hundred pixels tall.
+ */
+export const MIN_CARD_HEIGHT = 180
+
+export function maxCardHeight({
+  markTop,
+  markHeight,
+  gap,
+  viewportHeight,
+  scrollTop,
+  above
+}: Omit<PopoverPlacementInput, 'cardHeight'> & { above: boolean }): number {
+  const room = above
+    ? markTop - gap - scrollTop
+    : scrollTop + viewportHeight - (markTop + markHeight + gap)
+  return Math.max(MIN_CARD_HEIGHT, room)
+}

@@ -20,6 +20,8 @@ import type {
   CitationGenerateRequest,
   CitationGenerateResponse,
   CitationListRequest,
+  CitationResolveCitedRequest,
+  CitationResolveCitedResponse,
   CitationListResponse,
   ClipboardReadResponse,
   ClipboardWriteRequest,
@@ -130,7 +132,9 @@ const api = {
     generate: (req: CitationGenerateRequest): Promise<CitationGenerateResponse> =>
       ipcRenderer.invoke(IPC.CITATION_GENERATE, req),
     list: (req: CitationListRequest): Promise<CitationListResponse> =>
-      ipcRenderer.invoke(IPC.CITATION_LIST, req)
+      ipcRenderer.invoke(IPC.CITATION_LIST, req),
+    resolveCited: (req: CitationResolveCitedRequest): Promise<CitationResolveCitedResponse> =>
+      ipcRenderer.invoke(IPC.CITATION_RESOLVE_CITED, req)
   },
   critique: {
     generate: (req: CritiqueGenerateRequest): Promise<CritiqueGenerateResponse> =>

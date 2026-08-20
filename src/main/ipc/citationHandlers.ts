@@ -1,8 +1,17 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
-import type { CitationGenerateResponse, CitationListResponse } from '@shared/ipc-contract'
+import { computeClaimSpans } from '@shared/claimSpans'
+import { sentenceAround } from '@shared/inlineCitation'
+import type {
+  CitationGenerateResponse,
+  CitationListResponse,
+  CitationResolveCitedResponse
+} from '@shared/ipc-contract'
 import { formatCitation } from '../services/citations'
+import { checkReferences, resolveCitedWork } from '../services/search/referenceCheck'
+import { getAnalysis } from '../services/storage/analysesRepo'
+import { getClaim } from '../services/storage/claimsRepo'
 import { listCitationsForSource, saveCitation } from '../services/storage/citationsRepo'
 import { getSourceById } from '../services/storage/sourcesRepo'
 
@@ -11,6 +20,7 @@ const generateSchema = z.object({
   style: z.enum(['APA', 'MLA', 'Chicago'])
 })
 const listSchema = z.object({ sourceId: z.string() })
+const resolveCitedSchema = z.object({ claimId: z.string() })
 
 export function registerCitationHandlers(): void {
   ipcMain.handle(IPC.CITATION_GENERATE, (_event, raw): CitationGenerateResponse => {
@@ -36,5 +46,32 @@ export function registerCitationHandlers(): void {
   ipcMain.handle(IPC.CITATION_LIST, (_event, raw): CitationListResponse => {
     const { sourceId } = listSchema.parse(raw)
     return { citations: listCitationsForSource(sourceId) }
+  })
+
+  /**
+   * The work this claim's sentence already cites — the left-hand side of
+   * "Compare sources".
+   *
+   * Crossref and Open Library only. No relay, no key, no cost, so it is safe to
+   * run whenever the card opens rather than only after a critique — which
+   * matters, because the card is pressed on sentences nobody has critiqued.
+   *
+   * The SENTENCE and the whole DOCUMENT, exactly as generateCritique passes
+   * them, and for the same two reasons: a detected claim is a sub-span that
+   * stops before its trailing "(Author, Year)", and a numbered or MLA marker
+   * names its work in a list at the end of the draft.
+   */
+  ipcMain.handle(IPC.CITATION_RESOLVE_CITED, async (_event, raw): Promise<CitationResolveCitedResponse> => {
+    const { claimId } = resolveCitedSchema.parse(raw)
+    const claim = getClaim(claimId)
+    if (!claim) throw new Error('Claim not found')
+
+    const analysis = getAnalysis(claim.analysisId)
+    const span = analysis ? computeClaimSpans(analysis.sourceText, [claim])[0] : undefined
+    const sentence =
+      analysis && span ? sentenceAround(analysis.sourceText, span.start, span.end) : claim.text
+
+    const checks = await checkReferences(sentence, analysis?.sourceText)
+    return { cited: resolveCitedWork(checks) }
   })
 }

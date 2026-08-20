@@ -4,6 +4,7 @@
 // overflows the card", and placeholder text hides exactly those.
 import type {
   ProfileInfo,
+  ResolvedCitedWork,
   ScreenWatchClaimSummary,
   ScreenWatchOverlayUpdateEvent,
   ScreenWatchStructure,
@@ -303,6 +304,42 @@ export const claims: Claim[] = [
     createdAt: T0
   }
 ]
+
+/**
+ * The work a sentence cites, as `citation.resolveCited` resolves it.
+ *
+ * Two, because the comparison has two outcomes and only one of them is the
+ * happy path. `citedFound` is a Crossref match dated a year off the citation —
+ * routine, allowed by YEAR_TOLERANCE, and the case that would look like a wrong
+ * work if the card printed one year silently over the other. `citedMissing` is
+ * a real reference to something neither index holds, which the card must report
+ * as an empty lookup and never as a verdict. See shared/citedComparison.ts.
+ */
+export const citedFound: ResolvedCitedWork = {
+  raw: '(Halvorsen, 2021)',
+  surnames: ['Halvorsen'],
+  year: 2021,
+  citedTitle: null,
+  found: true,
+  title: 'Survey weighting in Norwegian adolescent panel studies',
+  matchedYear: 2022,
+  doi: '10.1111/nord.12488',
+  url: 'https://doi.org/10.1111/nord.12488',
+  index: 'crossref'
+}
+
+export const citedMissing: ResolvedCitedWork = {
+  raw: '(Unknown Author, 2025)',
+  surnames: ['Unknown'],
+  year: 2025,
+  citedTitle: null,
+  found: false,
+  title: null,
+  matchedYear: null,
+  doi: null,
+  url: null,
+  index: null
+}
 
 export const citations: Citation[] = [
   {

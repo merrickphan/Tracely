@@ -10,6 +10,7 @@ import {
 } from '@shared/citedReference'
 import { bibliographyReferences } from '@shared/bibliography'
 import type { CritiqueSource } from '@shared/citedEvidence'
+import type { ResolvedCitedWork } from '@shared/ipc-contract'
 import { enrichByDoi, normalizeDoi } from './openalex'
 import { PROVIDER_MIN_INTERVAL_MS, throttle } from './rateLimiter'
 import { politePoolMailto } from '../storage/settingsRepo'
@@ -375,6 +376,44 @@ export async function citedWorkEvidence(checks: ReferenceCheck[]): Promise<Criti
     // identify the work that was found rather than to echo the citation back.
     year: match.matchedYear ?? match.year,
     abstract
+  }
+}
+
+/**
+ * The work a sentence cites, in the shape the citation cards read.
+ *
+ * The same `checkReferences` the critique runs, mapped for display instead of
+ * for a prompt. It is a SEPARATE call from the critique's rather than a value
+ * threaded out of it, and deliberately so: "Compare sources" is pressed on
+ * sentences that have never been critiqued, and gating the comparison on a paid
+ * call the writer did not ask for is the thing this app does not do. Every
+ * request here is Crossref and Open Library — unmetered, no key, no relay.
+ *
+ * The FIRST reference wins when a sentence names two, matching
+ * `citedWorkEvidence`, so the card and the critique are talking about the same
+ * work. A corroborated one is preferred over an unresolved one for the same
+ * reason it is there: it is the one with something to show.
+ *
+ * Returns null when nothing checkable was named — which the card must render as
+ * "we cannot look this shape up", never as "your source was not found".
+ */
+export function resolveCitedWork(checks: ReferenceCheck[]): ResolvedCitedWork | null {
+  const match = checks.find((check) => check.corroborated && check.matchedTitle) ?? checks[0]
+  if (!match) return null
+  return {
+    raw: match.raw,
+    surnames: match.surnames,
+    year: match.year,
+    citedTitle: match.title,
+    found: match.corroborated,
+    title: match.matchedTitle,
+    matchedYear: match.matchedYear,
+    doi: match.matchedDoi,
+    // A DOI is a locator; an Open Library match carries none, and inventing an
+    // openlibrary.org search URL would hand the reader a results page dressed
+    // as the work — the exact shape isPlausibleSourceUrl rejects elsewhere.
+    url: match.matchedDoi ? `https://doi.org/${normalizeDoi(match.matchedDoi)}` : null,
+    index: match.index
   }
 }
 

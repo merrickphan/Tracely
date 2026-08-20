@@ -17,6 +17,7 @@ import type { DocCitationFlowState, DocFixState, DocProseFix } from '../componen
 import type { ProseMark } from '../components/documentMarks'
 import { useGradeLevel } from '../lib/gradeLevel'
 import { gradeLevelLabel } from '@shared/gradeLevel'
+import type { ResolvedCitedWork } from '@shared/ipc-contract'
 import { sourceInitials } from '../components/citationFlowCopy'
 import { APPLY_LOST_CLAIM } from '../components/fixFlowCopy'
 import {
@@ -303,6 +304,14 @@ function DocumentEditor({
     state: DocCitationFlowState
     /** Opened to look, not to cite — see shared/citationAction.ts. */
     readOnly: boolean
+    /**
+     * The work the sentence already cites, for the comparison. Held beside the
+     * flow rather than inside `state` because the lookup and the source search
+     * resolve independently — folding it into the step union would mean the
+     * slower of the two decided when either could be drawn.
+     */
+    cited: ResolvedCitedWork | null
+    citedLoading: boolean
   } | null>(null)
   const [citationBusy, setCitationBusy] = useState<'inserting' | 'previewing' | 'undoing' | null>(null)
   // While a flow is open its mark is pinned: the hit-test must not swap the
@@ -1008,6 +1017,30 @@ function DocumentEditor({
   }
 
   /**
+   * The work this sentence already cites — the left half of "Compare sources".
+   *
+   * A separate call from the source search, and free: Crossref and Open
+   * Library, no relay and no key. That is what makes it safe to run whenever
+   * the card opens rather than only after a critique, which matters because
+   * this card is pressed on sentences nobody has critiqued.
+   *
+   * A failure resolves to "nothing to show" rather than to an error. The card's
+   * other half is a working list of sources, and taking it down because a
+   * lookup timed out would lose the thing that already worked.
+   */
+  async function resolveCitedFor(claimId: string): Promise<void> {
+    let cited: ResolvedCitedWork | null = null
+    try {
+      cited = (await window.tracely.citation.resolveCited({ claimId })).cited
+    } catch (err) {
+      console.warn('[citation] cited-work lookup failed', err)
+    }
+    setCitationFlow((prev) =>
+      prev?.claimId !== claimId ? prev : { ...prev, cited, citedLoading: false }
+    )
+  }
+
+  /**
    * "Add citation" / "Find a source" on the hover popover — the four frames
    * from Figma, run in place over the sentence rather than by opening a modal.
    *
@@ -1022,7 +1055,22 @@ function DocumentEditor({
     fresh: boolean,
     readOnly = citationFlow?.readOnly ?? false
   ): Promise<void> {
-    setCitationFlow({ claimId: claim.id, state: { step: 'searching' }, readOnly })
+    // Carried across a "Search again" on the same sentence: the citation has
+    // not changed, and re-drawing "Looking it up…" over an answer already in
+    // hand is a flicker that says the card lost something.
+    const knownCited = citationFlow?.claimId === claim.id ? citationFlow.cited : null
+    setCitationFlow({
+      claimId: claim.id,
+      state: { step: 'searching' },
+      readOnly,
+      cited: knownCited,
+      citedLoading: readOnly && knownCited === null
+    })
+    // Fire and forget, deliberately NOT awaited. Two unmetered requests to
+    // Crossref and Open Library, resolving independently of the source search —
+    // awaiting them would make the slower of the two decide when either half of
+    // the comparison could be drawn.
+    if (readOnly && knownCited === null) void resolveCitedFor(claim.id)
     try {
       const res = fresh ? await tracelyApi.findEvidence(claim.id) : await tracelyApi.getEvidenceForClaim(claim.id)
       const evidence = res.evidence
@@ -1047,6 +1095,8 @@ function DocumentEditor({
           : {
               claimId: claim.id,
               readOnly: prev.readOnly,
+              cited: prev.cited,
+              citedLoading: prev.citedLoading,
               state: {
                 step: 'picking',
                 candidates: evidence.map((item) => ({
@@ -1074,6 +1124,8 @@ function DocumentEditor({
           : {
               claimId: claim.id,
               readOnly: prev.readOnly,
+              cited: prev.cited,
+              citedLoading: prev.citedLoading,
               state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
             }
       )
@@ -1133,6 +1185,8 @@ function DocumentEditor({
       setCitationFlow({
         claimId: flow.claimId,
         readOnly: flow.readOnly,
+        cited: flow.cited,
+        citedLoading: false,
         state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
       })
     } finally {
@@ -1160,6 +1214,9 @@ function DocumentEditor({
         // always false here — carried rather than hardcoded so the two cannot
         // drift if a future path opens the insert from somewhere else.
         readOnly: false,
+        // An insert card draws no comparison — see CitedSourceBlock.
+        cited: null,
+        citedLoading: false,
         state: {
           step: 'inserted',
           citation: {
@@ -1176,6 +1233,8 @@ function DocumentEditor({
       setCitationFlow({
         claimId: claim.id,
         readOnly: false,
+        cited: null,
+        citedLoading: false,
         state: { step: 'error', message: err instanceof Error ? err.message : String(err) }
       })
     } finally {
@@ -1940,6 +1999,8 @@ function DocumentEditor({
                   claimId: citationFlow.claimId,
                   state: citationFlow.state,
                   readOnly: citationFlow.readOnly,
+                  cited: citationFlow.cited,
+                  citedLoading: citationFlow.citedLoading,
                   replaces: activeMark.mark.citationDefectText ?? null,
                   inserting: citationBusy === 'inserting',
                   previewing: citationBusy === 'previewing',
@@ -1978,6 +2039,9 @@ function DocumentEditor({
                     // in a browser.
                     if (url) void window.tracely.shell.openExternal({ url })
                   },
+                  // The cited work's own link, which is not a candidate in the
+                  // list — it is the thing the list is being compared against.
+                  onOpenUrl: (url) => void window.tracely.shell.openExternal({ url }),
                   onInsert: () =>
                     void insertFlowCitation(
                       activeMark.mark.claim,

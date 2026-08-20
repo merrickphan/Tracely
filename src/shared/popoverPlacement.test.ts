@@ -1,6 +1,6 @@
 import { strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { placePopover } from './popoverPlacement.ts'
+import { MIN_CARD_HEIGHT, maxCardHeight, placePopover } from './popoverPlacement.ts'
 
 /** The editor's real geometry: 527px of visible height, a 20px line, 10px gap. */
 const at = (
@@ -67,5 +67,51 @@ describe('placePopover', () => {
     const p = at(626, 0, 300)
     strictEqual(p.above, false)
     strictEqual(p.top, 656)
+  })
+})
+
+/**
+ * The cap that stops a tall card clipping its own buttons. See the note on
+ * `maxCardHeight` — placePopover deliberately leaves a too-tall card below,
+ * and the bottom is where Dismiss lives.
+ */
+describe('maxCardHeight', () => {
+  const base = { markTop: 300, markHeight: 20, gap: 10, viewportHeight: 600, scrollTop: 0 }
+
+  it('below: the room between the line and the bottom of the viewport', () => {
+    // 0 + 600 - (300 + 20 + 10)
+    strictEqual(maxCardHeight({ ...base, above: false }), 270)
+  })
+
+  it('above: the room between the top of the viewport and the line', () => {
+    // 300 - 10 - 0
+    strictEqual(maxCardHeight({ ...base, above: true }), 290)
+  })
+
+  it('measures against the SCROLLED viewport, not the document', () => {
+    // Everything here is in content space, so a scrolled container's visible
+    // box is [scrollTop, scrollTop + viewportHeight). Forgetting that is how
+    // the placement bug this file exists for got in.
+    strictEqual(maxCardHeight({ ...base, scrollTop: 100, above: false }), 370)
+    strictEqual(maxCardHeight({ ...base, scrollTop: 100, above: true }), 190)
+  })
+
+  it('never returns a card too short to hold anything', () => {
+    // A line at the very bottom of the viewport: the true room is 10px, and a
+    // 10px card is worse than one that clips.
+    strictEqual(maxCardHeight({ ...base, markTop: 570, above: false }), MIN_CARD_HEIGHT)
+    // And at the very top, going the other way.
+    strictEqual(maxCardHeight({ ...base, markTop: 4, above: true }), MIN_CARD_HEIGHT)
+  })
+
+  /**
+   * The cap and the placement have to agree, or the card is sized for a side it
+   * is not on. Both read the same inputs; this pins that they stay consistent.
+   */
+  it('caps for the side placePopover actually chose', () => {
+    const input = { markTop: 500, markHeight: 20, cardHeight: 400, gap: 10, viewportHeight: 600, scrollTop: 0 }
+    const { above } = placePopover(input)
+    strictEqual(above, true, 'more room above than below here')
+    strictEqual(maxCardHeight({ ...input, above }), 490)
   })
 })
