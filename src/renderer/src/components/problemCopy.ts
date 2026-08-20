@@ -49,6 +49,11 @@ export const DESIGN_RED = '#d93636'
 export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   // Attribution, and the worst of it: a source that does not appear to exist.
   'fabricated-citation': DESIGN_RED,
+  // The design's amber, the colour it reserves for a MISSING citation — this is
+  // the same family: something is wrong with the attribution itself. Not red,
+  // because a placeholder is a slip a writer fixes in ten seconds rather than
+  // an invented source.
+  'citation-defect': DESIGN_AMBER,
   // Reasoning: the sentence does not follow, or asserts something false.
   'contradicted-claim': DESIGN_RED,
   // Orange, with the evidence group. This was RED, the design's colour for weak
@@ -85,6 +90,7 @@ export const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
   // find it, not that the student invented it. The verdict is serious enough
   // that overstating it once would cost the whole feature its credibility.
   'fabricated-citation': 'Source not found — may be fabricated',
+  'citation-defect': 'Citation is incomplete',
   'contradicted-claim': 'Contradicted — check this fact',
   'unsupported-by-evidence': 'Evidence does not carry this',
   'overstated-claim': 'Overstated — narrow this',
@@ -183,7 +189,10 @@ export interface ProblemCopy {
  * now, so they cannot disagree again.
  */
 export function problemCopyFor(
-  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation'>,
+  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation'> & {
+    /** citationShape.ts's own sentence for the defect, when there is one. */
+    citationDefect?: string | null
+  },
   evidence: ScreenWatchClaimEvidence,
   kind: ScreenWatchProblemKind
 ): ProblemCopy {
@@ -192,6 +201,20 @@ export function problemCopyFor(
   const noun = KIND_NOUN[bucket]
   const n = evidence.count
   const sources = `${n} source${n === 1 ? '' : 's'}`
+
+  if (kind === 'citation-defect') {
+    return {
+      title: 'Citation is incomplete',
+      // The defect's own sentence is carried on the claim, because
+      // citationShape.ts already words each one specifically — "the author is a
+      // placeholder", "the year has not happened yet" — and a generic line here
+      // would be less useful than what is already in hand.
+      description:
+        claim.citationDefect ??
+        'Something in this citation is not a real reference yet. Check the author, the year and the source it points at.',
+      action: 'Fix the citation'
+    }
+  }
 
   if (kind === 'cited-unverified') {
     return {
@@ -275,7 +298,10 @@ export function problemCopyFor(
  * surfaces draw it as a spinner rather than a title/description/button.
  */
 export function popoverCopyFor(
-  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation' | 'critique' | 'text'>,
+  claim: Pick<ScreenWatchClaimSummary, 'claimType' | 'hasInlineCitation' | 'critique' | 'text'> & {
+    /** citationShape.ts's own sentence for the defect, when there is one. */
+    citationDefect?: string | null
+  },
   evidence: ScreenWatchClaimEvidence,
   kind: Exclude<ScreenWatchProblemKind, 'searching'>
 ): ProblemCopy {

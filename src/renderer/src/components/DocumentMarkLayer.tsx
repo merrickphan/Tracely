@@ -645,6 +645,9 @@ function MarkPopover({
     {
       claimType: mark.claim.claimType,
       hasInlineCitation: mark.hasInlineCitation,
+      // What citationShape.ts found wrong with the citation's SHAPE, so the
+      // card can print that sentence rather than a generic one.
+      citationDefect: mark.citationDefect,
       critique: mark.claim.critique,
       text: mark.claim.text
     },
