@@ -175,6 +175,13 @@ export interface DocCitationFlow {
   onSetStyle: (style: CitationStyle) => void
   onSearchAgain: () => void
   onPreview: () => void
+  /**
+   * The defective citation this flow would REPLACE, exactly as typed.
+   *
+   * Null for an ordinary insert. When set, the primary button swaps that text
+   * for the new citation rather than appending a second one beside it.
+   */
+  replaces: string | null
   /** Opens the selected source's page in the writer's browser. */
   onOpenArticle: () => void
   onInsert: () => void
@@ -1087,8 +1094,15 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
             className="docmark-btn-primary"
             onClick={flow.onInsert}
             disabled={flow.inserting || !selectedId}
+            title={flow.replaces ? `Replaces ${flow.replaces}` : undefined}
           >
-            {flow.inserting ? 'Inserting…' : 'Insert citation'}
+            {flow.inserting
+              ? flow.replaces
+                ? 'Replacing…'
+                : 'Inserting…'
+              : flow.replaces
+                ? 'Replace citation'
+                : 'Insert citation'}
           </button>
           {/* Was "Preview", which formatted the citation — and the citation
               block is now generated the moment a source is selected, so the

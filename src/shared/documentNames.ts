@@ -23,10 +23,37 @@
 /**
  * How many times a capitalised word must appear before it counts as a name.
  *
- * Two, not one, and the asymmetry is deliberate: the cost of being wrong here
- * is a genuine misspelling that stops being underlined.
+ * ── Why this is 1, having been 2 ───────────────────────────────────────────
+ * Two was the cautious answer: a name used once is the one the writer is least
+ * likely to have proof-read, and a misspelling learned is a misspelling hidden.
+ *
+ * Measured on the owner's biography essay, 2026-08-19, that rule blocked
+ * **English, Otto, Limburger, Stirim, Belgium, Brussels and Allied** — every
+ * one of them appearing exactly once. Owner: *"English, Stirim, and a name were
+ * all deemed not a word when they are."* In an essay about a person, most
+ * proper nouns appear once; requiring two rejected nearly all of them.
+ *
+ * And the protection it was buying is mostly illusory. Chromium cannot
+ * spellcheck a proper noun it has never heard of: "Stirim" and a misspelling of
+ * it are equally unknown to the dictionary, so the squiggle under a name it
+ * does not know carries no information the writer can act on. Where the word IS
+ * in the dictionary — Belgium, English — teaching it changes nothing, because
+ * a known word was never underlined.
+ *
+ * So the case where two protected anything is narrow, and the case where it
+ * added noise was most of the document. The mid-sentence test below is what
+ * actually separates a name from a sentence opening, and it does that alone.
  */
-export const MIN_OCCURRENCES = 2
+export const MIN_OCCURRENCES = 1
+
+/**
+ * How many times an ALL-CAPS word must appear.
+ *
+ * Higher than the ordinary bar, because upper case is genuinely weaker evidence
+ * — a heading is capitalised for being a heading. Recurrence is what tells an
+ * acronym the draft uses from a line that was merely shouted once.
+ */
+export const SHOUTED_MIN_OCCURRENCES = 2
 
 /** Shortest word worth learning. Two-letter capitals are initials and acronyms. */
 const MIN_LENGTH = 3
@@ -78,14 +105,20 @@ export function documentNames(text: string): string[] {
 
   const total = new Map<string, number>()
   const midSentence = new Set<string>()
+  /** Words seen in ALL CAPS, held to a higher bar — see the loop below. */
+  const shouted = new Set<string>()
   const firstSeen: string[] = []
 
   for (const match of text.matchAll(WORD)) {
     const word = match[0]
     if (word.length < MIN_LENGTH) continue
-    // Capitalised, and not SHOUTING. An all-caps heading or acronym says
-    // nothing about whether the word is a name.
-    if (word[0] !== word[0].toUpperCase() || word === word.toUpperCase()) continue
+    if (word[0] !== word[0].toUpperCase()) continue
+    // ALL-CAPS is held to the old two-occurrence bar rather than excluded.
+    // A heading shouts once; an acronym the draft actually uses recurs. UNICEF
+    // appeared six times mid-sentence in the owner's essay and was rejected
+    // outright for being upper case, which is the wrong reading of the same
+    // evidence — a term used six times is exactly what a writer means.
+    const shouting = word === word.toUpperCase() && word.length > 1
     if (NOT_NAMES.has(word.toLowerCase())) continue
 
     // "Sweller's" is one token to this regex and a possessive to a reader. The
@@ -96,10 +129,13 @@ export function documentNames(text: string): string[] {
 
     if (!total.has(base)) firstSeen.push(base)
     total.set(base, (total.get(base) ?? 0) + 1)
+    if (shouting) shouted.add(base)
     if (!opensASentence(text, match.index)) midSentence.add(base)
   }
 
-  return firstSeen.filter(
-    (word) => midSentence.has(word) && (total.get(word) ?? 0) >= MIN_OCCURRENCES
-  )
+  return firstSeen.filter((word) => {
+    if (!midSentence.has(word)) return false
+    const seen = total.get(word) ?? 0
+    return seen >= (shouted.has(word) ? SHOUTED_MIN_OCCURRENCES : MIN_OCCURRENCES)
+  })
 }

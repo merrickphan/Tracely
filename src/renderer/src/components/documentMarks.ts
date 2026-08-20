@@ -55,6 +55,8 @@ export interface DocumentMark {
   hasInlineCitation: boolean
   /** citationShape.ts's sentence for a defect in this sentence's citation. */
   citationDefect: string | null
+  /** The defective citation exactly as typed, so it can be replaced in place. */
+  citationDefectText: string | null
   /**
    * Never null: a claim whose search has not resolved is not marked at all —
    * see the note in measureMarks. Typed non-null so the popover cannot be
@@ -200,6 +202,7 @@ export function measureMarks(
       problemKinds,
       hasInlineCitation: cited,
       citationDefect: defect?.message ?? null,
+      citationDefectText: defect?.text ?? null,
       evidence,
       rects
     })
@@ -412,6 +415,32 @@ export function replaceClaimText(body: HTMLElement, claim: Claim, replacement: s
  * being pressed has moved it, and applying a stale offset would rewrite a
  * different part of the sentence.
  */
+/**
+ * Swaps a defective citation for a real one, in place.
+ *
+ * `insertCitationForClaim` APPENDS a marker to the sentence, which is right
+ * when there was no citation and wrong when there was a broken one — it leaves
+ * `(Unknown Author, 2025) (Walker, 2004)` sitting in the draft. Owner,
+ * 2026-08-19: *"when it detects citations are incomplete, and I click fix the
+ * citation there is no replace button to replace the citation."*
+ *
+ * Located by its TEXT rather than by a stored offset, and refused when that
+ * text appears more than once. Same rule `applyProseIssue` and Tracer's rewrite
+ * both live by: the card can be seconds old and the writer has been typing, and
+ * replacing at a guessed offset rewrites a part of the document nobody asked
+ * about. Returns false and the caller says so.
+ */
+export function replaceCitationText(
+  body: HTMLElement,
+  defective: string,
+  replacement: string
+): boolean {
+  const { text } = buildTextMap(body)
+  const at = text.indexOf(defective)
+  if (at === -1 || at !== text.lastIndexOf(defective)) return false
+  return replaceRange(body, at, at + defective.length, replacement, true)
+}
+
 export function applyProseIssue(body: HTMLElement, issue: ProseIssue): boolean {
   if (!issue.suggestion) return false
   const { text } = buildTextMap(body)
