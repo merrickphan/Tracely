@@ -556,6 +556,41 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
 - **`weak` and `unsupported` are EVIDENCE-FIT verdicts and must not wear a reasoning label.** The kind was called `weak-reasoning` until 2026-08-19 and is now `unsupported-by-evidence`, drawn in orange with the other evidence findings rather than in the red the design reserves for weak reasoning. Both verdicts come out of `CRITIQUE_SYSTEM_PROMPT` Pass 3, which asks *"does the evidence actually back the claim as phrased?"* — a question about sources.
   - Measured on the owner's draft: *"The study has since had a rough time — Morehead, Dunlosky and Rawson failed to replicate the headline effect in 2019, and anyone citing the original as settled science is overreaching (Shelly J. Schmidt, 2019)."* Some of the best reasoning in the document — a conceded replication failure and a bounded claim — underlined in red as bad thinking, because its cited work turned out to be about a different subject. The critique was right; the label was a category error.
   - **"Weak reasoning" now belongs to the classifier's named faults** (`circular-reasoning`, `sequence-as-cause`, `single-case-generalisation`, `logical-leap`), which are the only things in this app that judge an argument rather than its sources. They are paragraph-level and live in the report. A SENTENCE-level reasoning fault would need Pass 3 to name what it found, the same change the classifier got — until then this kind must not borrow the word.
+- **`cited-unverified` and `unsupported-by-evidence` now require that the
+  critique actually OPENED the work the sentence cites** (`citedWorkRead` on
+  `Claim`, `problemKind.ts`, migration v5). `referenceCheck.ts` resolves the
+  cited work and `citedEvidence.ts` gives it slot 1 when it resolves; when it
+  does not, the critique reasons over a topical search the writer never claimed
+  as support. The four verdicts read identically either way, so `weak` over the
+  writer's own source and `weak` over four papers they never cited were the same
+  word downstream — and only the first says anything about their citation. Owner,
+  2026-08-19: *"It doesn't matter what the other five sources found; as long as
+  that specific source backs up their evidence, don't flag it."*
+  - **`null` suppresses, exactly like `false`.** Old rows, and any surface that
+    does not track it. The assertion needs the source to have been read, and
+    "probably" is not read. No backfill is possible — whether a lookup succeeded
+    is not recoverable from a stored verdict.
+  - **The card stopped quoting the retrieval score, because it was never the
+    reason.** It read *"the 5 sources found score 54/100 for supporting it"*
+    under a finding the score has not decided since the gate came off. The
+    description is `summariseCritique(claim.critique)` now, so `cited-unverified`
+    moved into `popoverCopyFor` beside the other critique-driven kinds.
+  - **`!nothingFound` is GONE from this kind, and that is a loosening on
+    purpose.** It was a PROXY for "do we have any basis to judge this citation",
+    written when nothing carried the real answer. `citedWorkRead` is that
+    answer and is strictly stronger. The newly reachable case — the critique
+    read their source, found it does not carry the claim, and the topical search
+    returned nothing — is the most valuable finding in the product, and it was
+    being discarded over what OTHER papers did not say.
+- **A citation does not have to be in brackets.** `inlineCitation.ts`'s
+  `attributed` patterns read prose attribution — "According to Pearson from
+  UNICEF", "As the Red Cross reported", "published in the Lancet", "UNICEF's own
+  records". Owner, 2026-08-19: *"a citation doesn't need to have parentheses
+  directly at the very end … there is not just one way to cite stuff."* A bare
+  `Name verb that …` is deliberately NOT detected: in an essay about a person
+  that attributes to its own subject and cites nothing. `attributed` is
+  deliberately absent from `CHECKABLE_CITATION_SHAPES` — none of these carries
+  the author-and-year `referenceCheck` needs.
 - **`cited-unverified` has NO retrieval-score gate, and removing it was the fix.** It required `evidence.score < 40`; the sentence above scored 47 and missed by seven points, so the citation finding never fired and `weak-reasoning` did. `evidence.score` measures a TOPICAL SEARCH of four indexes and this kind is about the source the WRITER named — different questions about different documents. The same argument was already made twice in that file for `nothingFound`; it applies to the band as much as to the floor. What licenses the finding is `citationDoubted`, a verdict from the one call that resolves the cited work and reads its abstract. The middle-band `partial-evidence` branch for cited claims went with it — its condition was a strict subset.
 
 - **The `contradicted` verdict is its own problem kind, not weak reasoning.** `CRITIQUE_SYSTEM_PROMPT` reserves it for "a specific fact you're confident is factually wrong" and tells the model to fall through to the rigor pass whenever it is merely unsure — so it is a claim about truth, while every other kind is a claim about support. `problemKind.ts` ranks `contradicted-claim` above everything, including `cited-unverified`.

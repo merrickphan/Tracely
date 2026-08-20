@@ -216,21 +216,6 @@ export function problemCopyFor(
     }
   }
 
-  if (kind === 'cited-unverified') {
-    return {
-      title: 'Citation may not support this',
-      description:
-        // Unreachable since 2026-08-16: problemKindsFor stopped raising
-        // 'cited-unverified' at all when nothing relevant came back, which is
-        // what this branch was the apology for. Left rather than deleted so the
-        // wording survives if the kind's condition ever loosens again.
-        evidence.count === 0
-          ? `You have cited this ${noun}, but a search of the academic databases found nothing carrying it. Either the source is not indexed — or it does not say this.`
-          : `You have cited this ${noun}, but the ${sources} found score ${evidence.score}/100 for supporting it. Check the source says what you have attributed to it.`,
-      action: 'Compare sources'
-    }
-  }
-
   if (level === 'none') {
     // "Unverified statistic" is the design's wording, and it is the better one:
     // "figure" reads as a chart as easily as a number.
@@ -346,6 +331,27 @@ export function popoverCopyFor(
         summariseCritique(claim.critique) ??
         'A specific fact asserted here appears to be wrong. Check it against the original source before this goes any further.',
       action: 'Suggest fix'
+    }
+  }
+  if (kind === 'cited-unverified') {
+    // ── The retrieval score is NOT the reason, and used to be the copy ───────
+    // This read: "You have cited this cause-and-effect claim, but the 5 sources
+    // found score 54/100 for supporting it." Owner, 2026-08-19: *"It doesn't
+    // matter what the other five sources found; as long as that specific source
+    // backs up their evidence, don't flag it."*
+    //
+    // He was reading the card correctly — it was explaining a finding about HIS
+    // source by quoting a number about five papers he never cited. The score
+    // has not decided this kind since the gate came off (problemKind.ts), so
+    // the sentence was not merely unhelpful, it named a cause that was already
+    // no longer the cause. What licenses the finding is a critique that opened
+    // the work he named, so what the card shows is what that critique said.
+    return {
+      title: 'Citation may not support this',
+      description:
+        summariseCritique(claim.critique) ??
+        'The source cited here does not appear to carry this claim. Check that it says what you have attributed to it.',
+      action: 'Compare sources'
     }
   }
   if (kind === 'unsupported-by-evidence') {

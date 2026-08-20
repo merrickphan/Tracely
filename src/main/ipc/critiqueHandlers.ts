@@ -36,7 +36,8 @@ export function registerCritiqueHandlers(): void {
       result.critique,
       result.verdict,
       result.suggestedRevision,
-      result.citationFix
+      result.citationFix,
+      result.citedWorkRead
     )
 
     // Only sources the local model flagged as contradicting, and only ones

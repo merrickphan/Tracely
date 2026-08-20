@@ -141,6 +141,7 @@ function asClaim(detected: DetectedClaim, strengthScore: number, id: string): Cl
     // synthesized input.
     suggestedRevision: null,
     citationFix: null,
+    citedWorkRead: null,
     createdAt: new Date().toISOString()
   }
 }

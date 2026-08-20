@@ -40,6 +40,41 @@ const SURNAME = `${PARTICLE}\\p{Lu}[\\p{L}'’-]+`
 const NOT_AN_AUTHOR =
   'Table|Fig|Figure|Chart|Graph|Chapter|Ch|Section|Sec|Part|Page|Pages|Volume|Vol|Appendix|Equation|Eq|Step|Item|Note|Line|Row|Column|Level|Grade|Round|Phase|Class|Type|Version|Model|Form|Room|Box|Panel|Article|Clause|Rule|Title|Proposition|Prop|Measure|Bill|Amendment|Act'
 
+/**
+ * A source named in PROSE rather than in brackets.
+ *
+ * Every pattern above waits for punctuation — a bracket, a square bracket, a
+ * superscript. None of them can see the oldest citation shape there is, which
+ * is a writer simply saying whose claim it is: *"According to Pearson from
+ * UNICEF, …"*. Owner, 2026-08-19: *"a citation doesn't need to have parentheses
+ * directly at the very end. It could be at the very start … Be smart about
+ * this, because there is not just one way to cite stuff."*
+ *
+ * Correct, and the cost of missing it is the worst thing this module can do: a
+ * sentence that names its source in the clearest possible way, told it is
+ * "Missing citation". Narrative style is also what MLA and Chicago actually
+ * teach, and what a student writes before they have learned a house style at
+ * all.
+ *
+ * ── What is deliberately NOT here ──────────────────────────────────────────
+ * A bare `Name verb that …` — "Hepburn argued that the war changed her" — is
+ * left undetected. In an essay ABOUT a person, that sentence attributes to its
+ * own subject and cites nothing, and it is far too common in biography and
+ * history to read as a reference. Every pattern below therefore requires a
+ * word that only appears when a writer is pointing AT a source: "according to",
+ * "as … reports", "reported by", or a possessive over a source noun.
+ */
+const REPORTING =
+  'reports?|reported|notes?|noted|writes?|wrote|argues?|argued|observes?|observed|explains?|explained|documents?|documented|records?|recorded|describes?|described|states?|stated|shows?|showed|concludes?|concluded|estimates?|estimated|found|puts? it'
+
+/** "… as reported BY the WHO", "… as published IN the Lancet". */
+const ATTRIBUTING_PARTICIPLE =
+  'reported|published|documented|recorded|noted|stated|described|compiled|collected|released|issued|cited'
+
+/** The nouns that make a possessive a citation: "UNICEF's figures". */
+const SOURCE_NOUN =
+  'reports?|stud(?:y|ies)|surveys?|analys[ie]s|data|dataset|figures|statistics|research|articles?|papers?|website|webpage|page|records|findings|account|estimates?|census|archives?|database|guidelines?|profile|biography|obituary|documentary|entry'
+
 const PATTERNS: Array<[string, RegExp]> = [
   // Parenthetical: (Smith, 2020) · (Mueller & Oppenheimer, 2014) · (IEA, 2024)
   // · ("Corruption Perceptions Index", 2024) · (Margarian, 2022: 23)
@@ -107,6 +142,38 @@ const PATTERNS: Array<[string, RegExp]> = [
       'u'
     )
   ],
+  // Prose attribution, four shapes — see the prose-attribution note above.
+  //
+  //   According to UNICEF, she made fifteen field visits.
+  //   According to Pearson from UNICEF, …
+  //   As the Red Cross reported, the camps were full.
+  //   The figure was first published in the Lancet.
+  //   UNICEF's own records put the number higher.
+  //
+  // Reported as one kind, `attributed`, and deliberately NOT in
+  // problemKind.ts's CHECKABLE_CITATION_SHAPES: none of these carries the
+  // author-and-year that `search/referenceCheck.ts` needs to resolve a work, so
+  // a critique that doubts one is doubting the topical search rather than the
+  // source the writer named.
+  ['attributed', new RegExp(`\\b[Aa]ccording to\\s+(?:the\\s+)?${SURNAME}`, 'u')],
+  [
+    'attributed',
+    // The gap allows a multi-word name — "As the Red Cross reported" — so it
+    // cannot be restricted to lowercase filler. Three words, because past that
+    // the verb has stopped belonging to the name.
+    new RegExp(
+      `\\b[Aa]s\\s+(?:the\\s+)?${SURNAME}(?:\\s+[\\p{L}'’-]+){0,3}\\s+(?:${REPORTING})\\b`,
+      'u'
+    )
+  ],
+  [
+    'attributed',
+    new RegExp(
+      `\\b(?:${ATTRIBUTING_PARTICIPLE})\\s+(?:by|in)\\s+(?:the\\s+)?${SURNAME}`,
+      'u'
+    )
+  ],
+  ['attributed', new RegExp(`\\b${SURNAME}['’]s\\s+(?:own\\s+)?(?:${SOURCE_NOUN})\\b`, 'u')],
   // Numeric: [1] · [12] · [1,2] · [1-3]
   ['numeric', /\[\s*\d{1,3}(?:\s*[–—,-]\s*\d{1,3})*\s*\]/],
   // Chicago notes shorthand for "the source I just cited": (ibid.) · (Ibid., 47)

@@ -16,6 +16,7 @@ interface ClaimRow {
   critique_verdict: string | null
   suggested_revision: string | null
   citation_fix: string | null
+  cited_work_read: number | null
   created_at: string
 }
 
@@ -43,6 +44,10 @@ function toDomain(row: ClaimRow): Claim {
     // them is `!== null`.
     suggestedRevision: row.suggested_revision ?? null,
     citationFix: row.citation_fix ?? null,
+    // SQLite has no boolean. `== null` rather than `=== undefined`, so a row
+    // that predates the column and a row whose lookup has not run both arrive
+    // as null — which problemKind.ts reads as "not read".
+    citedWorkRead: row.cited_work_read == null ? null : row.cited_work_read === 1,
     createdAt: row.created_at
   }
 }
@@ -107,10 +112,10 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         `INSERT INTO claims (
            id, analysis_id, text, claim_type, confidence, search_query, created_at,
            strength_score, score_breakdown, critique, critique_verdict,
-           suggested_revision, citation_fix
+           suggested_revision, citation_fix, cited_work_read
          ) VALUES (
            $id, $analysisId, $text, $type, $confidence, $query, $createdAt,
-           $score, $breakdown, $critique, $verdict, $revision, $citationFix
+           $score, $breakdown, $critique, $verdict, $revision, $citationFix, $citedWorkRead
          )`,
         {
           $id: id,
@@ -125,7 +130,8 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
           $critique: prior?.critique ?? null,
           $verdict: prior?.critique_verdict ?? null,
           $revision: prior?.suggested_revision ?? null,
-          $citationFix: prior?.citation_fix ?? null
+          $citationFix: prior?.citation_fix ?? null,
+          $citedWorkRead: prior?.cited_work_read ?? null
         }
       )
 
@@ -156,6 +162,7 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         critiqueVerdict: (prior?.critique_verdict as CritiqueVerdict | null) ?? null,
         suggestedRevision: prior?.suggested_revision ?? null,
         citationFix: prior?.citation_fix ?? null,
+        citedWorkRead: prior?.cited_work_read == null ? null : prior.cited_work_read === 1,
         createdAt
       }
     })
@@ -197,17 +204,26 @@ export function updateClaimCritique(
   critique: string,
   verdict: CritiqueVerdict,
   suggestedRevision: string | null,
-  citationFix: string | null
+  citationFix: string | null,
+  /**
+   * Whether this critique read the work the sentence cites. Written on every
+   * critique, alongside the verdict it qualifies — a verdict stored without it
+   * is the state that made "your citation may not support this" fire over
+   * correctly cited sentences.
+   */
+  citedWorkRead: boolean
 ): void {
   run(
     `UPDATE claims SET critique = $critique, critique_verdict = $verdict,
-     suggested_revision = $revision, citation_fix = $fix WHERE id = $id`,
+     suggested_revision = $revision, citation_fix = $fix,
+     cited_work_read = $citedWorkRead WHERE id = $id`,
     {
       $id: claimId,
       $critique: critique,
       $verdict: verdict,
       $revision: suggestedRevision,
-      $fix: citationFix
+      $fix: citationFix,
+      $citedWorkRead: citedWorkRead ? 1 : 0
     }
   )
 }

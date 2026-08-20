@@ -36,6 +36,23 @@ export interface CritiqueResult {
    * is always null when the verdict is `fabricated`.
    */
   citationFix: string | null
+  /**
+   * Did this critique have the work the writer cited in front of it?
+   *
+   * Not from the relay — the client already knows, because it is the client
+   * that resolves the reference and decides whether it earns slot 1 (see
+   * `citedWorkEvidence` and shared/citedEvidence.ts). It is reported because
+   * nothing downstream could tell: `weak` reached over the writer's own source
+   * and `weak` reached over four topical papers they never cited are the same
+   * word, and only the first says anything about their citation.
+   *
+   * Set OUTSIDE the cache, deliberately. It is a pure function of `citedWork`,
+   * which is computed before the cache key and is IN that key — so a cached
+   * critique always belongs to the same answer, and recomputing it costs
+   * nothing while bumping the cache version would re-pay for every critique in
+   * the database.
+   */
+  citedWorkRead: boolean
 }
 
 // Critique is the app's single most expensive call — it runs once per
@@ -181,7 +198,7 @@ export async function generateCritique(
   const key = cacheKey(claim, evidence, referenceCheck, citedWork)
 
   const cached = getCached<CritiqueResult>(key)
-  if (cached) return cached
+  if (cached) return { ...cached, citedWorkRead: citedWork !== null }
 
   const topEvidence = selectCritiqueEvidence(
     evidence,
@@ -213,5 +230,5 @@ export async function generateCritique(
     referenceLookupRan: referenceCheck !== null
   })
   setCached(key, 'ai:critique', result)
-  return result
+  return { ...result, citedWorkRead: citedWork !== null }
 }

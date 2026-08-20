@@ -349,6 +349,7 @@ function gradeClaims(claims: Claim[]): GradeClaim[] {
               hasRelevantSource: hasRelevantSource(claim.scoreBreakdown)
             },
             critiqueVerdict: claim.critiqueVerdict,
+            citedWorkRead: claim.citedWorkRead,
             outOfIndexScope: retrievalScopeFor(claim.text)
           })
   }))

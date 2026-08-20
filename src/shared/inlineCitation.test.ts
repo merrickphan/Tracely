@@ -1,4 +1,4 @@
-import { strictEqual } from 'node:assert/strict'
+import { ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind, sentenceAround } from './inlineCitation.ts'
 
@@ -97,6 +97,68 @@ describe('hasInlineCitation — notes shorthand and bare-scheme URLs', () => {
       strictEqual(hasInlineCitation(sentence), true)
     })
   }
+})
+
+/**
+ * Prose attribution — the citation shape that has no brackets in it at all.
+ *
+ * Owner, 2026-08-19: *"a citation doesn't need to have parentheses directly at
+ * the very end. It could be at the very start, like if it says 'according to
+ * Pearson from UNICEF.' Be smart about this, because there is not just one way
+ * to cite stuff."*
+ */
+describe('hasInlineCitation — a source named in prose', () => {
+  it('finds "according to", wherever the sentence puts it', () => {
+    ok(hasInlineCitation('According to UNICEF, she made fifteen field visits.'))
+    ok(hasInlineCitation('According to Pearson from UNICEF, the camps were overcrowded.'))
+    // Lowercase mid-sentence, and a multi-word institution behind "the".
+    ok(
+      hasInlineCitation(
+        'The rate doubled, according to the World Health Organization, before aid arrived.'
+      )
+    )
+  })
+
+  it('finds a reporting verb attached to a named source', () => {
+    ok(hasInlineCitation('As Walker notes, she rarely spoke of it afterwards.'))
+    // A multi-word name has to fit in the gap before the verb, which is why it
+    // cannot be restricted to lowercase filler.
+    ok(hasInlineCitation('As the Red Cross reported, the camps were full by December.'))
+    ok(hasInlineCitation('As van Dijk observed, the effect is smaller than claimed.'))
+  })
+
+  it('finds the passive form and the possessive form', () => {
+    ok(hasInlineCitation('The figure was first published in the Lancet.'))
+    ok(hasInlineCitation('These numbers were compiled by Statistics Netherlands.'))
+    ok(hasInlineCitation("UNICEF's own records put the number higher."))
+    ok(hasInlineCitation("Walker's biography covers the war years in detail."))
+  })
+
+  it('reports it as its own kind', () => {
+    strictEqual(inlineCitationKind('According to UNICEF, she visited Ethiopia.'), 'attributed')
+  })
+
+  /**
+   * The deliberate gap. In an essay ABOUT a person, `Name verb that …`
+   * attributes to its own subject and cites nothing — it is far too common in
+   * biography and history to read as a reference, so every pattern requires a
+   * word that only appears when the writer is pointing AT a source.
+   */
+  it('does not read a subject speaking as a citation', () => {
+    strictEqual(hasInlineCitation('Hepburn argued that the war changed her outlook.'), false)
+    strictEqual(hasInlineCitation('She wrote that she was hungry for most of 1944.'), false)
+    strictEqual(hasInlineCitation('She found the work exhausting but necessary.'), false)
+  })
+
+  it('does not fire on prose that merely starts the same way', () => {
+    // "plan" is lowercase, so there is no named source to attribute to.
+    strictEqual(hasInlineCitation('According to plan, the family left before winter.'), false)
+    strictEqual(
+      hasInlineCitation('She devolved anemia and oedema because of her malnutrition.'),
+      false
+    )
+    strictEqual(hasInlineCitation('Audrey moved to Arnhem and stayed for the duration.'), false)
+  })
 })
 
 describe('hasInlineCitation — does not fire on ordinary prose', () => {
