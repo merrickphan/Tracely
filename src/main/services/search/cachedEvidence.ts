@@ -14,6 +14,25 @@ export interface EvidenceResult {
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
 function cacheKey(query: string, claimText: string): string {
+  // v7: web search (#166) added a whole PROVIDER to the fan-out — the one that
+  // covers biography, history, institutions and journalism, which is everything
+  // the four academic indexes structurally cannot hold. It shipped without
+  // moving this key, so every claim already searched kept returning the
+  // pre-web-search list.
+  //
+  // Measured on the owner's own databases, 2026-08-20: 894 stored sources
+  // across stable and preview, and NOT ONE of them from the `web` or
+  // `wikipedia` providers — while the router sends 52 of the last 60 claims to
+  // `general`, which is exactly the domain both of those run for. The wiring
+  // was right, the endpoint was live on staging, and the answer came out of
+  // this cache before either could run. Owner: *"all the citations you find are
+  // really bad."* They were the old ones.
+  //
+  // This is the second time, and the paragraph below already said so in
+  // capitals. The rule is not "bump when ranking changes" — it is bump when
+  // anything about WHAT COMES BACK changes, and adding a provider is the
+  // largest possible version of that.
+  //
   // v6: the returned evidence is now filtered by MIN_COUNTABLE_RELEVANCE and
   // capped at five (see aggregator.ts). A v5 hit serves the old unfiltered
   // list of sixteen for up to 24 hours — which is exactly what happened: the
@@ -32,7 +51,7 @@ function cacheKey(query: string, claimText: string): string {
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v6::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v7::${query}::${claimText}`).digest('hex')
 }
 
 /**
