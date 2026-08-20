@@ -154,6 +154,31 @@ export interface ProblemKindInput {
    * has no document to read the shape from.
    */
   citationKind?: string | null
+  /**
+   * Did the critique actually have the writer's cited work in front of it?
+   *
+   * The one fact that separates "your source does not support this" from "the
+   * papers a topical search returned do not support this", and until 2026-08-19
+   * nothing carried it. `search/referenceCheck.ts` goes and resolves the work a
+   * sentence names; `shared/citedEvidence.ts` puts it in slot 1 when it
+   * resolves and leaves it out when it does not. Either way the critique
+   * returns the same four verdicts, so `weak` over a resolved source and `weak`
+   * over an unresolved one were indistinguishable downstream — and only the
+   * first is a statement about the citation.
+   *
+   * Owner, 2026-08-19, reading a card over a correctly cited sentence: *"It
+   * doesn't matter what the other five sources found; as long as that specific
+   * source backs up their evidence, don't flag it."*
+   *
+   * `false` means the lookup ran and came back with nothing to read — a limit
+   * of ours. `null` means nobody recorded it: claims critiqued before the field
+   * existed, and any surface that does not track it. **Both suppress the
+   * finding**, because the assertion needs the source to have been read and
+   * "probably" is not read. The direction is the one this whole file argues
+   * for: a tool that accuses a correct citation to avoid missing an incorrect
+   * one teaches students to ignore it.
+   */
+  citedWorkRead?: boolean | null
   /** Null until the background search resolves. */
   evidence: {
     score: number
@@ -300,6 +325,7 @@ export function problemKindsFor({
   hasOwnCitation = hasInlineCitation,
   citationDefect = null,
   citationKind = null,
+  citedWorkRead = null,
   evidence,
   critiqueVerdict,
   outOfIndexScope = null
@@ -340,6 +366,26 @@ export function problemKindsFor({
   const citationDoubted =
     critiqueVerdict !== null && DOUBTING_VERDICTS.includes(critiqueVerdict)
 
+  // Did the critique actually open the work the writer named? See
+  // `citedWorkRead` above — null and false both mean no.
+  const readTheirSource = citedWorkRead === true
+
+  /**
+   * May an EVIDENCE-FIT verdict be reported over this sentence at all?
+   *
+   * `weak` and `unsupported` are Pass 3's answer to "does the evidence back the
+   * claim as phrased", and for a sentence with its own citation the evidence
+   * that matters is the one the writer pointed at. If that source was never
+   * resolved, the verdict was reached over a topical search the writer never
+   * claimed as support — so it says nothing about their sentence, and printing
+   * it is the complaint this change exists to answer.
+   *
+   * An UNCITED sentence is untouched: there the searched sources are not a
+   * fallback, they are the evidence, and a verdict over them is exactly what
+   * the card should say.
+   */
+  const evidenceFitApplies = !hasOwnCitation || readTheirSource
+
   // An `unsupported` verdict the critique reached with no on-topic evidence in
   // front of it. It says nothing about the sentence, so it decides nothing
   // here — the retrieval kinds below report the same state honestly, as
@@ -359,7 +405,12 @@ export function problemKindsFor({
   if (critiqueVerdict === 'fabricated') kinds.push('fabricated-citation')
   else if (critiqueVerdict === 'contradicted') kinds.push('contradicted-claim')
   else if (critiqueVerdict === 'overstated') kinds.push('overstated-claim')
-  else if (critiqueVerdict && !retrievalMiss && WEAK_VERDICTS.includes(critiqueVerdict)) {
+  else if (
+    critiqueVerdict &&
+    !retrievalMiss &&
+    evidenceFitApplies &&
+    WEAK_VERDICTS.includes(critiqueVerdict)
+  ) {
     kinds.push('unsupported-by-evidence')
   }
 
@@ -426,7 +477,23 @@ export function problemKindsFor({
   // the verdict or the score separates them; the citation's SHAPE does.
   // Owner: *"this one also says citation may not support it, even though it
   // does."*
-  if (hasOwnCitation && !nothingFound && citationDoubted && isCheckableCitationShape(citationKind)) {
+  //
+  // ── `!nothingFound` is gone, and `readTheirSource` is what replaced it ─────
+  // That guard was a PROXY for this question, written when nothing carried the
+  // answer: "did anything relevant come back" stood in for "do we have any
+  // basis to judge this citation". It was always the wrong instrument — the
+  // topical search is about other documents — and it was the same category
+  // error the score gate above was deleted for, one line down.
+  //
+  // With `citedWorkRead` there is a real answer, and it is strictly stronger:
+  // the critique either had the writer's resolved work in slot 1 or it did not.
+  // Net, this is a large tightening — a doubting verdict alone used to be
+  // enough for any cited claim with one relevant hit — and one narrow case
+  // becomes reachable that the proxy was wrongly suppressing: the critique read
+  // their source, found it does not carry the claim, and the topical search
+  // happened to return nothing. That is the single most valuable finding in the
+  // product, and it was being thrown away because of what OTHER papers said.
+  if (hasOwnCitation && readTheirSource && citationDoubted && isCheckableCitationShape(citationKind)) {
     kinds.push('cited-unverified')
   }
 

@@ -152,6 +152,24 @@ const MIGRATIONS: Migration[] = [
       addColumnIfMissing(database, 'claims', 'suggested_revision', 'TEXT')
       addColumnIfMissing(database, 'claims', 'citation_fix', 'TEXT')
     }
+  },
+  {
+    version: 5,
+    describe: 'claims.cited_work_read — did the critique open the work the sentence cites',
+    up: (database) => {
+      // The fact that separates "your source does not support this" from "other
+      // papers on this topic do not". referenceCheck.ts resolves the cited work
+      // and citedEvidence.ts gives it slot 1 when it resolves; the critique
+      // returns the same four verdicts either way, so downstream the two were
+      // indistinguishable and the second was being printed as the first.
+      //
+      // No backfill. Whether a lookup succeeded is not recoverable from a
+      // stored verdict, and re-deriving it means re-running the reference check
+      // for every historical claim. Old rows stay null, which problemKind.ts
+      // reads as "not read" and stays quiet about — the safe direction, and the
+      // one the owner asked for on 2026-08-19.
+      addColumnIfMissing(database, 'claims', 'cited_work_read', 'INTEGER')
+    }
   }
 ]
 

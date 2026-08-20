@@ -108,7 +108,10 @@ describe('problemKindFor', () => {
         ...base,
         hasInlineCitation: true,
         evidence: found(22, 5),
-        critiqueVerdict: 'weak'
+        critiqueVerdict: 'weak',
+        // The critique had the work they named in front of it. Without this the
+        // verdict is about the topical search — see citedWorkRead.
+        citedWorkRead: true
       }),
       'cited-unverified'
     )
@@ -173,8 +176,10 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
         hasInlineCitation: true,
         evidence: found(12, 4),
         // Needed now: retrieval alone says nothing about a citation nothing has
-        // read. The critique is what opens the work the writer named.
-        critiqueVerdict: 'unsupported'
+        // read. The critique is what opens the work the writer named — and must
+        // be recorded as having done so.
+        critiqueVerdict: 'unsupported',
+        citedWorkRead: true
       }),
       // Both, in severity order: the citation finding leads, and the verdict
       // that produced it is reported too. `unsupported` over evidence that IS
@@ -190,7 +195,8 @@ describe('problemKindsFor — a sentence can be in more than one kind of trouble
         ...base,
         hasInlineCitation: true,
         evidence: found(20, 5),
-        critiqueVerdict: 'weak'
+        critiqueVerdict: 'weak',
+        citedWorkRead: true
       }),
       ['unsupported-by-evidence', 'cited-unverified'].sort(
         (a, b) => problemSeverity(a as never) - problemSeverity(b as never)
@@ -508,8 +514,51 @@ describe('a cited claim is not flagged by what other papers say', () => {
         ...base,
         hasInlineCitation: true,
         evidence: found(22, 8),
-        critiqueVerdict: 'weak'
+        critiqueVerdict: 'weak',
+        citedWorkRead: true
       }).includes('cited-unverified')
+    )
+  })
+
+  /**
+   * The same verdict, with the one fact that licenses it removed.
+   *
+   * Owner, 2026-08-19: *"It doesn't matter what the other five sources found;
+   * as long as that specific source backs up their evidence, don't flag it."*
+   * A `weak` reached without the writer's source in hand IS a verdict about
+   * those other sources, whatever word came back — so neither the citation
+   * finding nor the evidence-fit one may be raised over their sentence.
+   */
+  it('says nothing when the critique never opened the cited work', () => {
+    for (const read of [false, null] as const) {
+      deepStrictEqual(
+        problemKindsFor({
+          ...base,
+          hasInlineCitation: true,
+          evidence: found(22, 8),
+          critiqueVerdict: 'weak',
+          citedWorkRead: read
+        }),
+        [],
+        `citedWorkRead: ${read}`
+      )
+    }
+  })
+
+  /**
+   * An UNCITED sentence is untouched by all of this. There the searched
+   * sources are not a fallback for a citation, they ARE the evidence, and a
+   * verdict over them is exactly what the card should report.
+   */
+  it('leaves an uncited claim on the evidence path regardless', () => {
+    ok(
+      problemKindsFor({
+        ...base,
+        hasInlineCitation: false,
+        evidence: found(22, 8),
+        critiqueVerdict: 'weak',
+        citedWorkRead: null
+      }).includes('unsupported-by-evidence')
     )
   })
 
@@ -563,7 +612,10 @@ describe('a doubted citation is a citation finding at any retrieval score', () =
     claimType: 'factual' as const,
     hasInlineCitation: true,
     evidence: { score: 47, count: 6, hasRelevantSource: true },
-    critiqueVerdict: 'unsupported' as const
+    critiqueVerdict: 'unsupported' as const,
+    // The critique resolved the Schmidt reference and read its abstract — that
+    // is how it could report the work is about classroom management.
+    citedWorkRead: true
   }
 
   it('names the citation, not the reasoning', () => {
@@ -588,11 +640,31 @@ describe('a doubted citation is a citation finding at any retrieval score', () =
     strictEqual(kinds.includes('partial-evidence'), false, kinds.join(','))
   })
 
-  // The gate that still matters. Nothing relevant came back, so there is no
-  // literature to make a statement about and the citation stays unjudged.
-  it('still says nothing when retrieval found nothing relevant', () => {
+  /**
+   * What the topical search returned stopped mattering here on 2026-08-19.
+   *
+   * `!nothingFound` used to gate this kind, as a PROXY for "do we have any
+   * basis to judge the citation" — written when nothing carried the real
+   * answer. `citedWorkRead` is that answer, and it is strictly stronger: the
+   * critique either had the writer's resolved work in slot 1 or it did not.
+   *
+   * So this case flips. The critique opened their source, found it does not
+   * carry the claim, and four indexes happened to return nothing else on the
+   * topic. That is the most valuable finding in the product, and it was being
+   * discarded because of what OTHER papers did not say.
+   */
+  it('speaks even when retrieval found nothing relevant, if the source was read', () => {
     const kinds = problemKindsFor({
       ...sentence,
+      evidence: { score: 0, count: 8, hasRelevantSource: false }
+    })
+    strictEqual(kinds.includes('cited-unverified'), true, kinds.join(','))
+  })
+
+  it('but not when the source was never opened', () => {
+    const kinds = problemKindsFor({
+      ...sentence,
+      citedWorkRead: false,
       evidence: { score: 0, count: 8, hasRelevantSource: false }
     })
     strictEqual(kinds.includes('cited-unverified'), false, kinds.join(','))
@@ -643,7 +715,13 @@ describe('problemKindsFor — the three wrong cards', () => {
   // ("Audrey" Wikipedia) is a correct MLA citation that Crossref will never
   // resolve, so an `unsupported` verdict over it is about our retrieval.
   it('will not doubt a citation the lookup could never have checked', () => {
-    const shaped = { ...base, hasInlineCitation: true, hasOwnCitation: true, critiqueVerdict: 'unsupported' as const }
+    const shaped = {
+      ...base,
+      hasInlineCitation: true,
+      hasOwnCitation: true,
+      critiqueVerdict: 'unsupported' as const,
+      citedWorkRead: true
+    }
     strictEqual(
       problemKindsFor({ ...shaped, citationKind: 'titled' }).includes('cited-unverified'),
       false

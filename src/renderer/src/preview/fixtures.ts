@@ -181,6 +181,7 @@ export const claims: Claim[] = [
     // card has no replacement text to offer and falls back to the critique's
     // own points. That is the branch this claim exercises.
     suggestedRevision: null,
+    citedWorkRead: null,
     citationFix: null,
     createdAt: T0
   },
@@ -200,6 +201,7 @@ export const claims: Claim[] = [
     critique: null,
     critiqueVerdict: null,
     suggestedRevision: null,
+    citedWorkRead: null,
     citationFix: null,
     createdAt: T0
   },
@@ -224,6 +226,7 @@ export const claims: Claim[] = [
       'Studies indicate that later school start times generally improve student outcomes (Wahlstrom 2014).',
     citationFix:
       'Wahlstrom, Kyla. "Later Start Time for Teens Improves Grades, Mood, and Safety." Phi Delta Kappan, 2014, p. 12.',
+    citedWorkRead: true,
     createdAt: T0
   },
   // Searched, and nothing cleared the relevance floor — every factor 0 by
@@ -248,6 +251,38 @@ export const claims: Claim[] = [
     critique: null,
     critiqueVerdict: null,
     suggestedRevision: null,
+    citedWorkRead: null,
+    citationFix: null,
+    createdAt: T0
+  },
+  /**
+   * A citation the critique OPENED, and doubted.
+   *
+   * The one state that licenses 'cited-unverified' since 2026-08-19: a
+   * parenthetical the reference lookup could resolve, a resolved work handed to
+   * the critique in slot 1, and a doubting verdict reached with it in hand.
+   * `hasRelevantSource` is deliberately FALSE here — the topical search found
+   * nothing on Norwegian cohort data — because that is the branch the old
+   * `!nothingFound` guard was wrongly suppressing, and it is the most valuable
+   * finding the product has.
+   *
+   * Flip `citedWorkRead` to false to see the whole mark disappear, which is
+   * what the owner asked for on 2026-08-19.
+   */
+  {
+    id: 'c6',
+    analysisId: 'a1',
+    text: 'Longitudinal data from Norway tracked 2,000 students over four years',
+    claimType: 'factual',
+    confidence: 0.9,
+    searchQuery: 'Norway longitudinal adolescent screen time cohort',
+    strengthScore: 0,
+    scoreBreakdown: { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 },
+    critique:
+      'The cited work is a **methods paper** on survey weighting in Norwegian panel studies. It does not report a four-year adolescent cohort, and gives no figure resembling 2,000 students.',
+    critiqueVerdict: 'weak',
+    suggestedRevision: null,
+    citedWorkRead: true,
     citationFix: null,
     createdAt: T0
   },
@@ -263,6 +298,7 @@ export const claims: Claim[] = [
     critique: null,
     critiqueVerdict: null,
     suggestedRevision: null,
+    citedWorkRead: null,
     citationFix: null,
     createdAt: T0
   }
@@ -345,7 +381,11 @@ export const documents: DocumentListItem[] = [
       // alone — see shared/citationShape.ts — so this needs no search, no
       // critique and no relay to light up.
       '<div>Studies show that <b>70%</b> of adolescents who use social media for more than three hours a day report symptoms of anxiety (Unknown Author, 2025).</div><div><br></div>' +
-      '<div>Longitudinal data from Norway tracked 2,000 students over four years. The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
+      // Carries a WELL-FORMED citation whose work the critique actually read
+      // and doubted (claim c6, citedWorkRead: true). The only state in which
+      // 'cited-unverified' may be raised — and the harness had no fixture in
+      // it, so the card's copy was unreachable in the preview.
+      '<div>Longitudinal data from Norway tracked 2,000 students over four years (Halvorsen, 2021). The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
       '<div>Schools in three districts have already moved to ban phones during instructional hours.</div><div><br></div>' +
       '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +
       '<div>In conclusion, the link is real but weaker than the debate assumes.</div>',

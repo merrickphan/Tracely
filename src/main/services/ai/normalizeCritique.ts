@@ -1,4 +1,7 @@
 import type { CritiqueResult } from './critique'
+
+/** What the relay returns — everything the client does not add itself. */
+type RelayCritique = Omit<CritiqueResult, 'citedWorkRead'>
 // A value import, with the extension so Node's type-stripping resolver can
 // follow it — the same thing `shared/citationScope.ts` does. `isNarrowing`
 // lived here as a private function until Tracer needed the identical rule for
@@ -92,10 +95,13 @@ export const UNCHECKABLE_REFERENCE_CRITIQUE =
  *   unchanged by this parameter arriving. Every real caller should pass it.
  */
 export function normalizeCritique(
-  raw: CritiqueResult,
+  // `citedWorkRead` is excluded on both sides: it is not a field the relay
+  // sends and not one this function can decide — the caller knows whether the
+  // reference resolved, and attaches it after. See CritiqueResult.
+  raw: RelayCritique,
   claimText?: string,
   facts?: CritiqueFacts
-): CritiqueResult {
+): RelayCritique {
   const trimmed = typeof raw.suggestedRevision === 'string' && raw.suggestedRevision.trim()
     ? raw.suggestedRevision.trim()
     : null

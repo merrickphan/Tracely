@@ -383,6 +383,7 @@ function synthesizeClaim(detected: {
     citationFix: null,
     critique: null,
     critiqueVerdict: null,
+    citedWorkRead: null,
     createdAt: new Date().toISOString()
   }
 }
@@ -1396,6 +1397,9 @@ function updateOverlayAndWidget(
               }
             : null,
           critiqueVerdict: critiqueByClaimId.get(c.id)?.verdict ?? null,
+          // The critique is kept in memory here rather than in SQLite, so the
+          // flag comes straight off the result that carried the verdict.
+          citedWorkRead: critiqueByClaimId.get(c.id)?.citedWorkRead ?? null,
           outOfIndexScope: retrievalScopeFor(c.text)
         })
       ] as const

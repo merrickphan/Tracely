@@ -118,6 +118,22 @@ export interface Claim {
    */
   suggestedRevision: string | null
   citationFix: string | null
+  /**
+   * Did the critique that produced `critiqueVerdict` have the work this
+   * sentence CITES in front of it?
+   *
+   * `search/referenceCheck.ts` resolves the reference and `shared/citedEvidence.ts`
+   * gives it slot 1 when it resolves; when it does not, the critique reasons
+   * over a topical search the writer never claimed as support. The verdict
+   * reads identically either way, so without this field "your citation does not
+   * support this" and "other papers on this topic do not support this" were the
+   * same sentence — and only the first is true of the draft.
+   *
+   * Null on every claim critiqued before 2026-08-19, and on any surface that
+   * does not track it. `problemKind.ts` treats null as "not read" and stays
+   * quiet; see `citedWorkRead` there.
+   */
+  citedWorkRead: boolean | null
   createdAt: string
 }
 

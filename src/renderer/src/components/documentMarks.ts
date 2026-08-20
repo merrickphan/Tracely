@@ -160,6 +160,10 @@ export function measureMarks(
       hasOwnCitation: ownCitation,
       citationDefect: defect?.message ?? null,
       citationKind,
+      // Whether the critique that produced this verdict actually opened the
+      // work the sentence cites. Null on a claim critiqued before the column
+      // existed, which problemKind.ts reads as "not read".
+      citedWorkRead: span.claim.citedWorkRead,
       evidence: {
         score: evidence.score,
         count: evidence.count,
