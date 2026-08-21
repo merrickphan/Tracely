@@ -466,6 +466,25 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **An EMPTY evidence answer is cached for MINUTES, not a day**
+  (`EMPTY_TTL_MS` in `cachedEvidence.ts`). `safeSearch` turns every provider
+  failure into `[]`, so "nothing exists" and "every provider failed" arrive at
+  the cache as the same value — and both were frozen onto the claim for 24
+  hours. That is the wrong bet twice over: an empty result is far more likely
+  transient, and it is the one answer a writer retries.
+  - **It is what made three consecutive fixes invisible.** The v7 key bump and
+    the retrieval-generation retry both correctly triggered a fresh search, and
+    both were handed a row cached at 00:37 saying `evidence: 0`, live until the
+    next day — on exactly the document being used to judge them. Owner,
+    2026-08-21: *"wait it still does it I dont know why???"*
+  - **Fixing the TTL does not reach rows already written**, which is why this
+    also bumped the key to v8. A TTL change is about the future; the version is
+    the only thing that reaches the past.
+  - **When a retrieval fix appears to do nothing, look for a cached empty before
+    looking at the code.** Compute the key (`sha256` of
+    `search:aggregate::v8::${query}::${claimText}`) and read the row — three
+    layers of staleness have now hidden three separate fixes here, and each was
+    one query away from being obvious.
 - **A stored score has a RETRIEVAL GENERATION, because the request cache is only
   half the staleness** (`shared/retrievalGeneration.ts`, migration v6).
   `cachedEvidence.ts` versions the 24h cache; nothing versioned the answer
