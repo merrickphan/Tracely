@@ -317,6 +317,7 @@ export function ProseMarkLayer({
   wrapScrollTop: number
 }): JSX.Element {
   return (
+    <>
     <div className="docmark-layer docprose-layer">
       {marks.map((mark) =>
         mark.rects.map((rect, i) => (
@@ -331,7 +332,17 @@ export function ProseMarkLayer({
           />
         ))
       )}
-      {active ? (
+    </div>
+    {/*
+      A SIBLING layer, not a child of the one above — see
+      `.docprose-popover-layer` in index.css. `.docprose-layer` is z-index 1 so
+      that claim marks read above prose marks, and a positioned element with a
+      z-index is a STACKING CONTEXT: the card's own z-index could only ever mean
+      "within this layer", so the claim underlines at z-index 2 painted straight
+      over an open prose card. Owner, 2026-08-20.
+    */}
+    {active ? (
+      <div className="docmark-layer docprose-popover-layer">
         <ProsePopover
           mark={active.mark}
           rect={active.rect}
@@ -344,8 +355,9 @@ export function ProseMarkLayer({
           onMouseEnter={onPopoverEnter}
           onMouseLeave={onPopoverLeave}
         />
-      ) : null}
-    </div>
+      </div>
+    ) : null}
+    </>
   )
 }
 

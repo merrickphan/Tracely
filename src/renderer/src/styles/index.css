@@ -5448,6 +5448,24 @@ textarea:disabled {
   z-index: 1;
 }
 
+/* The prose POPOVER cannot live in the layer above, and this is why.
+ *
+ * `.docprose-layer` is z-index 1 on purpose — claim marks should read above
+ * prose marks — and a positioned element with a z-index creates a STACKING
+ * CONTEXT. That traps its descendants: `.docmark-popover`'s z-index 3 could
+ * only ever mean "3 among this layer's children", so the claim underlines at
+ * z-index 2 painted straight over an open prose card. Owner, 2026-08-20: *"when
+ * I hover over the style underlines … the normal yellow orange underlines
+ * appear over the overlays."*
+ *
+ * So the card gets its own sibling layer here. The MARKS stay at 1 — that
+ * ordering was a deliberate decision and is not what was wrong; raising the
+ * whole layer would have fixed the card by breaking the thing the z-index was
+ * there for. */
+.docprose-popover-layer {
+  z-index: 3;
+}
+
 /* pointer-events: none, like every other mark. This rule carried `auto` and a
    `cursor: help` so that a native `title` tooltip would fire on hover — which
    made every grammar-flagged word a place the writer could not click to put

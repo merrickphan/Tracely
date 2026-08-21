@@ -475,7 +475,7 @@ export const documents: DocumentListItem[] = [
       // and doubted (claim c6, citedWorkRead: true). The only state in which
       // 'cited-unverified' may be raised — and the harness had no fixture in
       // it, so the card's copy was unreachable in the preview.
-      '<div>Longitudinal data from Norway tracked 2,000 students over four years (Halvorsen, 2021). The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
+      '<div>Longitudinal data from Norway tracked 2,000 students over four years (Halvorsen, 2021). The effect persisted after controlling for baseline mental health, which basically suggests the relationship is not merely correlational.</div><div><br></div>' +
       // A SECOND copy of the same defective citation. Owner, 2026-08-20:
       // *"this keeps appearing."* replaceCitationText required the text to be
       // unique in the whole document, so two sentences sharing one bad
