@@ -466,6 +466,21 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **The prose popover lives in its OWN layer, because `.docprose-layer` is a
+  stacking context.** That layer is `z-index: 1` deliberately — claim marks
+  should read above prose marks — and a positioned element with a z-index traps
+  its descendants, so `.docmark-popover`'s `z-index: 3` could only ever mean "3
+  among this layer's children". The claim marks at `z-index: 2` painted straight
+  over an open prose card. Owner, 2026-08-20: *"when I hover over the style
+  underlines … the normal yellow orange underlines appear over the overlays."*
+  - `.docprose-popover-layer` is a SIBLING of the claim layer. The marks stay at
+    1: raising the whole layer would have fixed the card by breaking the thing
+    the z-index was there for.
+  - **`elementFromPoint` cannot test this on its own.** Every mark is
+    `pointer-events: none`, so hit-testing skips them whatever the z-index, and
+    the first probe reported a pass in BOTH states. Turn `pointer-events` on for
+    the duration and it discriminates: `docprose-card-body` with the fix,
+    `docmark-band` with the layer forced back to 1.
 - **"Replace citation" is scoped to the claim's SENTENCE, not to the document.**
   `replaceCitationText` required the defective text to be unique in the whole
   draft and refused otherwise — so pasting one malformed reference after four
