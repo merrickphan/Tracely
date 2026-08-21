@@ -718,17 +718,31 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
     claim qualifies on its citation alone and may carry no assertion at all, so
     six vague cited sentences at the top of a draft could take every slot. A
     stable partition, so document order still decides within each group.
-  - **NOT DONE, and it is a spend decision rather than a correctness one:
-    gating on `claimType` instead of on the text.** A number is still required,
-    so `Lamine Yamal plays for Real Madrid` — wrong, uncited, no digit — is
-    still never checked. The relay already returns `factual | statistic |
-    causal | opinion | prediction` on every claim, and `opinion`/`prediction`
-    are exactly the "nothing for Pass 1 to be confident about" cases this
-    module describes in prose. Switching to it would let every factual sentence
-    in — and would take almost every analysis from ~0 auto-critiques to the
-    full `MAX_AUTO_CRITIQUE_CLAIMS`, as well as reversing four tests in
-    `autoCritique.test.ts` that were written deliberately. Raised with the
-    owner 2026-08-20 rather than taken unilaterally.
+  - **ELIGIBILITY IS THE CLAIM'S TYPE NOW, not a pattern over its text**
+    (`isCheckableClaim`). A digit-only gate catches the arithmetic half of
+    being wrong and nothing else: `Lamine Yamal plays for Real Madrid` is
+    false, uncited, and carries no number, and it was answered with a list of
+    topical sources. The relay already returns `factual | statistic | causal |
+    opinion | prediction` on every claim and nothing here read it —
+    `opinion`/`prediction` are exactly the "nothing for Pass 1 to be confident
+    about" cases this module had been describing in prose and inferring from
+    punctuation.
+  - **This SPENDS more on purpose.** A draft with no numbers in it used to
+    critique nothing; now almost any analysis uses its full
+    `MAX_AUTO_CRITIQUE_CLAIMS`. Owner, 2026-08-20, shown the trade first: *"do
+    the claimType gate too."* The ceiling is unchanged — six per analysis, once
+    per analysis id, and `ai/critique.ts` caches on claim TEXT so re-opening an
+    unedited document is free. **`hasCheckableAssertion` survives as the
+    RANKING signal**, deciding which claims get the six slots.
+  - It reversed four tests in `autoCritique.test.ts`, and the fix was the
+    FIXTURE rather than the assertion: they hardcoded `claimType: 'factual'` on
+    interpretive sentences the relay would type `opinion`. The ones testing the
+    citation path now pass `opinion` deliberately, so they measure that path in
+    isolation instead of passing for the wrong reason.
+  - The Settings toggle is **"Fact-check my claims automatically"**. It read
+    "Check my citations automatically" over a setting that had also been
+    fact-checking uncited claims since the WWII fix — a label describing half
+    of what the switch does, on the switch that spends money.
 
 - **A claim the WRITER cited is never reported as unsupported on retrieval's say-so.** `claimsWithoutEvidence` filtered on resolved / no-relevant-source / in-scope and never asked whether the sentence carried a reference, so a line ending `(Lähteenmäki, 2006)` was named **"Unsupported claim · 0/100 evidence — no supporting source yet"**. That sentence is not unhelpful, it is false: there is a supporting source, in the sentence. What was established is that a topical search of four scholarly indexes returned nothing, and nothing in the retrieval path ever opens the work the writer named.
   - It is the SAME rule `problemKindsFor` has applied to the underline since 2026-08-16, where `nothingFound` gates `cited-unverified`. The two surfaces were reading one claim and disagreeing — the mark stayed quiet, the report accused. `citationLookup` is now shared with `computeEvidenceCoverage`, so a claim counted under `withOwnCitation` cannot also be listed under "no supporting source" in the same panel.

@@ -1,7 +1,7 @@
 import { computeClaimSpans } from './claimSpans.ts'
 import { isCitedInScope } from './citationScope.ts'
 import { hasInlineCitation } from './inlineCitation.ts'
-import type { Claim } from './types.ts'
+import type { Claim, ClaimType } from './types.ts'
 
 /**
  * Which claims may be critiqued without anybody pressing anything.
@@ -52,14 +52,10 @@ export const MAX_AUTO_CRITIQUE_CLAIMS = 6
  * returns plenty of real WWII scholarship, the claim scores well on retrieval,
  * and nothing anywhere asks whether 1943 is the right year.
  *
- * So a number, a date or a quantity makes an uncited claim eligible too. These
- * are the assertions Pass 1 can be confident about, and the ones a reader would
- * expect a checker to catch.
- *
- * Deliberately NOT "any uncited claim". An unfalsifiable or interpretive
- * sentence gives Pass 1 nothing to be confident about, so the call would buy a
- * verdict about the evidence — which the strength score already reports for
- * free.
+ * So a number, a date or a quantity makes an uncited claim eligible. What
+ * decides eligibility now is `isCheckableClaim` below — this test survives as
+ * the RANKING signal, deciding which claims get the six slots when more are
+ * eligible than the cap allows.
  *
  * ── It is ANY digit, and it was five branches that only ever matched a year ──
  * The test used to enumerate: a four-digit year, a percentage, a number
@@ -85,24 +81,43 @@ export function hasCheckableAssertion(text: string): boolean {
 }
 
 /**
- * ── The half of "flag false claims" this does NOT fix ──────────────────────
+ * Claim types a fact-check has nothing to bite on.
  *
- * A number is still required, so "Lamine Yamal plays for Real Madrid" — wrong,
- * uncited, and exactly the kind of thing a reader expects a checker to catch —
- * is still skipped, because it has no digit in it.
+ * Requiring a DIGIT caught "Lamine Yamal is 22 years old" and still missed
+ * "Lamine Yamal plays for Real Madrid" — wrong, uncited, and exactly what a
+ * reader expects a checker to catch. A gate that can only see numbers can only
+ * ever catch the arithmetic half of being wrong.
  *
- * The gate that would catch it is already on every claim and unused here:
- * `claimType`. The relay returns `factual | statistic | causal | opinion |
- * prediction`, and `opinion`/`prediction` are precisely the "nothing to be
- * confident about" cases this module keeps describing in prose. Gating on the
- * type instead of on the text would let every factual sentence in.
+ * So the test is the claim's TYPE, which the relay already returns on every
+ * claim and which nothing here was reading. `opinion` is the interpretive
+ * sentence this module keeps describing in prose, and `prediction` is not yet
+ * false — those are the two where Pass 1 has nothing to be confident about, and
+ * naming them beats inferring them from punctuation. Everything else —
+ * `factual`, `statistic`, `causal` — is checkable, digits or not.
  *
- * Not done unilaterally, because it is a SPEND decision rather than a
- * correctness one. Today an uncited draft with no numbers in it critiques
- * nothing; under that rule almost every analysis would spend its full
- * MAX_AUTO_CRITIQUE_CLAIMS. It also reverses four tests in this file that were
- * written on purpose. Owner's call — see the note in CLAUDE.md.
+ * ── This SPENDS more, deliberately, and the cap is what bounds it ─────────
+ * Before this, a draft with no numbers in it critiqued nothing at all; now
+ * almost any analysis will use its full MAX_AUTO_CRITIQUE_CLAIMS. That is the
+ * point rather than a side effect — owner, 2026-08-20, on being shown the
+ * trade: *"do the claimType gate too."* The ceiling is unchanged: six per
+ * analysis, once per analysis id, and `ai/critique.ts` caches on the claim's
+ * TEXT, so re-opening an unedited document is still free.
+ *
+ * A digit still matters — it decides WHICH claims get the six slots when there
+ * are more eligible than the cap. See the partition in autoCritiqueTargets.
  */
+const UNCHECKABLE_TYPES: ReadonlySet<ClaimType> = new Set<ClaimType>(['opinion', 'prediction'])
+
+/**
+ * Whether Pass 1 has anything it could be confident about.
+ *
+ * An `opinion` or `prediction` carrying a hard number is still checkable — the
+ * number is the part that can be wrong ("the best side in Europe, unbeaten in
+ * 30 matches"), which is also the behaviour a year used to buy.
+ */
+export function isCheckableClaim(claim: Pick<Claim, 'text' | 'claimType'>): boolean {
+  return !UNCHECKABLE_TYPES.has(claim.claimType) || hasCheckableAssertion(claim.text)
+}
 
 /**
  * Claim ids to critique, in document order, already capped.
@@ -136,7 +151,7 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       // 1943" is what exposed it: uncited, so no critique ran, so the app
       // answered a false sentence with a list of sources about the war.
       const cited = citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
-      if (!cited && !hasCheckableAssertion(claim.text)) return false
+      if (!cited && !isCheckableClaim(claim)) return false
       // The critique reasons over an evidence list. Handing it an empty one
       // produces a verdict about the search rather than about the sentence —
       // see isRetrievalMiss in problemKind.ts.
