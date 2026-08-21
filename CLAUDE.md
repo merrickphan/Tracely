@@ -466,6 +466,31 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **The ML worker's IMPORTS have to be unpacked too, and that was the root cause
+  of everything above.** Unpacking `out/main/mlWorker.js` moved the worker OUT of
+  `app.asar` so worker_threads could read it — and Node then resolves that
+  worker's bare imports by walking up from `app.asar.unpacked`, never into the
+  archive. `@huggingface/transformers` is pure JS, matched none of the existing
+  globs (`onnxruntime-node` is unpacked only because `**/*.node` and `**/*.dll`
+  caught its binaries), and stayed inside the asar where the worker cannot see
+  it.
+  - **Measured by running the shipped worker directly** against
+    v0.3.94-preview.184: `Cannot find package '@huggingface/transformers'`.
+    `ml/index.ts` then latches `unavailable`, `embedCached` returns null,
+    `classifyClaim` returns **'scholarly' for every claim**, and the two
+    providers gated on a routed domain — web search and Wikipedia — never run at
+    all. Retrieval also drops to lexical word overlap. Silently, as designed.
+  - **This is the same failure as v0.3.76 and v0.3.91, a third directory over**,
+    and it is why the ML packaging rules are called load-bearing.
+  - **`verify-packaged-ml.mjs` could not catch it, for a reason worth keeping.**
+    Its expectations read `app.asar` — the wrong place to look for something
+    resolved by name — and its embedding test resolves from the REPO's
+    `node_modules`, because run from the repo Node walks up past
+    `release/win-unpacked` and finds them. Green on the build machine, broken on
+    every user's. The new assertion is a filesystem check against
+    `app.asar.unpacked/node_modules`, which is true or false the same way
+    wherever it runs, and it was confirmed to FAIL against the installed broken
+    build before being trusted.
 - **`shared/sourceCredibility.ts` asks whether a MARKER would accept a source,
   which retrieval never did.** Relevance answers "is this page about the claim";
   citability is a different question and nothing asked it. Owner, 2026-08-21, on
