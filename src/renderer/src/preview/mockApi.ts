@@ -1,4 +1,5 @@
 import { hasInlineCitation } from '@shared/inlineCitation'
+import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { DEFAULT_WIDGET_VIEW_MODE } from '@shared/ipc-contract'
 import type {
   ScreenWatchClaimSummary,
@@ -621,17 +622,28 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
           // accusation — is unreachable in the harness. It is also the likelier
           // case here, since Screen Watch reads whatever is on screen.
           cited: fx.citedMissing,
-          candidates: fx.sources.map((s, i) => ({
-            sourceRef: s.id,
-            title: s.title,
-            authors: s.authors.map((a) => [a.given, a.family].filter(Boolean).join(' ')),
-            year: s.year,
-            venue: s.venue,
-            provider: s.provider,
-            url: s.url,
-            matchPercent: [92, 74, 51][i],
-            faviconDataUrl: null
-          }))
+          // Ordered and labelled the same way main does it, so the harness
+          // shows the real ranking rather than the fixture's own order.
+          candidates: byCredibility(
+            fx.sources.map((s, i) => ({
+              sourceRef: s.id,
+              title: s.title,
+              authors: s.authors.map((a) => [a.given, a.family].filter(Boolean).join(' ')),
+              year: s.year,
+              venue: s.venue,
+              provider: s.provider,
+              url: s.url,
+              matchPercent: [92, 74, 51, 47][i] ?? 40,
+              faviconDataUrl: null,
+              credibility: credibilityOf({
+                url: s.url,
+                venue: s.venue,
+                venueType: s.venueType,
+                doi: s.doi
+              })
+            })),
+            (c) => c.credibility.tier
+          )
         }),
       // Formatting is local and synchronous in main, so this returns the same
       // pair insertCitation would — the preview block is only worth reviewing

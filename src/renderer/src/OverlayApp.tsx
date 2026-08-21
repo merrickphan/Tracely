@@ -2625,6 +2625,26 @@ function CandidateRow({
             {candidate.matchPercent}% match
           </span>
         </div>
+        {/* What a marker would make of the publisher — see
+            shared/sourceCredibility.ts. Grey, never red, for `unvetted`: it
+            means "Tracely does not recognise this publisher", which is a fact
+            about our list rather than about the site. */}
+        <span
+          style={{
+            alignSelf: 'flex-start',
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            borderRadius: 999,
+            padding: '2px 7px',
+            marginTop: 1,
+            whiteSpace: 'nowrap',
+            background: candidate.credibility.citable ? '#eef7f0' : CHIP_BG,
+            color: candidate.credibility.citable ? POSITIVE : MUTED
+          }}
+        >
+          {candidate.credibility.label}
+        </span>
       </div>
       <Radio selected={selected} />
     </button>

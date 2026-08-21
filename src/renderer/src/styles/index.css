@@ -1786,6 +1786,32 @@ textarea:disabled {
   border-color: #1c1c1c;
 }
 
+/* What a marker would make of a source — see shared/sourceCredibility.ts.
+   Green for the three tiers a marker accepts without argument, grey for the
+   one it does not.
+
+   Grey rather than red, deliberately: `unvetted` means "Tracely does not
+   recognise this publisher", which is a statement about our list rather than
+   about the site. A warning colour would turn a limit of ours into an
+   accusation, which is the same mistake the cited-source block avoids. */
+.docmark-cred {
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-top: 3px;
+  background: #eef7f0;
+  color: #16a34a;
+  white-space: nowrap;
+}
+
+.docmark-cred-unvetted {
+  background: #f2f2f3;
+  color: #737373;
+}
+
 .docmark-block {
   width: 100%;
   box-sizing: border-box;

@@ -152,6 +152,49 @@ export const sources: Source[] = [
     citationCount: null,
     oaStatus: null,
     createdAt: T0
+  },
+  /**
+   * The reported case, as two sources rather than a description of it.
+   *
+   * Owner, 2026-08-21, on what a web search returned for one sentence: TIME
+   * beside Historydraft, offered as equals. A marker accepts the first without
+   * argument and takes marks off for the second, and nothing on the card said
+   * which was which. These two are here so the harness can show the difference
+   * — the academic fixtures above only ever exercise the scholarly tier.
+   */
+  {
+    id: 's5',
+    doi: null,
+    title: 'How a Young Audrey Hepburn Helped the Dutch Resistance During World War II',
+    authors: [{ given: 'Robert', family: 'Matzen' }],
+    year: 2019,
+    venue: 'TIME',
+    venueType: 'other',
+    url: 'https://time.com/5622911/audrey-hepburn-dutch-resistance/',
+    pdfUrl: null,
+    abstract: null,
+    provider: 'web',
+    providerId: 'https://time.com/5622911/audrey-hepburn-dutch-resistance/',
+    citationCount: null,
+    oaStatus: null,
+    createdAt: T0
+  },
+  {
+    id: 's6',
+    doi: null,
+    title: 'Audrey Hepburn timeline',
+    authors: [],
+    year: null,
+    venue: 'Historydraft',
+    venueType: 'other',
+    url: 'https://historydraft.com/story/audrey-hepburn/timeline/1',
+    pdfUrl: null,
+    abstract: null,
+    provider: 'web',
+    providerId: 'https://historydraft.com/story/audrey-hepburn/timeline/1',
+    citationCount: null,
+    oaStatus: null,
+    createdAt: T0
   }
 ]
 
@@ -164,13 +207,15 @@ const STANCES: Array<Pick<EvidenceItem, 'stance' | 'stanceConfidence'>> = [
   { stance: 'supports', stanceConfidence: 0.82 },
   { stance: 'contradicts', stanceConfidence: 0.88 },
   { stance: null, stanceConfidence: null },
+  { stance: null, stanceConfidence: null },
+  { stance: 'supports', stanceConfidence: 0.7 },
   { stance: null, stanceConfidence: null }
 ]
 
 // Indexed by position rather than spread over `sources`, so adding a source
 // without giving it a score is a visible `undefined` in the picker instead of a
 // silent NaN%. One per source, and the table is the length check.
-const RELEVANCE = [0.91, 0.78, 0.54, 0.47]
+const RELEVANCE = [0.91, 0.78, 0.54, 0.47, 0.62, 0.71]
 
 export const evidence: EvidenceItem[] = sources.map((source, i) => ({
   source,
