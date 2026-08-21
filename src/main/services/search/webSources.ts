@@ -40,8 +40,28 @@ const CHECK_TIMEOUT_MS = 8000
 // intraday, and the cost here is a web-search call rather than a chat call.
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
-type Coverage = 'direct' | 'partial' | 'background'
-type SourceKind = 'institutional' | 'reference' | 'news' | 'journal' | 'other'
+/**
+ * How much of the claim a source actually carries — the relay's own honest
+ * answer, not a similarity score.
+ *
+ * `context` replaced `background` on 2026-08-21 with the rewritten prompt. The
+ * three levels are the writer's words: it says this specific thing, it
+ * establishes the surrounding facts, or it is orientation.
+ */
+type Strength = 'direct' | 'partial' | 'context'
+/**
+ * `archive` and `book` arrived with the rewritten prompt. Both were previously
+ * flattened into 'other', which is how a national archive and an enthusiast
+ * blog ended up looking alike to `citationLocator`.
+ */
+type SourceKind =
+  | 'institutional'
+  | 'archive'
+  | 'reference'
+  | 'news'
+  | 'journal'
+  | 'book'
+  | 'other'
 
 interface FoundSource {
   title: string
@@ -51,11 +71,28 @@ interface FoundSource {
   kind: SourceKind
   authors: string[]
   supports: string
-  coverage: Coverage
+  strength: Strength
+  /** The publisher this page is repeating, when it plainly is one. */
+  echoes: string | null
 }
 
 interface FindSourcesResponse {
+  /**
+   * The separate factual assertions the relay found in the sentence, listed
+   * before it searched.
+   *
+   * Carried back because a writer looking at three "partial" sources needs to
+   * see WHICH part is still unsourced, and that cannot be derived from the
+   * source list.
+   */
+  assertions: string[]
   sources: FoundSource[]
+  /** What is wrong with the sentence as written, or null if nothing is. */
+  claimProblem: string | null
+  /** Wording the sources actually support. Null when the claim is fine. */
+  revisedClaim: string | null
+  /** True only when the underlying facts are genuinely contested. */
+  disputed: boolean
   note: string
 }
 
@@ -78,9 +115,13 @@ export interface WebSourceResult {
  */
 const VENUE_TYPE: Record<SourceKind, VenueType> = {
   institutional: 'other',
+  // An archive or museum record is a work of record, which is what suppresses
+  // the DOI `citationLocator` would otherwise hang off it.
+  archive: 'reference',
   reference: 'reference',
   news: 'other',
   journal: 'journal',
+  book: 'book',
   other: 'other'
 }
 
@@ -132,10 +173,15 @@ async function checkUrl(url: string): Promise<Liveness> {
 }
 
 function cacheKey(claim: string, context: string): string {
+  // v2: the prompt and the response schema were both rewritten (2026-08-21) —
+  // claim decomposition, honest Direct/Partial/Context strength, an `echoes`
+  // field, and a judgement on the claim itself. A v1 hit serves the old
+  // five-equal-options answer for a day.
+  //
   // v1. Bump on any change to what the relay returns or to how it is filtered,
   // for the reason spelled out in cachedEvidence.ts — a stale hit serves the
   // pre-change list for a day, on exactly the drafts being used to judge it.
-  return createHash('sha256').update(`search:web::v1::${claim}::${context}`).digest('hex')
+  return createHash('sha256').update(`search:web::v2::${claim}::${context}`).digest('hex')
 }
 
 /**

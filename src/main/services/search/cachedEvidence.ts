@@ -38,6 +38,10 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 const EMPTY_TTL_MS = 1000 * 60 * 10
 
 function cacheKey(query: string, claimText: string): string {
+  // v9: the web-search prompt and schema were rewritten (2026-08-21), so what
+  // that provider contributes to this list is different — different sources,
+  // different ordering, and enthusiast sites no longer returned at all.
+  //
   // v8: empty results were being cached for 24h (see EMPTY_TTL_MS), so every
   // v7 key that happened to be written while a claim came back empty is a row
   // that will keep answering "no sources" until tomorrow. The TTL change fixes
@@ -80,7 +84,7 @@ function cacheKey(query: string, claimText: string): string {
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v8::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v9::${query}::${claimText}`).digest('hex')
 }
 
 /**
