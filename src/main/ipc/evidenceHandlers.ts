@@ -21,7 +21,10 @@ export function registerEvidenceHandlers(): void {
     const claim = getClaim(claimId)
     if (!claim) throw new Error('Claim not found')
 
-    const result = await findEvidenceCached(claim.searchQuery, claim.text)
+    // The analysis id is what bounds the paid web search per document — see
+    // search/webBudget.ts. The sweep runs in document order, so a bounded
+    // budget is spent on the top of the draft rather than an arbitrary subset.
+    const result = await findEvidenceCached(claim.searchQuery, claim.text, claim.analysisId)
 
     // One disk write for the whole set instead of one per statement — this
     // loop plus the score update was ~21 full-database serializations, each
