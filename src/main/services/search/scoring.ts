@@ -10,6 +10,11 @@ const VENUE_TIER_WEIGHT: Record<VenueType, number> = {
   dataset: 0.65,
   conference: 0.8,
   book: 0.6,
+  // Level with a book. A chapter in an edited academic collection is refereed
+  // by its editors rather than by peer review, which is the same standing the
+  // book it sits in has — the split from 'book' is about how it is CITED, not
+  // about how good it is.
+  'book-chapter': 0.6,
   preprint: 0.5,
   // Deliberately barely above 'other'. An encyclopedia article is a genuine
   // help for orienting on a claim and is not something a student should cite,

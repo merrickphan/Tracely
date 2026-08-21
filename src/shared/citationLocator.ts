@@ -37,7 +37,14 @@ const ARTICLE: ReadonlySet<VenueType> = new Set<VenueType>([
   'conference',
   // A statistical series is published at a stable identifier and cited like an
   // article rather than like a book.
-  'dataset'
+  'dataset',
+  // A CHAPTER, which is here rather than in UNLOCATED and is the whole reason
+  // that type exists. `10.7551/mitpress/9178.003.0006` is not something a
+  // reader can look up in a catalogue — no library lists chapter six of an
+  // edited collection — so the identifier is the only address it has, and APA,
+  // MLA and Chicago all print it. Owner, 2026-08-20, on what came back from
+  // "Replace citation": a formatted Oreskes chapter "with no link".
+  'book-chapter'
 ])
 
 /**
@@ -45,6 +52,10 @@ const ARTICLE: ReadonlySet<VenueType> = new Set<VenueType>([
  *
  * A book is found by author, title and publisher; that is what a reference list
  * entry for one is FOR, and no style asks for a DOI on one.
+ *
+ * A CHAPTER is not a book and is deliberately not here — see ARTICLE above.
+ * Crossref types both as `book-*`, and `type.includes('book')` collapsed them,
+ * so a work whose only address is its DOI was printed without one.
  *
  * `reference` is deliberately NOT here. A tertiary work is usually read online
  * — MLA and Chicago both want the publisher's page for one — so it takes its

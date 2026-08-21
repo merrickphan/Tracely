@@ -25,6 +25,30 @@ describe('citationLocator', () => {
     strictEqual(citationLocator(source({ venueType: 'book', doi: null })), null)
   })
 
+  /**
+   * The report, 2026-08-20: "Replace citation" produced
+   * `Oreskes, N. (2014). The Scientific Consensus on Climate Change… Climate
+   * Change.` — "with no link". Crossref typed it `book-chapter`,
+   * `type.includes('book')` sent it to 'book', and a work whose ONLY address is
+   * its DOI was printed without one. No catalogue lists chapter six of an
+   * edited collection.
+   */
+  it('gives a CHAPTER its DOI, because it has no other address', () => {
+    strictEqual(
+      citationLocator({
+        doi: '10.7551/mitpress/9178.003.0006',
+        url: 'https://doi.org/10.7551/mitpress/9178.003.0006',
+        venueType: 'book-chapter'
+      }),
+      'https://doi.org/10.7551/mitpress/9178.003.0006'
+    )
+    // And falls back to the page when there is no identifier, like an article.
+    strictEqual(
+      citationLocator(source({ venueType: 'book-chapter', doi: null })),
+      'https://pubs.asha.org/doi/10.1044/leader.ftr3.19022014.58'
+    )
+  })
+
   // An Oxford DNB entry is read online, and MLA and Chicago both want the
   // publisher's page for one. What it must never take is the DOI a database
   // minted for a single entry, which is an artifact of that database.
@@ -62,6 +86,7 @@ describe('citationLocator', () => {
       'conference',
       'preprint',
       'book',
+      'book-chapter',
       'reference',
       'other'
     ]

@@ -607,6 +607,35 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
     alone — a poor marker and an honest one.
   - `realAuthors` here too: providers send placeholders as DATA, and an empty
     list is only one of the shapes "no author" arrives in.
+- **A CHAPTER is not a BOOK, and conflating them printed a reference with no
+  link.** `citationLocator.ts` gives a book no locator — a book is found by
+  author, title and publisher, and that rule is the answer to the owner's "can
+  you make it so the citations … is not all Doi?". Crossref types a chapter
+  `book-chapter`, `type.includes('book')` collapsed it, and a work whose ONLY
+  address is its DOI was formatted without one. Owner, 2026-08-20, on what
+  "Replace citation" returned: `Oreskes, N. (2014). The Scientific Consensus on
+  Climate Change: How Do We Know We're Not Wrong?. Climate Change.` — *"With no
+  link"*.
+  - **`venueType: 'book-chapter'` is in `ARTICLE`, not `UNLOCATED`.** Nothing
+    catalogues chapter six of an edited collection. The whole-book case is
+    untouched, so the original complaint still holds.
+  - **The bare venue was the second half of the same bug.** `Climate Change.`
+    printed in the slot a journal name occupies, naming a journal that does not
+    exist. APA and Chicago mark the container with `In`; MLA 9 does not.
+    `shared/citationTitle.ts` owns both that and `endTitle`, which stops
+    `…Not Wrong?.` — every formatter stripped a trailing PERIOD and appended its
+    own, guarding one of the three marks a title can end with. In MLA and
+    Chicago the doubled mark lands *inside* the quotes, where it reads as the
+    writer's typo.
+  - **THE MIGRATION IS THE HALF THAT MAKES IT VISIBLE.** `upsertSource` returns
+    the existing row untouched when the DOI matches, so a re-search never
+    re-classifies anything and the fix would have reached no stored row — the
+    same shape as v6's inherited claim scores, where three correct fixes in a
+    row were invisible. Migration v7 reclassifies on the CONTAINER TITLE, which
+    is what the field means rather than a heuristic: a chapter always sits in
+    something, a whole book sits in nothing. Measured on both of the owner's
+    databases before it was written — 142 of 148 `book` rows carry a container,
+    and the 6 that do not are real books.
 - **A citation NEVER carries a placeholder author.** `formatAuthors*` returned the literal string `'Unknown Author'` for an empty author list, which is not a citation in any style — it is a placeholder that reads to a marker exactly like an invented source, and the same string in a draft's reference list is what made `referenceCheck` search Crossref for an author called "Author" and the critique call three true sentences fabricated. They now return `null` and every formatter moves the TITLE into the author slot, which is what APA, MLA and Chicago all prescribe for an unattributed work. Title-first rather than refusing to format: the citation that comes out is correct and usable.
 - **A hover card shows the FIRST SENTENCE of a critique, never the whole thing** (`shared/critiqueSummary.ts`). `popoverCopyFor` used `claim.critique` verbatim, and `CRITIQUE_SYSTEM_PROMPT` budgets that at "under 120 words" — a specification for a report, rendered into a popover. It also arrives as markdown, which was being shown raw. The full critique is still in the report, unchanged; the prompt asks for the finding first and the reasoning after, so the first sentence is the verdict.
 - **`shared/weaknessSeverity.ts` decides the Strong / Needs Work badge, and it is NOT `issues.length === 0`.** Owner, 2026-08-19: *"It feels like the system is flagging things just for the sake of flagging them."* With twenty-odd kinds live, every finding of every kind flipped the badge, so one "obviously" printed the same NEEDS WORK as a circular argument and a well-written draft could not keep a single Strong. The badge asks "would a marker take marks off", the findings list still shows everything, and **an unlisted kind defaults to substantive** — a real problem shown quietly is worse than a small one shown loudly.

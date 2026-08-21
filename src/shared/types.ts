@@ -70,6 +70,18 @@ export type VenueType =
   | 'conference'
   | 'preprint'
   | 'book'
+  /**
+   * A chapter in an edited book, which is NOT a book.
+   *
+   * A whole book is found by author, title and publisher, which is why it takes
+   * no locator (see shared/citationLocator.ts). A chapter has none of that: no
+   * library catalogue lists it, its own DOI is the only address it has, and
+   * every style prints that DOI. Collapsing the two is what put
+   * `Oreskes, N. (2014). The Scientific Consensus on Climate Change… Climate
+   * Change.` in a reference list with no link and a book title masquerading as
+   * a journal.
+   */
+  | 'book-chapter'
   /** Tertiary reference work. Useful orientation, not citable evidence. */
   | 'reference'
   | 'other'
