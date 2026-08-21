@@ -88,40 +88,64 @@ if (!existsSync(unpackedWorker)) {
   fail(`ML worker is not unpacked at ${unpackedWorker} — add out/main/mlWorker.js to asarUnpack`)
 }
 
-// The worker's own imports must be UNPACKED, not merely present.
+// EVERY package the worker can reach must be unpacked, and the list is COMPUTED.
 //
-// The expectations above read app.asar, and app.asar is the wrong place to look
-// for anything the worker imports BY NAME. mlWorker.js is unpacked so
-// worker_threads can read it, and Node then resolves its bare imports by
-// walking up from app.asar.unpacked — never into the archive. A package that is
-// dutifully present in app.asar is invisible to it.
+// app.asar is the wrong place to look for anything the worker imports BY NAME.
+// mlWorker.js is unpacked so worker_threads can read it, and Node then resolves
+// its bare imports by walking up from app.asar.unpacked — never into the
+// archive. A package dutifully present in app.asar is invisible to it.
 //
-// The embedding test further down could not catch this either, and the reason
-// is worth writing down: run from the repo, Node walks up past
-// release/win-unpacked and finds the repo's OWN node_modules, so it resolves
-// happily on the build machine and fails on every user's. That is why this is a
-// filesystem assertion rather than another run of the worker — it is true or
-// false in the same way wherever the check is run.
+// Hand-listing the packages does not hold. Fixing @huggingface/transformers by
+// name produced `Cannot find package 'onnxruntime-common'` on the very next
+// run: once the worker lives outside the archive, its whole TRANSITIVE CLOSURE
+// has to live there too, and a list maintained by hand is a list that is one
+// dependency bump behind. So the closure is derived from the same
+// node_modules electron-builder packaged from, and every member is required to
+// be unpacked — a new transitive dependency fails the build instead of shipping
+// embeddings that silently do not load.
 //
-// Measured on v0.3.94-preview.184: `Cannot find package
-// '@huggingface/transformers'`, embeddings off, every claim routed 'scholarly',
-// web search and Wikipedia unreachable.
-const UNPACKED_DEPS = [
-  ['@huggingface/transformers', 'the library the ML worker imports by name'],
-  ['@huggingface/jinja', 'transitive dependency of transformers'],
-  ['sharp', 'transformers.node.mjs imports it at the top level'],
-  ['onnxruntime-node', 'the inference runtime']
-]
-for (const [pkg, why] of UNPACKED_DEPS) {
-  const at = join(RESOURCES, 'app.asar.unpacked', 'node_modules', ...pkg.split('/'))
-  if (!existsSync(at)) {
-    fail(
-      `${pkg} is not unpacked — ${why}. The ML worker runs from app.asar.unpacked ` +
-        `and cannot resolve into the archive. Add it to asarUnpack.`
-    )
+// A filesystem assertion rather than another run of the worker, deliberately.
+// The embedding test further down resolves from the REPO's node_modules,
+// because run from the repo Node walks up past release/win-unpacked and finds
+// them — green on the build machine and broken on every user's. This is true or
+// false the same way wherever it runs.
+const CLOSURE_ROOTS = ['@huggingface/transformers', 'sharp', 'onnxruntime-node']
+// 128MB of browser WASM the node entry never imports, and an expectation above
+// keeps it out of the archive entirely.
+const CLOSURE_SKIP = new Set(['onnxruntime-web'])
+
+function closureFrom(nodeModules) {
+  const found = new Set()
+  const visit = (name) => {
+    if (found.has(name) || CLOSURE_SKIP.has(name)) return
+    const pkg = join(nodeModules, ...name.split('/'), 'package.json')
+    if (!existsSync(pkg)) return
+    found.add(name)
+    let deps = {}
+    try {
+      deps = JSON.parse(readFileSync(pkg, 'utf8')).dependencies ?? {}
+    } catch {
+      // A package.json we cannot read is one we cannot walk. It is still
+      // required to be unpacked below, which is the assertion that matters.
+    }
+    for (const dep of Object.keys(deps)) visit(dep)
   }
+  for (const root of CLOSURE_ROOTS) visit(root)
+  return [...found].sort()
 }
-console.log(`PASS  ML worker's imports are unpacked — ${UNPACKED_DEPS.length} packages`)
+
+const closure = closureFrom(join(REPO, 'node_modules'))
+if (closure.length === 0) fail('could not compute the ML dependency closure — is node_modules installed?')
+const unpackedModules = join(RESOURCES, 'app.asar.unpacked', 'node_modules')
+const missing = closure.filter((name) => !existsSync(join(unpackedModules, ...name.split('/'))))
+if (missing.length > 0) {
+  fail(
+    `${missing.length} of ${closure.length} ML packages are not unpacked: ${missing.join(', ')}. ` +
+      'The worker runs from app.asar.unpacked and cannot resolve into the archive — ' +
+      'add them to asarUnpack in electron-builder.yml.'
+  )
+}
+console.log(`PASS  ML dependency closure is unpacked — ${closure.length} packages`)
 
 let bad = 0
 for (const [fragment, wanted, why] of EXPECTATIONS) {

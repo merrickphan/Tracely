@@ -131,8 +131,37 @@ asarUnpack:
   # at the top level; onnxruntime-web is deliberately NOT (128MB of browser WASM
   # the node entry never loads, and an expectation in verify-packaged-ml.mjs
   # keeps it out).
-  - node_modules/@huggingface/**
+  - node_modules/@huggingface/jinja/**
+  - node_modules/@huggingface/tokenizers/**
+  - node_modules/@huggingface/transformers/**
+  - node_modules/@img/colour/**
+  - node_modules/adm-zip/**
+  - node_modules/boolean/**
+  - node_modules/define-data-property/**
+  - node_modules/define-properties/**
+  - node_modules/detect-libc/**
+  - node_modules/detect-node/**
+  - node_modules/es-define-property/**
+  - node_modules/es-errors/**
+  - node_modules/es6-error/**
+  - node_modules/escape-string-regexp/**
+  - node_modules/global-agent/**
+  - node_modules/globalthis/**
+  - node_modules/gopd/**
+  - node_modules/has-property-descriptors/**
+  - node_modules/json-stringify-safe/**
+  - node_modules/matcher/**
+  - node_modules/object-keys/**
+  - node_modules/onnxruntime-common/**
+  - node_modules/onnxruntime-node/**
+  - node_modules/roarr/**
+  - node_modules/semver/**
+  - node_modules/semver-compare/**
+  - node_modules/serialize-error/**
   - node_modules/sharp/**
+  - node_modules/sprintf-js/**
+  - node_modules/type-fest/**
+  - node_modules/@img/**
 npmRebuild: false
 # Verifies the packed app can actually run embeddings, before the installer is
 # built or published. See scripts/afterPack.js for why a green build is not
