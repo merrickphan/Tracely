@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { MAX_AUTO_CRITIQUE_CLAIMS, autoCritiqueTargets } from './autoCritique.ts'
+import type { ClaimType } from './types.ts'
 
 /**
  * This function decides when Tracely spends money with nobody's finger on the
@@ -13,13 +14,22 @@ function claim(
   id: string,
   text: string,
   strengthScore: number | null,
-  critiqueVerdict: 'weak' | null = null
+  critiqueVerdict: 'weak' | null = null,
+  /**
+   * The relay returns this on every claim, and eligibility now reads it.
+   *
+   * It defaults to `factual` because most detected claims are, but several
+   * tests below pass `opinion` on purpose: that is the type the relay gives an
+   * interpretive sentence, and it is the only way to exercise "not eligible on
+   * its own merits" now that any factual sentence is.
+   */
+  claimType: ClaimType = 'factual'
 ) {
   return {
     id,
     analysisId: 'a1',
     text,
-    claimType: 'factual' as const,
+    claimType,
     confidence: 0.8,
     searchQuery: id,
     strengthScore,
@@ -36,14 +46,28 @@ const cited = (id: string, score: number | null = 40, verdict: 'weak' | null = n
   claim(id, `Point ${id} holds across the record (Walker, 2010).`, score, verdict)
 const uncited = (id: string, score: number | null = 40) =>
   claim(id, `Point ${id} holds across the record`, score)
+/** Uncited AND interpretive — the only shape with no way in of its own. */
+const uncitedOpinion = (id: string, text: string, score: number | null = 40) =>
+  claim(id, text, score, null, 'opinion')
 
 describe('autoCritiqueTargets', () => {
   it('takes a cited claim whose evidence has resolved', () => {
     deepStrictEqual(autoCritiqueTargets([cited('a')]), ['a'])
   })
 
-  it('leaves uncited claims alone — their verdict is already in the score', () => {
-    deepStrictEqual(autoCritiqueTargets([uncited('a')]), [])
+  /**
+   * This used to read "leaves uncited claims alone — their verdict is already
+   * in the score", and that policy is gone: an uncited FACTUAL claim is exactly
+   * the sentence Pass 1 exists for, and nothing else in Tracely can say it is
+   * false. What still has no way in is an uncited claim that asserts nothing
+   * checkable.
+   */
+  it('takes an uncited factual claim, and leaves an uncited opinion alone', () => {
+    deepStrictEqual(autoCritiqueTargets([uncited('a')]), ['a'])
+    deepStrictEqual(
+      autoCritiqueTargets([uncitedOpinion('b', 'Point b is the more interesting one')]),
+      []
+    )
   })
 
   it('waits for the evidence search', () => {
@@ -73,8 +97,14 @@ describe('autoCritiqueTargets', () => {
    * the assertion is invisible to the claim-only test. Same bug that made the
    * coverage ratio and the weakness list disagree about one sentence.
    */
+  /**
+   * Both of these use an `opinion`, which is the only claim with no way in of
+   * its own — so what they measure is the CITATION path in isolation, which is
+   * what they were always for. As a `factual` claim each would now qualify on
+   * its own merits and prove nothing about where the citation was found.
+   */
   it('sees a citation that follows the claim in the document', () => {
-    const bare = claim('bare', 'She delivered newspapers for the resistance', 40)
+    const bare = uncitedOpinion('bare', 'She delivered newspapers for the resistance')
     const document =
       'She delivered newspapers for the resistance, at real risk to herself (Lähteenmäki, 2006).'
     deepStrictEqual(autoCritiqueTargets([bare]), [])
@@ -82,9 +112,9 @@ describe('autoCritiqueTargets', () => {
   })
 
   it('does not invent a citation from the document for an uncited sentence', () => {
-    const bare = claim('bare', 'Rationing continued into the following year', 40)
+    const bare = uncitedOpinion('bare', 'Rationing was the harder memory')
     const document =
-      'She delivered newspapers for the resistance (Lähteenmäki, 2006). Rationing continued into the following year.'
+      'She delivered newspapers for the resistance (Lähteenmäki, 2006). Rationing was the harder memory.'
     deepStrictEqual(autoCritiqueTargets([bare], document), [])
   })
 })
@@ -119,17 +149,75 @@ describe('autoCritiqueTargets — uncited claims that can be fact-checked', () =
     }
   })
 
+  /**
+   * Owner, 2026-08-20: *"I put 'Lamine Yamal is 22 years old' and then it didnt
+   * flag it."*
+   *
+   * The gate was five branches — a four-digit year, a percentage, a magnitude
+   * word, a run of four-plus digits, a calendar date — and measured against
+   * ordinary sentences it admitted essentially only years. Every line below was
+   * skipped before, and each is exactly what Pass 1 is good at.
+   */
+  it('takes a number that is not a year', () => {
+    for (const text of [
+      'Lamine Yamal is 22 years old.',
+      'The Eiffel Tower is 90 metres tall.',
+      // The comma beat \d{4,}, so this one failed every branch at once.
+      'Mount Everest is 5,000 feet high.',
+      'Barack Obama was the 43rd president.',
+      'The building has 3 floors.'
+    ]) {
+      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), ['c'], text)
+    }
+  })
+
   // Pass 1 can only be confident about something specific. An interpretive
   // sentence gives it nothing, so the call would buy a verdict about the
-  // evidence — which the free strength score already reports.
+  // evidence — which the free strength score already reports. These are the
+  // sentences the relay types `opinion`, which is what the gate reads.
   it('leaves an uncited claim with nothing specific in it alone', () => {
     for (const text of [
       'Her humanitarian work mattered more than her films.',
       'The policy was broadly unpopular.',
       'Celebrity advocacy changed after that.'
     ]) {
-      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), [], text)
+      deepStrictEqual(autoCritiqueTargets([uncitedOpinion('c', text)]), [], text)
     }
+  })
+
+  /**
+   * Owner, 2026-08-20: *"do the claimType gate too."*
+   *
+   * A digit-only gate can catch the arithmetic half of being wrong and nothing
+   * else. Every sentence here is false, uncited, and carries no number at all —
+   * before this each one was answered with a list of topical sources.
+   */
+  it('takes a false claim with no number in it', () => {
+    for (const text of [
+      'Lamine Yamal plays for Real Madrid.',
+      'The capital of Australia is Sydney.',
+      'Penicillin was discovered by Marie Curie.'
+    ]) {
+      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), ['c'], text)
+    }
+  })
+
+  /**
+   * The number still matters where it always did: a `prediction` or an
+   * `opinion` is skipped on its type, unless it asserts something concrete —
+   * the quantity is the part of it that can be wrong.
+   */
+  it('takes an interpretive sentence that still asserts a hard number', () => {
+    deepStrictEqual(
+      autoCritiqueTargets([
+        claim('c', 'They are the best side in Europe, unbeaten in 30 matches.', 40, null, 'opinion')
+      ]),
+      ['c']
+    )
+    deepStrictEqual(
+      autoCritiqueTargets([claim('c', 'They will win the league.', 40, null, 'prediction')]),
+      []
+    )
   })
 
   it('still waits for the evidence search', () => {
@@ -141,6 +229,36 @@ describe('autoCritiqueTargets — uncited claims that can be fact-checked', () =
       autoCritiqueTargets([claim('w', 'World War II ended in 1943.', 40, 'weak')]),
       []
     )
+  })
+
+  /**
+   * A cited claim qualifies on its citation alone and may carry no assertion at
+   * all, so six vague cited sentences at the top of a draft would take every
+   * slot from the one sentence Pass 1 has something to say about. Document
+   * order still decides within each group.
+   */
+  it('spends the last slots on the claims with a hard number in them', () => {
+    // Cited, with no digit anywhere in the text. Prose attribution is the shape
+    // that manages both — "(Walker, 2010)" carries a year, and an id like
+    // "Point 0" would have carried a number of its own.
+    const words = ['one', 'two', 'three', 'four', 'five', 'six']
+    const vagueCited = words.map((w) =>
+      claim(`vague-${w}`, `According to Pearson from UNICEF, point ${w} holds.`, 40)
+    )
+    const targets = autoCritiqueTargets([
+      ...vagueCited,
+      uncitedFact('yamal', 'Lamine Yamal is 22 years old.')
+    ])
+    strictEqual(targets.length, MAX_AUTO_CRITIQUE_CLAIMS)
+    strictEqual(targets[0], 'yamal')
+    // And it is a stable partition, not a re-rank: the vague ones keep their order.
+    deepStrictEqual(targets.slice(1), [
+      'vague-one',
+      'vague-two',
+      'vague-three',
+      'vague-four',
+      'vague-five'
+    ])
   })
 
   it('shares one cap with the cited claims', () => {

@@ -1,7 +1,7 @@
 import { computeClaimSpans } from './claimSpans.ts'
 import { isCitedInScope } from './citationScope.ts'
 import { hasInlineCitation } from './inlineCitation.ts'
-import type { Claim } from './types.ts'
+import type { Claim, ClaimType } from './types.ts'
 
 /**
  * Which claims may be critiqued without anybody pressing anything.
@@ -52,33 +52,71 @@ export const MAX_AUTO_CRITIQUE_CLAIMS = 6
  * returns plenty of real WWII scholarship, the claim scores well on retrieval,
  * and nothing anywhere asks whether 1943 is the right year.
  *
- * So a year, a date, a percentage or a quantity makes an uncited claim eligible
- * too. These are the assertions Pass 1 can be confident about, and the ones a
- * reader would expect a checker to catch.
+ * So a number, a date or a quantity makes an uncited claim eligible. What
+ * decides eligibility now is `isCheckableClaim` below — this test survives as
+ * the RANKING signal, deciding which claims get the six slots when more are
+ * eligible than the cap allows.
  *
- * Deliberately NOT "any uncited claim". An unfalsifiable or interpretive
- * sentence gives Pass 1 nothing to be confident about, so the call would buy a
- * verdict about the evidence — which the strength score already reports for
- * free.
+ * ── It is ANY digit, and it was five branches that only ever matched a year ──
+ * The test used to enumerate: a four-digit year, a percentage, a number
+ * followed by a magnitude word, a run of four-plus digits, a calendar date.
+ * Measured 2026-08-20, that list admitted almost nothing:
+ *
+ *   skipped   Lamine Yamal is 22 years old
+ *   skipped   The Eiffel Tower is 90 metres tall
+ *   skipped   Mount Everest is 5,000 feet high      <- the comma beat \d{4,}
+ *   skipped   Barack Obama was the 43rd president
+ *   CHECKED   World War II ended in 1943
+ *
+ * Owner, 2026-08-20, on the first of those: *"it didnt flag it."* An age IS a
+ * quantity, which this docstring already promised. The branches were not a
+ * policy, they were an incomplete enumeration of one — so the test is now the
+ * thing they were enumerating, and there is no list left to be missing from.
  */
-const CHECKABLE_ASSERTION = new RegExp(
-  [
-    // A year. The Hepburn and WWII cases both turn on one.
-    '\\b(?:1[0-9]\\d{2}|20\\d{2})\\b',
-    // A percentage, written either way.
-    '\\d+(?:\\.\\d+)?\\s?(?:%|per ?cent)',
-    // A quantity with a magnitude word, or any number of four digits or more.
-    '\\b\\d[\\d,]*\\s?(?:million|billion|trillion|thousand)\\b',
-    '\\b\\d{4,}\\b',
-    // A calendar date.
-    '\\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\\s+\\d{1,2}\\b'
-  ].join('|'),
-  'i'
-)
+const CHECKABLE_ASSERTION = /\d/
 
 /** Whether Pass 1 has something specific enough to be confident about. */
 export function hasCheckableAssertion(text: string): boolean {
   return CHECKABLE_ASSERTION.test(text)
+}
+
+/**
+ * Claim types a fact-check has nothing to bite on.
+ *
+ * Requiring a DIGIT caught "Lamine Yamal is 22 years old" and still missed
+ * "Lamine Yamal plays for Real Madrid" — wrong, uncited, and exactly what a
+ * reader expects a checker to catch. A gate that can only see numbers can only
+ * ever catch the arithmetic half of being wrong.
+ *
+ * So the test is the claim's TYPE, which the relay already returns on every
+ * claim and which nothing here was reading. `opinion` is the interpretive
+ * sentence this module keeps describing in prose, and `prediction` is not yet
+ * false — those are the two where Pass 1 has nothing to be confident about, and
+ * naming them beats inferring them from punctuation. Everything else —
+ * `factual`, `statistic`, `causal` — is checkable, digits or not.
+ *
+ * ── This SPENDS more, deliberately, and the cap is what bounds it ─────────
+ * Before this, a draft with no numbers in it critiqued nothing at all; now
+ * almost any analysis will use its full MAX_AUTO_CRITIQUE_CLAIMS. That is the
+ * point rather than a side effect — owner, 2026-08-20, on being shown the
+ * trade: *"do the claimType gate too."* The ceiling is unchanged: six per
+ * analysis, once per analysis id, and `ai/critique.ts` caches on the claim's
+ * TEXT, so re-opening an unedited document is still free.
+ *
+ * A digit still matters — it decides WHICH claims get the six slots when there
+ * are more eligible than the cap. See the partition in autoCritiqueTargets.
+ */
+const UNCHECKABLE_TYPES: ReadonlySet<ClaimType> = new Set<ClaimType>(['opinion', 'prediction'])
+
+/**
+ * Whether Pass 1 has anything it could be confident about.
+ *
+ * An `opinion` or `prediction` carrying a hard number is still checkable — the
+ * number is the part that can be wrong ("the best side in Europe, unbeaten in
+ * 30 matches"), which is also the behaviour a year used to buy.
+ */
+export function isCheckableClaim(claim: Pick<Claim, 'text' | 'claimType'>): boolean {
+  return !UNCHECKABLE_TYPES.has(claim.claimType) || hasCheckableAssertion(claim.text)
 }
 
 /**
@@ -101,7 +139,7 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       )
     : null
 
-  return claims
+  const eligible = claims
     .filter((claim) => {
       // Two ways in, and they answer two different questions.
       //
@@ -113,7 +151,7 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       // 1943" is what exposed it: uncited, so no critique ran, so the app
       // answered a false sentence with a list of sources about the war.
       const cited = citedById?.get(claim.id) ?? hasInlineCitation(claim.text)
-      if (!cited && !hasCheckableAssertion(claim.text)) return false
+      if (!cited && !isCheckableClaim(claim)) return false
       // The critique reasons over an evidence list. Handing it an empty one
       // produces a verdict about the search rather than about the sentence —
       // see isRetrievalMiss in problemKind.ts.
@@ -123,6 +161,19 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       if (claim.critiqueVerdict !== null) return false
       return true
     })
-    .slice(0, MAX_AUTO_CRITIQUE_CLAIMS)
-    .map((claim) => claim.id)
+
+  // Document order, EXCEPT that a claim carrying a hard number goes ahead of
+  // one that does not when the cap has to cut.
+  //
+  // Document order alone was the rule, on the stated reasoning that a long
+  // draft should check the top of itself rather than an arbitrary subset. That
+  // still holds and is why this is a stable partition rather than a re-rank —
+  // but the two ways in do not produce equally checkable claims. A CITED claim
+  // qualifies on its citation alone and may carry no assertion at all, so six
+  // vague cited sentences at the top of a draft could take every slot from
+  // "Lamine Yamal is 22 years old" further down. The slots are money, and Pass
+  // 1 has the most to say about the ones with a hard number in them.
+  const concrete = eligible.filter((claim) => hasCheckableAssertion(claim.text))
+  const rest = eligible.filter((claim) => !hasCheckableAssertion(claim.text))
+  return [...concrete, ...rest].slice(0, MAX_AUTO_CRITIQUE_CLAIMS).map((claim) => claim.id)
 }

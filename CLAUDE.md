@@ -705,6 +705,44 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Paid: `autoCritiqueCited`** (Settings → Preferences, ON by default). The critique is the only thing in this app that opens the cited work, so it is the only thing that can tell a formatting slip from a fabrication. Eligibility lives in `shared/autoCritique.ts` — a tested leaf, not a `useEffect` — because it decides when money is spent without anyone pressing anything: cited only, evidence resolved, no verdict yet, capped at `MAX_AUTO_CRITIQUE_CLAIMS`, in document order.
   - **ON by default here, still NEVER in Screen Watch, and the difference is consent.** Screen Watch reads whatever is on screen forever without being asked, so an unprompted paid call there is a bill nobody can watch being run up — that rule stands. This fires inside a document the user opened, on claims they themselves attached a source to. `autoCritiquedRef` guards re-firing, and a failed settings read leaves it null so the sweep never runs.
   - `MAX_AUTO_CRITIQUE_CLAIMS` is defined in `shared/` and **re-exported from `costGuard.ts`**, so that file stays the one place to look for an AI limit while the renderer — which drives the sweep — can still import it.
+  - **`hasCheckableAssertion` is ANY DIGIT, and it used to be a list that only
+    ever matched a year.** The five branches — four-digit year, percentage,
+    magnitude word, `\d{4,}`, calendar date — read as a policy and behaved as an
+    incomplete enumeration. Measured 2026-08-20: `Lamine Yamal is 22 years old`,
+    `The Eiffel Tower is 90 metres tall`, `Mount Everest is 5,000 feet high`
+    (the comma beat `\d{4,}`) and `Barack Obama was the 43rd president` were
+    ALL skipped; only the year sentence passed. Owner, on the first: *"it didnt
+    flag it."* The docstring already promised "a quantity", so the test is now
+    the thing the branches were enumerating.
+  - **The cap now prefers claims with a hard number when it cuts.** A CITED
+    claim qualifies on its citation alone and may carry no assertion at all, so
+    six vague cited sentences at the top of a draft could take every slot. A
+    stable partition, so document order still decides within each group.
+  - **ELIGIBILITY IS THE CLAIM'S TYPE NOW, not a pattern over its text**
+    (`isCheckableClaim`). A digit-only gate catches the arithmetic half of
+    being wrong and nothing else: `Lamine Yamal plays for Real Madrid` is
+    false, uncited, and carries no number, and it was answered with a list of
+    topical sources. The relay already returns `factual | statistic | causal |
+    opinion | prediction` on every claim and nothing here read it —
+    `opinion`/`prediction` are exactly the "nothing for Pass 1 to be confident
+    about" cases this module had been describing in prose and inferring from
+    punctuation.
+  - **This SPENDS more on purpose.** A draft with no numbers in it used to
+    critique nothing; now almost any analysis uses its full
+    `MAX_AUTO_CRITIQUE_CLAIMS`. Owner, 2026-08-20, shown the trade first: *"do
+    the claimType gate too."* The ceiling is unchanged — six per analysis, once
+    per analysis id, and `ai/critique.ts` caches on claim TEXT so re-opening an
+    unedited document is free. **`hasCheckableAssertion` survives as the
+    RANKING signal**, deciding which claims get the six slots.
+  - It reversed four tests in `autoCritique.test.ts`, and the fix was the
+    FIXTURE rather than the assertion: they hardcoded `claimType: 'factual'` on
+    interpretive sentences the relay would type `opinion`. The ones testing the
+    citation path now pass `opinion` deliberately, so they measure that path in
+    isolation instead of passing for the wrong reason.
+  - The Settings toggle is **"Fact-check my claims automatically"**. It read
+    "Check my citations automatically" over a setting that had also been
+    fact-checking uncited claims since the WWII fix — a label describing half
+    of what the switch does, on the switch that spends money.
 
 - **A claim the WRITER cited is never reported as unsupported on retrieval's say-so.** `claimsWithoutEvidence` filtered on resolved / no-relevant-source / in-scope and never asked whether the sentence carried a reference, so a line ending `(Lähteenmäki, 2006)` was named **"Unsupported claim · 0/100 evidence — no supporting source yet"**. That sentence is not unhelpful, it is false: there is a supporting source, in the sentence. What was established is that a topical search of four scholarly indexes returned nothing, and nothing in the retrieval path ever opens the work the writer named.
   - It is the SAME rule `problemKindsFor` has applied to the underline since 2026-08-16, where `nothingFound` gates `cited-unverified`. The two surfaces were reading one claim and disagreeing — the mark stayed quiet, the report accused. `citationLookup` is now shared with `computeEvidenceCoverage`, so a claim counted under `withOwnCitation` cannot also be listed under "no supporting source" in the same panel.
@@ -805,6 +843,42 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   — the paid call — stays manual on both surfaces. The sweep shows its progress
   (`.docedit-checking`), because a 30-second wait that shows nothing is
   indistinguishable from marks that never come.
+  - **The sweep refreshes AS IT GOES, and runs three at a time.** It was a
+    strictly serial loop with ONE `onRefreshClaims` after it, so `claims` never
+    changed until the last search returned and every underline in the document
+    appeared at once, minutes in. Owner, 2026-08-20: *"the underlines are too
+    delayed."* A refresh is a SQLite read and a setState — no relay — so it now
+    runs per completed claim, behind an in-flight guard because three workers
+    finish independently. `runStructure` is the expensive one and stays at the
+    end, once.
+  - **The four scholarly indexes were never the wait.** Measured 2026-08-20,
+    all four answer one claim in ~700ms because they fan out in parallel. What
+    costs seconds is `findWebSources`, which `aggregator.ts` **awaits inside**
+    the fan-out for any `general`-routed claim — a relay call running several
+    site-restricted web searches. Eight of those one after another is where the
+    delay came from, so the fix is concurrency across CLAIMS, not tuning
+    providers.
+  - Verified in the preview harness with 300ms injected per search: three
+    starts at t=0, a refresh after each completion, six claims done in two
+    waves instead of six. First mark at ~310ms where it was ~1800ms.
+- **Screen Watch's 4-second typing debounce does not apply to text that was
+  already there.** `STABLE_MS` exists because the 1200ms poll is the pause
+  between WORDS, and a drafting writer clears that bar dozens of times a
+  paragraph — each one a full relay call on the whole document. None of that
+  describes the first snapshot after a tracking reset: a document switched to
+  with a page in it was written before Screen Watch looked at it.
+  `screenWatch/firstSight.ts` is the rule, as a leaf so it is testable at all.
+  - **The length test is the discriminator, and only on the FIRST snapshot.**
+    Typing into an empty control arrives a character at a time, so its first
+    snapshot is short. Testing length on every change would fire mid-paragraph,
+    analyse half a sentence, and then take `MIN_ANALYSIS_INTERVAL_MS` (20s) —
+    locking out the analysis the writer was waiting for. Skipping the debounce
+    must never cost a detection.
+  - **`pendingSince` is BACKDATED, not zeroed.** Every other guard — the delta
+    test, the 20s floor, the retry cooldown — still applies. It says "already
+    stable", not "analyse regardless". And it still costs one tick, because the
+    analysis branch is the `else` of the change branch: two matching reads is
+    also what rules out a torn UIA snapshot. ~5.2s becomes ~1.2s, not zero.
 - **Tested modules are leaves.** `npm test` runs these through Node's type stripping, whose ESM resolver rejects the extensionless relative imports used throughout this codebase — so a module with a relative *value* import cannot be unit tested. That is why `roles.ts` duplicates three lines of sentence splitting instead of importing `splitSentences`, why the paragraph-bucketing logic lives in `shared/paragraphSplit.ts`, and why `analyzeStructure.ts` is thin: every decision with a wrong answer available sits somewhere the runner can load it.
 - **`splitParagraphs` treats ANY newline run as a boundary**, not just a blank line. It runs on the contentEditable editor's `innerText`, where execCommand wraps each Enter in a `<div>` that Chromium renders as a single `\n`; requiring `\n\n` would see a normal essay as one giant paragraph. It lives in `shared/` because the renderer must re-derive the same paragraphs to draw text beside the labels — a `DocumentOutline` carries **no prose**, only indices, roles, booleans and ids.
 - **`document_structure` is a cache of a pure function that still has to be persisted**, because it cannot be recomputed on demand: the analysis runs on `innerText`, and `documents.body_html` cannot be turned back into that string from main without parsing HTML. `source_hash` is over the innerText, so reformatting leaves the analysis valid while an edit to the words marks it stale.

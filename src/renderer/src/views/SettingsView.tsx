@@ -747,11 +747,19 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 */}
                 <label className="settings-toggle-row">
                   <div>
-                    <div className="settings-toggle-row-title">Check my citations automatically</div>
+                    {/*
+                      Named for what it does now, not for what it did first.
+                      It read "Check my citations automatically" over a setting
+                      that has also fact-checked uncited claims since the
+                      claimType gate landed — a toggle whose label describes
+                      half of it is one nobody can make an informed decision
+                      about, and this is the switch that spends money.
+                    */}
+                    <div className="settings-toggle-row-title">Fact-check my claims automatically</div>
                     <div className="settings-toggle-row-subtitle">
                       {settings.autoCritiqueCited
-                        ? 'On — when you analyse a document, Tracely looks up the sources you cited and checks they say what you say they do. Uses AI credits.'
-                        : 'Off — cited claims are checked only when you press Critique.'}
+                        ? 'On — when you analyse a document, Tracely checks whether your factual claims are actually true, and looks up the sources you cited to see they say what you say they do. Uses AI credits.'
+                        : 'Off — claims are checked only when you press Critique.'}
                     </div>
                   </div>
                   <input
