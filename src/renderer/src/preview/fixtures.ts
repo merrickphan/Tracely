@@ -219,6 +219,7 @@ export const claims: Claim[] = [
     // own points. That is the branch this claim exercises.
     suggestedRevision: null,
     citedWorkRead: null,
+    retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
   },
@@ -239,6 +240,7 @@ export const claims: Claim[] = [
     critiqueVerdict: null,
     suggestedRevision: null,
     citedWorkRead: null,
+    retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
   },
@@ -264,6 +266,7 @@ export const claims: Claim[] = [
     citationFix:
       'Wahlstrom, Kyla. "Later Start Time for Teens Improves Grades, Mood, and Safety." Phi Delta Kappan, 2014, p. 12.',
     citedWorkRead: true,
+    retrievalGeneration: 2,
     createdAt: T0
   },
   // Searched, and nothing cleared the relevance floor — every factor 0 by
@@ -289,6 +292,7 @@ export const claims: Claim[] = [
     critiqueVerdict: null,
     suggestedRevision: null,
     citedWorkRead: null,
+    retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
   },
@@ -320,6 +324,7 @@ export const claims: Claim[] = [
     critiqueVerdict: 'weak',
     suggestedRevision: null,
     citedWorkRead: true,
+    retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
   },
@@ -336,6 +341,7 @@ export const claims: Claim[] = [
     critiqueVerdict: null,
     suggestedRevision: null,
     citedWorkRead: null,
+    retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
   }

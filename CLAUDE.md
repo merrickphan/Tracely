@@ -466,6 +466,31 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **A stored score has a RETRIEVAL GENERATION, because the request cache is only
+  half the staleness** (`shared/retrievalGeneration.ts`, migration v6).
+  `cachedEvidence.ts` versions the 24h cache; nothing versioned the answer
+  written into `claims`. `findSearchedClaimByText` matched on `strength_score IS
+  NOT NULL` — **and 0 is not null** — `insertClaims` copied the score, the
+  breakdown and the `claim_evidence` rows onto every future analysis of the same
+  sentence, and the editor's sweep only searched claims whose score was NULL. So
+  an empty answer from an older fan-out was reported forever, and the app never
+  consulted the cache because it never searched again.
+  - Measured on the owner's database, 2026-08-21: **123 stored claims scored
+    with zero sources, across 14 distinct sentences**, still saying "No sources
+    found" hours after the build that could answer them had installed. Owner:
+    *"why does it still do this."*
+  - **BUMP IT WHEN `findEvidence` GAINS OR LOSES A SOURCE OF RESULTS**, not for
+    a ranking change — `rescoreFromBreakdown` already re-scores stored
+    breakdowns on read, so weights flow through without it.
+  - **Old rows stay NULL rather than being backfilled.** Null means "produced by
+    something we can no longer identify", which is what makes the sweep retry
+    them once; backfilling would preserve the bug the column exists to clear.
+    One fresh search stamps the row, so it converges rather than looping.
+  - **The harness cannot drive that sweep.** `analysisIdRef` is set only by
+    running insights, so opening a document in the preview never fires it. This
+    was verified against a COPY of the real database instead — migration
+    applied in memory, then the old and new inheritance queries run
+    side by side on the owner's own claims.
 - **The prose popover lives in its OWN layer, because `.docprose-layer` is a
   stacking context.** That layer is `z-index: 1` deliberately — claim marks
   should read above prose marks — and a positioned element with a z-index traps
