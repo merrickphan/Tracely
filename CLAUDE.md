@@ -466,6 +466,20 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **The IN-TEXT marker had its own copy of the placeholder bug, and #168 did not
+  reach it.** `shared/citationInText.ts` read `authors[0].family` raw and fell
+  back to the literal string `'Unknown Author'`, so a source with no author put
+  **"(Unknown Author, 2025)"** in the sentence above a reference entry that
+  correctly began with its title — the two halves of one citation naming
+  different things, and the half a reader follows naming something that appears
+  nowhere in the list. Owner, 2026-08-19: *"Please never cite 'unknown author'
+  again."* Said after #168, because #168 fixed only the reference formatters.
+  - **The marker leads with whatever the ENTRY leads with.** That is the whole
+    job of an in-text citation, so the fallback is a four-word `shortTitle`, not
+    a name. Below the title it falls to the venue, and below that to the year
+    alone — a poor marker and an honest one.
+  - `realAuthors` here too: providers send placeholders as DATA, and an empty
+    list is only one of the shapes "no author" arrives in.
 - **A citation NEVER carries a placeholder author.** `formatAuthors*` returned the literal string `'Unknown Author'` for an empty author list, which is not a citation in any style — it is a placeholder that reads to a marker exactly like an invented source, and the same string in a draft's reference list is what made `referenceCheck` search Crossref for an author called "Author" and the critique call three true sentences fabricated. They now return `null` and every formatter moves the TITLE into the author slot, which is what APA, MLA and Chicago all prescribe for an unattributed work. Title-first rather than refusing to format: the citation that comes out is correct and usable.
 - **A hover card shows the FIRST SENTENCE of a critique, never the whole thing** (`shared/critiqueSummary.ts`). `popoverCopyFor` used `claim.critique` verbatim, and `CRITIQUE_SYSTEM_PROMPT` budgets that at "under 120 words" — a specification for a report, rendered into a popover. It also arrives as markdown, which was being shown raw. The full critique is still in the report, unchanged; the prompt asks for the finding first and the reasoning after, so the first sentence is the verdict.
 - **`shared/weaknessSeverity.ts` decides the Strong / Needs Work badge, and it is NOT `issues.length === 0`.** Owner, 2026-08-19: *"It feels like the system is flagging things just for the sake of flagging them."* With twenty-odd kinds live, every finding of every kind flipped the badge, so one "obviously" printed the same NEEDS WORK as a circular argument and a well-written draft could not keep a single Strong. The badge asks "would a marker take marks off", the findings list still shows everything, and **an unlisted kind defaults to substantive** — a real problem shown quietly is worse than a small one shown loudly.

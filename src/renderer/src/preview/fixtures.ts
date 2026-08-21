@@ -122,6 +122,36 @@ export const sources: Source[] = [
     citationCount: 12,
     oaStatus: null,
     createdAt: T0
+  },
+  /**
+   * A real work with NO author, which is the state the in-text marker used to
+   * render as "(Unknown Author, 2025)".
+   *
+   * Reported by the owner, 2026-08-19, from a live picker. The reference entry
+   * correctly led with the title while the marker above it named a person who
+   * appears nowhere in the list — and there was no fixture in this state, so
+   * the preview could not show it.
+   *
+   * The title is deliberately long: the marker has to shorten it to sit inside
+   * a sentence, and a four-word cut is only visibly right on something that
+   * needs cutting.
+   */
+  {
+    id: 's4',
+    doi: '10.13051/ee:doc/smitadou0010411a1c',
+    title: 'Robert Hepburn and Adam Smith to [unknown], Thursday, 6 August 1789',
+    authors: [],
+    year: 2025,
+    venue: 'Electronic Enlightenment Scholarly Edition of Correspondence',
+    venueType: 'reference',
+    url: null,
+    pdfUrl: null,
+    abstract: null,
+    provider: 'crossref',
+    providerId: 'C904',
+    citationCount: null,
+    oaStatus: null,
+    createdAt: T0
   }
 ]
 
@@ -133,12 +163,18 @@ export const sources: Source[] = [
 const STANCES: Array<Pick<EvidenceItem, 'stance' | 'stanceConfidence'>> = [
   { stance: 'supports', stanceConfidence: 0.82 },
   { stance: 'contradicts', stanceConfidence: 0.88 },
+  { stance: null, stanceConfidence: null },
   { stance: null, stanceConfidence: null }
 ]
 
+// Indexed by position rather than spread over `sources`, so adding a source
+// without giving it a score is a visible `undefined` in the picker instead of a
+// silent NaN%. One per source, and the table is the length check.
+const RELEVANCE = [0.91, 0.78, 0.54, 0.47]
+
 export const evidence: EvidenceItem[] = sources.map((source, i) => ({
   source,
-  relevanceScore: [0.91, 0.78, 0.54][i],
+  relevanceScore: RELEVANCE[i],
   rank: i + 1,
   ...STANCES[i]
 }))
@@ -371,6 +407,23 @@ export const citations: Citation[] = [
     style: 'APA',
     formattedText:
       'Iglesias-Muñoz, T. (2024). Screen exposure in early adolescence: a preregistered replication. PsyArXiv. https://doi.org/10.31234/osf.io/preg2024',
+    createdAt: T0
+  },
+  {
+    // The no-author entry, written exactly as formatters/apa.ts writes one: the
+    // TITLE takes the author position. It is here so the picker's "WILL BE
+    // INSERTED" block shows a marker and an entry that AGREE — a short form of
+    // the title above the full title below, which is the whole point of an
+    // in-text marker and the thing "(Unknown Author, 2025)" broke.
+    //
+    // No locator, and that is `citationLocator` working rather than an
+    // omission: venueType 'reference' never carries a DOI, and this source has
+    // no URL.
+    id: 'cite4',
+    sourceId: 's4',
+    style: 'APA',
+    formattedText:
+      'Robert Hepburn and Adam Smith to [unknown], Thursday, 6 August 1789. (2025). Electronic Enlightenment Scholarly Edition of Correspondence.',
     createdAt: T0
   }
 ]
