@@ -12,7 +12,7 @@ import TracerChat from '../components/TracerChat'
 import ArgumentScoreModal from '../components/ArgumentScoreModal'
 import ToolbarMenu from '../components/ToolbarMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
-import DocumentMarkLayer, { ProseMarkLayer } from '../components/DocumentMarkLayer'
+import DocumentMarkLayer, { PendingMarkLayer, ProseMarkLayer } from '../components/DocumentMarkLayer'
 import type { DocCitationFlowState, DocFixState, DocProseFix } from '../components/DocumentMarkLayer'
 import type { ProseMark } from '../components/documentMarks'
 import { useGradeLevel } from '../lib/gradeLevel'
@@ -24,9 +24,11 @@ import {
   applyTracerRewrite,
   addWorksCitedEntry,
   applyProseIssue,
+  type PendingMark,
   insertCitationForClaim,
   markAt,
   measureMarks,
+  measurePendingMarks,
   measureProseMarks,
   proseMarkAt,
   replaceClaimText,
@@ -40,6 +42,7 @@ import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
 import { autoCritiqueTargets } from '@shared/autoCritique'
+import { DETECT_IDLE_MS, shouldDetectNow } from '@shared/liveDetect'
 import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { RETRIEVAL_GENERATION } from '@shared/retrievalGeneration'
 import { tracelyApi } from '../lib/api'
@@ -167,6 +170,9 @@ function DocumentEditor({
   // it, a search that comes back empty for every claim leaves them all
   // unscored and the effect below fires again on the next render, forever.
   const autoSearchedRef = useRef<Set<string>>(new Set())
+  /** The text the last detection ran on, and when — the two live-detect bounds. */
+  const lastDetectRef = useRef<{ text: string; at: number } | null>(null)
+  const detectingRef = useRef(false)
   // The same guard for the paid pass, and here it is not a nicety: without it
   // a critique that fails, or one whose verdict does not persist, re-fires on
   // every render — on the reasoning model, at roughly a cent a call.
@@ -206,6 +212,8 @@ function DocumentEditor({
   // are not claims — see ProseMark — and separate so a re-measure driven by a
   // claim arriving does not have to rebuild them and vice versa.
   const [proseMarks, setProseMarks] = useState<ProseMark[]>([])
+  /** Claims found and being searched right now — a progress line, not a finding. */
+  const [pendingMarks, setPendingMarks] = useState<PendingMark[]>([])
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
   // The prose issue under the pointer, and whether its fix is being applied.
   // Hit-tested exactly like `activeMark`: nothing in either layer may accept a
@@ -268,6 +276,16 @@ function DocumentEditor({
   // rather than the text itself: identical text can still need re-measuring
   // after a font or alignment change.
   const [measureTick, setMeasureTick] = useState(0)
+  /**
+   * Bumped only when the TEXT changes, which measureTick is not.
+   *
+   * measureTick also counts layout: a ResizeObserver on the editor bumps it, so
+   * keying the live-detect debounce off it meant dragging the window edge kept
+   * clearing the timer and detection never ran. The two questions are "do the
+   * marks need re-measuring" and "has the draft moved on", and only the second
+   * should start a relay call.
+   */
+  const [textTick, setTextTick] = useState(0)
   // The pointer is inside the popover, so leaving the underline must not close
   // it — otherwise the card vanishes as you reach for its buttons.
   const insidePopoverRef = useRef(false)
@@ -500,6 +518,7 @@ function DocumentEditor({
     setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
     // Every keystroke reflows the text the marks were measured against.
     setMeasureTick((n) => n + 1)
+    setTextTick((n) => n + 1)
     // Typing can end a pending style (Enter starts a fresh block), so the
     // toolbar has to follow the caret, not just explicit toolbar clicks.
     syncFormatState()
@@ -748,12 +767,28 @@ function DocumentEditor({
       // milliseconds — and measuring both together is what keeps the two layers
       // agreeing about where the document's characters are.
       setProseMarks(measureProseMarks(body, wrap))
+      // The claims currently being searched, measured in the same frame for the
+      // same reason: three layers drawing over one document have to agree about
+      // where its characters are. Only while a sweep is actually running —
+      // `checking` is what makes "checking this" true rather than a guess.
+      setPendingMarks(
+        checking
+          ? measurePendingMarks(
+              body,
+              wrap,
+              live.filter((claim) => claim.strengthScore === null)
+            )
+          : []
+      )
       setWrapWidth(wrap.clientWidth)
     })
     // `structureOpen` was a dependency here: opening the rail narrowed the
     // editor, so every mark had to be re-measured. With the rail gone the
     // editor's width no longer changes from inside this component.
-  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align])
+    // `checking` is in the deps so the pending lines appear when a sweep starts
+    // and clear when it ends — without it they would only ever be measured on
+    // the next keystroke.
+  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align, checking])
 
   // The editor reflows on window resize, which does not go through
   // handleInput.
@@ -795,6 +830,7 @@ function DocumentEditor({
     }
     queueSave()
     setMeasureTick((n) => n + 1)
+    setTextTick((n) => n + 1)
   }
 
   /**
@@ -815,6 +851,7 @@ function DocumentEditor({
     if (!applyTracerRewrite(body, rewrite.find, rewrite.replace)) return false
     queueSave()
     setMeasureTick((n) => n + 1)
+    setTextTick((n) => n + 1)
     return true
   }
 
@@ -1385,8 +1422,12 @@ function DocumentEditor({
    * thesis is unfindable and the score would be misleadingly low for a reason
    * the user cannot see.
    *
-   * Never automatic. This is the only relay-touching path in the editor, and
-   * `handleInput` fires on every keystroke.
+   * Still never automatic, and it is now the only thing here that is not.
+   * Claim DETECTION runs on a debounce (see the live-detect effect above), and
+   * that is what the underlines are made of. This adds `grade-draft` — the
+   * essay score — which is both the expensive call and a whole report nobody
+   * asked to see. "AI Insights" means "grade my essay"; it should keep meaning
+   * exactly that.
    */
   async function runStructure(): Promise<void> {
     setOutlineLoading(true)
@@ -1399,6 +1440,11 @@ function DocumentEditor({
       const reuse = analysisIdRef.current !== null && !outlineStale
       const analysisId = reuse ? analysisIdRef.current : await onRunInsights(text)
       analysisIdRef.current = analysisId
+      // A manual run counts against the live-detect bounds like any other
+      // detection. Without this, pressing the button and then pausing would
+      // re-detect the same text a second time — free from the request cache,
+      // but it would also spend the interval floor that exists to stop it.
+      if (!reuse) lastDetectRef.current = { text, at: Date.now() }
       const res = await tracelyApi.analyzeStructure({
         documentId: docIdRef.current,
         text,
@@ -1523,6 +1569,70 @@ function DocumentEditor({
     const analysisId = analysisIdRef.current
     if (analysisId) await onRefreshClaims(analysisId)
   }
+
+  /**
+   * Detect claims after a pause in typing, so the underlines do not need a
+   * button press.
+   *
+   * Owner, 2026-08-21: *"How can we get the underlines to appear immediately,
+   * kind of like Grammarly, instead of waiting until we click the 'grade essay'
+   * button?"*
+   *
+   * **Detection only — never `runStructure`.** That function makes two relay
+   * calls: `detect-claims`, which is what marks are made of, and `grade-draft`,
+   * which is the essay score. Automating the second would spend the expensive
+   * call on every pause AND pop a reading of the draft nobody asked for. "AI
+   * Insights" still means "grade my essay"; this only means "find the claims".
+   *
+   * Once claims land, the two effects below take over unchanged: the evidence
+   * sweep searches them (free APIs) and the marks appear as each one resolves.
+   *
+   * Every bound lives in `shared/liveDetect.ts` — a tested leaf, like
+   * `autoCritique.ts`, because this decides when the editor spends money with
+   * nobody's finger on the button. `detectingRef` is the one guard that cannot
+   * live there: it is about a call already in flight, not about the text.
+   */
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const body = editorRef.current
+      if (!body || detectingRef.current) return
+      const text = body.innerText
+      if (
+        !shouldDetectNow({
+          text,
+          lastDetectedText: lastDetectRef.current?.text ?? null,
+          lastDetectAt: lastDetectRef.current?.at ?? null,
+          now: Date.now()
+        })
+      ) {
+        return
+      }
+      detectingRef.current = true
+      // Stamped BEFORE the call, not after. The interval floor is there to stop
+      // a slow relay from being asked again while it is still answering, and
+      // stamping on completion would measure the gap between answers instead of
+      // between requests.
+      lastDetectRef.current = { text, at: Date.now() }
+      void onRunInsights(text)
+        .then((analysisId) => {
+          if (analysisId) analysisIdRef.current = analysisId
+        })
+        .catch(() => {
+          // Silent. This ran unasked, so a failure has no error to attribute to
+          // anything the writer did — "AI Insights" still reports properly when
+          // they ask for the reading themselves.
+          lastDetectRef.current = null
+        })
+        .finally(() => {
+          detectingRef.current = false
+        })
+    }, DETECT_IDLE_MS)
+    return () => window.clearTimeout(timer)
+    // `textTick` is bumped on every text change, so this is the debounce: each
+    // one clears the pending timer and starts a new one. Deliberately NOT
+    // measureTick — that counts resizes too, and a window drag would postpone
+    // detection for as long as it lasted.
+  }, [textTick])
 
   /**
    * Search evidence for claims nothing has looked at yet — automatically.
@@ -2041,6 +2151,14 @@ function DocumentEditor({
           to place their caret exactly as if this were not here. Only the
           popover takes the pointer.
         */}
+        {/* Bottom of the three layers: a claim being checked has nothing to
+            say yet, so anything that does say something outranks it. It is
+            replaced by a real mark the moment its search resolves. */}
+        <PendingMarkLayer
+          marks={pendingMarks}
+          wrapWidth={wrapWidth}
+          wrapHeight={wrapView.height}
+        />
         {/* Under the claim marks in the DOM as well as in z-index, so a
             sentence that is both unverified and clumsy reads as unverified
             first. */}

@@ -5474,6 +5474,50 @@ textarea:disabled {
   z-index: 1;
 }
 
+/* Claims that have been FOUND and are being checked right now.
+ *
+ * Below the prose marks and far below the claim marks: this is a progress
+ * indicator, not a finding, and the moment it has something to say it is
+ * replaced by a real mark in the layer above. Grey (#9a9ba1) is the colour
+ * problemCopy.ts already gives 'searching' on the Screen Watch overlay, so the
+ * two surfaces say "checking" the same way. */
+.docpending-layer {
+  z-index: 0;
+}
+
+/* pointer-events: none, like every other mark layer — see the note on
+   .docprose. This one has no card at all, so there is nothing to hover for. */
+.docpending {
+  position: absolute;
+  pointer-events: none;
+  border-bottom: 2px dotted #9a9ba1;
+  animation: docpending-pulse 1.4s ease-in-out infinite;
+}
+
+/* Deliberately opacity only, and deliberately not gated on a frame callback.
+ *
+ * A transform or a layout property would repaint the text above it on every
+ * frame while the writer is typing into that exact sentence. Opacity is
+ * composited. And the resting state is the VISIBLE end of the animation, so if
+ * the compositor never runs this (a window that is not compositing — the trap
+ * documented on the overlay's entrance fade) the mark is a steady dotted line
+ * rather than an invisible one. */
+@keyframes docpending-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docpending {
+    animation: none;
+  }
+}
+
 /* The prose POPOVER cannot live in the layer above, and this is why.
  *
  * `.docprose-layer` is z-index 1 on purpose — claim marks should read above
