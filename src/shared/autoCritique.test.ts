@@ -119,6 +119,28 @@ describe('autoCritiqueTargets — uncited claims that can be fact-checked', () =
     }
   })
 
+  /**
+   * Owner, 2026-08-20: *"I put 'Lamine Yamal is 22 years old' and then it didnt
+   * flag it."*
+   *
+   * The gate was five branches — a four-digit year, a percentage, a magnitude
+   * word, a run of four-plus digits, a calendar date — and measured against
+   * ordinary sentences it admitted essentially only years. Every line below was
+   * skipped before, and each is exactly what Pass 1 is good at.
+   */
+  it('takes a number that is not a year', () => {
+    for (const text of [
+      'Lamine Yamal is 22 years old.',
+      'The Eiffel Tower is 90 metres tall.',
+      // The comma beat \d{4,}, so this one failed every branch at once.
+      'Mount Everest is 5,000 feet high.',
+      'Barack Obama was the 43rd president.',
+      'The building has 3 floors.'
+    ]) {
+      deepStrictEqual(autoCritiqueTargets([uncitedFact('c', text)]), ['c'], text)
+    }
+  })
+
   // Pass 1 can only be confident about something specific. An interpretive
   // sentence gives it nothing, so the call would buy a verdict about the
   // evidence — which the free strength score already reports.
@@ -141,6 +163,36 @@ describe('autoCritiqueTargets — uncited claims that can be fact-checked', () =
       autoCritiqueTargets([claim('w', 'World War II ended in 1943.', 40, 'weak')]),
       []
     )
+  })
+
+  /**
+   * A cited claim qualifies on its citation alone and may carry no assertion at
+   * all, so six vague cited sentences at the top of a draft would take every
+   * slot from the one sentence Pass 1 has something to say about. Document
+   * order still decides within each group.
+   */
+  it('spends the last slots on the claims with a hard number in them', () => {
+    // Cited, with no digit anywhere in the text. Prose attribution is the shape
+    // that manages both — "(Walker, 2010)" carries a year, and an id like
+    // "Point 0" would have carried a number of its own.
+    const words = ['one', 'two', 'three', 'four', 'five', 'six']
+    const vagueCited = words.map((w) =>
+      claim(`vague-${w}`, `According to Pearson from UNICEF, point ${w} holds.`, 40)
+    )
+    const targets = autoCritiqueTargets([
+      ...vagueCited,
+      uncitedFact('yamal', 'Lamine Yamal is 22 years old.')
+    ])
+    strictEqual(targets.length, MAX_AUTO_CRITIQUE_CLAIMS)
+    strictEqual(targets[0], 'yamal')
+    // And it is a stable partition, not a re-rank: the vague ones keep their order.
+    deepStrictEqual(targets.slice(1), [
+      'vague-one',
+      'vague-two',
+      'vague-three',
+      'vague-four',
+      'vague-five'
+    ])
   })
 
   it('shares one cap with the cited claims', () => {

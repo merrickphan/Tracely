@@ -69,6 +69,9 @@ import { isCitedInScope } from '@shared/citationScope'
 import { hasRelevantSource, problemKindsFor, problemSeverity } from '@shared/problemKind'
 import { retrievalScopeFor } from '@shared/retrievalScope'
 import { computeWatchOutline } from './watchOutline'
+// Whether a snapshot pre-dates us, and so skips the typing debounce. A leaf, so
+// the rule is testable — see the note at the top of that file.
+import { isPreexistingText } from './firstSight'
 import { clipUnderline, resolveClip } from './clipRects'
 // Whether a poll result that arrived after an await may still be drawn — see
 // tickGuard.ts for the bug this exists to stop.
@@ -126,6 +129,13 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let ticking = false
 let detecting = false
 
+/**
+ * Is the next text we see the first since a reset?
+ *
+ * True on start and whenever tracking resets, false from the first snapshot
+ * onward. Only used to decide whether that snapshot pre-dates us — see tick().
+ */
+let awaitingFirstSight = true
 let pendingText = ''
 let pendingSince = 0
 let lastAnalyzedText = ''
@@ -444,6 +454,10 @@ let trackingGeneration = 0
 
 function resetTrackingState(): void {
   trackingGeneration++
+  // The next text seen is text we have not looked at before. If it arrives
+  // already long, it pre-dates us and skips the typing debounce — see the note
+  // at the pendingText bookkeeping in tick().
+  awaitingFirstSight = true
   pendingText = ''
   pendingSince = 0
   lastAnalyzedText = ''
@@ -718,10 +732,39 @@ async function tick(): Promise<void> {
     lastDocumentKey = snapshot.processName
 
     if (snapshot.text !== pendingText) {
+      // Text that was ALREADY THERE when we arrived is not being typed, so it
+      // does not need the typing debounce.
+      //
+      // STABLE_MS exists because 1200ms is the pause between words, and someone
+      // drafting clears that bar dozens of times a paragraph. None of that
+      // applies to the first thing seen after a tracking reset: a document
+      // switched to with a page of text in it was written before Screen Watch
+      // looked at it, and waiting four seconds for it to "settle" is waiting for
+      // something that already finished. Owner, 2026-08-20: underlines *"should
+      // appear right as I enter the document."*
+      //
+      // The length test is what separates the two cases, and it has to be on
+      // the FIRST snapshot specifically. Typing into an empty control arrives
+      // one keystroke at a time, so its first snapshot is short and falls
+      // through to the normal debounce — which is what must happen, because
+      // firing there would analyse half a sentence and then take the 20s floor,
+      // locking out the real one.
+      const preexisting = isPreexistingText(awaitingFirstSight, snapshot.text)
+      awaitingFirstSight = false
       pendingText = snapshot.text
-      pendingSince = Date.now()
+      // Backdated, not zero: every other guard below (the delta test, the
+      // analysis-interval floor, the retry cooldown) still applies unchanged.
+      // This says "already stable", not "analyse regardless".
+      //
+      // It still costs one more tick — the analysis branch is the `else` of
+      // this one, so it fires on the NEXT poll once the text reads the same
+      // twice. That is worth keeping rather than routing around: two matching
+      // reads is also what rules out a torn snapshot mid-repaint. So this turns
+      // a ~5.2s wait into a ~1.2s one, not into zero.
+      pendingSince = preexisting ? Date.now() - STABLE_MS : Date.now()
       logScreenWatch(
-        `text changed on ${snapshot.processName} (len ${pendingText.length}, supportsTextPattern=${snapshot.supportsTextPattern})`
+        `text changed on ${snapshot.processName} (len ${pendingText.length}, ` +
+          `preexisting=${preexisting}, supportsTextPattern=${snapshot.supportsTextPattern})`
       )
     } else if (
       pendingText.trim().length >= MIN_TEXT_LENGTH &&

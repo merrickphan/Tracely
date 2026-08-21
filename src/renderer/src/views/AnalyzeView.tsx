@@ -46,6 +46,21 @@ import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
 
+/**
+ * How many evidence searches the auto-sweep runs at once.
+ *
+ * The sweep was strictly serial, and for a `general` claim `findEvidence`
+ * awaits a relay web search inside its own fan-out (`search/aggregator.ts`) —
+ * an OpenAI call running several site-restricted queries, seconds rather than
+ * milliseconds. The four scholarly indexes are NOT the cost: measured
+ * 2026-08-20, all four answer one claim in ~700ms because they run in parallel.
+ * Eight claims one after another is where the wait came from.
+ *
+ * Three rather than all of them: `search/rateLimiter.ts` throttles per provider
+ * anyway so more would mostly queue, and the relay counts a burst per user.
+ */
+const SEARCH_CONCURRENCY = 3
+
 const FONT_FAMILIES = ['Arial', 'Inter', 'Instrument Sans', 'Roboto']
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24]
 
@@ -1603,14 +1618,59 @@ function DocumentEditor({
   async function checkClaims(ids: string[]): Promise<void> {
     if (ids.length === 0) return
     setChecking({ done: 0, total: ids.length })
-    for (const [i, id] of ids.entries()) {
+
+    const analysisIdForSweep = analysisIdRef.current
+    let done = 0
+    const queue = [...ids]
+
+    /**
+     * Show what has resolved SO FAR, without waiting for the queue.
+     *
+     * This is the whole delay complaint. `onRefreshClaims` used to run once,
+     * after the loop — and `measureMarks` refuses to draw a claim with no
+     * evidence (deliberately: underlining an unchecked claim reports a verdict
+     * Tracely has not reached). So the document showed NOTHING until the last
+     * claim came back, and then every underline appeared at once. Owner,
+     * 2026-08-20: *"the underlines are too delayed."*
+     *
+     * A refresh is a SQLite read and a setState — no relay, no network — so
+     * running it per completed claim is cheap. `runStructure` is the expensive
+     * one and stays at the end, once.
+     */
+    let refreshing = false
+    async function showWhatIsReady(): Promise<void> {
+      if (!analysisIdForSweep || analysisIdRef.current !== analysisIdForSweep) return
+      // Workers finish independently, so two can land here together. The second
+      // would read the same rows the first is already reading — skipping it
+      // costs nothing, because the worker that IS refreshing will pick up both
+      // claims and every worker refreshes again after its next search.
+      if (refreshing) return
+      refreshing = true
       try {
-        await tracelyApi.findEvidence(id)
+        await onRefreshClaims(analysisIdForSweep)
       } catch {
-        // One claim's search failing must not abandon the rest of the queue.
+        // A failed refresh must not abandon the queue; the next one catches up.
+      } finally {
+        refreshing = false
       }
-      setChecking({ done: i + 1, total: ids.length })
     }
+
+    async function worker(): Promise<void> {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        try {
+          await tracelyApi.findEvidence(id)
+        } catch {
+          // One claim's search failing must not abandon the rest of the queue.
+        }
+        done += 1
+        setChecking({ done, total: ids.length })
+        await showWhatIsReady()
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(SEARCH_CONCURRENCY, ids.length) }, () => worker())
+    )
     setChecking(null)
 
     // Re-read both sides: the claims so their new strength scores render, and

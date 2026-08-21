@@ -52,34 +52,57 @@ export const MAX_AUTO_CRITIQUE_CLAIMS = 6
  * returns plenty of real WWII scholarship, the claim scores well on retrieval,
  * and nothing anywhere asks whether 1943 is the right year.
  *
- * So a year, a date, a percentage or a quantity makes an uncited claim eligible
- * too. These are the assertions Pass 1 can be confident about, and the ones a
- * reader would expect a checker to catch.
+ * So a number, a date or a quantity makes an uncited claim eligible too. These
+ * are the assertions Pass 1 can be confident about, and the ones a reader would
+ * expect a checker to catch.
  *
  * Deliberately NOT "any uncited claim". An unfalsifiable or interpretive
  * sentence gives Pass 1 nothing to be confident about, so the call would buy a
  * verdict about the evidence — which the strength score already reports for
  * free.
+ *
+ * ── It is ANY digit, and it was five branches that only ever matched a year ──
+ * The test used to enumerate: a four-digit year, a percentage, a number
+ * followed by a magnitude word, a run of four-plus digits, a calendar date.
+ * Measured 2026-08-20, that list admitted almost nothing:
+ *
+ *   skipped   Lamine Yamal is 22 years old
+ *   skipped   The Eiffel Tower is 90 metres tall
+ *   skipped   Mount Everest is 5,000 feet high      <- the comma beat \d{4,}
+ *   skipped   Barack Obama was the 43rd president
+ *   CHECKED   World War II ended in 1943
+ *
+ * Owner, 2026-08-20, on the first of those: *"it didnt flag it."* An age IS a
+ * quantity, which this docstring already promised. The branches were not a
+ * policy, they were an incomplete enumeration of one — so the test is now the
+ * thing they were enumerating, and there is no list left to be missing from.
  */
-const CHECKABLE_ASSERTION = new RegExp(
-  [
-    // A year. The Hepburn and WWII cases both turn on one.
-    '\\b(?:1[0-9]\\d{2}|20\\d{2})\\b',
-    // A percentage, written either way.
-    '\\d+(?:\\.\\d+)?\\s?(?:%|per ?cent)',
-    // A quantity with a magnitude word, or any number of four digits or more.
-    '\\b\\d[\\d,]*\\s?(?:million|billion|trillion|thousand)\\b',
-    '\\b\\d{4,}\\b',
-    // A calendar date.
-    '\\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\\s+\\d{1,2}\\b'
-  ].join('|'),
-  'i'
-)
+const CHECKABLE_ASSERTION = /\d/
 
 /** Whether Pass 1 has something specific enough to be confident about. */
 export function hasCheckableAssertion(text: string): boolean {
   return CHECKABLE_ASSERTION.test(text)
 }
+
+/**
+ * ── The half of "flag false claims" this does NOT fix ──────────────────────
+ *
+ * A number is still required, so "Lamine Yamal plays for Real Madrid" — wrong,
+ * uncited, and exactly the kind of thing a reader expects a checker to catch —
+ * is still skipped, because it has no digit in it.
+ *
+ * The gate that would catch it is already on every claim and unused here:
+ * `claimType`. The relay returns `factual | statistic | causal | opinion |
+ * prediction`, and `opinion`/`prediction` are precisely the "nothing to be
+ * confident about" cases this module keeps describing in prose. Gating on the
+ * type instead of on the text would let every factual sentence in.
+ *
+ * Not done unilaterally, because it is a SPEND decision rather than a
+ * correctness one. Today an uncited draft with no numbers in it critiques
+ * nothing; under that rule almost every analysis would spend its full
+ * MAX_AUTO_CRITIQUE_CLAIMS. It also reverses four tests in this file that were
+ * written on purpose. Owner's call — see the note in CLAUDE.md.
+ */
 
 /**
  * Claim ids to critique, in document order, already capped.
@@ -101,7 +124,7 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       )
     : null
 
-  return claims
+  const eligible = claims
     .filter((claim) => {
       // Two ways in, and they answer two different questions.
       //
@@ -123,6 +146,19 @@ export function autoCritiqueTargets(claims: Claim[], documentText?: string): str
       if (claim.critiqueVerdict !== null) return false
       return true
     })
-    .slice(0, MAX_AUTO_CRITIQUE_CLAIMS)
-    .map((claim) => claim.id)
+
+  // Document order, EXCEPT that a claim carrying a hard number goes ahead of
+  // one that does not when the cap has to cut.
+  //
+  // Document order alone was the rule, on the stated reasoning that a long
+  // draft should check the top of itself rather than an arbitrary subset. That
+  // still holds and is why this is a stable partition rather than a re-rank —
+  // but the two ways in do not produce equally checkable claims. A CITED claim
+  // qualifies on its citation alone and may carry no assertion at all, so six
+  // vague cited sentences at the top of a draft could take every slot from
+  // "Lamine Yamal is 22 years old" further down. The slots are money, and Pass
+  // 1 has the most to say about the ones with a hard number in them.
+  const concrete = eligible.filter((claim) => hasCheckableAssertion(claim.text))
+  const rest = eligible.filter((claim) => !hasCheckableAssertion(claim.text))
+  return [...concrete, ...rest].slice(0, MAX_AUTO_CRITIQUE_CLAIMS).map((claim) => claim.id)
 }
