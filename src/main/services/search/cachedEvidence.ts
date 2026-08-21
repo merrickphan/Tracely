@@ -13,7 +13,36 @@ export interface EvidenceResult {
 // the cache is the repeat lookups within one writing session.
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24
 
+/**
+ * How long an EMPTY answer is kept. Minutes, not a day.
+ *
+ * `safeSearch` turns every provider failure into `[]`, so "nothing exists" and
+ * "every provider failed" arrive here as the same value — and until 2026-08-21
+ * both were frozen onto the claim for 24 hours. That is the wrong bet in both
+ * directions: an empty result is far more likely to be transient (a rate limit,
+ * a timeout, a relay hiccup, a provider that has just been added and has not
+ * reached this claim yet) than a durable fact about the literature, and it is
+ * also the one answer a writer will retry.
+ *
+ * Measured on the owner's database: a biography claim searched at 00:37 cached
+ * `evidence: 0` until the following day. Every fix that followed — the cache
+ * version bump, the retrieval-generation retry — correctly triggered a fresh
+ * search, and every one of them was handed this row instead. Three fixes, all
+ * invisible, on exactly the document being used to judge them. Owner: *"wait it
+ * still does it I dont know why???"*
+ *
+ * Ten minutes is enough to stop a re-render or a sweep hammering four providers
+ * in a row, and short enough that a transient failure or a shipped improvement
+ * shows up while the writer is still in the document.
+ */
+const EMPTY_TTL_MS = 1000 * 60 * 10
+
 function cacheKey(query: string, claimText: string): string {
+  // v8: empty results were being cached for 24h (see EMPTY_TTL_MS), so every
+  // v7 key that happened to be written while a claim came back empty is a row
+  // that will keep answering "no sources" until tomorrow. The TTL change fixes
+  // the future; only a bump reaches the rows already written.
+  //
   // v7: web search (#166) added a whole PROVIDER to the fan-out — the one that
   // covers biography, history, institutions and journalism, which is everything
   // the four academic indexes structurally cannot hold. It shipped without
@@ -51,7 +80,7 @@ function cacheKey(query: string, claimText: string): string {
   // claimText is part of the key because score and ordering depend on it via
   // computeTextRelevance, so two claims that happen to produce the same
   // searchQuery must not share an order computed for different claim text.
-  return createHash('sha256').update(`search:aggregate::v7::${query}::${claimText}`).digest('hex')
+  return createHash('sha256').update(`search:aggregate::v8::${query}::${claimText}`).digest('hex')
 }
 
 /**
@@ -77,6 +106,10 @@ export async function findEvidenceCached(query: string, claimText: string): Prom
   if (cached) return cached
 
   const { cacheable, ...result } = await findEvidence(query, claimText)
-  if (cacheable) setCached(key, 'search:aggregate', result, CACHE_TTL_MS)
+  // An answer with nothing in it is held for minutes rather than a day — see
+  // EMPTY_TTL_MS. `cacheable` is a different question (the World Bank catalogue
+  // not being embedded yet) and still gates both.
+  const ttl = result.evidence.length === 0 ? EMPTY_TTL_MS : CACHE_TTL_MS
+  if (cacheable) setCached(key, 'search:aggregate', result, ttl)
   return result
 }
