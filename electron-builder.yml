@@ -108,6 +108,31 @@ asarUnpack:
   # its dependencies not — a failure that only appears in a packaged build,
   # never in dev.
   - '**/*.dll'
+  # And the LIBRARY the worker imports by name, not just the files it requires
+  # by path.
+  #
+  # This is the third form of the same failure. Unpacking mlWorker.js moved the
+  # worker OUT of app.asar so worker_threads could read it — and Node then
+  # resolves that worker's bare imports by walking up from its new location,
+  # which is app.asar.unpacked. `@huggingface/transformers` is pure JS, so it
+  # matched none of the globs above (onnxruntime-node is here only because
+  # `**/*.node` and `**/*.dll` caught its binaries) and stayed inside the
+  # archive, where the unpacked worker cannot reach it.
+  #
+  # Measured on the shipped v0.3.94-preview.184 installer, by running the
+  # packaged worker directly: `Cannot find package '@huggingface/transformers'`.
+  # ml/index.ts then latches `unavailable`, classifyClaim returns 'scholarly'
+  # for EVERY claim because embedCached is null, and the two providers gated on
+  # a routed domain — web search and Wikipedia — never run at all. Retrieval
+  # also silently drops to lexical word overlap. Same silent degradation as
+  # v0.3.76 and v0.3.91, a third directory over.
+  #
+  # sharp and the tokenizers are here because transformers.node.mjs imports them
+  # at the top level; onnxruntime-web is deliberately NOT (128MB of browser WASM
+  # the node entry never loads, and an expectation in verify-packaged-ml.mjs
+  # keeps it out).
+  - node_modules/@huggingface/**
+  - node_modules/sharp/**
 npmRebuild: false
 # Verifies the packed app can actually run embeddings, before the installer is
 # built or published. See scripts/afterPack.js for why a green build is not

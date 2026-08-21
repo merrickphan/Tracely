@@ -88,6 +88,41 @@ if (!existsSync(unpackedWorker)) {
   fail(`ML worker is not unpacked at ${unpackedWorker} — add out/main/mlWorker.js to asarUnpack`)
 }
 
+// The worker's own imports must be UNPACKED, not merely present.
+//
+// The expectations above read app.asar, and app.asar is the wrong place to look
+// for anything the worker imports BY NAME. mlWorker.js is unpacked so
+// worker_threads can read it, and Node then resolves its bare imports by
+// walking up from app.asar.unpacked — never into the archive. A package that is
+// dutifully present in app.asar is invisible to it.
+//
+// The embedding test further down could not catch this either, and the reason
+// is worth writing down: run from the repo, Node walks up past
+// release/win-unpacked and finds the repo's OWN node_modules, so it resolves
+// happily on the build machine and fails on every user's. That is why this is a
+// filesystem assertion rather than another run of the worker — it is true or
+// false in the same way wherever the check is run.
+//
+// Measured on v0.3.94-preview.184: `Cannot find package
+// '@huggingface/transformers'`, embeddings off, every claim routed 'scholarly',
+// web search and Wikipedia unreachable.
+const UNPACKED_DEPS = [
+  ['@huggingface/transformers', 'the library the ML worker imports by name'],
+  ['@huggingface/jinja', 'transitive dependency of transformers'],
+  ['sharp', 'transformers.node.mjs imports it at the top level'],
+  ['onnxruntime-node', 'the inference runtime']
+]
+for (const [pkg, why] of UNPACKED_DEPS) {
+  const at = join(RESOURCES, 'app.asar.unpacked', 'node_modules', ...pkg.split('/'))
+  if (!existsSync(at)) {
+    fail(
+      `${pkg} is not unpacked — ${why}. The ML worker runs from app.asar.unpacked ` +
+        `and cannot resolve into the archive. Add it to asarUnpack.`
+    )
+  }
+}
+console.log(`PASS  ML worker's imports are unpacked — ${UNPACKED_DEPS.length} packages`)
+
 let bad = 0
 for (const [fragment, wanted, why] of EXPECTATIONS) {
   const found = count(fragment)
