@@ -986,7 +986,7 @@ function DocumentEditor({
     // nothing main knows and the renderer does not.
     const marker = formatInTextCitation(source, style)
     const wrote = replaces
-      ? replaceCitationText(body, replaces, marker)
+      ? replaceCitationText(body, claim, replaces, marker)
       : insertCitationForClaim(body, claim, marker)
     if (!wrote) {
       // Roll the reference back out. A works-cited entry for a citation that
@@ -999,7 +999,12 @@ function DocumentEditor({
       }
       throw new Error(
         replaces
-          ? `Could not find ${replaces} in the document any more — it may have been edited since the card opened.`
+          ? // Says WHERE it looked, because the search is sentence-scoped and a
+            // message about "the document" sent the writer hunting through a
+            // draft that still plainly contains the text. Both remaining causes
+            // are real and local: the sentence moved on, or it carries the same
+            // broken citation twice and nothing here may pick between them.
+            `Could not replace ${replaces} in that sentence — it may have been edited since the card opened, or the sentence carries it twice.`
           : 'Could not find that sentence in the document any more — it may have been edited since the search.'
       )
     }

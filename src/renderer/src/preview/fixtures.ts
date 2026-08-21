@@ -476,7 +476,13 @@ export const documents: DocumentListItem[] = [
       // 'cited-unverified' may be raised — and the harness had no fixture in
       // it, so the card's copy was unreachable in the preview.
       '<div>Longitudinal data from Norway tracked 2,000 students over four years (Halvorsen, 2021). The effect persisted after controlling for baseline mental health, which suggests the relationship is not merely correlational.</div><div><br></div>' +
-      '<div>Schools in three districts have already moved to ban phones during instructional hours.</div><div><br></div>' +
+      // A SECOND copy of the same defective citation. Owner, 2026-08-20:
+      // *"this keeps appearing."* replaceCitationText required the text to be
+      // unique in the whole document, so two sentences sharing one bad
+      // reference made BOTH unfixable — and one bad reference pasted after
+      // several sentences is the ordinary way this happens. Without a second
+      // copy here the harness cannot reach that failure at all.
+      '<div>Schools in three districts have already moved to ban phones during instructional hours (Unknown Author, 2025).</div><div><br></div>' +
       '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +
       '<div>In conclusion, the link is real but weaker than the debate assumes.</div>',
     createdAt: T0,

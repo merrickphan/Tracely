@@ -4,7 +4,12 @@ import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { findProseIssues, replacementRange, type ProseIssue } from '@shared/proseIssues'
 import { isCitedInScope } from '@shared/citationScope'
 import { findCitationDefects } from '@shared/citationShape'
-import { hasInlineCitationNear, inlineCitationKind, sentenceAround } from '@shared/inlineCitation'
+import {
+  hasInlineCitationNear,
+  inlineCitationKind,
+  sentenceAround,
+  sentenceRangeAround
+} from '@shared/inlineCitation'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { retrievalScopeFor } from '@shared/retrievalScope'
 import { findWorksCitedSection, planWorksCited } from '@shared/worksCited'
@@ -428,20 +433,48 @@ export function replaceClaimText(body: HTMLElement, claim: Claim, replacement: s
  * 2026-08-19: *"when it detects citations are incomplete, and I click fix the
  * citation there is no replace button to replace the citation."*
  *
- * Located by its TEXT rather than by a stored offset, and refused when that
- * text appears more than once. Same rule `applyProseIssue` and Tracer's rewrite
- * both live by: the card can be seconds old and the writer has been typing, and
- * replacing at a guessed offset rewrites a part of the document nobody asked
- * about. Returns false and the caller says so.
+ * Located by its TEXT rather than by a stored offset — same rule
+ * `applyProseIssue` and Tracer's rewrite both live by: the card can be seconds
+ * old and the writer has been typing, and replacing at a guessed offset
+ * rewrites a part of the document nobody asked about.
+ *
+ * ── Scoped to THIS SENTENCE, and that is the whole fix ─────────────────────
+ * It required the text to be unique in the WHOLE DOCUMENT, and refused
+ * otherwise. A broken citation is not a typo a writer makes once: paste the
+ * same malformed reference after four sentences — which is exactly what a
+ * student does with one bad source — and every one of those four cards refuses,
+ * forever, because of the other three. Owner, 2026-08-20: *"this keeps
+ * appearing."*
+ *
+ * The uniqueness test was standing in for "am I replacing the right one", and
+ * the card already knows the answer: it was opened from ONE claim. Its
+ * sentence is the only place the replacement may land, which makes duplicates
+ * elsewhere irrelevant rather than fatal — and is strictly more correct, since
+ * a unique match in a different paragraph was never the right target either.
+ *
+ * Still refuses when the SENTENCE carries the same broken citation twice. That
+ * is genuinely ambiguous and rare, and guessing there would rewrite the half
+ * the writer was not looking at.
  */
 export function replaceCitationText(
   body: HTMLElement,
+  /** The claim whose card this is. Its sentence bounds the search. */
+  claim: Claim,
   defective: string,
   replacement: string
 ): boolean {
   const { text } = buildTextMap(body)
-  const at = text.indexOf(defective)
-  if (at === -1 || at !== text.lastIndexOf(defective)) return false
+  const span = computeClaimSpans(text, [claim])[0]
+  // The claim itself is gone — the sentence really was edited away, which is
+  // the one case the old error message described correctly.
+  if (!span) return false
+
+  const { from, to } = sentenceRangeAround(text, span.start, span.end)
+  const sentence = text.slice(from, to)
+  const rel = sentence.indexOf(defective)
+  if (rel === -1 || rel !== sentence.lastIndexOf(defective)) return false
+
+  const at = from + rel
   return replaceRange(body, at, at + defective.length, replacement, true)
 }
 
