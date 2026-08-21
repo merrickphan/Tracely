@@ -170,6 +170,23 @@ const MIGRATIONS: Migration[] = [
       // one the owner asked for on 2026-08-19.
       addColumnIfMissing(database, 'claims', 'cited_work_read', 'INTEGER')
     }
+  },
+  {
+    version: 6,
+    describe: 'claims.retrieval_generation — which retrieval stack produced a stored score',
+    up: (database) => {
+      // A stored score is inherited forever (findSearchedClaimByText matches on
+      // strength_score IS NOT NULL, and 0 is not null), so a claim that came
+      // back empty under an older fan-out was reported empty for good — the app
+      // never consulted the request cache, because it never searched again.
+      //
+      // Deliberately left NULL on every existing row rather than backfilled to
+      // the current generation. Null means "produced by something we can no
+      // longer identify", which is exactly right, and it is what makes the
+      // sweep re-search them once. Backfilling would preserve the bug it exists
+      // to clear.
+      addColumnIfMissing(database, 'claims', 'retrieval_generation', 'INTEGER')
+    }
   }
 ]
 

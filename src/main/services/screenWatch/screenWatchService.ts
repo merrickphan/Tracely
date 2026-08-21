@@ -386,6 +386,7 @@ function synthesizeClaim(detected: {
     critique: null,
     critiqueVerdict: null,
     citedWorkRead: null,
+    retrievalGeneration: null,
     createdAt: new Date().toISOString()
   }
 }

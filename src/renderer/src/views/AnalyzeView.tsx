@@ -40,6 +40,7 @@ import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
 import { autoCritiqueTargets } from '@shared/autoCritique'
+import { RETRIEVAL_GENERATION } from '@shared/retrievalGeneration'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
 
@@ -1514,7 +1515,19 @@ function DocumentEditor({
     if (!analysisId || !claims || checking) return
     if (autoSearchedRef.current.has(analysisId)) return
 
-    const unsearched = claims.filter((claim) => claim.strengthScore === null).map((c) => c.id)
+    // Never searched, OR searched by a retrieval stack this build no longer
+    // has. The second half is the fix for a card that says "No sources found"
+    // hours after the build that could answer it installed: a stored score is
+    // inherited across every re-analysis of the same sentence, and a score of 0
+    // is not null, so an empty answer from an older fan-out was never retried.
+    // See shared/retrievalGeneration.ts. One re-search per affected claim,
+    // once, against a request cache that is usually warm.
+    const unsearched = claims
+      .filter(
+        (claim) =>
+          claim.strengthScore === null || claim.retrievalGeneration !== RETRIEVAL_GENERATION
+      )
+      .map((c) => c.id)
     if (unsearched.length === 0) return
 
     autoSearchedRef.current.add(analysisId)

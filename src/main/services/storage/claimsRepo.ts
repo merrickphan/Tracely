@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import type { Claim, ClaimType, CritiqueVerdict, ScoreBreakdown } from '@shared/types'
 import { queryAll, queryOne, run, transaction } from './db'
 import { rescoreFromBreakdown } from '../search/scoring'
+import { RETRIEVAL_GENERATION } from '@shared/retrievalGeneration'
 
 interface ClaimRow {
   id: string
@@ -17,6 +18,7 @@ interface ClaimRow {
   suggested_revision: string | null
   citation_fix: string | null
   cited_work_read: number | null
+  retrieval_generation: number | null
   created_at: string
 }
 
@@ -48,6 +50,7 @@ function toDomain(row: ClaimRow): Claim {
     // that predates the column and a row whose lookup has not run both arrive
     // as null — which problemKind.ts reads as "not read".
     citedWorkRead: row.cited_work_read == null ? null : row.cited_work_read === 1,
+    retrievalGeneration: row.retrieval_generation ?? null,
     createdAt: row.created_at
   }
 }
@@ -68,11 +71,17 @@ export interface NewClaim {
 export function findSearchedClaimByText(text: string): ClaimRow | null {
   return (
     queryOne<ClaimRow>(
+      // `retrieval_generation` as well as a score. A result produced by an
+      // older fan-out is not one this build would produce, and inheriting it is
+      // how an empty answer outlived the provider that could have filled it —
+      // see shared/retrievalGeneration.ts. Old rows are NULL and never match,
+      // so they are re-searched once.
       `SELECT * FROM claims
         WHERE text = $text AND strength_score IS NOT NULL
+          AND retrieval_generation = $generation
         ORDER BY created_at DESC, rowid DESC
         LIMIT 1`,
-      { $text: text }
+      { $text: text, $generation: RETRIEVAL_GENERATION }
     ) ?? null
   )
 }
@@ -112,10 +121,11 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         `INSERT INTO claims (
            id, analysis_id, text, claim_type, confidence, search_query, created_at,
            strength_score, score_breakdown, critique, critique_verdict,
-           suggested_revision, citation_fix, cited_work_read
+           suggested_revision, citation_fix, cited_work_read, retrieval_generation
          ) VALUES (
            $id, $analysisId, $text, $type, $confidence, $query, $createdAt,
-           $score, $breakdown, $critique, $verdict, $revision, $citationFix, $citedWorkRead
+           $score, $breakdown, $critique, $verdict, $revision, $citationFix, $citedWorkRead,
+           $generation
          )`,
         {
           $id: id,
@@ -131,7 +141,10 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
           $verdict: prior?.critique_verdict ?? null,
           $revision: prior?.suggested_revision ?? null,
           $citationFix: prior?.citation_fix ?? null,
-          $citedWorkRead: prior?.cited_work_read ?? null
+          $citedWorkRead: prior?.cited_work_read ?? null,
+          // Only ever the CURRENT generation, because `prior` is now only found
+          // when it already matches it.
+          $generation: prior ? RETRIEVAL_GENERATION : null
         }
       )
 
@@ -163,6 +176,7 @@ export function insertClaims(analysisId: string, claims: NewClaim[]): Claim[] {
         suggestedRevision: prior?.suggested_revision ?? null,
         citationFix: prior?.citation_fix ?? null,
         citedWorkRead: prior?.cited_work_read == null ? null : prior.cited_work_read === 1,
+        retrievalGeneration: prior ? RETRIEVAL_GENERATION : null,
         createdAt
       }
     })
@@ -182,11 +196,19 @@ export function getClaim(id: string): Claim | null {
 }
 
 export function updateClaimScore(claimId: string, score: number, breakdown: ScoreBreakdown): void {
-  run('UPDATE claims SET strength_score = $score, score_breakdown = $breakdown WHERE id = $id', {
-    $id: claimId,
-    $score: score,
-    $breakdown: JSON.stringify(breakdown)
-  })
+  // Stamped with the generation that produced it, so a later build can tell
+  // whether this answer is still one it would give. See
+  // shared/retrievalGeneration.ts.
+  run(
+    `UPDATE claims SET strength_score = $score, score_breakdown = $breakdown,
+     retrieval_generation = $generation WHERE id = $id`,
+    {
+      $id: claimId,
+      $score: score,
+      $breakdown: JSON.stringify(breakdown),
+      $generation: RETRIEVAL_GENERATION
+    }
+  )
 }
 
 /**

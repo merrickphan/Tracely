@@ -134,6 +134,15 @@ export interface Claim {
    * quiet; see `citedWorkRead` there.
    */
   citedWorkRead: boolean | null
+  /**
+   * Which retrieval generation produced `strengthScore` and `scoreBreakdown`.
+   *
+   * Null on every claim scored before the column existed, and on any claim
+   * nothing has searched. The editor re-searches a claim whose generation is
+   * not the current one, which is what stops an empty answer from an older
+   * fan-out being reported forever. See shared/retrievalGeneration.ts.
+   */
+  retrievalGeneration: number | null
   createdAt: string
 }
 

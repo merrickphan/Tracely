@@ -142,6 +142,7 @@ function asClaim(detected: DetectedClaim, strengthScore: number, id: string): Cl
     suggestedRevision: null,
     citationFix: null,
     citedWorkRead: null,
+    retrievalGeneration: null,
     createdAt: new Date().toISOString()
   }
 }
