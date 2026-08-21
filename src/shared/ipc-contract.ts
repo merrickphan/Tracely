@@ -27,6 +27,7 @@ import type {
   TracerMessage
 } from './types'
 import type { ScreenWatchProblemKind } from './problemKind'
+import type { Credibility } from './sourceCredibility'
 
 // Note: CitationStyle is already 'APA' | 'MLA' | 'Chicago' — reused as-is for
 // the Screen Watch citation flow below, same enum the main app's citation
@@ -513,6 +514,12 @@ export interface ScreenWatchSourceCandidate {
   url: string | null
   matchPercent: number
   faviconDataUrl: string | null
+  /**
+   * What a marker would make of this publisher — see
+   * shared/sourceCredibility.ts. Computed in main so the overlay and the editor
+   * cannot reach different verdicts about one source.
+   */
+  credibility: Credibility
 }
 export interface ScreenWatchFindSourceResponse {
   candidates: ScreenWatchSourceCandidate[]

@@ -40,6 +40,7 @@ import type { DocumentMark, MarkRect } from '../components/documentMarks'
 import TextArea from '../components/TextArea'
 import { DocumentIcon, CloseIcon, BackIcon } from '../components/icons'
 import { autoCritiqueTargets } from '@shared/autoCritique'
+import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { RETRIEVAL_GENERATION } from '@shared/retrievalGeneration'
 import { tracelyApi } from '../lib/api'
 import type { Tab } from '../App'
@@ -1095,6 +1096,32 @@ function DocumentEditor({
         const analysisId = analysisIdRef.current
         if (analysisId) await onRefreshClaims(analysisId)
       }
+      // Sorted before the state is built, so the pre-selected row is the most
+      // citable one rather than whatever retrieval happened to rank first.
+      const candidates = byCredibility(
+        evidence.map((item) => ({
+          sourceId: item.source.id,
+          title: item.source.title,
+          venue: item.source.venue,
+          year: item.source.year,
+          matchPercent: Math.round(item.relevanceScore * 100),
+          initials: sourceInitials(item.source.venue ?? item.source.title),
+          // The PUBLISHER's link, which is not always `url` — see
+          // shared/sourceIcon.ts. Crossref hands back a doi.org URL for every
+          // record it holds, and its favicon is the DOI logo.
+          url: iconUrlFor(item.source),
+          // Judged on the source's OWN url, not the icon one: a doi.org link
+          // would make every Crossref record look like the same publisher.
+          credibility: credibilityOf({
+            url: item.source.url,
+            venue: item.source.venue,
+            venueType: item.source.venueType,
+            doi: item.source.doi
+          })
+        })),
+        (c) => c.credibility.tier
+      )
+
       setCitationFlow((prev) =>
         prev?.claimId !== claim.id
           ? prev
@@ -1105,19 +1132,8 @@ function DocumentEditor({
               citedLoading: prev.citedLoading,
               state: {
                 step: 'picking',
-                candidates: evidence.map((item) => ({
-                  sourceId: item.source.id,
-                  title: item.source.title,
-                  venue: item.source.venue,
-                  year: item.source.year,
-                  matchPercent: Math.round(item.relevanceScore * 100),
-                  initials: sourceInitials(item.source.venue ?? item.source.title),
-                  // The PUBLISHER's link, which is not always `url` — see
-                  // shared/sourceIcon.ts. Crossref hands back a doi.org URL for
-                  // every record it holds, and its favicon is the DOI logo.
-                  url: iconUrlFor(item.source)
-                })),
-                selectedId: evidence[0]?.source.id ?? null,
+                candidates,
+                selectedId: candidates[0]?.sourceId ?? null,
                 style: citationStyle,
                 preview: null
               }

@@ -52,6 +52,7 @@ import {
 } from './citationFlowCopy'
 import { CITED_HEADING, UNCHECKABLE_SHAPE_NOTE, describeCitedWork } from '@shared/citedComparison'
 import type { ResolvedCitedWork } from '@shared/ipc-contract'
+import type { Credibility } from '@shared/sourceCredibility'
 import type { WorksCitedResult } from './documentMarks'
 
 /**
@@ -126,6 +127,11 @@ export interface DocSourceCandidate {
    * data: URI (see ipc/sourcesHandlers.ts), which that CSP already allows.
    */
   url: string | null
+  /**
+   * Whether a marker would accept this, decided locally — see
+   * shared/sourceCredibility.ts. Drives the chip on the row and the order.
+   */
+  credibility: Credibility
 }
 
 export type DocCitationFlowState =
@@ -1187,6 +1193,15 @@ function CitationFlowCard({ flow, claimText }: { flow: DocCitationFlow; claimTex
                   {candidate.year ? ` · ${candidate.year}` : ''}
                 </span>
                 <span className="docmark-match">{candidate.matchPercent}% match</span>
+              </span>
+              {/* What a marker would make of it. `title` carries the reason, so
+                  the chip stays short enough to sit on one line beside the
+                  match percentage. */}
+              <span
+                className={`docmark-cred docmark-cred-${candidate.credibility.tier}`}
+                title={candidate.credibility.why}
+              >
+                {candidate.credibility.label}
               </span>
             </span>
             <span

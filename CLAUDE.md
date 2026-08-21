@@ -466,6 +466,31 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **`shared/sourceCredibility.ts` asks whether a MARKER would accept a source,
+  which retrieval never did.** Relevance answers "is this page about the claim";
+  citability is a different question and nothing asked it. Owner, 2026-08-21, on
+  what one web search returned: TIME and British Heritage beside Historydraft,
+  The Vintage News and The Imaginative Conservative — a paper of record, a
+  timeline site, an enthusiast blog and an opinion journal, offered as five
+  equal options. A student loses marks for three of them and the card said
+  nothing.
+  - **Decided LOCALLY and deterministically**, not by the model. The relay
+    prompt already says to avoid content farms and returned those five anyway,
+    labelling an enthusiast history site `news`. A model grading its own output
+    grades it generously, and this verdict has to be defensible to a student who
+    disagrees — same stance as `scoring.ts` and `weaknessSeverity.ts`.
+  - **Nothing is hidden.** Unvetted sources are ranked last and labelled, never
+    dropped: filtering silently would leave a writer unable to tell "found
+    nothing" from "found things and binned them", and after a day of cards
+    wrongly reading "No sources found" that state must not get easier to reach.
+  - **`unvetted` is grey, never red.** It means "Tracely does not recognise this
+    publisher" — a fact about our list, not about the site. The same rule the
+    cited-source block follows.
+  - **The tier outranks the match percentage**, and that is the point. Measured
+    in the harness: Historydraft scored 0.71 against TIME's 0.62 and still sorts
+    below it. The allowlists are deliberately short — a long one is a long list
+    of things to be wrong about — and `.gov`/`.edu`/`.mil`/`.int` need no list
+    at all, because those registries cannot be bought.
 - **An EMPTY evidence answer is cached for MINUTES, not a day**
   (`EMPTY_TTL_MS` in `cachedEvidence.ts`). `safeSearch` turns every provider
   failure into `[]`, so "nothing exists" and "every provider failed" arrive at

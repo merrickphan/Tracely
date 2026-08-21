@@ -30,6 +30,7 @@ import { findCitationInsertPoint } from '@shared/citationInsertPoint'
 import { findEvidenceCached } from '../search/cachedEvidence'
 import { getFaviconDataUrl } from '../search/favicon'
 import { checkReferences, resolveCitedWork } from '../search/referenceCheck'
+import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { computeTextRelevance } from '../search/scoring'
 import type { NormalizedSourceResult } from '../search/types'
 import { getSetting, setSetting } from '../storage/settingsRepo'
@@ -1257,10 +1258,18 @@ export async function findSourceForClaim(claimId: string, query?: string): Promi
       provider: item.provider,
       url: item.url,
       matchPercent,
-      faviconDataUrl: await getFaviconDataUrl(item.url)
+      faviconDataUrl: await getFaviconDataUrl(item.url),
+      credibility: credibilityOf({
+        url: item.url,
+        venue: item.venue,
+        venueType: item.venueType,
+        doi: item.doi
+      })
     }))
   )
-  return candidates
+  // Most citable first, the same order the editor's picker uses. Stable, so
+  // the match percentage still decides within a tier.
+  return byCredibility(candidates, (c) => c.credibility.tier)
 }
 
 /**
