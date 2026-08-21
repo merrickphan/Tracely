@@ -466,6 +466,24 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
   - **Learned from `withoutWorksCited(text)`, never the raw draft.** A reference list is title-case noise — "The Pen Is Mightier Than the Keyboard", "Psychological Science" — and measured on real documents it took the list from 27 words to 5-7 actual names. Cited authors are still learned, because an in-text citation puts them in the body.
   - **Screen Watch deliberately does not do this.** It reads other applications' text, and teaching the user's dictionary from whatever is on screen is not a thing a passive reader should do.
 
+- **"Replace citation" is scoped to the claim's SENTENCE, not to the document.**
+  `replaceCitationText` required the defective text to be unique in the whole
+  draft and refused otherwise — so pasting one malformed reference after four
+  sentences made all four permanently unfixable, each blocked by the other
+  three. Owner, 2026-08-20: *"this keeps appearing."* One bad source used
+  repeatedly is the ordinary way a student produces this, not an edge case.
+  - The uniqueness test was standing in for *"am I replacing the right one"*,
+    and the card already knows: it was opened from ONE claim.
+    `sentenceRangeAround` (extracted from `sentenceAround`, same code, now
+    returning offsets) bounds the search. Duplicates elsewhere became
+    irrelevant rather than fatal — and it is strictly more correct, since a
+    unique match in another paragraph was never the right target either.
+  - **Still refuses when the SAME SENTENCE carries it twice.** Genuinely
+    ambiguous, and guessing rewrites the half the writer was not looking at.
+  - **The error message named the wrong cause**, which is why it read as a
+    glitch: *"Could not find … in the document any more — it may have been
+    edited"* over a draft that visibly still contained the text, sending the
+    writer hunting for an edit they never made.
 - **The IN-TEXT marker had its own copy of the placeholder bug, and #168 did not
   reach it.** `shared/citationInText.ts` read `authors[0].family` raw and fell
   back to the literal string `'Unknown Author'`, so a source with no author put

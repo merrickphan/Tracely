@@ -1,6 +1,12 @@
-import { ok, strictEqual } from 'node:assert/strict'
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { hasInlineCitation, hasInlineCitationNear, inlineCitationKind, sentenceAround } from './inlineCitation.ts'
+import {
+  hasInlineCitation,
+  hasInlineCitationNear,
+  inlineCitationKind,
+  sentenceAround,
+  sentenceRangeAround
+} from './inlineCitation.ts'
 
 describe('hasInlineCitation — finds what a writer actually types', () => {
   const cited = [
@@ -343,5 +349,52 @@ describe('sentenceAround — a span that already ends a sentence', () => {
     const start = para.indexOf(claim)
     const window = sentenceAround(para, start, start + claim.length + 1)
     strictEqual(hasInlineCitation(window), false, window)
+  })
+})
+
+/**
+ * The offsets behind `sentenceAround`, which is what an EDIT needs.
+ *
+ * `replaceCitationText` used to require the broken citation to be unique in the
+ * whole document, and refused otherwise — so a draft that pastes one malformed
+ * reference after four sentences could never fix any of them. Owner,
+ * 2026-08-20: *"this keeps appearing."* The card knows which claim it was
+ * opened from; its sentence is the only place the replacement may land.
+ */
+describe('sentenceRangeAround', () => {
+  it('agrees with sentenceAround, which is the point of extracting it', () => {
+    const text = 'First one. The rate rose sharply (Smith, 2020). Third one here.'
+    const at = text.indexOf('rate rose')
+    const { from, to } = sentenceRangeAround(text, at, at + 9)
+    strictEqual(text.slice(from, to), sentenceAround(text, at, at + 9))
+  })
+
+  it('bounds the claim to its own sentence, not its neighbours', () => {
+    const text = 'Alpha (Unknown Author, 2025). Beta (Unknown Author, 2025). Gamma.'
+    const at = text.indexOf('Beta')
+    const { from, to } = sentenceRangeAround(text, at, at + 4)
+    const sentence = text.slice(from, to)
+    ok(sentence.includes('Beta'), sentence)
+    strictEqual(sentence.includes('Alpha'), false, sentence)
+    strictEqual(sentence.includes('Gamma'), false, sentence)
+    // Exactly one copy in scope — which is what makes the replacement safe
+    // while the document holds two.
+    strictEqual(sentence.indexOf('(Unknown Author, 2025)'), sentence.lastIndexOf('(Unknown Author, 2025)'))
+  })
+
+  it('keeps a trailing citation inside the sentence that owns it', () => {
+    // A detected claim is a sub-span that stops before the citation, so the
+    // window has to reach past `end` or the edit cannot see what it is fixing.
+    const text = 'She volunteered at the hospital (Unknown Author, 2025). Later she left.'
+    const at = 0
+    const { from, to } = sentenceRangeAround(text, at, text.indexOf(' ('))
+    ok(text.slice(from, to).includes('(Unknown Author, 2025)'))
+  })
+
+  it('returns a range inside the text for a span at either edge', () => {
+    const text = 'Only one sentence here.'
+    deepStrictEqual(sentenceRangeAround(text, 0, 4), { from: 0, to: text.length })
+    const end = sentenceRangeAround(text, text.length - 1, text.length)
+    ok(end.from >= 0 && end.to <= text.length)
   })
 })

@@ -213,6 +213,28 @@ const PATTERNS: Array<[string, RegExp]> = [
  * a false positive.
  */
 export function sentenceAround(text: string, start: number, end: number): string {
+  const { from, to } = sentenceRangeAround(text, start, end)
+  return text.slice(from, to)
+}
+
+/**
+ * The same widening, as OFFSETS.
+ *
+ * `sentenceAround` returns the string, which is all a pattern needs. An EDIT
+ * needs to know where that string sits: `replaceCitationText` has to find the
+ * writer's broken citation inside this sentence and nowhere else, and a
+ * substring cannot tell it that.
+ *
+ * Extracted rather than duplicated — the bracket-awareness and the two
+ * terminator rules below are exactly the kind of thing that gets subtly
+ * different in a second copy, and this one is covered by the tests already
+ * written against `sentenceAround`.
+ */
+export function sentenceRangeAround(
+  text: string,
+  start: number,
+  end: number
+): { from: number; to: number } {
   const isTerminator = (ch: string): boolean => ch === '.' || ch === '!' || ch === '?' || ch === '\n'
 
   /**
@@ -300,7 +322,7 @@ export function sentenceAround(text: string, start: number, end: number): string
     from--
   }
 
-  return text.slice(from, stop)
+  return { from, to: stop }
 }
 
 /**
