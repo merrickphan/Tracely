@@ -111,8 +111,9 @@ Ranked by what it unblocks:
 
 1. **`sources[].label`** — the relevance floor and the scoring weights are
    fitted against these. ~200 labelled sources before the floor stops moving
-   with individual judgements. The 2026-08-08 run has 102 already labelled in
-   prose that couldn't be imported; re-labelling those is the cheapest 102.
+   with individual judgements. **Read "Item 1's headline number" below before
+   spending a day here: 288 such judgements already exist in
+   `eval/retrieval/labels`, in a store `eval:fit` does not read.**
 2. **`draft.roles`** — trains a paragraph-role classifier as a linear probe on
    the MiniLM embeddings already shipping. ~300–500 paragraphs. This is the one
    that *removes* an API call rather than holding cost flat: it replaces the
@@ -129,13 +130,35 @@ Two things worth knowing before you start:
   learns *you*. That's fine for a tool you're building for yourself, and worth
   knowing before calling it general.
 
-### Item 1 cannot be done from a cloud run — measured 2026-08-17
+### Item 1's headline number counts one of two stores — measured 2026-08-21
 
-`sources[].label` is ranked first and has been at **0** since the format
-existed, and the reason is not that nobody got to it. Labelling a source means
-having a candidate list, which means running retrieval, and the scheduled cloud
-runs that do most of the writing here **cannot reach any of the four
-providers**. Their egress proxy answers `403` to the CONNECT for
+**`sources[].label` is 0 here, and the repo holds 288 per-source verdicts.**
+Both are true. `eval/retrieval/labels/*.json` is a second label store, on the
+same `rel`/`marg`/`irr` scale, joined to its report by claim-text prefix rather
+than by DOI: 36 claims across essays 01–09, 288 source verdicts, 51 of them
+`rel`. That is already past the ~200 this file calls the floor.
+
+`npm run eval:validate` printed only the first number, and that line is what
+the BUGS row and every run reading it quoted. So "per-source labels are still
+0" was read as *nobody has labelled anything* when it meant *the fitter's store
+is empty*. `eval/scripts/fit-weights.mjs` reads these annotations;
+`eval/retrieval/rank.mjs` and `floor.mjs` read the other directory. Neither
+knows about the other.
+
+**So the next move on item 1 is reconciling the two stores, not labelling ~200
+sources again.** That is a real piece of work — the two join to different
+reports by different keys, and merging them wrong would silently mislabel, the
+exact failure `paths.mjs` documents — but it is much cheaper than re-labelling,
+and it is what stands between 288 existing judgements and `eval:fit`.
+
+Do not fold the two counts into one total. The fitter would look fed while
+still seeing nothing, which is the same class of error as the one above.
+
+### And none of it runs from a cloud run — measured 2026-08-17, still true
+
+Labelling a source means having a candidate list, which means running
+retrieval, and the scheduled cloud runs that do most of the writing here
+**cannot reach any of the four providers**. Their egress proxy answers `403` to the CONNECT for
 `api.openalex.org`, `api.crossref.org`, `api.semanticscholar.org` and
 `eutils.ncbi.nlm.nih.gov` — a policy denial, not a transient failure and not
 something a retry or a different client fixes.
@@ -147,10 +170,15 @@ Two consequences worth writing down rather than rediscovering:
   items 2 and 3, never item 1. An overnight run reporting progress on the
   retrieval blocker is reporting progress on the half of it that was never the
   blocker.
-- **The 102 prose labels in `eval/baseline.md` are still the cheapest 200-source
-  start, and they need no network at all** — they are already written, against
-  a report already on disk. Re-labelling those is the one piece of item 1 that
-  does not require a machine with provider access.
+- **The 102 prose labels in `eval/baseline.md` need no provider access — but
+  they do need the report, and `eval/reports/` is gitignored.** So a cloud run
+  that clones the repo cannot do them either: `eval/.gitignore` keeps reports
+  out, and `import-baseline.mjs` reads
+  `report-2026-08-08T02-37-26-088Z.json` on its first line. "No network"
+  was read as "anywhere"; it means "anywhere the report is", which today is
+  Merrick's PC only. Re-labelling them is also *not* mechanical — the importer
+  says so in its own header, because the prose names sources by shorthand
+  title.
 
 Everything else in item 1 has to happen where the network does: a local run on
 Merrick's PC, where `npm run evaluate` can retrieve (`EVAL_SKIP_CRITIQUE=1`

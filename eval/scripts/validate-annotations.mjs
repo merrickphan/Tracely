@@ -8,8 +8,36 @@
 // none of them can detect its violation on their own.
 
 import { loadAnnotations, joinToReport, SOURCE_LABELS } from './annotations.mjs'
-import { reportPath } from './paths.mjs'
-import { existsSync, readFileSync } from 'fs'
+import { REPO, reportPath } from './paths.mjs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
+
+/**
+ * Per-source verdicts in eval/retrieval/labels — the OTHER label store.
+ *
+ * This script counts `sources[].label` in eval/annotations and prints "N
+ * labelled sources", and that number was read for days as the total amount of
+ * per-source labelling in the repo. It is not. eval/retrieval/labels holds
+ * positional `verdicts` arrays over the same rel/marg/irr scale, read by
+ * rank.mjs and floor.mjs; eval/scripts/fit-weights.mjs reads only annotations.
+ * So "0 labelled sources" was true of the store the fitter reads and false of
+ * the repo, and the ~200 floor below was reported as unmet while 288 verdicts
+ * sat one directory over.
+ *
+ * Counted, never merged: the two stores are joined to different reports by
+ * different keys, and adding them into one number would make the fitter look
+ * fed when it still sees nothing.
+ */
+function retrievalVerdictCount() {
+  const dir = `${REPO}/eval/retrieval/labels`
+  if (!existsSync(dir)) return { files: 0, verdicts: 0 }
+  const files = readdirSync(dir).filter((f) => f.endsWith('.json'))
+  let verdicts = 0
+  for (const file of files) {
+    const parsed = JSON.parse(readFileSync(`${dir}/${file}`, 'utf8'))
+    for (const claim of parsed.claims ?? []) verdicts += (claim.verdicts ?? []).length
+  }
+  return { files: files.length, verdicts }
+}
 
 const { annotations, problems } = loadAnnotations()
 
@@ -69,10 +97,21 @@ console.log(`  drafts with paragraph roles: ${withRoles}/${annotations.length}\n
 // thresholds anything enforces — but a fit at n=13 that nobody warned you
 // about is how a hand-tuned number acquires the authority of a measurement.
 if (sources < 200) {
+  const other = retrievalVerdictCount()
   console.log(
-    `  NOTE  ${sources} labelled sources. Fitting the relevance floor wants ~200+;\n` +
-      `        below that the threshold moves with two or three individual judgements.\n`
+    `  NOTE  ${sources} labelled sources in eval/annotations. Fitting the relevance\n` +
+      `        floor wants ~200+; below that the threshold moves with two or three\n` +
+      `        individual judgements.\n`
   )
+  if (other.verdicts > 0) {
+    console.log(
+      `        eval/retrieval/labels holds ${other.verdicts} per-source verdicts across\n` +
+        `        ${other.files} file(s) — the same rel/marg/irr scale, a different store.\n` +
+        `        rank.mjs and floor.mjs read those; eval:fit reads only the count above.\n` +
+        `        So the labelling exists and the fitter cannot see it. Reconciling the\n` +
+        `        two stores is cheaper than labelling ~200 sources again.\n`
+    )
+  }
 }
 if (claims < 40) {
   console.log(
