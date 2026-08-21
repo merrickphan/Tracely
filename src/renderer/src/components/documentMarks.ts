@@ -141,13 +141,17 @@ export function measureMarks(
 
     // A claim nothing has been searched for yet gets no mark at all.
     //
-    // problemKindsFor answers `evidence: null` with 'searching', which is
-    // correct where it was written: Screen Watch kicks off a background search
-    // for every claim it finds, so null genuinely means "looking right now".
-    // Nothing searches automatically in this editor — runStructure is the only
-    // relay-touching path and it is explicitly user-initiated — so null here
-    // means "never looked", and drawing it would put a "Checking this claim"
-    // spinner under every sentence of a document with no search running.
+    // problemKindsFor answers `evidence: null` with 'searching', and this pass
+    // still refuses to draw that — but the reason has changed, so read it
+    // carefully before reusing the old one. It used to be "nothing searches
+    // automatically in this editor", which has been false since AnalyzeView
+    // started sweeping unsearched claims. The reason now is narrower: a mark
+    // HERE is a finding, carrying a colour and a hover card written against a
+    // claim that has an answer, and a claim being searched has neither.
+    //
+    // That in-flight state IS drawn, by `measurePendingMarks` below — a grey
+    // line in its own layer with no card. So null still means "no finding to
+    // report", and "checking this" is no longer the same thing as silence.
     //
     // Underlining an unchecked claim in any colour makes the same mistake the
     // coverage line used to: reporting a verdict Tracely has not reached.
@@ -280,6 +284,82 @@ export function measureProseMarks(body: HTMLElement, wrap: HTMLElement): ProseMa
     if (rects.length === 0) continue
 
     marks.push({ issue, rects })
+  }
+
+  return marks
+}
+
+/** A claim that has been found but not yet checked. Rects only — see below. */
+export interface PendingMark {
+  claimId: string
+  rects: MarkRect[]
+}
+
+/**
+ * Where the claims currently being searched sit on the page.
+ *
+ * ── Why this is separate from `measureMarks` ───────────────────────────────
+ * `measureMarks` refuses to draw a claim with no evidence, and that rule is
+ * right: underlining one in any of the problem colours reports a verdict
+ * Tracely has not reached. But the note explaining it says *"Nothing searches
+ * automatically in this editor"*, and that stopped being true — `AnalyzeView`
+ * sweeps every unsearched claim as soon as one arrives. So there is now a real
+ * interval, several seconds long, where the app has found a sentence worth
+ * checking and is checking it, and the document shows nothing at all.
+ *
+ * Screen Watch has always drawn this state; `problemCopy.ts` already gives it a
+ * colour (grey, `#9a9ba1`) and a label ("Checking…"). The editor is the only
+ * surface that went blank instead.
+ *
+ * ── Rects only, and no popover ─────────────────────────────────────────────
+ * A `DocumentMark` carries a non-null `evidence` and a `MarkProblemKind` that
+ * deliberately excludes `searching`, because the hover card is written against
+ * a claim that has an answer. Rather than widen both to admit a state with
+ * nothing to say, this is its own list: a progress indicator, `pointer-events:
+ * none`, no card. Hovering something that cannot explain itself is worse than
+ * not being able to hover it.
+ *
+ * Caller passes only the claims it is ACTUALLY searching. A claim with no
+ * evidence and no search running is "never looked", which is not this.
+ */
+export function measurePendingMarks(
+  body: HTMLElement,
+  wrap: HTMLElement,
+  claims: Claim[]
+): PendingMark[] {
+  if (claims.length === 0) return []
+
+  const { text, nodes } = buildTextMap(body)
+  if (nodes.length === 0) return []
+
+  const wrapRect = wrap.getBoundingClientRect()
+  const zoom = readZoom(wrap.ownerDocument.defaultView, wrap.ownerDocument.documentElement)
+  const marks: PendingMark[] = []
+
+  for (const span of computeClaimSpans(text, claims)) {
+    const from = locate(nodes, span.start)
+    const to = locate(nodes, span.end)
+    if (!from || !to) continue
+
+    const range = document.createRange()
+    try {
+      range.setStart(from.node, from.offset)
+      range.setEnd(to.node, to.offset)
+    } catch {
+      continue
+    }
+
+    const rects = Array.from(range.getClientRects())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({
+        left: contentOffset(rect.left - wrapRect.left, wrap.scrollLeft, zoom),
+        top: contentOffset(rect.top - wrapRect.top, wrap.scrollTop, zoom),
+        width: clientToLayout(rect.width, zoom),
+        height: clientToLayout(rect.height, zoom)
+      }))
+    if (rects.length === 0) continue
+
+    marks.push({ claimId: span.claim.id, rects })
   }
 
   return marks

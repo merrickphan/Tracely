@@ -19,7 +19,7 @@ import {
 } from '@shared/markMotion'
 import type { ProseIssue } from '@shared/proseIssues'
 import type { CitationStyle } from '@shared/types'
-import type { DocumentMark, MarkRect, ProseMark } from './documentMarks'
+import type { DocumentMark, MarkRect, PendingMark, ProseMark } from './documentMarks'
 import MarkdownText from './MarkdownText'
 import { PROBLEM_COLOR, PROBLEM_LABEL, opensFixFlow, popoverCopyFor } from './problemCopy'
 import { insertsCitation } from '@shared/citationAction'
@@ -297,6 +297,50 @@ export interface DocumentMarkLayerProps {
  */
 export const PROSE_ERROR = '#2563eb'
 export const PROSE_STYLE = '#9aa1ad'
+
+/**
+ * The claims Tracely has found and is checking right now.
+ *
+ * No colour choice and no hover: this says "working on it", and the instant it
+ * knows anything a real mark replaces it. `data-claim-id` is here for the same
+ * reason every other mark carries one — these layers render no text, so this is
+ * the only way to read them when inspecting or preview-testing.
+ *
+ * `MarkRect` is positioned in content coordinates, so the layer is sized to the
+ * wrap exactly like the two above it.
+ */
+export function PendingMarkLayer({
+  marks,
+  wrapWidth,
+  wrapHeight
+}: {
+  marks: PendingMark[]
+  wrapWidth: number
+  wrapHeight: number
+}): JSX.Element {
+  return (
+    <div
+      className="docmark-layer docpending-layer"
+      style={{ width: wrapWidth, height: wrapHeight }}
+    >
+      {marks.map((mark) =>
+        mark.rects.map((rect, i) => (
+          <span
+            key={`${mark.claimId}-${i}`}
+            className="docpending"
+            data-claim-id={mark.claimId}
+            style={{
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height
+            }}
+          />
+        ))
+      )}
+    </div>
+  )
+}
 
 export function ProseMarkLayer({
   marks,

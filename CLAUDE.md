@@ -831,6 +831,47 @@ It used to be a rail beside the editor (`StructurePanel.tsx`). The rail was remo
 - **The `contradicted` verdict is its own problem kind, not weak reasoning.** `CRITIQUE_SYSTEM_PROMPT` reserves it for "a specific fact you're confident is factually wrong" and tells the model to fall through to the rigor pass whenever it is merely unsure — so it is a claim about truth, while every other kind is a claim about support. `problemKind.ts` ranks `contradicted-claim` above everything, including `cited-unverified`.
 - **The critique cache is keyed on the claim's TEXT, not its id** (`ai/critique.ts`, v6). Screen Watch mints a fresh `randomUUID()` per detection, so an id-keyed entry could never be hit there: re-detecting an unchanged sentence paid a fresh call on the reasoning model, the most expensive call in the product. `strengthScore` is in the key too, because it is in the request body.
 - **Screen Watch claims need BOTH evidence fields folded in.** `withEvidenceScores` in `screenWatchService.ts` sets `strengthScore` *and* `scoreBreakdown`, because `computeEvidenceCoverage` decides "has a relevant source" from `scoreBreakdown.sourceCount`. Folding only the score marks every searched claim resolved-but-unsourced, producing an `unsupported-claim` weakness for every claim that in fact *has* sources. `evidenceCoverage.test.ts` pins this.
+- **The editor DETECTS CLAIMS automatically now, so underlines need no button**
+  (`shared/liveDetect.ts`, the live-detect effect in `AnalyzeView`). Owner,
+  2026-08-21: *"How can we get the underlines to appear immediately, kind of
+  like Grammarly, instead of waiting until we click the 'grade essay' button?"*
+  - **Detection is not grading, and only ONE of them was ever the button's
+    job.** `runStructure` makes two relay calls: `detect-claims`, which is what
+    marks are made of, and `grade-draft`, the essay score. Only the first has
+    anything to do with underlines. So detection is automatic and **`AI
+    Insights` still means "grade my essay"** — automating the second would
+    spend the expensive call on every pause and pop a report nobody asked for.
+  - **The bounds are Screen Watch's, because it solved this already**: a 2.5s
+    idle debounce (shorter than STABLE_MS — an input event is exact where a
+    1200ms poll is not), `MIN_DETECT_CHARS` 80, `MIN_DETECT_DELTA_CHARS` 80,
+    and `MIN_DETECT_INTERVAL_MS` 15s, which is the real ceiling: the idle timer
+    alone bounds nothing, since type-pause-type clears it forever. Re-detecting
+    UNCHANGED text is free (`claimDetection.ts` caches on an input hash), so
+    what these bound is text that genuinely moved on.
+  - **`lastDetectRef` is stamped BEFORE the call**, so the floor measures the
+    gap between requests rather than between answers, and a manual
+    `runStructure` stamps it too — otherwise pressing the button and pausing
+    re-detects the same text.
+  - **The debounce keys off `textTick`, NOT `measureTick`.** `measureTick` also
+    counts layout (a ResizeObserver on the editor bumps it), so dragging the
+    window edge would clear the timer for as long as the drag lasted and
+    detection would never run.
+- **A claim being CHECKED is drawn, in its own layer**
+  (`measurePendingMarks`, `.docpending`). `measureMarks` still refuses to draw
+  a claim with no evidence — but its stated reason, *"nothing searches
+  automatically in this editor"*, has been false since the sweep landed, and
+  the honest reason is narrower: a mark THERE is a finding with a colour and a
+  hover card, and a claim mid-search has neither. So the in-flight state gets a
+  grey dotted line with **no popover** — hovering something that cannot explain
+  itself is worse than not being able to hover it. Grey `#9a9ba1` is the colour
+  `problemCopy.ts` already gives `searching` on the overlay, so both surfaces
+  say "checking" the same way. `z-index: 0`, under prose (1) and claims (2),
+  and `pointer-events: none` like every other layer — verified in the harness
+  that a click at a marked word still lands on `docedit-body`, which is the
+  Screen Watch click-through bug the prose layer already reintroduced once.
+  The pulse is **opacity only** (composited, and it rests at the VISIBLE end,
+  so a non-compositing window degrades to a steady line rather than an
+  invisible one — the overlay entrance-fade trap).
 - **The editor searches evidence automatically, and that is what draws the
   underlines.** `measureMarks` skips any claim with no evidence (null means
   "never looked", and underlining an unchecked claim reports a verdict Tracely
