@@ -13,7 +13,7 @@
 
 import { createRequire } from 'module'
 import { existsSync, readFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { dirname, join, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { Worker } from 'worker_threads'
 import { loadEnv } from './env.mjs'
@@ -114,30 +114,73 @@ const CLOSURE_ROOTS = ['@huggingface/transformers', 'sharp', 'onnxruntime-node']
 // keeps it out of the archive entirely.
 const CLOSURE_SKIP = new Set(['onnxruntime-web'])
 
-function closureFrom(nodeModules) {
-  const found = new Set()
-  const visit = (name) => {
-    if (found.has(name) || CLOSURE_SKIP.has(name)) return
-    const pkg = join(nodeModules, ...name.split('/'), 'package.json')
-    if (!existsSync(pkg)) return
-    found.add(name)
-    let deps = {}
-    try {
-      deps = JSON.parse(readFileSync(pkg, 'utf8')).dependencies ?? {}
-    } catch {
-      // A package.json we cannot read is one we cannot walk. It is still
-      // required to be unpacked below, which is the assertion that matters.
-    }
-    for (const dep of Object.keys(deps)) visit(dep)
+/**
+ * Every package.json the worker can reach, resolved the way NODE resolves.
+ *
+ * Walking dependency NAMES from the top-level node_modules is not the same
+ * thing and gets a different answer: npm nests a package when versions
+ * conflict, so `sharp` requires semver ^7 and gets `sharp/node_modules/semver`
+ * while the top level holds an unrelated 6.3.1 that nothing here loads. The
+ * name walk demanded the top-level copy, the build failed for a package the
+ * worker never asks for, and the one it does ask for was already covered by
+ * `sharp/**`.
+ *
+ * So each dependency is resolved FROM ITS REQUIRER, which is positional in
+ * exactly the way Node is, and the result is a set of real paths rather than a
+ * set of names.
+ */
+function findPackage(name, fromPath) {
+  // Node's own node_modules walk, done by hand.
+  //
+  // `createRequire().resolve('<name>/package.json')` cannot be used here and
+  // that is not a detail: @huggingface/transformers ships an `exports` map that
+  // does not expose ./package.json, so resolve THROWS for the single most
+  // important package in this check. The first version caught that and returned
+  // — silently skipping transformers and both its @huggingface dependencies,
+  // and reporting a confident PASS over a closure with the subject missing from
+  // it. A guard that skips what it is guarding is worse than no guard.
+  let dir = dirname(fromPath)
+  for (;;) {
+    const candidate = join(dir, 'node_modules', ...name.split('/'), 'package.json')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
   }
-  for (const root of CLOSURE_ROOTS) visit(root)
-  return [...found].sort()
 }
 
-const closure = closureFrom(join(REPO, 'node_modules'))
+function closurePaths(entryFile) {
+  const found = new Set()
+  const visit = (name, fromPath) => {
+    const pkgJson = findPackage(name, fromPath)
+    // Genuinely absent — an optional dependency npm did not install for this
+    // platform. Nothing to assert about it.
+    if (!pkgJson) return
+    if (found.has(pkgJson)) return
+    found.add(pkgJson)
+    let deps = {}
+    try {
+      deps = JSON.parse(readFileSync(pkgJson, 'utf8')).dependencies ?? {}
+    } catch {
+      // Unreadable package.json. It is still required to be unpacked below,
+      // which is the assertion that matters.
+    }
+    for (const dep of Object.keys(deps)) {
+      if (!CLOSURE_SKIP.has(dep)) visit(dep, pkgJson)
+    }
+  }
+  for (const root of CLOSURE_ROOTS) visit(root, entryFile)
+  return [...found]
+}
+
+const closure = closurePaths(WORKER)
 if (closure.length === 0) fail('could not compute the ML dependency closure — is node_modules installed?')
-const unpackedModules = join(RESOURCES, 'app.asar.unpacked', 'node_modules')
-const missing = closure.filter((name) => !existsSync(join(unpackedModules, ...name.split('/'))))
+const unpackedRoot = join(RESOURCES, 'app.asar.unpacked')
+const missing = closure
+  // Each resolved path, relocated to where electron-builder should have put it.
+  .map((abs) => ({ abs, at: join(unpackedRoot, relative(REPO, abs)) }))
+  .filter(({ at }) => !existsSync(at))
+  .map(({ abs }) => relative(REPO, abs).split('\\').join('/').replace(/\/package\.json$/, ''))
 if (missing.length > 0) {
   fail(
     `${missing.length} of ${closure.length} ML packages are not unpacked: ${missing.join(', ')}. ` +
