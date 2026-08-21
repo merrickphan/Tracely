@@ -36,9 +36,33 @@ import type { Author, VenueType } from '@shared/types'
 /** Matches MAX_EVIDENCE_RESULTS; the writer asked for at most five options. */
 const MAX_WEB_SOURCES = 5
 const CHECK_TIMEOUT_MS = 8000
-// A day. What the open web says about a historical claim does not move
-// intraday, and the cost here is a web-search call rather than a chat call.
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24
+/**
+ * A week, raised from a day.
+ *
+ * What the open web says about "Hepburn raised money for the Dutch resistance"
+ * does not change between Tuesday and Friday, and this is the most expensive
+ * single call in the product — OpenAI bills the `web_search_preview` tool per
+ * call on top of tokens, and the prompt runs several site-restricted queries
+ * inside each one. A 24-hour TTL meant re-opening the same draft the next
+ * morning paid for the whole draft again.
+ *
+ * The risk a short TTL was buying — a stale answer — is small here and gets
+ * smaller the more specific the claim. The risk it was creating, re-paying
+ * daily for an unchanged document, is the one that showed up on the bill.
+ */
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7
+/**
+ * An EMPTY answer is held for minutes, not a week.
+ *
+ * The same split `cachedEvidence.ts` had to learn: every failure path here —
+ * the relay refusing, a timeout, every URL failing its liveness check — arrives
+ * at the cache as the same empty list as "the web genuinely has nothing". They
+ * are not the same, an empty result is far more likely transient, and it is the
+ * one answer a writer retries. Freezing it for a week would make a fixed
+ * retrieval bug invisible for a week, which is exactly how three consecutive
+ * correct fixes went unnoticed in August.
+ */
+const EMPTY_TTL_MS = 1000 * 60 * 10
 
 /**
  * How much of the claim a source actually carries — the relay's own honest
@@ -269,6 +293,7 @@ export async function findWebSources(
   }
 
   const result: WebSourceResult = { sources, note: response.note ?? '', dropped }
-  setCached(key, 'search:web', result, CACHE_TTL_MS)
+  // Minutes for an empty answer, a week for a real one — see EMPTY_TTL_MS.
+  setCached(key, 'search:web', result, sources.length === 0 ? EMPTY_TTL_MS : CACHE_TTL_MS)
   return result
 }

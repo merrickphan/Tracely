@@ -1025,3 +1025,40 @@ positive it would otherwise produce on ordinary academic prose.
 
 - Citation author formatting truncates to "et al." after 3 authors rather than implementing full APA/MLA/Chicago author-list rules.
 - PubMed results have no abstract (would need a second NCBI `efetch` call per result; the other three providers already include abstracts).
+
+- **Web search is a FALLBACK, capped, and cached for a week** (`search/webBudget.ts`,
+  the fallback branch in `aggregator.ts`, `CACHE_TTL_MS`/`EMPTY_TTL_MS` in
+  `webSources.ts`). Measured on the owner's OpenAI dashboard, 2026-08-21: the
+  first day web search ever actually ran in a packaged build cost $0.62, against
+  $1.18 for the entire preceding fortnight. Fourteen web searches were ~53c of
+  it; every chat call combined — 13 critiques, 20 detections, 8 grades — was ~9c.
+  - **Its cost is invisible to our own usage log, and that is why a cap was
+    needed rather than a dashboard.** OpenAI bills `web_search_preview` per call,
+    separately from tokens, and `response.usage` does not carry it — so
+    `[usage] find-sources … cost=$…` reports the smaller half. The prompt also
+    runs several site-restricted queries inside one call (seven observed), so one
+    cache entry is many billed searches.
+  - **The fallback does the saving; the cap is a ceiling.** `findWebSources` left
+    the `Promise.all` fan-out — running it beside five free providers meant paying
+    on every `general` claim whether or not those providers had already answered.
+    It now runs only when nothing from them is both above the relevance floor and
+    `credibilityOf(...).citable`. Replayed against yesterday's real workload: 43%
+    of claims already had a citable free source, taking an 8-claim essay from 8
+    web searches to 4.6 with no quality loss. A cap of 4 would buy ~7 more points
+    by denying the web to claims that need it — the "No sources found" card this
+    provider exists to fix — so it is 6, matching `MAX_AUTO_CRITIQUE_CLAIMS`.
+  - **CITABILITY, not just relevance, is the test.** A Wikipedia hit clears the
+    relevance floor easily and must NOT suppress the paid search: it is a finding
+    aid, and a claim whose only relevant result is an encyclopedia article is
+    exactly the claim the web search was added for.
+  - **The hourly cap is not redundant with the per-analysis one.** The
+    per-analysis cap assumes analyses are discrete; Screen Watch mints a fresh
+    claim id per detection and passes no analysis at all, and the editor now
+    detects on a debounce. A loop with a new analysis each time would honour the
+    per-analysis cap perfectly and still spend without limit.
+  - **A 24h TTL meant re-opening a draft the next morning re-paid for all of it.**
+    Now a week — what the open web says about a historical claim does not move
+    between Tuesday and Friday. An EMPTY answer still expires in minutes, the same
+    split `cachedEvidence.ts` had to learn: every failure path arrives as the same
+    empty list as "the web genuinely has nothing", and freezing that for a week
+    would hide a fixed retrieval bug for a week.

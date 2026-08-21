@@ -20,6 +20,9 @@ import type { NormalizedSourceResult } from './types'
 // to hold when reading rows a PREVIOUS search stored — see the note there.
 import { MAX_EVIDENCE_RESULTS } from '@shared/evidenceLimits'
 import { findWebSources } from './webSources'
+import { takeWebSearch } from './webBudget'
+// "Would a marker accept this" — the second half of the fallback test below.
+import { credibilityOf } from '@shared/sourceCredibility'
 
 const PER_PROVIDER_LIMIT = 6
 // How many sources the strength score is computed from. Deliberately NOT
@@ -267,6 +270,30 @@ function relevanceText(item: NormalizedSourceResult): string {
  * Falls back to coverage whenever the model is unavailable — the caller is
  * told which metric came back, because the two need different thresholds.
  */
+/**
+ * Did the free providers return anything a writer could actually cite?
+ *
+ * Two conditions, and both are needed. Relevance alone is what the DISPLAY set
+ * already filters on, so it answers "would the card show anything at all".
+ * Citability is `shared/sourceCredibility.ts`'s question — "would a marker
+ * accept this" — and it is what stops a WIKIPEDIA hit from suppressing the
+ * paid search. Wikipedia is a finding aid and every style guide says so; a
+ * claim whose only relevant result is an encyclopedia article is precisely the
+ * claim the web search exists for.
+ *
+ * Cheap and local: a relevance number already computed and a host lookup.
+ */
+function hasCitableSource(
+  items: NormalizedSourceResult[],
+  relevances: number[],
+  metric: RelevanceMetric
+): boolean {
+  const floor = MIN_COUNTABLE_RELEVANCE[metric]
+  return items.some(
+    (item, index) => relevances[index] >= floor && credibilityOf(item).citable
+  )
+}
+
 async function computeRelevances(
   claimText: string,
   items: NormalizedSourceResult[]
@@ -284,7 +311,16 @@ async function computeRelevances(
 
 export async function findEvidence(
   query: string,
-  claimText: string
+  claimText: string,
+  /**
+   * Which analysis this claim belongs to, for the paid web-search budget.
+   *
+   * Optional and null-safe: Screen Watch has no persisted analysis, and every
+   * caller without one shares a single bucket bounded by the hourly ceiling —
+   * see `webBudget.ts` for why that is the conservative reading rather than a
+   * gap.
+   */
+  analysisId: string | null = null
 ): Promise<{
   evidence: RankedSourceResult[]
   score: number
@@ -321,30 +357,10 @@ export async function findEvidence(
     // The match threshold was calibrated against full claim sentences, not
     // the shorter search query generated for scholarly APIs.
     domain === 'statistical' ? safeSearch('worldbank', worldBank.search, claimText) : Promise.resolve([]),
-    /**
-     * The web, for claims the four indexes structurally cannot answer.
-     *
-     * `general` is biography, history, definitions and institutions — the
-     * claims whose sources live on unicef.org, in a national biography, or in
-     * journalism, and in none of OpenAlex, Crossref, Semantic Scholar or
-     * PubMed. Measured on a real biography essay: every one of sixteen
-     * retrieved sources scored below the relevance floor, because the right
-     * ones were never in the candidate set to be ranked.
-     *
-     * The ONE paid provider here, which is why it is gated on the router
-     * rather than run for everything: a scholarly claim already has four free
-     * indexes that answer it well, and paying for a web search on top would buy
-     * very little. It is also why a misroute now costs money rather than a
-     * wasted free request — the argument for keeping the router honest just got
-     * stronger.
-     *
-     * `safeSearch` is not used: this is not a `(query, limit)` provider, it
-     * takes the claim and the draft's subject, and its own failure path already
-     * returns an empty list rather than throwing.
-     */
-    domain === 'general'
-      ? findWebSources(claimText, query).then((r) => r.sources)
-      : Promise.resolve([])
+    // The web is NOT here any more — see the fallback below. It is the one
+    // paid provider, and running it beside five free ones meant paying on every
+    // `general` claim whether or not the free ones had already answered.
+    Promise.resolve<NormalizedSourceResult[]>([])
   ])
 
   const clusters: NormalizedSourceResult[] = []
@@ -374,7 +390,56 @@ export async function findEvidence(
   // provider ranked its own result highest — see blendedRelevance/
   // computeTextRelevance for why: provider rank alone let confidently wrong
   // top hits pass straight through.
-  const { values, metric } = await computeRelevances(claimText, clusters)
+  let { values, metric } = await computeRelevances(claimText, clusters)
+
+  /**
+   * The web, and ONLY when the free indexes came back with nothing usable.
+   *
+   * `general` is biography, history, definitions and institutions — claims
+   * whose sources live on unicef.org, in a national biography or in
+   * journalism, and in none of OpenAlex, Crossref, Semantic Scholar or PubMed.
+   * That argument is unchanged and is why this provider exists.
+   *
+   * What changed is WHEN it runs. It used to sit in the fan-out above, so every
+   * `general` claim paid for a web search in parallel with five free providers
+   * — including the claims those providers answered perfectly well. Measured on
+   * the owner's dashboard, 2026-08-21: fourteen web searches were about 53c of
+   * a 62c day, against nine cents for every chat call combined.
+   *
+   * The test is the relevance floor the DISPLAY set already uses, so this asks
+   * exactly the question the card asks: is there anything here a writer could
+   * actually cite? If yes, a paid search buys a sixth option for a claim that
+   * already had five. If no, the card would otherwise read "No sources found",
+   * which is the state this provider was added to fix.
+   *
+   * `safeSearch` is not used: this is not a `(query, limit)` provider, it takes
+   * the claim and the draft's subject, and its own failure path already returns
+   * an empty list rather than throwing.
+   */
+  if (domain === 'general' && !hasCitableSource(clusters, values, metric)) {
+    const budget = takeWebSearch(analysisId, Date.now())
+    if (budget.allowed) {
+      const web = (await findWebSources(claimText, query)).sources
+      const fresh = web.filter((item) => findDuplicateIndex(clusters, item) === -1)
+      if (fresh.length > 0) {
+        // Relevance for the new candidates only. The worker round-trip
+        // dominates, so this is one extra batched call rather than a re-run
+        // over everything — and the existing values stay exactly as computed,
+        // which matters because the metric must not change underneath them.
+        const added = await computeRelevances(claimText, fresh)
+        // Only when both came from the same metric. A lexical fallback mixed
+        // into dense scores would compare numbers on two different scales, and
+        // the floor that separates them is different for each.
+        if (added.metric === metric) {
+          clusters.push(...fresh)
+          values = [...values, ...added.values]
+        }
+      }
+    } else {
+      console.log(`[websearch] skipped (${budget.reason}) for: ${claimText.slice(0, 60)}`)
+    }
+  }
+
   const scored = clusters.map((item, index) => ({ item, textRelevance: values[index] }))
   scored.sort((a, b) => blendedRelevance(b.item, b.textRelevance) - blendedRelevance(a.item, a.textRelevance))
 

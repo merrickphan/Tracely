@@ -103,13 +103,19 @@ function cacheKey(query: string, claimText: string): string {
  * serve pre-change results after a retrieval change and quietly invalidate
  * the comparison.
  */
-export async function findEvidenceCached(query: string, claimText: string): Promise<EvidenceResult> {
+export async function findEvidenceCached(
+  query: string,
+  claimText: string,
+  /** Passed through to the web-search budget only; NOT part of the cache key —
+   *  the answer for a claim does not depend on which analysis asked. */
+  analysisId: string | null = null
+): Promise<EvidenceResult> {
   const key = cacheKey(query, claimText)
 
   const cached = getCached<EvidenceResult>(key)
   if (cached) return cached
 
-  const { cacheable, ...result } = await findEvidence(query, claimText)
+  const { cacheable, ...result } = await findEvidence(query, claimText, analysisId)
   // An answer with nothing in it is held for minutes rather than a day — see
   // EMPTY_TTL_MS. `cacheable` is a different question (the World Bank catalogue
   // not being embedded yet) and still gates both.
