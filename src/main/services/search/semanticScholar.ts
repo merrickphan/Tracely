@@ -26,6 +26,10 @@ function toVenueType(types: string[] | null | undefined): VenueType | null {
   const joined = types.join(' ').toLowerCase()
   if (joined.includes('conference')) return 'conference'
   if (joined.includes('journal') || joined.includes('article')) return 'journal'
+  // S2's `BookSection` is a chapter, and it must be tested before the generic
+  // book branch it also matches. See shared/citationLocator.ts for why the two
+  // are not the same citation.
+  if (joined.includes('booksection')) return 'book-chapter'
   if (joined.includes('book')) return 'book'
   return 'other'
 }

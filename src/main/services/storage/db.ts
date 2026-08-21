@@ -187,6 +187,35 @@ const MIGRATIONS: Migration[] = [
       // to clear.
       addColumnIfMissing(database, 'claims', 'retrieval_generation', 'INTEGER')
     }
+  },
+  {
+    version: 7,
+    describe: "sources.venue_type — a stored 'book' with a container title is a chapter",
+    up: (database) => {
+      // Crossref types a chapter `book-chapter`, and `type.includes('book')`
+      // collapsed it onto 'book' — which citationLocator.ts gives no locator,
+      // because a book is found by author, title and publisher. A chapter is
+      // not: nothing catalogues chapter six of an edited collection, so its DOI
+      // is the only address it has. Owner, 2026-08-20, on what "Replace
+      // citation" produced: an Oreskes chapter, formatted, "with no link".
+      //
+      // This has to reach STORED rows or it fixes nothing anyone can see.
+      // upsertSource returns the existing row untouched when the DOI already
+      // matches, so a re-search never re-classifies anything — the same shape
+      // as the inherited claim scores in v6, where three consecutive correct
+      // fixes were invisible because no stored row could change.
+      //
+      // The container title is the test, and it is what the field MEANS rather
+      // than a heuristic: a chapter always sits in something, a whole book sits
+      // in nothing. Measured on the owner's two databases before writing this —
+      // 142 of 148 'book' rows carry a container, and the 6 that do not are
+      // real books (Victory at Stalingrad, Metallographie). Those keep their
+      // locator-free entry, which is the original complaint this must not undo.
+      database.exec(
+        `UPDATE sources SET venue_type = 'book-chapter'
+          WHERE venue_type = 'book' AND venue IS NOT NULL AND TRIM(venue) <> ''`
+      )
+    }
   }
 ]
 

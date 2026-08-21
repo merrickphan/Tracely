@@ -24,6 +24,13 @@ function toVenueType(type: string | undefined): VenueType | null {
   if (!type) return null
   if (type.includes('journal')) return 'journal'
   if (type.includes('proceedings') || type.includes('conference')) return 'conference'
+  // BEFORE the generic book branch, because every one of these contains
+  // "book". `type.includes('book')` sent `book-chapter` to 'book', which takes
+  // no locator — so an MIT Press chapter with a perfectly good DOI was
+  // formatted with nothing a reader could follow.
+  if (type === 'book-chapter' || type === 'book-part' || type === 'book-section') {
+    return 'book-chapter'
+  }
   if (type.includes('book')) return 'book'
   return 'other'
 }
