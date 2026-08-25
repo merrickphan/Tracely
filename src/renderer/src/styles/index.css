@@ -6945,3 +6945,205 @@ textarea:disabled {
     font-size: 17px;
   }
 }
+
+/* ── Home's source finder ─────────────────────────────────────────────────
+ *
+ * A dialog rather than a route: it answers one question and gets out of the
+ * way, and it owns nothing the app has to remember afterwards. Sized against
+ * the smallest window the app allows (680x480) so it never needs the page
+ * behind it to be scrolled to reach its own buttons — the mistake the citation
+ * card made when it was allowed to grow past the editor.
+ */
+.srcfind-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 16, 18, 0.42);
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
+}
+
+.srcfind {
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh / var(--app-zoom, 1) - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #fff);
+  color: var(--text, #1c1c1c);
+  border: 1px solid var(--line, #e6e6e2);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  padding: 20px;
+  gap: 12px;
+}
+
+.srcfind-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.srcfind-head h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.srcfind-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted, #6d6d68);
+}
+.srcfind-close {
+  border: 0;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted, #6d6d68);
+  padding: 0 4px;
+}
+.srcfind-close:hover { color: var(--text, #1c1c1c); }
+
+.srcfind-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: inherit;
+  background: var(--input-bg, #fafaf8);
+  border: 1px solid var(--line, #e6e6e2);
+  border-radius: 9px;
+}
+.srcfind-input:focus {
+  outline: 2px solid var(--accent, #ff5900);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.srcfind-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.srcfind-hint { font-size: 12px; color: var(--muted, #6d6d68); }
+.srcfind-go {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent, #ff5900);
+  cursor: pointer;
+}
+.srcfind-go:disabled { opacity: 0.45; cursor: default; }
+
+/* The results are what scrolls — the header, the box and the button stay put,
+   so the control you press is never below the fold. */
+.srcfind-results { overflow-y: auto; min-height: 0; }
+.srcfind-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 2px;
+  font-size: 13.5px;
+  color: var(--muted, #6d6d68);
+}
+.srcfind-note {
+  margin: 6px 2px;
+  font-size: 13.5px;
+  color: var(--muted, #6d6d68);
+}
+.srcfind-error { color: var(--danger, #d93636); }
+
+.srcfind-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.srcfind-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line-soft, #f0f0ec);
+}
+.srcfind-row:last-child { border-bottom: 0; }
+
+/* 28px / 8px radius — the same box the overlay and the editor draw, so a
+   favicon and the two-letter fallback sit on one grid. */
+.srcfind-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--chip-bg, #f2f2ee);
+  color: var(--muted, #6d6d68);
+  overflow: hidden;
+}
+.srcfind-badge.has-icon { background: transparent; }
+.srcfind-badge img { width: 100%; height: 100%; object-fit: contain; }
+
+.srcfind-row-main { min-width: 0; }
+.srcfind-row-title { font-size: 13.5px; font-weight: 550; line-height: 1.35; }
+.srcfind-row-meta { font-size: 12px; color: var(--muted, #6d6d68); margin-top: 2px; }
+.srcfind-row-cite {
+  font-size: 11.5px;
+  color: var(--muted, #6d6d68);
+  margin-top: 6px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.srcfind-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+}
+.srcfind-match { font-size: 11.5px; color: var(--muted, #6d6d68); font-variant-numeric: tabular-nums; }
+
+/* Grey for `unvetted`, and that is the whole point: it means "Tracely does not
+   recognise this publisher", which is a fact about our list rather than about
+   the site. Never red. */
+.srcfind-cred {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--chip-bg, #f2f2ee);
+  color: var(--muted, #6d6d68);
+}
+.srcfind-cred[data-tier='scholarly'] { background: rgba(47, 125, 79, 0.12); color: #2f7d4f; }
+.srcfind-cred[data-tier='official'] { background: rgba(47, 125, 79, 0.12); color: #2f7d4f; }
+.srcfind-cred[data-tier='reference'] { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+.srcfind-cred[data-tier='news-of-record'] { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+
+.srcfind-row-btns { display: flex; gap: 6px; margin-top: 2px; }
+.srcfind-open,
+.srcfind-copy {
+  border: 1px solid var(--line, #e6e6e2);
+  background: none;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text, #1c1c1c);
+  cursor: pointer;
+}
+.srcfind-open:hover,
+.srcfind-copy:hover { background: var(--chip-bg, #f2f2ee); }

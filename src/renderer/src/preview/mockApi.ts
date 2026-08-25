@@ -313,7 +313,54 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
           }
         })
       },
-      getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence })
+      getForClaim: () => ok('evidence.getForClaim', { evidence: fx.evidence }),
+      /**
+       * Home's source finder.
+       *
+       * Returns the fixture sources ordered and labelled the way main does it,
+       * so the harness shows the real ranking rather than the fixture's order —
+       * and honours the short-text refusal, because "type a bit more" is a
+       * state the panel has to render and is otherwise unreachable here.
+       */
+      forText: (req) => {
+        const trimmed = (req.text ?? '').trim()
+        if (trimmed.length < 25) {
+          return ok('evidence.forText', {
+            candidates: [],
+            citations: {},
+            note: 'Type a sentence or two — at least 25 characters — and Tracely will look for sources that speak to it.'
+          })
+        }
+        const candidates = byCredibility(
+          fx.sources.map((s, i) => ({
+            sourceRef: `text:${i}`,
+            title: s.title,
+            venue: s.venue,
+            year: s.year,
+            provider: s.provider,
+            url: s.url,
+            matchPercent: [88, 71, 63, 44][i] ?? 38,
+            faviconDataUrl: null,
+            credibility: credibilityOf({
+              url: s.url,
+              venue: s.venue,
+              venueType: s.venueType,
+              doi: s.doi
+            })
+          })),
+          (c) => c.credibility.tier
+        )
+        return ok('evidence.forText', {
+          candidates,
+          citations: Object.fromEntries(
+            candidates.map((c, i) => [
+              c.sourceRef,
+              `${fx.sources[i]?.authors?.[0]?.family ?? 'Author'}, ${fx.sources[i]?.year ?? 'n.d.'}. ${c.title}. ${c.venue ?? ''}`.trim()
+            ])
+          ),
+          note: null
+        })
+      }
     },
     citation: {
       /**

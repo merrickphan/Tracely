@@ -521,6 +521,39 @@ export interface ScreenWatchSourceCandidate {
    */
   credibility: Credibility
 }
+/**
+ * Sources for a piece of text the user typed, with no document behind it.
+ *
+ * Home's source finder. Everything else in the app searches for sources FOR a
+ * detected claim — which means a document, an analysis and a stored claim row
+ * have to exist first. This is the same retrieval with none of that: paste a
+ * sentence, get the sources that speak to it.
+ *
+ * The response reuses `ScreenWatchSourceCandidate` deliberately. It already
+ * carries the favicon and the credibility verdict, and reusing it means Home's
+ * rows can be the same rows the overlay and the editor draw — one source list
+ * in the product, not three that drift.
+ */
+export interface EvidenceForTextRequest {
+  text: string
+  style: CitationStyle
+}
+export interface EvidenceForTextResponse {
+  candidates: ScreenWatchSourceCandidate[]
+  /**
+   * A formatted reference per candidate, keyed by sourceRef.
+   *
+   * Precomputed here because this surface has nothing else to do with a source
+   * — there is no sentence to insert a marker into, so the citation IS the
+   * deliverable and every row needs one. That is the opposite of the citation
+   * flow's reasoning for NOT precomputing (three styles x N candidates, nearly
+   * all discarded); here it is one style x N and all of it is shown.
+   */
+  citations: Record<string, string>
+  /** Null when the text was too short or nothing came back. */
+  note: string | null
+}
+
 export interface ScreenWatchFindSourceResponse {
   candidates: ScreenWatchSourceCandidate[]
   /**

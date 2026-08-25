@@ -3,6 +3,8 @@ import type { ScreenWatchStatus } from '@shared/ipc-contract'
 import type { DocumentListItem } from '@shared/types'
 import { computeHomeStats } from '@shared/homeStats'
 import { greetingFor } from '@shared/greeting'
+import SourceFinderPanel from '../components/SourceFinderPanel'
+import type { CitationStyle } from '@shared/types'
 import type { Tab } from '../App'
 import figmaLogo from '../assets/figma-logo.png'
 import tracerBadge from '../assets/tracer-badge.png'
@@ -105,10 +107,25 @@ export default function HomeView({
   const [screenWatch, setScreenWatch] = useState<ScreenWatchStatus | null>(null)
   const [openGuide, setOpenGuide] = useState<string | null>(null)
   const [tracerOpen, setTracerOpen] = useState(false)
+  const [finderOpen, setFinderOpen] = useState(false)
+  /**
+   * The style the finder formats its results in.
+   *
+   * Read from settings rather than defaulted, because a citation shown in a
+   * style the user does not write in is one they have to retype. Falls back to
+   * APA only until the read resolves.
+   */
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>('APA')
   const [documents, setDocuments] = useState<DocumentListItem[]>([])
 
   useEffect(() => {
     tracelyApi.getScreenWatchStatus().then(setScreenWatch)
+    // The finder formats its results in the user's own style. A failed read
+    // leaves the APA default rather than blocking the panel.
+    tracelyApi
+      .getSettings()
+      .then((s) => setCitationStyle(s.defaultCitationStyle))
+      .catch(() => {})
     return tracelyApi.onScreenWatchStatus(setScreenWatch)
   }, [])
 
@@ -222,30 +239,29 @@ export default function HomeView({
             </span>
           </button>
           {/*
-            Disabled, not omitted, and not wired to something else.
+            Replaces the disabled "Paste a link" card that sat here.
 
-            The design has this card and there is no paste-a-link path in the
-            app: nothing fetches a URL, and the four search providers index
-            papers rather than arbitrary pages. A button that silently did
-            something adjacent — opened a new document, say — would be worse
-            than one that says it is not ready, which is the same rule the
-            citation flow follows when it will not offer "Find a source" over a
-            claim it cannot search for.
+            That card was in the design and had nothing behind it — nothing in
+            the app fetches a URL, and the four indexes hold papers rather than
+            arbitrary pages — so it was rendered disabled rather than wired to
+            something adjacent. This is the same slot doing something real.
+
+            Owner, 2026-08-22: a place on Home to "enter a piece of evidence and
+            it returns sources that work with it". Every other route to
+            retrieval needs a document, a detected claim and a stored row first;
+            this is the same search with none of that, for the question people
+            actually arrive with.
           */}
-          <button className="home-action" disabled title="Not available yet">
+          <button className="home-action" onClick={() => setFinderOpen(true)}>
             <span className="home-action-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M10 14a4 4 0 005.7 0l3-3a4 4 0 10-5.7-5.7L11.5 7M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 105.7 5.7L12.5 17"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
+                <circle cx="11" cy="11" r="6.2" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M15.5 15.5L20 20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </span>
             <span className="home-action-text">
-              <b>Paste a link</b>
-              <span>Point Tracely at a page and it will analyze the content.</span>
+              <b>Find sources</b>
+              <span>Paste a fact and Tracely finds work that supports it.</span>
             </span>
           </button>
         </section>
@@ -344,6 +360,9 @@ export default function HomeView({
         </footer>
       </div>
 
+      {finderOpen ? (
+        <SourceFinderPanel style={citationStyle} onClose={() => setFinderOpen(false)} />
+      ) : null}
       {tracerOpen ? <TracerChat onClose={() => setTracerOpen(false)} /> : null}
       {openGuide ? (
         <GuideReader guide={guideById(openGuide)!} onClose={() => setOpenGuide(null)} />

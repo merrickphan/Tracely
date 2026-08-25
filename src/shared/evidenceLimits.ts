@@ -19,3 +19,21 @@
  * A leaf with no imports.
  */
 export const MAX_EVIDENCE_RESULTS = 5
+
+/**
+ * Shortest text Home's source finder will search for.
+ *
+ * Below this there is nothing to rank against: dense relevance compares the
+ * user's text to each candidate, and three words produce a vector that matches
+ * everything equally. Refusing is more useful than returning noise.
+ */
+export const MIN_EVIDENCE_TEXT_CHARS = 25
+
+/**
+ * How many sources Home's finder shows.
+ *
+ * Wider than the editor's picker (MAX_EVIDENCE_RESULTS) on purpose: there the
+ * writer is choosing ONE source to cite in a sentence, and a long list is a
+ * decision they did not ask for. Here the list IS the answer.
+ */
+export const MAX_TEXT_SOURCE_CANDIDATES = 8
