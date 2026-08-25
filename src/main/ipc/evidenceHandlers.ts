@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type {
+  ClaimsOffTopicResponse,
   EvidenceForTextResponse,
   EvidenceFindResponse,
   EvidenceGetForClaimResponse,
@@ -21,8 +22,15 @@ import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { getFaviconDataUrl } from '../services/search/favicon'
 import { formatCitation } from '../services/citations'
 import { MIN_EVIDENCE_TEXT_CHARS, MAX_TEXT_SOURCE_CANDIDATES } from '@shared/evidenceLimits'
+import { findOffTopicClaims } from '../services/structure/claimRelevance'
 
 const claimIdSchema = z.object({ claimId: z.string() })
+const offTopicSchema = z.object({
+  text: z.string().max(200_000),
+  // Only the two fields the check reads. Parsing the whole Claim here would
+  // couple this handler to every future column on it for no gain.
+  claims: z.array(z.object({ id: z.string(), text: z.string() })).max(64)
+})
 const forTextSchema = z.object({
   text: z.string().max(4000),
   style: z.enum(['APA', 'MLA', 'Chicago'])
@@ -184,5 +192,21 @@ export function registerEvidenceHandlers(): void {
       citations,
       note: ordered.length === 0 ? 'Nothing in the indexes came back for that. Try naming the subject more specifically.' : null
     }
+  })
+
+  /**
+   * Which claims are tangents — local, free, and therefore safe to run unasked.
+   *
+   * Two batched embeddings and a cosine distance in-process. No relay, nothing
+   * billed, which is the same rule that lets the evidence sweep run
+   * automatically: paid judgement calls need a button, free ones do not.
+   */
+  ipcMain.handle(IPC.CLAIMS_OFF_TOPIC, async (_event, raw): Promise<ClaimsOffTopicResponse> => {
+    const { text, claims } = offTopicSchema.parse(raw)
+    const offTopicClaimIds = await findOffTopicClaims(
+      text,
+      claims as unknown as Parameters<typeof findOffTopicClaims>[1]
+    )
+    return { offTopicClaimIds }
   })
 }

@@ -6,6 +6,9 @@ import { bucketClaimsByParagraph } from '@shared/paragraphSplit'
 import { computeClaimSpans } from '@shared/claimSpans'
 import { sourceHashFor, STRUCTURE_SCHEMA_VERSION } from './outlineIdentity'
 import { looksLikeTitle } from './roles'
+import { findReasoningIssues } from './reasoningIssues'
+import { reasoningWeaknesses } from './weaknesses'
+import { paragraphSubject } from '@shared/paragraphNames'
 
 /**
  * A `DocumentOutline` built from the graded read instead of from local rules.
@@ -27,6 +30,21 @@ import { looksLikeTitle } from './roles'
  * - **Claim bucketing**, so a finding and a detected claim in the same
  *   paragraph line up. Computed against the untrimmed text exactly as
  *   `analyzeStructure` does.
+ *
+ * The reasoning pass is the fourth thing that stays local, added 2026-08-22.
+ * `reasoningIssues.ts` reads the prose for the CLAIM -> EVIDENCE -> REASONING
+ * chain — evidence dropped without analysis, an absolute nothing earns, a
+ * conclusion that only restates the thesis, an opening that announces a subject
+ * instead of claiming something. All of it was written, tested and reachable
+ * ONLY from Screen Watch, because this path replaced the rule engine wholesale;
+ * a student reading the report in the editor never saw any of it. Owner: the
+ * argument score "needs work ... make sure it properly flags things like a bad
+ * thesis or faulty reasoning."
+ *
+ * It runs on the MODEL's roles and the model's thesis, not on a second local
+ * classification — so the two halves of the report describe the same reading of
+ * the draft, and the detectors get better labels than the heuristics ever gave
+ * them. It is free, instant and adds no call.
  *
  * `cohesion` is null here on purpose. The flow between paragraphs is now the
  * model's ORGANIZATION and COHESION findings, which quote the seam rather than
@@ -89,6 +107,29 @@ export function buildGradedOutline(input: GradedOutlineInput): DocumentOutline {
     label: finding.label,
     ...(finding.fix ? { fix: finding.fix } : {})
   }))
+
+  // The local reasoning pass, on the model's own roles. Every finding quotes
+  // the sentence it is about, so nothing here can describe a paragraph the
+  // student did not write.
+  const thesisIndex = paragraphs.findIndex((p) => p.role === 'thesis')
+  const reasoning = findReasoningIssues({
+    paragraphs: spans.map((span, i) => ({
+      index: span.index,
+      text: span.text,
+      role: paragraphs[i]?.role ?? 'unknown'
+    })),
+    thesisIndex: thesisIndex === -1 ? null : thesisIndex,
+    titleParagraph
+  })
+  weaknesses.push(
+    ...reasoningWeaknesses(reasoning, (index) =>
+      paragraphSubject(
+        spans.map((span, i) => ({ index: span.index, role: paragraphs[i]?.role ?? 'unknown' })),
+        titleParagraph,
+        index
+      )
+    )
+  )
 
   for (const span of spans) {
     for (const defect of findCitationDefects(span.text)) {

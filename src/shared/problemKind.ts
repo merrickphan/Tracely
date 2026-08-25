@@ -113,6 +113,27 @@ export type ScreenWatchProblemKind =
   | 'weak-evidence'
   /** Sources qualify the claim rather than confirming it. */
   | 'partial-evidence'
+  /**
+   * True or false, this sentence is not about the essay.
+   *
+   * The one finding here that is not about the claim at all — every other kind
+   * asks whether a sentence is true or supported, and this asks whether it
+   * BELONGS. A tangent can be perfectly true, well-cited and still wrong to
+   * include, which is why it needs its own kind rather than a share of one:
+   * "no supporting sources" over a correct sentence about a footballer names
+   * the wrong problem entirely.
+   *
+   * Owner, 2026-08-22, on pasting an unrelated sentence onto an essay: it
+   * should be flagged both "for being false" and "for being completely
+   * irrelevant to the topic". Two findings, because they are two problems and
+   * fixing one does not fix the other.
+   *
+   * Ranked just under the truth findings and above every support finding.
+   * Deleting a paragraph makes its citations moot, so telling someone their
+   * tangent is under-sourced before telling them it is a tangent is advice in
+   * the wrong order.
+   */
+  | 'off-topic'
   /** Well supported, but the sentence is unattributed. */
   | 'missing-citation'
   /**
@@ -215,6 +236,16 @@ export interface ProblemKindInput {
    * decides what an empty result set is allowed to be called.
    */
   outOfIndexScope?: OutOfScopeReason | null
+  /**
+   * Is this sentence about the rest of the draft? See shared/claimRelevance.ts.
+   *
+   * `false` is a measured finding; `null` is "not measured" — the ML worker
+   * unavailable, the draft too short, or a surface that does not compute it —
+   * and must stay silent. Underlining a sentence as a tangent because an
+   * embedding model failed to load is the same class of error as reporting a
+   * retrieval miss as an unsupported claim.
+   */
+  onTopic?: boolean | null
 }
 
 /**
@@ -328,7 +359,8 @@ export function problemKindsFor({
   citedWorkRead = null,
   evidence,
   critiqueVerdict,
-  outOfIndexScope = null
+  outOfIndexScope = null,
+  onTopic = null
 }: ProblemKindInput): ScreenWatchProblemKind[] {
   // Nothing is known yet, so nothing else can be asserted. Sole kind.
   if (!evidence) return ['searching']
@@ -413,6 +445,17 @@ export function problemKindsFor({
   ) {
     kinds.push('unsupported-by-evidence')
   }
+
+  // Not about the essay — and independent of everything above and below it. A
+  // tangent can be true AND well-sourced, so this is never an else-branch:
+  // both findings can be worth making about one sentence, which is exactly
+  // what the owner asked for on 2026-08-22 ("flag it for being false" AND
+  // "flag it for being completely irrelevant to the topic").
+  //
+  // Above every attribution and support finding, because deleting a paragraph
+  // makes its citations moot — telling someone their tangent is under-sourced
+  // before telling them it is a tangent is advice in the wrong order.
+  if (onTopic === false) kinds.push('off-topic')
 
   // Cited, and the literature we DID find does not back what was attributed.
   // Subsumes the plain evidence bands for a cited claim: "thin support" is the

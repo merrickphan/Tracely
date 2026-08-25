@@ -389,6 +389,27 @@ export const claims: Claim[] = [
     retrievalGeneration: 2,
     citationFix: null,
     createdAt: T0
+  },
+  {
+    id: 'c7',
+    analysisId: 'a1',
+    text: 'Lamine Yamal is 22 years old',
+    claimType: 'factual',
+    confidence: 0.55,
+    searchQuery: 'Lamine Yamal age',
+    // Searched, and the academic indexes had nothing — which is what happens to
+    // a tangent. The mark still has to be DRAWN for the off-topic finding to be
+    // reachable at all: measureMarks refuses a claim with no evidence, so a
+    // null score here would make this fixture invisible.
+    strengthScore: 8,
+    scoreBreakdown: { sourceCount: 0, quality: 0, recency: 0, relevance: 0, support: 0 },
+    critique: null,
+    critiqueVerdict: null,
+    suggestedRevision: null,
+    citedWorkRead: null,
+    retrievalGeneration: 2,
+    citationFix: null,
+    createdAt: T0
   }
 ]
 
@@ -535,6 +556,13 @@ export const documents: DocumentListItem[] = [
       // copy here the harness cannot reach that failure at all.
       '<div>Schools in three districts have already moved to ban phones during instructional hours (Unknown Author, 2025).</div><div><br></div>' +
       '<div>This matters because policy is being written now, before the evidence has settled.</div><div><br></div>' +
+      // A TANGENT — true, unrelated, and the only way to reach the 'off-topic'
+      // underline in the harness. Owner, 2026-08-22: a random sentence pasted
+      // onto the end of an essay should be flagged both for being false and for
+      // being irrelevant, and the second half had no fixture at all. Sits
+      // before the conclusion so it reads as a paragraph of the draft rather
+      // than as a stray line after it.
+      '<div>Lamine Yamal is 22 years old.</div><div><br></div>' +
       '<div>In conclusion, the link is real but weaker than the debate assumes.</div>',
     createdAt: T0,
     updatedAt: T0,

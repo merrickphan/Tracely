@@ -360,7 +360,22 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
           ),
           note: null
         })
-      }
+      },
+      /**
+       * Flags the fixture claim that genuinely is a tangent, so the underline
+       * and its card are reachable here at all.
+       *
+       * The resistance claim sits in a draft about screen time and adolescent
+       * mental health — it is exactly the shape this finding exists for, which
+       * is why it is matched on its text rather than pinned to an id: the point
+       * is to show the state a real tangent produces, not to hardcode one.
+       */
+      offTopic: (req) =>
+        ok('evidence.offTopic', {
+          offTopicClaimIds: (req.claims ?? [])
+            .filter((c) => /resistance|underground newspapers|lamine yamal/i.test(c.text))
+            .map((c) => c.id)
+        })
     },
     citation: {
       /**

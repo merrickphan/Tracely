@@ -534,6 +534,26 @@ export interface ScreenWatchSourceCandidate {
  * rows can be the same rows the overlay and the editor draw — one source list
  * in the product, not three that drift.
  */
+/**
+ * Which of a draft's claims are not about the rest of it.
+ *
+ * Local and free — two MiniLM embeddings and a cosine distance, no relay — so
+ * the editor may run it on the same automatic path the evidence sweep uses
+ * rather than behind a button. See shared/claimRelevance.ts.
+ */
+export interface ClaimsOffTopicRequest {
+  text: string
+  claims: Claim[]
+}
+export interface ClaimsOffTopicResponse {
+  /**
+   * Null when nothing could be measured — the model unavailable, or the draft
+   * too short to have a topic yet. The caller must be able to tell that from
+   * "every claim belongs", because only the second is a finding.
+   */
+  offTopicClaimIds: string[] | null
+}
+
 export interface EvidenceForTextRequest {
   text: string
   style: CitationStyle

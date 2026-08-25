@@ -214,6 +214,12 @@ function DocumentEditor({
   const [proseMarks, setProseMarks] = useState<ProseMark[]>([])
   /** Claims found and being searched right now — a progress line, not a finding. */
   const [pendingMarks, setPendingMarks] = useState<PendingMark[]>([])
+  /**
+   * Claims measured as tangents. Null until measured, and null again whenever
+   * the check could not run — see shared/claimRelevance.ts for why that
+   * distinction is carried rather than collapsed to an empty set.
+   */
+  const [offTopicIds, setOffTopicIds] = useState<ReadonlySet<string> | null>(null)
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
   // The prose issue under the pointer, and whether its fix is being applied.
   // Hit-tested exactly like `activeMark`: nothing in either layer may accept a
@@ -764,7 +770,7 @@ function DocumentEditor({
     if (!body || !wrap) return
     return scheduleFrame(window, () => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
-      setMarks(measureMarks(body, wrap, live, articleCounts))
+      setMarks(measureMarks(body, wrap, live, articleCounts, offTopicIds))
       // In the same frame as the claim marks, not behind a debounce of its own:
       // findProseIssues is pure and local — a thousand-word draft is a few
       // milliseconds — and measuring both together is what keeps the two layers
@@ -791,7 +797,7 @@ function DocumentEditor({
     // `checking` is in the deps so the pending lines appear when a sweep starts
     // and clear when it ends — without it they would only ever be measured on
     // the next keystroke.
-  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align, checking])
+  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align, checking, offTopicIds])
 
   // The editor reflows on window resize, which does not go through
   // handleInput.
@@ -1658,6 +1664,37 @@ function DocumentEditor({
     // measureTick — that counts resizes too, and a window drag would postpone
     // detection for as long as it lasted.
   }, [textTick])
+
+  /**
+   * Which claims are tangents — recomputed whenever the claims change.
+   *
+   * Free and local (two batched MiniLM embeddings, no relay), which is what
+   * lets it run unasked on the same rule the evidence sweep runs under. It is
+   * keyed off `claims` rather than the text, because a tangent is a property of
+   * a detected claim and the claims are what changes when the draft does.
+   *
+   * A failure leaves the previous answer alone rather than clearing it: a
+   * transient worker error should not make every underline in the document
+   * change colour.
+   */
+  useEffect(() => {
+    const body = editorRef.current
+    if (!body || !claims || claims.length === 0) {
+      setOffTopicIds(null)
+      return
+    }
+    let cancelled = false
+    void window.tracely.evidence
+      .offTopic({ text: body.innerText, claims })
+      .then((res) => {
+        if (cancelled) return
+        setOffTopicIds(res.offTopicClaimIds === null ? null : new Set(res.offTopicClaimIds))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [claims])
 
   /**
    * Search evidence for claims nothing has looked at yet — automatically.
