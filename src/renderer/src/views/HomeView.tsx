@@ -266,63 +266,72 @@ export default function HomeView({
           </button>
         </section>
 
-        <section className="home-section">
-          <div className="home-section-head">
-            <h2>Recent documents</h2>
-            <button className="home-link" onClick={() => onNavigate('documents')}>
-              View all documents →
-            </button>
-          </div>
-          {recent.length === 0 ? (
-            <p className="home-empty">
-              Nothing here yet. Start a document and Tracely will grade it as you write.
-            </p>
-          ) : (
-            <div className="home-docs">
-              {recent.map((doc) => (
-                <button key={doc.id} className="home-doc" onClick={() => onOpenDocument(doc.id)}>
-                  <span className="home-doc-thumb" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                    {doc.score !== null ? (
-                      <span className={`home-doc-grade tone-${doc.score >= 80 ? 'good' : doc.score >= 65 ? 'mid' : 'low'}`}>
-                        {gradeFor(doc.score, gradingLevel).letter}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="home-doc-title">{doc.title}</span>
-                  <span className="home-doc-meta">{openedLabel(doc.updatedAt, now)}</span>
+        {/*
+          Two columns on a wide window, stacked otherwise — see .home-lower.
+          A wrapper rather than a class on each section, because the grid has
+          to own both of them: making the sections themselves grid items of
+          .home-inner would put the header, the stats and the actions in the
+          same track list.
+        */}
+        <div className="home-lower">
+          <section className="home-section">
+            <div className="home-section-head">
+              <h2>Recent documents</h2>
+              <button className="home-link" onClick={() => onNavigate('documents')}>
+                View all documents →
+              </button>
+            </div>
+            {recent.length === 0 ? (
+              <p className="home-empty">
+                Nothing here yet. Start a document and Tracely will grade it as you write.
+              </p>
+            ) : (
+              <div className="home-docs">
+                {recent.map((doc) => (
+                  <button key={doc.id} className="home-doc" onClick={() => onOpenDocument(doc.id)}>
+                    <span className="home-doc-thumb" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                      {doc.score !== null ? (
+                        <span className={`home-doc-grade tone-${doc.score >= 80 ? 'good' : doc.score >= 65 ? 'mid' : 'low'}`}>
+                          {gradeFor(doc.score, gradingLevel).letter}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="home-doc-title">{doc.title}</span>
+                    <span className="home-doc-meta">{openedLabel(doc.updatedAt, now)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="home-section home-section--resources">
+            <div className="home-section-head">
+              <h2>Resources</h2>
+            </div>
+            <p className="home-section-sub">Guides to help you write and grade with confidence.</p>
+            <div className="home-resources">
+              {RESOURCES.map((item) => (
+                // Same call as "Paste a link": the four guides are named in the
+                // design and none of them is written. A "Read →" that goes
+                // nowhere is a worse first impression than one that is plainly
+                // not ready yet.
+                <button
+                  key={item.id}
+                  className="home-resource"
+                  onClick={() => setOpenGuide(item.id)}
+                >
+                  <img className="home-resource-icon" src={item.icon} alt="" width={40} height={40} />
+                  <b>{item.title}</b>
+                  <span className="home-resource-blurb">{item.blurb}</span>
+                  <span className="home-resource-read">Read →</span>
                 </button>
               ))}
             </div>
-          )}
-        </section>
-
-        <section className="home-section home-section--resources">
-          <div className="home-section-head">
-            <h2>Resources</h2>
-          </div>
-          <p className="home-section-sub">Guides to help you write and grade with confidence.</p>
-          <div className="home-resources">
-            {RESOURCES.map((item) => (
-              // Same call as "Paste a link": the four guides are named in the
-              // design and none of them is written. A "Read →" that goes
-              // nowhere is a worse first impression than one that is plainly
-              // not ready yet.
-              <button
-                key={item.id}
-                className="home-resource"
-                onClick={() => setOpenGuide(item.id)}
-              >
-                <img className="home-resource-icon" src={item.icon} alt="" width={40} height={40} />
-                <b>{item.title}</b>
-                <span className="home-resource-blurb">{item.blurb}</span>
-                <span className="home-resource-read">Read →</span>
-              </button>
-            ))}
-          </div>
-        </section>
+          </section>
+        </div>
 
         <footer className="home-foot">
           {/*
