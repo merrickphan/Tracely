@@ -5935,10 +5935,29 @@ textarea:disabled {
      "bigger", and it is what the owner asked for: "you could make the text or
      components bigger; just make sure it looks natural when full-screened."
 
-     1360 rather than no limit: past roughly that, a 3-up row of cards is wider
-     than a comfortable reading sweep and the page starts to feel like a
-     dashboard rather than a document tool. */
-  max-width: 1360px;
+     ── The margin scales with the window ─────────────────────────────────
+     A FIXED cap still leaves dead page at a large size — 1360 centred in a
+     2000px window is 315px of nothing each side, which is the same complaint
+     one size later. Owner, 2026-08-26: "I want the margins to go with it when
+     you resize the app so it looks clean."
+
+     So the gutter is a PERCENTAGE and there is no fixed ceiling: the content
+     is always 92% of the window and the margin always ~4% a side, at every
+     size. A cap of any value reproduces the original complaint one window size
+     later — 1360 was 315px of dead page at 2000, and 1600 would be 475px at
+     2560.
+
+     What stops that turning into stretched cards is handled per GRID rather
+     than on this container: the stats and actions rows cap themselves and
+     centre (a stat card past ~400px is one number in a panel), while the
+     documents and guides below split into two columns and use the width
+     properly. Capping the container punished every grid for the two that
+     could not take the space.
+
+     `vw` is divided by --app-zoom, per the rule at the top of this file: the
+     root is scaled with CSS `zoom`, so viewport units resolve against the
+     UNZOOMED viewport and would otherwise be wrong by the font-size factor. */
+  max-width: calc(92vw / var(--app-zoom, 1));
   margin: 0 auto;
   padding: var(--h-card-edge) var(--h-gutter) 26px;
   display: flex;
@@ -7168,3 +7187,75 @@ textarea:disabled {
 }
 .srcfind-open:hover,
 .srcfind-copy:hover { background: var(--surface-2); }
+
+/* ── Home's lower half, side by side on a wide window ─────────────────────
+ *
+ * "Recent documents" and "Resources" stack, which is right on a normal window
+ * and is most of why a full-screened Home is mostly empty: the content ran out
+ * around two thirds of the way down a 1063px-tall window while the sides sat
+ * blank. Owner, 2026-08-26, with a screenshot: "look how much empty space."
+ *
+ * Putting them in two columns spends the extra WIDTH on layout rather than on
+ * stretching cards — which is the thing that made the original 888 cap
+ * necessary — and it shortens the page, so the vertical emptiness goes with it.
+ * The documents column is the wider of the two because its cards carry a
+ * thumbnail; the guides are text.
+ *
+ * 1500px, not 1180: below that the two columns would each be narrower than the
+ * three-up grid inside them needs, which trades one bad layout for another.
+ */
+@media (min-width: 1500px) {
+  .home-lower {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 30px;
+    align-items: start;
+  }
+  /* The grids inside each column drop to two across, so a card in a half-width
+     column is about the size it was in the full-width one. */
+  .home-lower .home-docs,
+  .home-lower .home-resources {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* Stacked spacing is the column gap's job now. */
+  .home-lower .home-section + .home-section {
+    margin-top: 0;
+  }
+}
+
+/* The two rows that cannot use extra width.
+ *
+ * There are exactly three stats and two actions, so a wider container can only
+ * make each one wider — and a stat card past about 400px is a single number
+ * marooned in a panel, which is the state the old fixed container cap existed
+ * to prevent. Capping them HERE instead lets everything that can use the width
+ * (the documents and guides below) actually have it.
+ *
+ * Centred rather than left-aligned: the header card above them is full-width,
+ * and a left-aligned row under a full-width banner reads as a layout mistake
+ * rather than a decision. */
+@media (min-width: 1400px) {
+  .home-stats,
+  .home-actions {
+    /* `align-self`, NOT auto side margins. `.home-inner` is a COLUMN flex
+       container, and auto margins on a column flex child remove the stretch —
+       the row collapses to fit-content, which measured 680px against a 1180
+       max-width. width:100% + align-self is the pair that actually centres a
+       capped row inside a flex column. */
+    width: 100%;
+    max-width: 1180px;
+    align-self: center;
+  }
+}
+
+/* Cards stop growing before they become panels.
+ *
+ * The two-column block below uses the extra width well up to a point; past
+ * roughly 2200px each column is wide enough that a 2-up grid inside it makes a
+ * document card 640px of mostly thumbnail. The cap is on the CARD rather than
+ * the grid so the row simply stops widening and the space goes to the gutter,
+ * which is the one place extra width is not a problem. */
+.home-doc,
+.home-resource {
+  max-width: 460px;
+}
