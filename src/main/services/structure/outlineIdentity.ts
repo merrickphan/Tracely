@@ -19,8 +19,14 @@ import { createHash } from 'crypto'
  * so `weaknesses` carries `'model-finding'` kinds with `severity`,
  * `rubricSection` and `label`, and `cohesion` is null. A v8 row renders as a
  * report from a rule engine that no longer exists.
+ *
+ * v10 adds the local reasoning pass back on top of the graded read
+ * (`gradedOutline.ts`), so a v9 row is a report missing every finding
+ * `reasoningIssues.ts` produces — a stored outline that would silently look
+ * complete while saying nothing about a dropped quotation or a restated
+ * conclusion. Bumping is what makes the next open recompute it.
  */
-export const STRUCTURE_SCHEMA_VERSION = 9
+export const STRUCTURE_SCHEMA_VERSION = 10
 
 /**
  * The equivalence class the analysis actually cares about: two texts with the

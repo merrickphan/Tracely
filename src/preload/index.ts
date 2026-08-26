@@ -28,6 +28,10 @@ import type {
   ClipboardWriteResponse,
   CritiqueGenerateRequest,
   CritiqueGenerateResponse,
+  ClaimsOffTopicRequest,
+  ClaimsOffTopicResponse,
+  EvidenceForTextRequest,
+  EvidenceForTextResponse,
   EvidenceFindRequest,
   EvidenceFindResponse,
   EvidenceGetForClaimRequest,
@@ -122,7 +126,13 @@ const api = {
     find: (req: EvidenceFindRequest): Promise<EvidenceFindResponse> =>
       ipcRenderer.invoke(IPC.EVIDENCE_FIND, req),
     getForClaim: (req: EvidenceGetForClaimRequest): Promise<EvidenceGetForClaimResponse> =>
-      ipcRenderer.invoke(IPC.EVIDENCE_GET_FOR_CLAIM, req)
+      ipcRenderer.invoke(IPC.EVIDENCE_GET_FOR_CLAIM, req),
+    /** Sources for text the user typed, with no document behind it — Home. */
+    forText: (req: EvidenceForTextRequest): Promise<EvidenceForTextResponse> =>
+      ipcRenderer.invoke(IPC.EVIDENCE_FOR_TEXT, req),
+    /** Which claims are not about the rest of the draft. Local, free. */
+    offTopic: (req: ClaimsOffTopicRequest): Promise<ClaimsOffTopicResponse> =>
+      ipcRenderer.invoke(IPC.CLAIMS_OFF_TOPIC, req)
   },
   sources: {
     favicons: (req: SourcesFaviconsRequest): Promise<SourcesFaviconsResponse> =>

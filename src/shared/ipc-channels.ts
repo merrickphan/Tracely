@@ -4,6 +4,8 @@ export const IPC = {
 
   EVIDENCE_FIND: 'evidence:find',
   EVIDENCE_GET_FOR_CLAIM: 'evidence:getForClaim',
+  EVIDENCE_FOR_TEXT: 'evidence:forText',
+  CLAIMS_OFF_TOPIC: 'claims:offTopic',
 
   CITATION_GENERATE: 'citation:generate',
   CITATION_LIST: 'citation:list',

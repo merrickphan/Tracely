@@ -93,7 +93,16 @@ export function measureMarks(
   body: HTMLElement,
   wrap: HTMLElement,
   claims: Claim[],
-  articleCounts: ReadonlyMap<string, number>
+  articleCounts: ReadonlyMap<string, number>,
+  /**
+   * Claims measured as tangents — see shared/claimRelevance.ts.
+   *
+   * Null means NOT MEASURED (the model unavailable, or the draft too short),
+   * which is different from an empty set and must stay silent. Passing the
+   * distinction through rather than collapsing it to a Set is what stops a
+   * failed embed from underlining half a document as off topic.
+   */
+  offTopicClaimIds: ReadonlySet<string> | null = null
 ): DocumentMark[] {
   if (claims.length === 0) return []
 
@@ -179,7 +188,8 @@ export function measureMarks(
         hasRelevantSource: hasRelevantSource(span.claim.scoreBreakdown)
       },
       critiqueVerdict: span.claim.critiqueVerdict,
-      outOfIndexScope: retrievalScopeFor(span.claim.text)
+      outOfIndexScope: retrievalScopeFor(span.claim.text),
+      onTopic: offTopicClaimIds === null ? null : !offTopicClaimIds.has(span.claim.id)
     }) as MarkProblemKind[]
     // Nothing is wrong with this sentence. Not drawing it is the point: a
     // document where every claim is underlined tells the writer nothing.

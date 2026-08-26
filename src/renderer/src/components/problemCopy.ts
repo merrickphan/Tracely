@@ -78,6 +78,17 @@ export const PROBLEM_COLOR: Record<ScreenWatchProblemKind, string> = {
   // asserting. What is actually left to do here is add a citation, which is
   // what amber means everywhere else in the palette.
   'outside-index': DESIGN_AMBER,
+  // Amber, with the attribution group rather than orange or red.
+  //
+  // Not RED: red is reserved for the two findings that say the writing is
+  // wrong — a contradicted fact and an invented source — and a tangent is
+  // neither. The sentence may be perfectly true.
+  //
+  // Not ORANGE either: orange means "the evidence is missing or thin", which is
+  // a finding about the literature, and this one is not about sources at all.
+  // Amber is the palette's colour for "there is something to do here", which is
+  // exactly right — the thing to do is cut it or connect it.
+  'off-topic': DESIGN_AMBER,
   // Nothing known yet — deliberately the quietest thing on screen, since it
   // resolves on its own within a few seconds. Not a state the design draws.
   searching: '#9a9ba1'
@@ -103,6 +114,10 @@ export const PROBLEM_LABEL: Record<ScreenWatchProblemKind, string> = {
   // Not "unverified" and not "no sources". Both of those are verdicts on the
   // sentence; this one is a disclosure about the search.
   'outside-index': 'Not in these databases',
+  // Says what is wrong with it, not what to do about it. Whether a tangent gets
+  // cut or connected to the argument is the writer's call, and a label that
+  // told them which would be the tool making it for them.
+  'off-topic': 'Off topic for this essay',
   searching: 'Checking…'
 }
 
@@ -290,6 +305,19 @@ export function popoverCopyFor(
   evidence: ScreenWatchClaimEvidence,
   kind: Exclude<ScreenWatchProblemKind, 'searching'>
 ): ProblemCopy {
+  if (kind === 'off-topic') {
+    // Deliberately not "Find a source". This is the one finding here that a
+    // source cannot fix — the sentence may already be true and cited, and
+    // offering retrieval would send the writer looking for evidence for
+    // something they should probably cut. The action is theirs to choose,
+    // which is why the card names the choice rather than making it.
+    return {
+      title: 'Off topic for this essay',
+      description:
+        'This sentence is not about the same subject as the rest of the draft. It may still be true — but a marker reads a tangent as padding. Cut it, or connect it to your argument.',
+      action: 'Ask Tracer'
+    }
+  }
   if (kind === 'outside-index') {
     // The reason is recomputed from the claim's text rather than carried on the
     // payload. It is a pure function of that string — the same one main ran to

@@ -243,6 +243,39 @@ export interface WeaknessInput {
 }
 
 
+/**
+ * Reasoning findings, phrased.
+ *
+ * Split out of `findWeaknesses` so the EDITOR can use it. The editor's report
+ * is built by `gradedOutline.ts` from one relay call and never runs the local
+ * rule engine — which meant every detector in `reasoningIssues.ts` was written,
+ * tested, and unreachable on the surface a student actually reads. Owner,
+ * 2026-08-22: the argument score "needs work ... make sure it properly flags
+ * things like a bad thesis or faulty reasoning."
+ *
+ * `subject` is passed in rather than derived, because only the caller knows
+ * whether the draft has a title paragraph — and getting that wrong is how a
+ * card headed "Paragraph 11" came to carry prose about the 12th.
+ */
+export function reasoningWeaknesses(
+  reasoning: ReasoningFinding[],
+  subject: (index: number) => string
+): StructureWeakness[] {
+  return reasoning.map((finding) => {
+    const template = REASONING_TEMPLATE[finding.kind]
+    return {
+      kind: finding.kind,
+      paragraphIndex: finding.paragraphIndex,
+      claimId: null,
+      message: template.message(
+        finding.paragraphIndex === null ? 'The draft' : subject(finding.paragraphIndex)
+      ),
+      tracerPrompt: template.tracerPrompt,
+      quote: finding.quote
+    }
+  })
+}
+
 export function findWeaknesses({
   paragraphs,
   claimsWithoutEvidence,
@@ -422,19 +455,7 @@ export function findWeaknesses({
     })
   }
 
-  for (const finding of reasoning) {
-    const template = REASONING_TEMPLATE[finding.kind]
-    found.push({
-      kind: finding.kind,
-      paragraphIndex: finding.paragraphIndex,
-      claimId: null,
-      message: template.message(
-        finding.paragraphIndex === null ? 'The draft' : subject(finding.paragraphIndex)
-      ),
-      tracerPrompt: template.tracerPrompt,
-      quote: finding.quote
-    })
-  }
+  found.push(...reasoningWeaknesses(reasoning, subject))
 
   // Sorted, never truncated. The panel decides how many to show and says how
   // many it is hiding — a cap applied here would be invisible to it, and
