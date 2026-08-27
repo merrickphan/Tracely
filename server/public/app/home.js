@@ -44,8 +44,32 @@ const CSS = `
   transition: transform var(--t-fast, 150ms) var(--ease, ease), color var(--t-fast, 150ms) var(--ease, ease);
 }
 .home-tab .home-action:hover .act-arrow { transform: translateX(4px); color: var(--accent-deep); }
-.home-tab .home-link-form { display: flex; gap: var(--s-1, 8px); margin-top: var(--s-2, 16px); }
-.home-tab .home-link-form .input { flex: 1; }
+
+/* the source-finder modal */
+.home-find { padding: var(--s-4, 32px) var(--s-5, 40px); display: flex; flex-direction: column; gap: var(--s-2, 16px); min-width: min(640px, 86vw); }
+.home-find header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2, 16px); }
+.home-find h2 { font-family: var(--serif); font-size: var(--fs-xl, 24px); font-weight: 700; line-height: 1.15; letter-spacing: -.2px; }
+.home-find .find-sub { color: var(--ink-dim); margin-top: 4px; font-size: var(--fs-sm, 13.5px); }
+.home-find textarea.input { resize: vertical; min-height: 68px; font-size: var(--fs-md, 15px); line-height: 1.5; }
+.home-find .find-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2, 16px); }
+.home-find .find-hint { font-size: var(--fs-xs, 12.5px); color: var(--ink-faint); }
+.home-find .find-results { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s-1, 8px); }
+.home-find .find-note { font-size: var(--fs-sm, 13.5px); color: var(--ink-dim); padding: var(--s-1, 8px) 0; }
+.home-find .find-row { display: flex; gap: var(--s-2, 16px); align-items: flex-start; padding: var(--s-2, 16px); }
+.home-find .find-row-main { flex: 1; min-width: 0; }
+.home-find .find-row-title { font-family: var(--serif); font-size: var(--fs-md, 15px); font-weight: 700; line-height: 1.3; }
+.home-find .find-row-meta { font-size: var(--fs-xs, 12.5px); color: var(--ink-faint); margin-top: 2px; }
+.home-find .find-row-cite { font-size: var(--fs-xs, 12.5px); color: var(--ink-dim); margin-top: 6px; line-height: 1.5; overflow-wrap: anywhere; }
+.home-find .find-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.home-find .find-chip {
+  font-size: 11px; font-weight: 600; letter-spacing: .3px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--ink-faint);
+}
+.home-find .find-chip[data-citable="true"] { color: var(--accent-deep); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.home-find .find-match { font-size: var(--fs-xs, 12.5px); color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.home-find .find-row-btns { display: flex; gap: var(--s-1, 8px); }
+/* "Open" is an anchor wearing .btn, which resets nothing anchor-specific */
+.home-find .find-row-btns a.btn { text-decoration: none; display: inline-block; }
 
 /* recent documents */
 .home-tab .home-recent { display: flex; gap: var(--s-2, 16px); overflow: hidden; }
@@ -222,6 +246,137 @@ function openGuide(guide, ctx) {
   modalRoot.appendChild(backdrop);
 }
 
+/* ── the source finder ────────────────────────────────────────────────── */
+
+const MIN_FINDER_CHARS = 25; // matches the desktop finder's MIN_EVIDENCE_TEXT_CHARS
+
+const PROVIDER_NAMES = {
+  openalex: "OpenAlex", crossref: "Crossref", semanticscholar: "Semantic Scholar",
+  pubmed: "PubMed", wikipedia: "Wikipedia", worldbank: "World Bank",
+};
+
+function openFinder(ctx) {
+  const modalRoot = document.getElementById("modalRoot");
+  if (!modalRoot) return;
+  const style = ctx.settings.citationStyle ?? "apa";
+  modalRoot.innerHTML = "";
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal">
+      <div class="home-find">
+        <header>
+          <div>
+            <h2>Find sources</h2>
+            <div class="find-sub">Paste a fact or a sentence. Tracely looks for work that speaks to it.</div>
+          </div>
+          <button class="btn btn-ghost" data-close>Close</button>
+        </header>
+        <textarea class="input" id="hfText" rows="3"
+          placeholder="e.g. Screen time is linked to higher rates of depression in teenagers."></textarea>
+        <div class="find-actions">
+          <span class="find-hint" id="hfHint">Citations shown in ${esc(style.toUpperCase())}.</span>
+          <button class="btn btn-primary" id="hfGo">Find sources</button>
+        </div>
+        <div class="find-results" id="hfResults"></div>
+      </div>
+    </div>
+  `;
+  const close = () => {
+    modalRoot.innerHTML = "";
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop || e.target.closest("[data-close]")) close();
+  });
+  document.addEventListener("keydown", onKey);
+  modalRoot.appendChild(backdrop);
+
+  const textEl = backdrop.querySelector("#hfText");
+  const hintEl = backdrop.querySelector("#hfHint");
+  const goEl = backdrop.querySelector("#hfGo");
+  const resultsEl = backdrop.querySelector("#hfResults");
+  textEl.focus();
+
+  async function search() {
+    const text = textEl.value.trim();
+    if (text.length < MIN_FINDER_CHARS) {
+      hintEl.textContent = `A little more — ${MIN_FINDER_CHARS} characters minimum.`;
+      textEl.focus();
+      return;
+    }
+    goEl.disabled = true;
+    goEl.textContent = "Searching…";
+    resultsEl.innerHTML = `<div class="find-note">Searching the academic indexes…</div>`;
+    try {
+      const result = await ctx.api.evidence({ claim: text });
+      renderResults(result);
+    } catch (e) {
+      // Named, not swallowed: "nothing happened" is indistinguishable from
+      // "no sources".
+      resultsEl.innerHTML = `<div class="find-note">${esc(e.message)}</div>`;
+    } finally {
+      goEl.disabled = false;
+      goEl.textContent = "Find sources";
+    }
+  }
+
+  function renderResults(result) {
+    const searched = result.searched ?? {};
+    const providers = (searched.providers ?? []).map((p) => PROVIDER_NAMES[p] ?? p);
+    // Sources come sorted by relevance, so the first `aboveFloor` rows are
+    // exactly the ones above it. Citable work first within that — the tier
+    // outranks the match percentage, same rule as everywhere else.
+    const rows = (result.sources ?? [])
+      .slice(0, Math.min(searched.aboveFloor ?? 0, 8))
+      .sort((a, b) => (b.citable === true) - (a.citable === true));
+    if (rows.length === 0) {
+      // Grey, never an accusation: these indexes hold scholarly work, and
+      // plenty of true facts live outside them.
+      resultsEl.innerHTML = `<div class="find-note">Nothing matched in ${
+        providers.length ? esc(providers.join(", ")) : "the academic indexes"
+      }. That settles nothing — many true facts live outside scholarly indexes. Try naming the subject directly instead of using pronouns.</div>`;
+      return;
+    }
+    resultsEl.innerHTML = rows.map((s, i) => {
+      const cite = ctx.citations.formatCitation(s, ctx.settings.citationStyle ?? "apa")?.entry ?? "";
+      return `
+      <div class="card find-row" data-row="${i}">
+        <div class="find-row-main">
+          <div class="find-row-title">${esc(s.title)}</div>
+          <div class="find-row-meta">${esc([s.venue, s.year].filter(Boolean).join(" · ") || "—")}</div>
+          ${cite ? `<div class="find-row-cite" data-cite>${esc(cite)}</div>` : ""}
+        </div>
+        <div class="find-row-side">
+          <span class="find-chip" data-citable="${s.citable === true}">${s.citable ? "Citable" : "Unrecognized publisher"}</span>
+          ${typeof s.relevance === "number" ? `<span class="find-match">${Math.round(s.relevance * 100)}% match</span>` : ""}
+          <div class="find-row-btns">
+            ${s.url ? `<a class="btn btn-ghost" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Open</a>` : ""}
+            ${cite ? `<button class="btn" data-copy="${i}">Copy citation</button>` : ""}
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+    for (const btn of resultsEl.querySelectorAll("[data-copy]")) {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest(".find-row");
+        const cite = row?.querySelector("[data-cite]")?.textContent ?? "";
+        if (!cite) return;
+        await navigator.clipboard.writeText(cite);
+        btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = "Copy citation"; }, 1600);
+      });
+    }
+  }
+
+  goEl.addEventListener("click", search);
+  textEl.addEventListener("keydown", (e) => {
+    // Enter searches; Shift+Enter is a newline — the box holds a sentence.
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); search(); }
+  });
+}
+
 /* ── render ───────────────────────────────────────────────────────────── */
 
 export async function render(mount, ctx) {
@@ -258,17 +413,13 @@ export async function render(mount, ctx) {
             <span class="act-arrow" aria-hidden="true">→</span>
           </div>
         </div>
-        <div class="card home-action" id="hActLink">
+        <div class="card home-action" id="hActFind">
           <div class="act-row">
             <div>
-              <div class="act-title">Paste a link</div>
-              <div class="act-desc">Point Tracely at a page and it will analyze the content</div>
+              <div class="act-title">Find sources</div>
+              <div class="act-desc">Paste a fact and Tracely finds work that supports it</div>
             </div>
             <span class="act-arrow" aria-hidden="true">→</span>
-          </div>
-          <div class="home-link-form hidden" id="hLinkForm">
-            <input class="input" id="hLinkUrl" type="url" placeholder="https://…" />
-            <button class="btn btn-primary" id="hLinkGo">Cite it</button>
           </div>
         </div>
       </div>
@@ -340,38 +491,15 @@ export async function render(mount, ctx) {
     }
   });
 
-  /* paste a link — reveal inline form, then cite → create → analyze */
-  const linkCard = root.querySelector("#hActLink");
-  const linkForm = root.querySelector("#hLinkForm");
-  const linkUrl = root.querySelector("#hLinkUrl");
-  const linkGo = root.querySelector("#hLinkGo");
+  /* find sources — paste a fact, get citable work that speaks to it.
+     Replaces "Paste a link". Every other route to retrieval goes through a
+     document and a detected claim; this is the same free scholarly search
+     (/api/evidence — no key, no model call) with none of that, for the
+     question people arrive with: I have a fact, who says it? It writes
+     nothing — no document, no analysis — so it never shows up in history;
+     saving a result is the deliberate Copy below. */
+  root.querySelector("#hActFind").addEventListener("click", () => openFinder(ctx));
 
-  linkCard.addEventListener("click", (e) => {
-    if (e.target.closest(".home-link-form")) return;
-    linkForm.classList.toggle("hidden");
-    if (!linkForm.classList.contains("hidden")) linkUrl.focus();
-  });
-
-  async function citeLink() {
-    const url = linkUrl.value.trim();
-    if (!url) { linkUrl.focus(); return; }
-    linkGo.disabled = true;
-    linkGo.textContent = "Fetching…";
-    try {
-      const { source } = await ctx.api.citeUrl(url);
-      const body =
-        `<p>${esc(source.url)}</p>` +
-        (source.snippet ? `<p>${esc(source.snippet)}</p>` : "");
-      const doc = await ctx.api.documents.create({ title: source.title || "Untitled", bodyHtml: body });
-      ctx.navigate("analyze", { docId: doc.id });
-    } catch (e) {
-      ctx.toast(e.message, true);
-      linkGo.disabled = false;
-      linkGo.textContent = "Cite it";
-    }
-  }
-  linkGo.addEventListener("click", citeLink);
-  linkUrl.addEventListener("keydown", (e) => { if (e.key === "Enter") citeLink(); });
 
   /* tracer launcher */
   root.querySelector("#hTracer").addEventListener("click", () => ctx.openTracer(null));
