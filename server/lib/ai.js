@@ -180,7 +180,7 @@ For each claim return:
 - "sentence": the full containing sentence, also copied exactly from the draft (this one includes any citation).
 - "claimType": one of "factual" (a fact about the world), "statistic" (a number, rate, or quantity), "causal" (X causes/leads to Y), "opinion" (a value judgment presented as assertion), "prediction" (a claim about the future).
 - "confidence": 0 to 1 — how confident you are that this is a checkable claim worth verifying (not that the claim is true).
-- "query": a short web-search-style query (a few keywords) that would surface evidence for or against the claim.
+- "query": a short web-search-style query (a few keywords) that would surface evidence for or against the claim. The query MUST be self-contained: resolve every pronoun and reference from the surrounding text into its actual name ("He was famous for X" after a sentence about Einstein → "Einstein famous for X", never "he famous for X"). A query a stranger could not interpret without the draft is wrong.
 
 Rules:
 - Only extract claims that actually appear in the draft. One entry per distinct claim; a sentence can contain more than one.

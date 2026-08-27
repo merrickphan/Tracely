@@ -402,8 +402,13 @@ export async function gatherEvidence({ claim, query, claimType } = {}) {
   const failed = results.filter((r) => !r.ok).map((r) => r.name);
 
   const sources = dedupeSources(results.flatMap((r) => r.sources));
+  // Rank against the claim PLUS the query: the query carries resolved
+  // referents ("Einstein") that the claim text may hold only as a pronoun
+  // ("He was famous for…"), and ranking on the pronoun form rewards sources
+  // about the wrong subject entirely.
+  const rankText = q === claimText ? claimText : `${claimText} ${q}`;
   for (const s of sources) {
-    s.relevance = lexicalRelevance(claimText, `${s.title} ${s.abstract ?? ""}`);
+    s.relevance = lexicalRelevance(rankText, `${s.title} ${s.abstract ?? ""}`);
     s.metric = "lexical"; // carried alongside — thresholds differ per metric
     s.citable = isCitable(s);
   }

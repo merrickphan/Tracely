@@ -18,5 +18,20 @@ The human body has 206 bones. Napoleon was famously short, standing well under f
     window.__tracelyHarness = { getText: () => document.getElementById("doc").value };
   </script>
   <script src="/ext-content.js"></script>
+  <script>
+    // Store-screenshot helper: ?expand=1 clicks the widget pill once findings land.
+    if (location.search.includes("expand=1")) {
+      if (location.search.includes("clean=1")) { var b = document.querySelector(".bar"); if (b) b.style.display = "none"; }
+      var expandForShot = setInterval(function () {
+        var host = document.getElementById("tracely-host");
+        var pill = host && host.shadowRoot && host.shadowRoot.getElementById("pill");
+        var count = pill && pill.querySelector(".count");
+        if (pill && count && count.textContent && count.textContent !== "…") {
+          pill.click();
+          clearInterval(expandForShot);
+        }
+      }, 500);
+    }
+  </script>
 </body>
 </html>
