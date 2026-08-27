@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tracely widget harness (stands in for Google Docs)</title>
+  <style>
+    body { font-family: Georgia, serif; margin: 0; background: #fff; }
+    .bar { background: #f1f3f4; padding: 10px 20px; font-family: sans-serif; font-size: 13px; color: #444; border-bottom: 1px solid #ddd; }
+    textarea { width: 100%; height: 70vh; border: none; outline: none; padding: 40px 15%; font: 16px/1.8 Georgia, serif; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div class="bar">⚠ Test harness — this page stands in for a Google Doc so the Tracely widget can be exercised without signing in. The widget reads this textarea.</div>
+  <textarea id="doc">The Great Wall of China is the only man-made structure visible from space with the naked eye. Water boils at 100 degrees Celsius at sea level. Albert Einstein failed math in school, which is why he later invented the lightbulb.
+
+The human body has 206 bones. Napoleon was famously short, standing well under five feet tall.</textarea>
+  <script>
+    window.__tracelyHarness = { getText: () => document.getElementById("doc").value };
+  </script>
+  <script src="/ext-content.js"></script>
+</body>
+</html>

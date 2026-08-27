@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracely — Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #faf8f5; color: #23201a;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 36px 24px 60px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .plane {
+    width: 38px; height: 38px; border-radius: 11px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
+  }
+  .plane svg { width: 20px; height: 20px; }
+  h1 { font-family: Georgia, serif; font-size: 26px; font-weight: 700; }
+  .tag { color: #6f685c; font-size: 13px; margin-bottom: 22px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 600; color: #6f685c;
+    background: #fff; border: 1px solid #eae5dd; border-radius: 999px;
+    padding: 6px 14px; margin-bottom: 26px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #a39a8a; flex-shrink: 0; }
+  .status.on .dot { background: #15803d; }
+  .status.off .dot { background: #d92d20; }
+  section {
+    background: #fff; border: 1px solid #eae5dd; border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    color: #ea580c; margin-bottom: 6px;
+  }
+  .hint { font-size: 12.5px; color: #6f685c; margin-bottom: 12px; line-height: 1.45; }
+  .row { display: flex; gap: 8px; }
+  input[type="password"], input[type="text"] {
+    flex: 1; min-width: 0;
+    border: 1px solid #ddd6ca; border-radius: 8px; padding: 8px 11px;
+    font-size: 13px; color: #23201a; background: #faf8f5; outline: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  input:focus { border-color: #f97316; background: #fff; }
+  select {
+    font-size: 13px; border: 1px solid #ddd6ca; border-radius: 8px;
+    padding: 7px 10px; background: #fff; color: #23201a; outline: none;
+  }
+  select:focus { border-color: #f97316; }
+  button {
+    border: 1px solid #fbd6b5; background: #fff1e6; color: #ea580c;
+    border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: #ffe4cc; }
+  .saved { font-size: 12px; color: #15803d; font-weight: 600; margin-top: 8px; min-height: 15px; }
+  ul { list-style: none; }
+  li {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 2px; border-bottom: 1px dashed #eae5dd; font-size: 13px;
+  }
+  li:last-child { border-bottom: none; }
+  li .origin { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li button { padding: 4px 10px; font-size: 11.5px; background: #fff; border-color: #ddd6ca; color: #6f685c; }
+  li button:hover { border-color: #d92d20; color: #d92d20; background: #fff; }
+  .foot { font-size: 11px; color: #a39a8a; margin-top: 24px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></span>
+      <h1>Tracely</h1>
+    </header>
+    <p class="tag">Live fact-checking while you write — anywhere on the web.</p>
+
+    <span id="serverStatus" class="status"><span class="dot"></span><span id="serverStatusText">Checking for a local Tracely server…</span></span>
+
+    <section>
+      <h2>Anthropic API key</h2>
+      <p class="hint">Stored locally in this browser and sent only to api.anthropic.com. Leave empty if you run the Tracely server — the server has all the features (URL citing, Docs write-back) and uses its own key.</p>
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+        <button id="saveKey">Save</button>
+      </div>
+      <p id="keySaved" class="saved"></p>
+    </section>
+
+    <section>
+      <h2>Model — standalone mode</h2>
+      <p class="hint">Used when checks go directly to Anthropic (no local server running).</p>
+      <select id="model">
+        <option value="claude-opus-5">Opus 5 · sharpest</option>
+        <option value="claude-sonnet-5">Sonnet 5 · balanced</option>
+        <option value="claude-haiku-4-5">Haiku 4.5 · fastest</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Sites with auto-check on</h2>
+      <p class="hint">Automatic 10-second checking runs only on these sites. Everywhere else, nothing leaves the page until you click “Check once” in the widget.</p>
+      <ul id="sites"></ul>
+      <p id="noSites" class="hint" style="margin-bottom:0">None yet — click into a text field on a site and flip “Auto-check on this site” in the Tracely widget.</p>
+    </section>
+
+    <p class="foot">Tracely never sends your writing anywhere except the engine you chose: your local Tracely server, or api.anthropic.com with the key above. Google Docs checks read the doc through your own signed-in session.</p>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
