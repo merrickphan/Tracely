@@ -66,7 +66,7 @@ export const api = {
   detectClaims: (text, opts = {}) => call("/api/detect-claims", { text, ...opts }),
   evidence: (req) => call("/api/evidence", req),                 // {claimId?, claim, query, claimType}
   critique: (req) => call("/api/critique", req),                 // {claim, sentence, citedRef?, sources?, model?}
-  grade: (req) => call("/api/grade", req),                       // {text, level, model?} → {components, model}
+  grade: (req) => call("/api/grade", req),                       // {text, level, rubric?, model?} → {components, custom?, model}
   structure: (text) => call("/api/structure", { text }),
   tracer: (req) => call("/api/tracer", req),                     // {conversationId?, documentId?, message}
   citeUrl: (url) => call("/api/cite-url", { url }),

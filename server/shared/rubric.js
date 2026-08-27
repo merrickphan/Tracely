@@ -127,3 +127,48 @@ export function sumComponents(components) {
   // reads is a whole number, and every point still traces to a component.
   return Math.round((earned / possible) * 100);
 }
+
+/* ── custom (pasted) rubrics ──────────────────────────────────────────────
+   A teacher's rubric replaces the built-in components wholesale: the model
+   extracts what the rubric scores and how many points each is worth, then
+   judges each one. The arithmetic stays here — the model never computes the
+   total, same stance as sumComponents. */
+
+export const MAX_CUSTOM_COMPONENTS = 12;
+
+/** Clean the model's extracted components: drop unusable rows, clamp the
+    numbers. Pure and shared so the server can normalize and a test can pin
+    the clamping without touching the SDK. */
+export function normalizeCustomComponents(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    const title = String(item?.title ?? "").trim().slice(0, 80);
+    const points = Math.round(Number(item?.points));
+    if (!title || !Number.isFinite(points) || points <= 0) continue;
+    const p = Math.min(100, points);
+    out.push({
+      title,
+      points: p,
+      score: Math.max(0, Math.min(p, Math.round(Number(item?.score) || 0))),
+      quote: String(item?.quote ?? "").slice(0, 600),
+      note: String(item?.note ?? "").slice(0, 300),
+    });
+    if (out.length >= MAX_CUSTOM_COMPONENTS) break;
+  }
+  return out;
+}
+
+/** earned/possible → /100, integer. 0 when nothing was scorable. */
+export function sumCustomComponents(list) {
+  let earned = 0;
+  let possible = 0;
+  for (const c of Array.isArray(list) ? list : []) {
+    const points = Number(c?.points) || 0;
+    if (points <= 0) continue;
+    earned += Math.max(0, Math.min(points, Number(c?.score) || 0));
+    possible += points;
+  }
+  if (possible === 0) return 0;
+  return Math.round((earned / possible) * 100);
+}

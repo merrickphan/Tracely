@@ -1591,8 +1591,11 @@ export async function render(mount, ctx) {
     insightsBtn.textContent = "Analyzing…";
     try {
       const level = settings.gradingLevel ?? 12;
-      const res = await api.grade({ text, level, model: settings.model });
-      const components = res.components ?? {};
+      // A pasted rubric (Settings → Custom rubric) replaces the built-in one.
+      const customRubric = String(settings.customRubric ?? "").trim();
+      const res = await api.grade({ text, level, model: settings.model, rubric: customRubric || undefined });
+      const custom = res.custom === true && Array.isArray(res.components);
+      const components = res.components ?? (custom ? [] : {});
 
       // Verify EVERY component quote exists verbatim in the draft.
       const haystack = normWs(text);
@@ -1605,7 +1608,9 @@ export async function render(mount, ctx) {
         }
       }
 
-      const rubricScore = rubric.sumComponents(components);
+      const rubricScore = custom
+        ? rubric.sumCustomComponents(components)
+        : rubric.sumComponents(components);
       const grade = rubric.applyGradeLevel(rubricScore, level);
 
       const flags = state.claims
@@ -1623,13 +1628,13 @@ export async function render(mount, ctx) {
         title: nameInput.value.trim() || "Untitled",
         words: text.trim() ? text.trim().split(/\s+/).length : 0,
       };
-      showReport({ grade: { components, ...grade }, flags, meta });
+      showReport({ grade: { components, custom, ...grade }, flags, meta });
 
       await api.documents.update(docId, { gradeLetter: grade.letter, gradeScore: grade.total }).catch(() => {});
       await api.analyses.create({
         documentId: docId,
         sourceText: text,
-        gradeJson: { components, ...grade, flags },
+        gradeJson: { components, custom, ...grade, flags },
       }).catch(() => {});
     } catch (e) {
       ctx.toast(`Grading failed: ${e.message}`, true);

@@ -79,3 +79,42 @@ test("sumComponents rounds to an integer, like the shipped scoreFromComponents",
   assert.equal(sumComponents(partial), 77);
   assert.ok(Number.isInteger(sumComponents(partial)));
 });
+
+/* ── custom (pasted) rubrics ─────────────────────────────────────────── */
+import { MAX_CUSTOM_COMPONENTS, normalizeCustomComponents, sumCustomComponents } from "../shared/rubric.js";
+
+test("normalizeCustomComponents drops unusable rows and clamps the numbers", () => {
+  const out = normalizeCustomComponents([
+    { title: "Thesis", points: 20, score: 25, quote: "q", note: "n" },   // score clamped to points
+    { title: "", points: 10, score: 5 },                                  // no title → dropped
+    { title: "Void", points: 0, score: 0 },                               // zero points → dropped
+    { title: "Neg", points: -5, score: 3 },                               // negative → dropped
+    { title: "Huge", points: 500, score: 400 },                           // points clamped to 100
+    { title: "Frac", points: 9.6, score: -2 },                            // rounded; score floored at 0
+  ]);
+  assert.deepEqual(out.map((c) => [c.title, c.points, c.score]), [
+    ["Thesis", 20, 20],
+    ["Huge", 100, 100],
+    ["Frac", 10, 0],
+  ]);
+});
+
+test("normalizeCustomComponents caps the list and rejects non-arrays", () => {
+  const many = Array.from({ length: 20 }, (_, i) => ({ title: `C${i}`, points: 5, score: 3 }));
+  assert.equal(normalizeCustomComponents(many).length, MAX_CUSTOM_COMPONENTS);
+  assert.deepEqual(normalizeCustomComponents(null), []);
+  assert.deepEqual(normalizeCustomComponents({ title: "obj" }), []);
+});
+
+test("sumCustomComponents is earned over possible, integer, and 0 when nothing was scorable", () => {
+  assert.equal(sumCustomComponents([
+    { title: "A", points: 20, score: 15 },
+    { title: "B", points: 30, score: 30 },
+  ]), 90);
+  // 13 of 30 → 43.33 → 43; the /100 a student reads is a whole number
+  assert.equal(sumCustomComponents([{ title: "A", points: 30, score: 13 }]), 43);
+  assert.equal(sumCustomComponents([]), 0);
+  assert.equal(sumCustomComponents(null), 0);
+  // over-scored rows cannot push past 100
+  assert.equal(sumCustomComponents([{ title: "A", points: 10, score: 99 }]), 100);
+});

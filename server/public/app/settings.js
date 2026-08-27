@@ -206,6 +206,9 @@ const CSS = `
 }
 .settings-tab .set-chip button:hover { background: color-mix(in srgb, var(--mark-red) 14%, transparent); color: var(--mark-red); }
 .settings-tab .set-chip-input { min-width: 170px; flex: 0 1 auto; }
+
+/* custom rubric — a column row, like the chip editor */
+.settings-tab .set-rubric { width: 100%; min-height: 96px; resize: vertical; line-height: 1.5; font-size: var(--fs-xs, 12.5px); }
 `;
 
 function ensureStyles() {
@@ -328,6 +331,13 @@ export async function render(mount, ctx) {
         <span class="eyebrow">Preferences</span>
         ${row("Default citation style", "Used in the Library and in suggested citations", `<select class="input" data-set="citationStyle">${options(STYLES, settings.citationStyle ?? "apa")}</select>`)}
         ${row("Grading level", "Grades below 12 earn a small credit on the rubric score", `<select class="input" data-set="gradingLevel">${options(gradeOptions, settings.gradingLevel ?? 12)}</select>`)}
+        <div class="set-row set-col">
+          <div class="set-lab">
+            <span>Custom rubric</span>
+            <span class="set-hint">Paste an assignment rubric and AI Insights grades against it instead of the built-in one. Leave empty to use Tracely's rubric. Level credit still applies.</span>
+          </div>
+          <textarea class="input set-rubric" data-set="customRubric" rows="5" placeholder="e.g.&#10;Thesis (20 points): states an arguable position…&#10;Evidence (30 points): claims are supported by cited sources…">${esc(settings.customRubric ?? "")}</textarea>
+        </div>
         ${row("Fact-check my claims automatically", "Uses the API when on", `<input type="checkbox" data-set="autoCritique"${settings.autoCritique ? " checked" : ""} />`, { costs: true })}
         ${row("Auto-find sources for flagged claims", "Uses web search, capped", `<input type="checkbox" data-set="autoSources"${settings.autoSources ? " checked" : ""} />`, { costs: true })}
         ${row("Model", "Affects cost", `<select class="input" data-set="model">${options(MODELS, settings.model ?? "claude-opus-5")}</select>`, { costs: true })}

@@ -104,7 +104,7 @@ export const prefs = {
   },
   set(patch) {
     const allowed = ["citationStyle", "gradingLevel", "autoCritique", "autoSources", "model", "effort",
-                     "modelStrategy", "theme", "accent", "fontSize", "density", "firstName", "lastName", "watchEnabled", "watchApps"];
+                     "modelStrategy", "theme", "accent", "fontSize", "density", "firstName", "lastName", "watchEnabled", "watchApps", "customRubric"];
     const clean = {};
     for (const k of allowed) if (k in patch) clean[k] = patch[k];
     settingsSet(clean);

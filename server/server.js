@@ -565,15 +565,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/grade") {
       loadEnvFile();
       requireKey();
-      const { text, level } = (await parseJsonBody(req)) ?? {};
+      const { text, level, rubric } = (await parseJsonBody(req)) ?? {};
       if (typeof text !== "string" || text.trim().length < 40) throw new CheckError("bad_request", "text too short to grade");
+      if (rubric != null && (typeof rubric !== "string" || rubric.length > 4000)) {
+        throw new CheckError("bad_request", "rubric must be a string of at most 4000 characters");
+      }
+      const customRubric = typeof rubric === "string" ? rubric.trim() : "";
       const model = pickModel("grade");
       const clipped = text.slice(0, GUARDS.maxInputChars);
-      // Re-grading an unchanged draft is free.
-      const key = hashKey(`grade|${model}|${level ?? 12}|${clipped}`);
+      // Re-grading an unchanged draft is free. The rubric is in the key:
+      // editing the pasted rubric must re-grade, and clearing it must fall
+      // back to the built-in grade rather than replaying the custom one.
+      const key = hashKey(`grade|${model}|${level ?? 12}|${customRubric}|${clipped}`);
       let result = MOCK ? null : cacheGet("grade", key, { maxAgeMs: 7 * 24 * 3600_000 });
       if (!result) {
-        result = await ai.gradeDraft({ text: clipped, level, model });
+        result = customRubric
+          ? await ai.gradeWithCustomRubric({ text: clipped, rubric: customRubric, level, model })
+          : await ai.gradeDraft({ text: clipped, level, model });
         if (!MOCK) cacheSet("grade", key, result);
       }
       json(res, 200, result, cors);

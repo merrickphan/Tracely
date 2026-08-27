@@ -125,11 +125,14 @@ export function showReport({ grade = {}, flags = [], meta = {} } = {}) {
       grade.total + "/100 → " + grade.letter),
   ]);
 
-  // ── six component rows, in GRADE_COMPONENTS order ──
+  // ── component rows — built-in in GRADE_COMPONENTS order, or a pasted
+  // rubric's own components (grade.custom) in the rubric's order. Custom
+  // rows have no key, which skips the two built-in special cases below. ──
   const rows = el("div", { padding: "8px 24px 8px" });
-  for (const key of GRADE_COMPONENTS) {
-    const def = RUBRIC[key];
-    const c = components[key] ?? null;
+  const rowDefs = grade.custom && Array.isArray(components)
+    ? components.map((c) => ({ key: null, def: { title: c.title, points: c.points }, c }))
+    : GRADE_COMPONENTS.map((key) => ({ key, def: RUBRIC[key], c: components[key] ?? null }));
+  for (const { key, def, c } of rowDefs) {
     const row = el("div", { padding: "16px 0", borderBottom: "1px solid " + P.line });
     stagger(row);
 
@@ -262,6 +265,13 @@ export function showReport({ grade = {}, flags = [], meta = {} } = {}) {
     transition: "transform .2s ease",
   }, [header, arithmetic, rows, flagsWrap]);
   header.append(closeBtn);
+  if (grade.custom) {
+    // Name which rubric produced the number — a grade that silently switched
+    // rubrics reads as Tracely disagreeing with itself.
+    arithmetic.after(el("div", {
+      fontFamily: SANS, fontSize: "12.5px", color: P.inkFaint, margin: "8px 24px 0",
+    }, "Graded against your pasted rubric (Settings → Custom rubric)."));
+  }
 
   const backdrop = el("div", {
     position: "fixed", inset: "0", background: P.backdrop, zIndex: "80",
