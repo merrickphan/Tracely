@@ -69,6 +69,31 @@ async function syncOnce() {
     return
   }
   if (local === remote) return
+
+  // A hard reset is destructive, so it is fenced by three checks. All three are
+  // no-ops on a real viewer machine (clean tree, on-branch, always strictly
+  // behind) and only ever bite when `npm run live` is pointed at a checkout
+  // something else is using — e.g. the bridge's own WORKDIR on Sam's Mac, where
+  // resetting would delete a Claude run's in-progress edits. Fail-safe: when
+  // unsure, skip the update rather than destroy work. (Run this on a separate
+  // clone from the bridge — see LIVE-PREVIEW.md.)
+  const current = await git('rev-parse', '--abbrev-ref', 'HEAD').catch(() => '')
+  if (current !== BRANCH) {
+    console.error(`[live] HEAD is on '${current}', not '${BRANCH}' — refusing to reset. Check out ${BRANCH} here.`)
+    return
+  }
+  const dirty = await git('status', '--porcelain').catch(() => 'x')
+  if (dirty) {
+    console.warn('[live] working tree has uncommitted changes — deferring reset so nothing is lost')
+    return
+  }
+  // Only fast-forward: refuse if this checkout has commits origin doesn't (i.e.
+  // HEAD is not an ancestor of origin/BRANCH), which is the mid-edit / diverged case.
+  const ff = await run('git', ['merge-base', '--is-ancestor', 'HEAD', `origin/${BRANCH}`], { cwd: REPO }).then(() => true).catch(() => false)
+  if (!ff) {
+    console.warn('[live] local checkout is ahead of / diverged from origin — refusing to reset backward')
+    return
+  }
   console.log(`[live] new changes on ${BRANCH} (${local.slice(0, 7)} → ${remote.slice(0, 7)}) — applying`)
   try {
     await git('reset', '--hard', `origin/${BRANCH}`)
@@ -83,17 +108,30 @@ async function syncOnce() {
 async function main() {
   await ensureEnv()
 
-  // Make sure we're on the branch (create a local tracking copy if needed).
+  // Make sure we're ON the branch. This must succeed — syncOnce does hard
+  // resets scoped to whatever HEAD points at, so running from the wrong branch
+  // would rewrite THAT branch to live-preview's tree. If we can't land on the
+  // branch (usually: a dirty checkout refusing the switch), stop rather than
+  // reset something we shouldn't.
   try {
-    await git('rev-parse', '--verify', BRANCH)
-    await git('checkout', BRANCH)
-  } catch {
-    try {
-      await git('fetch', 'origin', BRANCH)
-      await git('checkout', '-b', BRANCH, `origin/${BRANCH}`)
-    } catch {
-      console.warn(`[live] could not check out ${BRANCH} — staying on the current branch and tracking origin/${BRANCH}`)
+    const already = await git('rev-parse', '--abbrev-ref', 'HEAD')
+    if (already !== BRANCH) {
+      const haveLocal = await git('rev-parse', '--verify', '--quiet', BRANCH).then(() => true).catch(() => false)
+      if (haveLocal) await git('checkout', BRANCH)
+      else {
+        await git('fetch', 'origin', BRANCH)
+        await git('checkout', '-b', BRANCH, `origin/${BRANCH}`)
+      }
     }
+    const landed = await git('rev-parse', '--abbrev-ref', 'HEAD')
+    if (landed !== BRANCH) throw new Error(`still on ${landed}`)
+  } catch (e) {
+    console.error(
+      `\n[live] Could not check out '${BRANCH}' (${e.message.split('\n')[0]}).\n` +
+        `       This checkout may have uncommitted changes. Commit/stash them, or run\n` +
+        `       'npm run live' from a fresh clone (recommended — never the bridge's copy).\n`
+    )
+    process.exit(1)
   }
 
   const head = await git('rev-parse', 'HEAD').catch(() => String(Date.now()))
@@ -107,6 +145,11 @@ async function main() {
 
   // Start the real app. HMR is its own; we never restart it.
   const dev = spawn(npmCmd, ['run', 'dev'], { cwd: REPO, stdio: 'inherit' })
+  dev.on('error', (e) => {
+    console.error(`[live] could not start the app dev server: ${e.message}`)
+    console.error('       Is Node installed and did `npm install` run in this folder?')
+    process.exit(1)
+  })
   dev.on('exit', (code) => {
     console.log(`[live] app dev server exited (${code}) — stopping`)
     process.exit(code ?? 0)
@@ -114,7 +157,12 @@ async function main() {
 
   const stop = () => {
     try {
-      dev.kill()
+      if (process.platform === 'win32' && dev.pid) {
+        // npm spawns a child electron tree; a bare kill() orphans it on Windows.
+        spawn('taskkill', ['/pid', String(dev.pid), '/T', '/F'], { stdio: 'ignore' })
+      } else {
+        dev.kill()
+      }
     } catch {}
     process.exit(0)
   }

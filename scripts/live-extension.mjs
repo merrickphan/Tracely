@@ -47,11 +47,13 @@ if (existsSync(bgPath)) {
   }
 }
 
-// 3) Give the dev copy the `tabs` permission the reloader needs. Never added to
-//    the real manifest — it would make the store listing ask for tab access.
+// 3) Give the dev copy the permissions the reloader needs — `tabs` to refresh
+//    pages after a reload, `alarms` to wake the worker if MV3 kills it. Neither
+//    is ever added to the real manifest (that would change the store listing's
+//    requested permissions).
 const manifestPath = join(DEV, 'manifest.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-manifest.permissions = [...new Set([...(manifest.permissions || []), 'tabs'])]
+manifest.permissions = [...new Set([...(manifest.permissions || []), 'tabs', 'alarms'])]
 manifest.name = (manifest.name || 'Tracely') + ' (Live)'
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
 

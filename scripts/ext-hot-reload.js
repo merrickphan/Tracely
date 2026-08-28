@@ -28,9 +28,13 @@ async function readVersion() {
   }
 }
 
-async function reloadActiveTabs() {
+async function reloadTabs() {
   try {
-    const tabs = await chrome.tabs.query({ active: true })
+    // Every http(s) tab, not just the active one: runtime.reload() invalidates
+    // the content script in ALL tabs, so a background tab left un-refreshed runs
+    // a dead content script until you touch it. Dev-only, so reloading them all
+    // is the right trade.
+    const tabs = await chrome.tabs.query({})
     for (const tab of tabs) {
       if (tab.id != null && /^https?:/.test(tab.url || '')) chrome.tabs.reload(tab.id)
     }
@@ -48,7 +52,7 @@ async function poll() {
   }
   if (version !== knownVersion) {
     console.log(`[tracely-hot-reload] change detected (${knownVersion} → ${version}) — reloading`)
-    await reloadActiveTabs()
+    await reloadTabs()
     chrome.runtime.reload() // restarts with the new code from disk; the fresh worker re-baselines
   }
 }
@@ -62,4 +66,17 @@ setInterval(() => {
 }, KEEPALIVE_MS)
 
 setInterval(poll, POLL_MS)
+
+// Belt-and-suspenders: if the worker is ever torn down anyway (the OS can kill
+// it regardless of the keepalive), a registered alarm listener is one of the
+// few things that WAKES a dead MV3 worker on a schedule — and top-level
+// listener registration re-arms the poll each time the worker restarts, so the
+// loop can never stay dead. The onAlarm handler runs a poll immediately.
+try {
+  chrome.alarms.onAlarm.addListener((a) => {
+    if (a.name === 'tracely-hot-reload') poll()
+  })
+  chrome.alarms.create('tracely-hot-reload', { periodInMinutes: 0.25 })
+} catch {}
+
 poll()
