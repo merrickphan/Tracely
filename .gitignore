@@ -61,3 +61,7 @@ server/node_modules/
 dist-web/
 dist-demo/
 demo.html
+
+# Tracely live preview (dev-only, generated/gitignored)
+extension-dev/
+.env.live
