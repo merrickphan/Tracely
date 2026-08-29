@@ -467,47 +467,110 @@
        in a fixed overlay. If the hook finds nothing (Docs changed how it
        paints, hook not injected), nothing is drawn and the widget behaves
        exactly as before — this is strictly additive. */
-    let marksLayer = null;
     let locateSeq = 0;
     let lastVerdictByHash = new Map();
-    let docsHitRects = []; // rebuilt per draw — hover hit-testing for the popover
+    // Per-tile overlays, anchored to the canvas tiles themselves: native DOM
+    // scrolling then carries the bars in the same frame — the old viewport-
+    // fixed layer only caught up after a locate round-trip, so underlines
+    // visibly lagged the text. tileId → {overlay, group, sx, sy, shiftX, shiftY}
+    const tileOverlays = new Map();
+    let docsBars = []; // [{hash, el, size}] — hover hit-testing reads live rects
+
+    function clearDocsMarks() {
+      for (const t of tileOverlays.values()) {
+        t.group.textContent = "";
+        t.shiftX = 0;
+        t.shiftY = 0;
+        t.group.style.transform = "";
+      }
+      docsBars = [];
+    }
+
+    function overlayForTile(tileId) {
+      const canvas = document.querySelector(`canvas[data-tracely-tile="${tileId}"]`);
+      if (!canvas || !canvas.parentElement) return null;
+      let t = tileOverlays.get(tileId);
+      if (!t || !t.overlay.isConnected || t.overlay.parentElement !== canvas.parentElement) {
+        t?.overlay.remove();
+        const parent = canvas.parentElement;
+        try {
+          if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
+        } catch { /* leave as-is */ }
+        const overlay = document.createElement("div");
+        overlay.setAttribute("data-tracely-docs-marks", "");
+        const group = document.createElement("div");
+        overlay.appendChild(group);
+        parent.appendChild(overlay);
+        t = { overlay, group, sx: 1, sy: 1, shiftX: 0, shiftY: 0 };
+        tileOverlays.set(tileId, t);
+      }
+      const canvasEl = canvas;
+      Object.assign(t.overlay.style, {
+        position: "absolute",
+        left: canvasEl.offsetLeft + "px",
+        top: canvasEl.offsetTop + "px",
+        width: canvasEl.offsetWidth + "px",
+        height: canvasEl.offsetHeight + "px",
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: "3", // above the tile it annotates; far below Docs menus/dialogs
+      });
+      t.sx = canvasEl.offsetWidth / (canvasEl.width || 1);
+      t.sy = canvasEl.offsetHeight / (canvasEl.height || 1);
+      // A fresh authoritative draw resets any interim blit-shift.
+      t.shiftX = 0;
+      t.shiftY = 0;
+      t.group.style.transform = "";
+      return t;
+    }
 
     function drawDocsMarks(rects) {
-      if (!marksLayer) {
-        marksLayer = document.createElement("div");
-        marksLayer.setAttribute("data-tracely-docs-marks", "");
-        Object.assign(marksLayer.style, {
-          // z-index 900, deliberately modest: above the editing surface but
-          // BELOW Docs' own menus, dialogs and comment popups (which sit in
-          // the 1000+ range) — an underline must never draw over an open menu.
-          position: "fixed", inset: "0", pointerEvents: "none", zIndex: "900",
-        });
-        document.documentElement.appendChild(marksLayer);
-      }
-      marksLayer.textContent = "";
-      docsHitRects = [];
+      clearDocsMarks();
+      const byTile = new Map();
       for (const [hash, list] of Object.entries(rects ?? {})) {
-        const verdict = lastVerdictByHash.get(hash);
-        const color = MARK_COLORS[verdict];
-        if (!color) continue;
         for (const r of list) {
-          if (!r || r.width < 3 || r.top < -20 || r.top > innerHeight + 20) continue;
+          if (!r || r.width < 3) continue;
+          let b = byTile.get(r.tile);
+          if (!b) { b = []; byTile.set(r.tile, b); }
+          b.push({ hash, r });
+        }
+      }
+      for (const [tileId, items] of byTile) {
+        const t = overlayForTile(tileId);
+        if (!t) continue;
+        for (const { hash, r } of items) {
+          const verdict = lastVerdictByHash.get(hash);
+          const color = MARK_COLORS[verdict];
+          if (!color) continue;
           const bar = document.createElement("div");
           Object.assign(bar.style, {
-            position: "fixed",
-            left: r.left + "px",
-            top: r.top + "px",
+            position: "absolute",
+            left: r.x + "px",
+            top: r.y + "px",
             width: r.width + "px",
             height: "3px",
             background: color, // solid, one distinct colour per verdict
             borderRadius: "2px",
             pointerEvents: "none",
           });
-          marksLayer.appendChild(bar);
-          docsHitRects.push({ hash, left: r.left, top: r.top, width: r.width, size: r.size || 18 });
+          t.group.appendChild(bar);
+          docsBars.push({ hash, el: bar, size: r.size || 18 });
         }
       }
     }
+
+    // Docs scrolls small distances by blitting INSIDE a canvas — the tile
+    // doesn't move, its pixels do. The hook pushes the shift the moment it
+    // happens; nudging the group in the same frame keeps bars glued to text
+    // between authoritative locate rounds.
+    window.addEventListener("message", (ev) => {
+      if (ev.source !== window || ev.data?.type !== "tracely-docs-shift") return;
+      const t = tileOverlays.get(ev.data.tile);
+      if (!t) return;
+      t.shiftX += (Number(ev.data.dx) || 0) * t.sx;
+      t.shiftY += (Number(ev.data.dy) || 0) * t.sy;
+      t.group.style.transform = `translate(${t.shiftX}px, ${t.shiftY}px)`;
+    });
 
     window.addEventListener("message", (ev) => {
       if (ev.source !== window || ev.data?.type !== "tracely-docs-rects") return;
@@ -521,8 +584,7 @@
       // on the other side of the protocol.
       const issues = currentIssues().slice(0, 40);
       if (issues.length === 0) {
-        if (marksLayer) marksLayer.textContent = "";
-        docsHitRects = [];
+        clearDocsMarks();
         hideDocsPopover();
       }
       lastVerdictByHash = new Map(issues.map(({ seg, f }) => [seg.hash, f.verdict]));
@@ -657,12 +719,13 @@
       row.appendChild(dis);
       popEl.appendChild(row);
       // Position under the underline; flip above when it would clip the viewport.
+      const below = (rect.bottom ?? rect.top + 4) + 8;
       popEl.style.left = Math.max(12, Math.min(rect.left, innerWidth - 320)) + "px";
-      popEl.style.top = rect.top + 10 + "px";
+      popEl.style.top = below + "px";
       popEl.style.visibility = "hidden";
       document.documentElement.appendChild(popEl);
       const h = popEl.getBoundingClientRect().height;
-      if (rect.top + 10 + h > innerHeight - 10) {
+      if (below + h > innerHeight - 10) {
         popEl.style.top = Math.max(10, rect.top - rect.size - h - 8) + "px";
       }
       popEl.style.visibility = "visible";
@@ -675,11 +738,19 @@
       const x = e.clientX, y = e.clientY;
       requestAnimationFrame(() => {
         hoverRafBusy = false;
-        const over = (r) => x >= r.left - 2 && x <= r.left + r.width + 2 && y >= r.top - r.size && y <= r.top + 6;
+        // Bars are DOM-anchored now — read their LIVE viewport rects, which
+        // are correct mid-scroll by construction.
+        const hitOf = (b) => {
+          if (!b.el.isConnected) return null;
+          const r = b.el.getBoundingClientRect();
+          return x >= r.left - 2 && x <= r.right + 2 && y >= r.top - b.size && y <= r.bottom + 3
+            ? { left: r.left, top: r.top, bottom: r.bottom, size: b.size }
+            : null;
+        };
         if (popEl) {
           const pb = popEl.getBoundingClientRect();
           const inPop = x >= pb.left - 8 && x <= pb.right + 8 && y >= pb.top - 8 && y <= pb.bottom + 8;
-          const stillOnMark = docsHitRects.some((r) => r.hash === popHash && over(r));
+          const stillOnMark = docsBars.some((b) => b.hash === popHash && hitOf(b));
           if (inPop || stillOnMark) {
             clearTimeout(popHideTimer);
             popHideTimer = null;
@@ -688,8 +759,10 @@
           if (!popHideTimer) popHideTimer = setTimeout(() => { popHideTimer = null; hideDocsPopover(); }, 250);
           return;
         }
-        const hit = docsHitRects.find(over);
-        if (hit) showDocsPopover(hit.hash, hit);
+        for (const b of docsBars) {
+          const hit = hitOf(b);
+          if (hit) { showDocsPopover(b.hash, hit); break; }
+        }
       });
     }, { passive: true });
 
