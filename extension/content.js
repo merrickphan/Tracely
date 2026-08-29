@@ -310,6 +310,7 @@
     .src a:hover { color: #ff7f00; }
     .src-meta { font-size: 10px; color: #a7a7ac; font-weight: 500; }
     .src-snip { font-size: 10.5px; color: #8e8e93; }
+    .src-actions { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
     .loading { font-size: 11.5px; color: #a7a7ac; font-style: italic; }
     .st-manual { background: #eaf1fb; color: #2c6fb8; }
     .cite-url { display: flex; gap: 6px; margin-top: 8px; }
@@ -878,9 +879,11 @@
                     <a href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">${esc(src.title)}</a>
                     <div class="src-meta">${esc(src.publisher)}</div>
                     ${src.snippet ? `<div class="src-snip">${esc(src.snippet)}</div>` : ""}
+                    <div class="src-actions">
+                      ${canEditDoc() ? `<button class="act primary" data-doc-cite="${seg.hash}" data-i="${i}"${docBusy ? " disabled" : ""}>${st.citedUrl === src.url ? "Cited ✓" : "Cite in doc"}</button>` : ""}
+                      <button class="act" data-copy-src="${seg.hash}" data-i="${i}">${st.copiedUrl === src.url ? "Copied ✓" : "Copy cite"}</button>
+                    </div>
                   </div>
-                  ${canEditDoc() ? `<button class="act primary" data-doc-cite="${seg.hash}" data-i="${i}"${docBusy ? " disabled" : ""}>${st.citedUrl === src.url ? "Cited ✓" : "Cite in doc"}</button>` : ""}
-                  <button class="act" data-copy-src="${seg.hash}" data-i="${i}">${st.copiedUrl === src.url ? "Copied ✓" : "Copy cite"}</button>
                 </div>`).join("") + `</div>`;
           }
           return `
@@ -1620,8 +1623,10 @@
                     <a href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">${esc(src.title)}</a>
                     <div class="src-meta">${esc(src.publisher)}</div>
                     ${src.snippet ? `<div class="src-snip">${esc(src.snippet)}</div>` : ""}
+                    <div class="src-actions">
+                      <button class="act" data-copy-src="${seg.hash}" data-i="${i}">${st.copiedUrl === src.url ? "Copied ✓" : "Copy cite"}</button>
+                    </div>
                   </div>
-                  <button class="act" data-copy-src="${seg.hash}" data-i="${i}">${st.copiedUrl === src.url ? "Copied ✓" : "Copy cite"}</button>
                 </div>`).join("") + `</div>`;
           }
           return `
