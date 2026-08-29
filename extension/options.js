@@ -5,12 +5,37 @@
 const SERVER = "http://localhost:4477";
 const $ = (id) => document.getElementById(id);
 
+/* ── Faster ↔ Smarter slider ↔ model mapping ─────────────────────────────── */
+
+const MODELS = ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"];
+const MODEL_NOTES = [
+  "Haiku — fastest and cheapest. A full essay costs well under a cent.",
+  "Sonnet — a balance of speed and rigor for everyday checking.",
+  "Opus — the sharpest judgment for subtle or high-stakes claims.",
+];
+
+function paintSlider(pos) {
+  const slider = $("modelSlider");
+  // orange fill up to the thumb, faint track after — matches jointracely.com
+  const pct = (pos / (MODELS.length - 1)) * 100;
+  slider.style.setProperty(
+    "--range-fill",
+    `linear-gradient(90deg, var(--orange) 0%, var(--orange-2) ${pct}%, rgba(20,16,10,0.08) ${pct}%, rgba(20,16,10,0.08) 100%)`
+  );
+  document.querySelectorAll(".tick").forEach((t) => t.classList.toggle("active", Number(t.dataset.i) === pos));
+  $("labFaster").classList.toggle("active", pos === 0);
+  $("labSmarter").classList.toggle("active", pos === MODELS.length - 1);
+  $("modelNote").textContent = MODEL_NOTES[pos] ?? "";
+}
+
 /* ── load + save ─────────────────────────────────────────────────────────── */
 
 function load() {
-  chrome.storage.local.get({ apiKey: "", model: "claude-opus-5", enabledSites: [] }, (cfg) => {
+  chrome.storage.local.get({ apiKey: "", model: "claude-haiku-4-5", enabledSites: [] }, (cfg) => {
     $("apiKey").value = cfg.apiKey;
-    $("model").value = cfg.model;
+    const pos = Math.max(0, MODELS.indexOf(cfg.model));
+    $("modelSlider").value = String(pos);
+    paintSlider(pos);
     renderSites(cfg.enabledSites);
   });
 }
@@ -33,8 +58,10 @@ $("apiKey").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("saveKey").click();
 });
 
-$("model").addEventListener("change", () => {
-  chrome.storage.local.set({ model: $("model").value });
+$("modelSlider").addEventListener("input", () => {
+  const pos = Number($("modelSlider").value);
+  paintSlider(pos);
+  chrome.storage.local.set({ model: MODELS[pos] ?? "claude-haiku-4-5" });
 });
 
 /* ── per-site auto-check list ────────────────────────────────────────────── */

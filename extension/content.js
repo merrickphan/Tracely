@@ -19,8 +19,8 @@
    and Docs write-back hide). Harness/plain test pages fetch directly.
 
    Field mode also draws Grammarly-style overlay underlines: flagged
-   sentences get a 2px colored underline + faint wash (false #d93636,
-   questionable #ffb800, incoherent #ff5900; grey dotted while pending);
+   sentences get a wavy colored underline (no highlight wash) — false #d93636,
+   questionable #ffb800, incoherent #ff5900; grey dotted while pending;
    clicking one opens the panel and flashes that verdict's card. */
 "use strict";
 
@@ -41,6 +41,54 @@
   // The three-colour mark vocabulary for in-page underlines (field mode).
   const MARK_COLORS = { false: "#d93636", questionable: "#ffb800", incoherent: "#ff5900" };
   const MARK_PENDING = "#9a9ba1"; // grey dotted while a sentence's check is in flight
+
+  // A Grammarly-style wavy underline as a repeatable SVG, tinted to the mark colour.
+  function wavyUnderline(color) {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='6' height='4' viewBox='0 0 6 4'><path d='M0 3 Q1.5 0.6 3 3 T6 3' stroke='${color}' stroke-width='1.4' fill='none'/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
+
+  // The Faster↔Smarter slider — one control replacing the model + effort
+  // dropdowns on both widget surfaces. Three stops; effort rides along.
+  const SPEED_STOPS = [
+    { model: "claude-haiku-4-5", effort: "low" },
+    { model: "claude-sonnet-5", effort: "low" },
+    { model: "claude-opus-5", effort: "medium" },
+  ];
+  function speedPos(model) {
+    const i = SPEED_STOPS.findIndex((s) => s.model === model);
+    return i === -1 ? 0 : i;
+  }
+  function sbFill(pos) {
+    const pct = (pos / (SPEED_STOPS.length - 1)) * 100;
+    return `linear-gradient(90deg, #ff7f00 0%, #f9a35a ${pct}%, rgba(20,16,10,0.08) ${pct}%, rgba(20,16,10,0.08) 100%)`;
+  }
+  function speedbarHtml(pos) {
+    return `<div class="speedbar">
+      <span class="sb-lab${pos === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
+      <div class="sb-track">
+        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="1" value="${pos}" style="--sb-fill:${sbFill(pos)}">
+        <span class="sb-dots">${SPEED_STOPS.map(() => "<i></i>").join("")}</span>
+      </div>
+      <span class="sb-lab${pos === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter</span>
+    </div>`;
+  }
+  // Wire the slider without re-rendering: a full render mid-drag drops the
+  // thumb. Updates settings + fill + end labels in place.
+  function wireSpeedbar(shadow, settings, saveSettings) {
+    const el = shadow.getElementById("speedSel");
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const pos = Number(el.value);
+      const stop = SPEED_STOPS[pos] ?? SPEED_STOPS[0];
+      settings.model = stop.model;
+      settings.effort = stop.effort;
+      saveSettings();
+      el.style.setProperty("--sb-fill", sbFill(pos));
+      shadow.querySelector('[data-sb-lab="0"]')?.classList.toggle("on", pos === 0);
+      shadow.querySelector('[data-sb-lab="max"]')?.classList.toggle("on", pos === SPEED_STOPS.length - 1);
+    });
+  }
 
   /* ── shared helpers (mirror public/app.js) ─────────────────────────────── */
 
@@ -153,101 +201,118 @@
 
   const PLANE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>`;
 
+  // jointracely.com's own font, bundled in the extension (web_accessible).
+  const FONT_URL = (() => { try { return chrome.runtime.getURL("fonts/PlusJakartaSans.woff2"); } catch { return ""; } })();
+  const JAKARTA = `'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+
   const WIDGET_CSS = `
+    ${FONT_URL ? `@font-face { font-family: 'Plus Jakarta Sans'; src: url('${FONT_URL}') format('woff2'); font-weight: 200 800; font-display: swap; }` : ""}
     :host { all: initial; }
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: ${JAKARTA}; -webkit-font-smoothing: antialiased; }
     .root { position: fixed; right: 22px; bottom: 22px; z-index: 2147483647; }
     .pill {
-      display: flex; align-items: center; gap: 8px;
-      background: #fff; color: #23201a;
-      border: 1px solid #eae5dd; border-radius: 999px;
-      padding: 9px 16px 9px 12px;
-      box-shadow: 0 4px 24px #00000026;
+      display: flex; align-items: center; gap: 9px;
+      background: #fff; color: #0e0e10;
+      border: 1px solid rgba(20,16,10,0.06); border-radius: 999px;
+      padding: 9px 17px 9px 11px;
+      box-shadow: 0 8px 26px rgba(180,120,60,0.18);
       cursor: pointer; user-select: none;
-      font-size: 13px; font-weight: 600;
+      font-size: 13.5px; font-weight: 700;
     }
-    .pill:hover { border-color: #f97316; }
-    .pill.quiet { color: #6f685c; }
-    .pill.quiet .plane { background: linear-gradient(135deg, #b3a893, #a39a8a); }
+    .pill:hover { transform: translateY(-1px); }
+    .pill.quiet { color: #8e8e93; }
+    .pill.quiet .plane { background: linear-gradient(150deg, #c7c7cc, #a7a7ac); }
     .plane {
-      width: 26px; height: 26px; border-radius: 8px;
-      background: linear-gradient(135deg, #f97316, #ea580c);
+      width: 28px; height: 28px; border-radius: 9px;
+      background: linear-gradient(150deg, #ff7f00, #f9a35a);
       display: flex; align-items: center; justify-content: center;
-      color: #fff; flex-shrink: 0;
+      color: #fff; flex-shrink: 0; box-shadow: 0 4px 12px rgba(255,127,0,0.30);
     }
-    .plane svg { width: 14px; height: 14px; }
-    .count { background: #fef1f0; color: #d92d20; border-radius: 999px; padding: 1px 8px; font-size: 12px; }
-    .count.ok { background: #ecfdf3; color: #15803d; }
-    .count.off { background: #f1f0ee; color: #a39a8a; }
+    .plane svg { width: 15px; height: 15px; }
+    .count { background: #fdecec; color: #d93636; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
+    .count.ok { background: #e7f6ee; color: #1f9d55; }
+    .count.off { background: #f2f2f3; color: #a7a7ac; }
     .panel {
-      position: absolute; right: 0; bottom: 52px;
-      width: 380px; max-height: min(560px, 72vh);
-      background: #faf8f5; border: 1px solid #eae5dd; border-radius: 14px;
-      box-shadow: 0 12px 48px #00000033;
+      position: absolute; right: 0; bottom: 54px;
+      width: 384px; max-height: min(560px, 72vh);
+      background: #fdfbf9; border: 1px solid rgba(20,16,10,0.06); border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(180,120,60,0.22);
       display: flex; flex-direction: column; overflow: hidden;
     }
     .head {
       display: flex; align-items: center; gap: 8px;
-      padding: 12px 14px; background: #fff; border-bottom: 1px solid #eae5dd;
+      padding: 14px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05);
       cursor: grab;
     }
-    .head .name { font-family: Georgia, serif; font-weight: 700; font-size: 16px; }
+    .head .name { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
     .head .autosrc { flex-shrink: 0; }
-    .status { margin-left: auto; font-size: 11px; color: #a39a8a; max-width: 170px; text-align: right; }
-    .status.error { color: #d92d20; }
-    .selects { display: flex; gap: 6px; padding: 8px 14px; background: #fff; border-bottom: 1px solid #eae5dd; align-items: center; }
-    select { font-size: 12px; border: 1px solid #ddd6ca; border-radius: 6px; padding: 3px 6px; background: #fff; color: #23201a; outline: none; }
-    .list { overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .empty { text-align: center; color: #a39a8a; font-size: 12.5px; padding: 26px 12px; }
-    .card { background: #fff; border: 1px solid #eae5dd; border-left: 3px solid #a39a8a; border-radius: 10px; padding: 10px 12px; }
-    .card.c-false { border-left-color: #d92d20; }
-    .card.c-quest { border-left-color: #b45309; }
-    .card.c-inco { border-left-color: #7c3aed; }
-    .top { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-    .badge { font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; }
-    .badge-false { background: #d92d2015; color: #d92d20; }
-    .badge-quest { background: #b4530915; color: #b45309; }
-    .badge-inco { background: #7c3aed12; color: #7c3aed; }
-    .x { margin-left: auto; background: none; border: none; color: #a39a8a; cursor: pointer; font-size: 13px; }
-    .x:hover { color: #23201a; }
-    .quote { font-family: Georgia, serif; font-style: italic; font-size: 12.5px; color: #6f685c; border-left: 2px solid #ddd6ca; padding-left: 8px; margin-bottom: 6px; }
-    .expl { font-size: 12px; color: #23201a; margin-bottom: 8px; }
-    .fix { background: #faf8f5; border: 1px solid #eae5dd; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
-    .fix-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #15803d; margin-bottom: 3px; }
-    .fix-text { font-family: Georgia, serif; font-size: 12.5px; margin-bottom: 6px; }
-    .row { display: flex; gap: 6px; }
+    .status { margin-left: auto; font-size: 11px; color: #a7a7ac; max-width: 170px; text-align: right; font-weight: 500; }
+    .status.error { color: #d93636; }
+    .selects { display: flex; gap: 6px; padding: 9px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); align-items: center; }
+    .speedbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); }
+    .sb-lab { font-size: 12px; font-weight: 700; color: #8e8e93; flex-shrink: 0; }
+    .sb-lab.on { color: #0e0e10; }
+    .sb-track { position: relative; flex: 1; display: flex; align-items: center; }
+    input[type="range"].speed { -webkit-appearance: none; appearance: none; width: 100%; height: 12px; border-radius: 999px; background: transparent; outline: none; cursor: pointer; margin: 0; }
+    input[type="range"].speed::-webkit-slider-runnable-track { height: 12px; border-radius: 999px; background: var(--sb-fill, linear-gradient(90deg, #ff7f00, #f9a35a)); }
+    input[type="range"].speed::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 1px solid rgba(20,16,10,0.12); box-shadow: 0 2px 8px rgba(180,120,60,0.38); margin-top: -6px; cursor: grab; }
+    .sb-dots { position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; pointer-events: none; }
+    .sb-dots i { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(20,16,10,0.05); }
+    .foot .act { padding: 4px 11px; font-size: 11px; }
+    .foot-left { display: flex; align-items: center; gap: 10px; }
+    select { font-size: 12px; border: 1px solid rgba(20,16,10,0.1); border-radius: 8px; padding: 4px 8px; background: #fff; color: #0e0e10; outline: none; font-weight: 600; }
+    .list { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .empty { text-align: center; color: #a7a7ac; font-size: 13px; padding: 28px 12px; font-weight: 500; }
+    .card { background: #fff; border: 1px solid rgba(20,16,10,0.05); border-left: 3px solid #a7a7ac; border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 14px rgba(180,120,60,0.07); }
+    .card.c-false { border-left-color: #d93636; }
+    .card.c-quest { border-left-color: #ffb800; }
+    .card.c-inco { border-left-color: #ff5900; }
+    .top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .badge { font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; }
+    .badge-false { background: #fdecec; color: #d93636; }
+    .badge-quest { background: #fff4d6; color: #a67500; }
+    .badge-inco { background: #ffe9dd; color: #d95a19; }
+    .x { margin-left: auto; background: none; border: none; color: #a7a7ac; cursor: pointer; font-size: 14px; }
+    .x:hover { color: #0e0e10; }
+    .quote { font-style: italic; font-size: 12.5px; color: #8e8e93; border-left: 2px solid rgba(20,16,10,0.1); padding-left: 9px; margin-bottom: 7px; font-weight: 500; }
+    .expl { font-size: 12.5px; color: #0e0e10; margin-bottom: 9px; line-height: 1.5; font-weight: 500; }
+    .fix { background: #fdfbf9; border: 1px solid rgba(20,16,10,0.06); border-radius: 12px; padding: 10px 12px; margin-bottom: 7px; }
+    .fix-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #1f9d55; margin-bottom: 4px; }
+    .fix-text { font-size: 12.5px; margin-bottom: 7px; line-height: 1.5; }
+    .row { display: flex; gap: 7px; }
     button.act {
-      border: 1px solid #ddd6ca; background: #fff; color: #23201a; border-radius: 6px;
-      padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-weight: 600;
+      border: 1px solid rgba(20,16,10,0.1); background: #fff; color: #0e0e10; border-radius: 9px;
+      padding: 6px 12px; font-size: 11.5px; cursor: pointer; font-weight: 700; font-family: ${JAKARTA};
     }
-    button.act:hover { border-color: #f97316; color: #ea580c; }
-    button.act.primary { background: #fff1e6; border-color: #fbd6b5; color: #ea580c; }
+    button.act:hover { border-color: #ff7f00; color: #ff7f00; }
+    button.act.primary { background: #0e0e10; border-color: #0e0e10; color: #fff; }
+    button.act.primary:hover { color: #fff; opacity: .9; }
     button.act[disabled] { opacity: .5; cursor: default; }
-    .sources { border-top: 1px dashed #ddd6ca; margin-top: 8px; padding-top: 6px; }
-    .sources-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #ea580c; margin-bottom: 4px; }
-    .src { display: flex; gap: 6px; align-items: flex-start; padding: 5px 6px; border-radius: 7px; }
-    .src:hover { background: #fff1e6; }
-    .stance { font-size: 8px; font-weight: 700; text-transform: uppercase; padding: 1px 5px; border-radius: 8px; margin-top: 2px; flex-shrink: 0; }
-    .st-supports { background: #ecfdf3; color: #15803d; }
-    .st-refutes { background: #fef1f0; color: #d92d20; }
-    .st-context { background: #f1f0ee; color: #6f685c; }
+    .sources { border-top: 1px solid rgba(20,16,10,0.07); margin-top: 9px; padding-top: 7px; }
+    .sources-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #ff7f00; margin-bottom: 5px; }
+    .src { display: flex; gap: 7px; align-items: flex-start; padding: 6px 7px; border-radius: 9px; }
+    .src:hover { background: #fff6ee; }
+    .stance { font-size: 8px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 8px; margin-top: 2px; flex-shrink: 0; }
+    .st-supports { background: #e7f6ee; color: #1f9d55; }
+    .st-refutes { background: #fdecec; color: #d93636; }
+    .st-context { background: #f2f2f3; color: #8e8e93; }
     .src-body { flex: 1; min-width: 0; }
-    .src a { font-size: 11.5px; font-weight: 600; color: #23201a; text-decoration: none; display: block; }
-    .src a:hover { color: #ea580c; text-decoration: underline; }
-    .src-meta { font-size: 10px; color: #a39a8a; }
-    .src-snip { font-size: 10.5px; color: #6f685c; }
-    .loading { font-size: 11.5px; color: #a39a8a; font-style: italic; }
-    .st-manual { background: #e8f1fb; color: #1d6fb8; }
+    .src a { font-size: 11.5px; font-weight: 700; color: #0e0e10; text-decoration: none; display: block; }
+    .src a:hover { color: #ff7f00; }
+    .src-meta { font-size: 10px; color: #a7a7ac; font-weight: 500; }
+    .src-snip { font-size: 10.5px; color: #8e8e93; }
+    .loading { font-size: 11.5px; color: #a7a7ac; font-style: italic; }
+    .st-manual { background: #eaf1fb; color: #2c6fb8; }
     .cite-url { display: flex; gap: 6px; margin-top: 8px; }
-    .cite-url input { flex: 1; min-width: 0; border: 1px solid #ddd6ca; border-radius: 6px; padding: 4px 8px; font-size: 11.5px; outline: none; color: #23201a; background: #fff; }
-    .cite-url input:focus { border-color: #f97316; }
-    .autosrc { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6f685c; cursor: pointer; user-select: none; }
-    .autosrc input { accent-color: #f97316; }
-    .foot { padding: 7px 14px; background: #fff; border-top: 1px solid #eae5dd; font-size: 10.5px; color: #a39a8a; display: flex; justify-content: space-between; }
+    .cite-url input { flex: 1; min-width: 0; border: 1px solid rgba(20,16,10,0.1); border-radius: 9px; padding: 6px 10px; font-size: 11.5px; outline: none; color: #0e0e10; background: #fff; font-family: ${JAKARTA}; }
+    .cite-url input:focus { border-color: #ff7f00; }
+    .autosrc { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8e8e93; cursor: pointer; user-select: none; font-weight: 600; }
+    .autosrc input { accent-color: #ff7f00; }
+    .foot { padding: 8px 16px; background: #fff; border-top: 1px solid rgba(20,16,10,0.05); font-size: 10.5px; color: #a7a7ac; display: flex; justify-content: space-between; font-weight: 500; }
     .card.flash { animation: tracely-flash 1.2s ease-out; }
     @keyframes tracely-flash {
-      0% { background: #fff7ed; box-shadow: 0 0 0 3px #f9731666; }
-      100% { background: #fff; box-shadow: none; }
+      0% { box-shadow: 0 0 0 3px rgba(255,127,0,0.4); }
+      100% { box-shadow: 0 4px 14px rgba(180,120,60,0.07); }
     }
   `;
 
@@ -383,6 +448,96 @@
       }
       return out;
     }
+
+    /* ── overlay underlines over the Docs canvas ──────────────────────────
+       Docs paints text onto canvas tiles, so field mode's DOM techniques
+       can't see it. docs-hook.js (page world, document_start) wraps the
+       canvas text calls and keeps a ledger of what was painted where; we ask
+       it to locate each flagged sentence and draw the same wavy underlines
+       in a fixed overlay. If the hook finds nothing (Docs changed how it
+       paints, hook not injected), nothing is drawn and the widget behaves
+       exactly as before — this is strictly additive. */
+    let marksLayer = null;
+    let locateSeq = 0;
+    let lastVerdictByHash = new Map();
+
+    function drawDocsMarks(rects) {
+      if (!marksLayer) {
+        marksLayer = document.createElement("div");
+        marksLayer.setAttribute("data-tracely-docs-marks", "");
+        Object.assign(marksLayer.style, {
+          // z-index 900, deliberately modest: above the editing surface but
+          // BELOW Docs' own menus, dialogs and comment popups (which sit in
+          // the 1000+ range) — an underline must never draw over an open menu.
+          position: "fixed", inset: "0", pointerEvents: "none", zIndex: "900",
+        });
+        document.documentElement.appendChild(marksLayer);
+      }
+      marksLayer.textContent = "";
+      for (const [hash, list] of Object.entries(rects ?? {})) {
+        const verdict = lastVerdictByHash.get(hash);
+        const color = MARK_COLORS[verdict];
+        if (!color) continue;
+        for (const r of list) {
+          if (!r || r.width < 3 || r.top < -20 || r.top > innerHeight + 20) continue;
+          const bar = document.createElement("div");
+          Object.assign(bar.style, {
+            position: "fixed",
+            left: r.left + "px",
+            top: r.top + "px",
+            width: r.width + "px",
+            height: "4px",
+            backgroundImage: wavyUnderline(color),
+            backgroundRepeat: "repeat-x",
+            backgroundPosition: "left bottom",
+            backgroundSize: "6px 4px",
+            pointerEvents: "none",
+          });
+          marksLayer.appendChild(bar);
+        }
+      }
+    }
+
+    window.addEventListener("message", (ev) => {
+      if (ev.source !== window || ev.data?.type !== "tracely-docs-rects") return;
+      if (ev.data.id !== locateSeq) return; // stale response from an older request
+      drawDocsMarks(ev.data.rects);
+    });
+
+    function requestDocsMarks() {
+      if (document.hidden) return;
+      // The hook caps at 40 wants — cap here too so nothing is silently dropped
+      // on the other side of the protocol.
+      const issues = currentIssues().slice(0, 40);
+      if (issues.length === 0 && marksLayer) marksLayer.textContent = "";
+      lastVerdictByHash = new Map(issues.map(({ seg, f }) => [seg.hash, f.verdict]));
+      locateSeq++;
+      // Sent even with zero issues: an empty locate is the hook's cue to prune
+      // ledgers for detached canvas tiles, so clean documents don't accumulate.
+      window.postMessage({
+        type: "tracely-docs-locate",
+        id: locateSeq,
+        wants: issues.map(({ seg }) => ({ hash: seg.hash, text: seg.text })),
+      }, "*");
+    }
+
+    // Scroll/wheel fire at frame rate; a trailing 140ms throttle keeps the
+    // locate pass (line assembly + matching in the page world) off the hot
+    // path while underlines still track a scroll closely.
+    let locateQueued = false;
+    function scheduleDocsMarks() {
+      if (locateQueued) return;
+      locateQueued = true;
+      setTimeout(() => {
+        locateQueued = false;
+        requestDocsMarks();
+      }, 140);
+    }
+
+    setInterval(requestDocsMarks, 900);
+    window.addEventListener("scroll", scheduleDocsMarks, { capture: true, passive: true });
+    window.addEventListener("wheel", scheduleDocsMarks, { capture: true, passive: true });
+    window.addEventListener("resize", scheduleDocsMarks, { passive: true });
 
     async function fetchSources(hash, auto = false) {
       if (sourcesInflight) return;
@@ -537,42 +692,8 @@
       }
     }
 
-    async function highlightAllInDoc() {
-      if (docBusy) return;
-      docBusy = true;
-      render();
-      try {
-        const issues = currentIssues();
-        for (const { seg, f } of issues) {
-          await docApply({ action: "highlight", sentence: seg.text, verdict: f.verdict });
-        }
-        statusKind = "idle";
-        statusMsg = `highlighted ${issues.length} sentence${issues.length === 1 ? "" : "s"}`;
-      } catch (e) {
-        statusKind = "error";
-        statusMsg = e?.message ?? "highlight failed";
-      } finally {
-        docBusy = false;
-        render();
-      }
-    }
-
-    async function clearHighlightsInDoc() {
-      if (docBusy) return;
-      docBusy = true;
-      render();
-      try {
-        await docApply({ action: "clearHighlights" });
-        statusKind = "idle";
-        statusMsg = "highlights cleared";
-      } catch (e) {
-        statusKind = "error";
-        statusMsg = e?.message ?? "clear failed";
-      } finally {
-        docBusy = false;
-        render();
-      }
-    }
+    // (the bridge "highlight in doc" feature was removed — real overlay
+    //  underlines replaced background tints)
 
     // ── widget UI ──
     const { shadow, root } = makeWidget();
@@ -635,35 +756,16 @@
             <span class="name">Tracely</span>
             <span class="status ${statusKind === "error" || statusKind === "offline" ? "error" : ""}">${esc(statusMsg)}</span>
           </div>
-          <div class="selects">
-            <select id="modelSel">
-              <option value="claude-opus-5"${settings.model === "claude-opus-5" ? " selected" : ""}>Opus 5 · sharpest</option>
-              <option value="claude-sonnet-5"${settings.model === "claude-sonnet-5" ? " selected" : ""}>Sonnet 5 · balanced</option>
-              <option value="claude-haiku-4-5"${settings.model === "claude-haiku-4-5" ? " selected" : ""}>Haiku 4.5 · fastest</option>
-            </select>
-            <select id="effortSel">
-              <option value="low"${settings.effort === "low" ? " selected" : ""}>Fast</option>
-              <option value="medium"${settings.effort === "medium" ? " selected" : ""}>Balanced</option>
-              <option value="high"${settings.effort === "high" ? " selected" : ""}>Thorough</option>
-            </select>
-            <label class="autosrc" title="Automatically look up sources for flagged claims (capped)"><input type="checkbox" id="autoSrcTgl"${settings.autoSources === true ? " checked" : ""} /><span>Auto-src</span></label>
-            <button class="act" id="checkNow" style="margin-left:auto">Check now</button>
-          </div>
-          ${canEditDoc() ? `
-          <div class="selects">
-            <button class="act" id="hlAll"${docBusy ? " disabled" : ""}>Highlight issues in doc</button>
-            <button class="act" id="hlClear"${docBusy ? " disabled" : ""}>Clear highlights</button>
-          </div>` : ""}
+          ${speedbarHtml(speedPos(settings.model))}
           <div class="list">
             ${cards || `<div class="empty">${statusKind === "offline" ? "Start the Tracely server, then reopen this doc." : "Nothing flagged. Keep writing — checking every 10s."}</div>`}
           </div>
           <div class="foot">
-            <span id="countdownTxt">${inflight ? "checking…" : `next check in ${countdown}s`}</span>
-            <span>${canEditDoc()
-              ? "in-doc marks apply as background tints (bridge)"
-              : standaloneMode
-                ? "standalone — no Docs write-back; fixes are copy-paste"
-                : "fixes are copy-paste (Docs API needs OAuth)"}</span>
+            <span class="foot-left">
+              <span id="countdownTxt">${inflight ? "checking…" : `next check in ${countdown}s`}</span>
+              <label class="autosrc" title="Automatically look up sources for flagged claims (capped)"><input type="checkbox" id="autoSrcTgl"${settings.autoSources === true ? " checked" : ""} /><span>Auto-src</span></label>
+            </span>
+            <button class="act" id="checkNow">Check now</button>
           </div>
         </div>`;
       }
@@ -682,8 +784,7 @@
 
       shadow.getElementById("pill").addEventListener("click", () => { expanded = !expanded; render(); });
       if (expanded) {
-        shadow.getElementById("modelSel").addEventListener("change", (e) => { settings.model = e.target.value; saveSettings(); });
-        shadow.getElementById("effortSel").addEventListener("change", (e) => { settings.effort = e.target.value; saveSettings(); });
+        wireSpeedbar(shadow, settings, saveSettings);
         shadow.getElementById("checkNow").addEventListener("click", () => { lastCheckEnd = 0; cycle(); });
         for (const btn of shadow.querySelectorAll("[data-dismiss]")) {
           btn.addEventListener("click", () => {
@@ -708,8 +809,6 @@
             if (src) copyText(`${src.title} — ${src.url}`, btn.dataset.copySrc, src.url);
           });
         }
-        shadow.getElementById("hlAll")?.addEventListener("click", highlightAllInDoc);
-        shadow.getElementById("hlClear")?.addEventListener("click", clearHighlightsInDoc);
         for (const btn of shadow.querySelectorAll("[data-doc-fix]")) {
           btn.addEventListener("click", () => docFix(btn.dataset.docFix));
         }
@@ -1034,10 +1133,19 @@
           Object.assign(bar.style, {
             position: "fixed", left: r.left + "px", top: r.top + "px",
             width: r.width + "px", height: r.height + "px",
-            borderBottom: pending ? `2px dotted ${color}` : `2px solid ${color}`,
-            background: pending ? "transparent" : color + "14", // very faint wash
-            borderRadius: "2px",
+            background: "transparent", // Grammarly-style: a clean underline, no highlight wash
+            pointerEvents: "none",
           });
+          if (pending) {
+            bar.style.borderBottom = `2px dotted ${color}`;
+            bar.style.opacity = "0.7";
+          } else {
+            // wavy underline drawn along the bottom edge, in the mark colour
+            bar.style.backgroundImage = wavyUnderline(color);
+            bar.style.backgroundRepeat = "repeat-x";
+            bar.style.backgroundPosition = "left bottom";
+            bar.style.backgroundSize = "6px 4px";
+          }
           layer.appendChild(bar);
         }
       }
@@ -1398,26 +1506,16 @@
             <label class="autosrc" title="Run automatic checks on this site every 10s. Off: nothing is sent until you click."><input type="checkbox" id="siteTgl"${enabled ? " checked" : ""} /><span>Auto-check on this site</span></label>
             <span class="status ${statusKind === "error" || statusKind === "offline" ? "error" : ""}">${esc(statusMsg)}</span>
           </div>
-          <div class="selects">
-            <select id="modelSel">
-              <option value="claude-opus-5"${settings.model === "claude-opus-5" ? " selected" : ""}>Opus 5 · sharpest</option>
-              <option value="claude-sonnet-5"${settings.model === "claude-sonnet-5" ? " selected" : ""}>Sonnet 5 · balanced</option>
-              <option value="claude-haiku-4-5"${settings.model === "claude-haiku-4-5" ? " selected" : ""}>Haiku 4.5 · fastest</option>
-            </select>
-            <select id="effortSel">
-              <option value="low"${settings.effort === "low" ? " selected" : ""}>Fast</option>
-              <option value="medium"${settings.effort === "medium" ? " selected" : ""}>Balanced</option>
-              <option value="high"${settings.effort === "high" ? " selected" : ""}>Thorough</option>
-            </select>
-            <label class="autosrc" title="Automatically look up sources for flagged claims (capped)"><input type="checkbox" id="autoSrcTgl"${settings.autoSources === true ? " checked" : ""} /><span>Auto-src</span></label>
-            <button class="act" id="checkNow" style="margin-left:auto">${enabled ? "Check now" : "Check once"}</button>
-          </div>
+          ${speedbarHtml(speedPos(settings.model))}
           <div class="list">
             ${cards || `<div class="empty">${emptyMsg}</div>`}
           </div>
           <div class="foot">
-            <span id="countdownTxt">${inflight ? "checking…" : enabled ? `next check in ${countdown}s` : "auto-check off — checks run only when you click"}</span>
-            <span>${isStandalone() ? "standalone — key goes only to api.anthropic.com" : "fixes apply in the field"}</span>
+            <span class="foot-left">
+              <span id="countdownTxt">${inflight ? "checking…" : enabled ? `next check in ${countdown}s` : "auto-check off"}</span>
+              <label class="autosrc" title="Automatically look up sources for flagged claims (capped)"><input type="checkbox" id="autoSrcTgl"${settings.autoSources === true ? " checked" : ""} /><span>Auto-src</span></label>
+            </span>
+            <button class="act" id="checkNow">${enabled ? "Check now" : "Check once"}</button>
           </div>
         </div>`;
       }
@@ -1437,8 +1535,7 @@
       shadow.getElementById("pill").addEventListener("click", () => { expanded = !expanded; render(); });
       if (expanded) {
         shadow.getElementById("siteTgl").addEventListener("change", (e) => setSiteEnabled(e.target.checked));
-        shadow.getElementById("modelSel").addEventListener("change", (e) => { settings.model = e.target.value; saveSettings(); });
-        shadow.getElementById("effortSel").addEventListener("change", (e) => { settings.effort = e.target.value; saveSettings(); });
+        wireSpeedbar(shadow, settings, saveSettings);
         shadow.getElementById("checkNow").addEventListener("click", () => { lastCheckEnd = 0; cycle(); });
         for (const btn of shadow.querySelectorAll("[data-dismiss]")) {
           btn.addEventListener("click", () => {
