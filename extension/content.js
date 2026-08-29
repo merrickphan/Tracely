@@ -565,7 +565,7 @@
             if (range[0] > s) f0 = svgFrac(run.node, run.raw, run.font, svgRawIndexAt(run.raw, range[0] - s));
             if (range[1] < e) f1 = svgFrac(run.node, run.raw, run.font, svgRawIndexAt(run.raw, range[1] - s));
             if (f1 - f0 <= 0.005) continue;
-            bars.push({ hash: seg.hash, node: run.node, f0, f1 });
+            bars.push({ hash: seg.hash, node: run.node, raw: run.raw, f0, f1 });
           }
         }
       }
@@ -582,6 +582,7 @@
     let docsBars = []; // [{hash, el, tile, rx, ry, w, size, fallLeft, fallTop}]
     const tileState = new Map(); // tileId → {canvas, sx, sy, shiftX, shiftY}
     let glueRaf = 0;
+    let docsScroller = null;
 
     function ensureLayer() {
       if (marksLayer && marksLayer.isConnected) return;
@@ -609,10 +610,22 @@
         if (!t.canvas) continue;
         t.rect = t.canvas.getBoundingClientRect();
       }
+      // Bars must never draw over Docs' own chrome: clip to the editor's
+      // scroll area (tiles for scrolled-away text keep DOM positions that
+      // land on the toolbar otherwise).
+      let clip = null;
+      if (!docsScroller || !docsScroller.isConnected) {
+        docsScroller = document.querySelector(".kix-appview-editor");
+      }
+      if (docsScroller) clip = docsScroller.getBoundingClientRect();
       for (const b of docsBars) {
         if (b.node) {
           // SVG mode: the annotation rect IS the live position — zero lag.
-          if (!b.node.isConnected) {
+          // Docs RECYCLES annotation nodes when tiles scroll far: the same
+          // element suddenly describes different text. Validate the binding
+          // every frame — a recycled node hides its bar instantly instead of
+          // underlining the wrong sentence until the next re-match.
+          if (!b.node.isConnected || b.node.getAttribute("aria-label") !== b.raw) {
             b.el.style.opacity = "0";
             staleSvg = true;
             continue;
@@ -622,7 +635,9 @@
           const y = r.bottom + 1;
           b.el.style.transform = `translate(${x}px, ${y}px)`;
           b.el.style.width = (b.f1 - b.f0) * r.width + "px";
-          b.el.style.opacity = y < -20 || y > innerHeight + 20 ? "0" : "1";
+          const out = y < -20 || y > innerHeight + 20 ||
+            (clip && (y < clip.top + 2 || y > clip.bottom - 2 || x > clip.right || x + (b.f1 - b.f0) * r.width < clip.left));
+          b.el.style.opacity = out ? "0" : "1";
           b.size = r.height || b.size;
           continue;
         }
@@ -710,7 +725,7 @@
             willChange: "transform",
           });
           marksLayer.appendChild(bar);
-          docsBars.push({ hash: sb.hash, el: bar, node: sb.node, f0: sb.f0, f1: sb.f1, size: 18 });
+          docsBars.push({ hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1, size: 18 });
         }
         console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
         glueFrame();
@@ -786,6 +801,7 @@
     }
 
     function hideDocsPopover() {
+      if (popEl) console.debug("[tracely] popover hide");
       if (popEl) popEl.remove();
       popEl = null;
       popHash = null;
@@ -805,8 +821,9 @@
     }
 
     function showDocsPopover(hash, rect) {
+      console.debug("[tracely] popover open", hash);
       const f = cache.get(hash);
-      if (!f) return;
+      if (!f) { console.debug("[tracely] popover abort: no finding"); return; }
       popFont();
       hideDocsPopover();
       popHash = hash;
@@ -871,13 +888,15 @@
         }
       }
       // With no rewrite on offer (citation-needed), finding the source IS the
-      // fix — it gets the primary button.
+      // fix — it gets the primary button. Sources load INTO the popover, so
+      // picking one never requires a trip to the widget.
       const src = popBtn(f.verdict === "needs_citation" ? "Find a source" : "Sources", !f.revision);
-      src.addEventListener("click", () => {
-        expanded = true;
-        render();
-        fetchSources(hash);
-        hideDocsPopover();
+      src.addEventListener("click", async () => {
+        src.textContent = "Searching…";
+        src.disabled = true;
+        try { await fetchSources(hash); } catch { /* state lands in sourcesMap */ }
+        src.remove();
+        renderPopSources(hash);
       });
       row.appendChild(src);
       const dis = popBtn("Dismiss", false);
@@ -903,6 +922,75 @@
       popEl.style.visibility = "visible";
     }
 
+    function renderPopSources(hash) {
+      if (!popEl || popHash !== hash) return;
+      let box = popEl.querySelector("[data-pop-sources]");
+      if (!box) {
+        box = document.createElement("div");
+        box.setAttribute("data-pop-sources", "");
+        Object.assign(box.style, {
+          marginTop: "9px", paddingTop: "8px", maxHeight: "190px", overflowY: "auto",
+          borderTop: "1px solid rgba(20,16,10,0.07)",
+        });
+        popEl.appendChild(box);
+      }
+      box.textContent = "";
+      const st = sourcesMap.get(hash);
+      if (!st || st.loading) {
+        box.textContent = "Searching the web for sources…";
+        Object.assign(box.style, { color: "#a7a7ac", fontStyle: "italic", fontSize: "11.5px" });
+        return;
+      }
+      box.style.color = "";
+      box.style.fontStyle = "";
+      if (!st.list || st.list.length === 0) {
+        box.textContent = "No usable sources came back — try again from the widget.";
+        return;
+      }
+      const title = document.createElement("div");
+      title.textContent = "Pick one to cite";
+      Object.assign(title.style, {
+        fontSize: "9px", fontWeight: "700", textTransform: "uppercase",
+        letterSpacing: ".8px", color: "#ff7f00", marginBottom: "6px",
+      });
+      box.appendChild(title);
+      st.list.forEach((srcItem, i) => {
+        const row = document.createElement("div");
+        Object.assign(row.style, { padding: "6px 0", borderBottom: "1px solid rgba(20,16,10,0.05)" });
+        const a = document.createElement("a");
+        a.href = srcItem.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = srcItem.title;
+        Object.assign(a.style, { fontSize: "11.5px", fontWeight: "700", color: "#0e0e10", textDecoration: "none", display: "block" });
+        const meta = document.createElement("div");
+        meta.textContent = `${srcItem.publisher}${srcItem.stance ? " · " + srcItem.stance : ""}`;
+        Object.assign(meta.style, { fontSize: "10px", color: "#a7a7ac", margin: "1px 0 5px", fontWeight: "500" });
+        const btns = document.createElement("div");
+        Object.assign(btns.style, { display: "flex", gap: "6px" });
+        if (canEditDoc()) {
+          const cite = popBtn("Cite in doc", true);
+          cite.style.padding = "4px 10px";
+          cite.addEventListener("click", async () => {
+            cite.textContent = "Citing…";
+            cite.disabled = true;
+            await docCite(hash, i);
+            cite.textContent = "Cited ✓";
+          });
+          btns.appendChild(cite);
+        }
+        const copy = popBtn("Copy cite", false);
+        copy.style.padding = "4px 10px";
+        copy.addEventListener("click", () => {
+          try { navigator.clipboard.writeText(`${srcItem.title} — ${srcItem.url}`); } catch { /* denied */ }
+          copy.textContent = "Copied ✓";
+        });
+        btns.appendChild(copy);
+        row.append(a, meta, btns);
+        box.appendChild(row);
+      });
+    }
+
     let hoverRafBusy = false;
     window.addEventListener("mousemove", (e) => {
       if (hoverRafBusy) return;
@@ -913,7 +1001,7 @@
         // Bars are DOM-anchored now — read their LIVE viewport rects, which
         // are correct mid-scroll by construction.
         const hitOf = (b) => {
-          if (!b.el.isConnected) return null;
+          if (!b.el.isConnected || b.el.style.opacity === "0") return null;
           const r = b.el.getBoundingClientRect();
           return x >= r.left - 2 && x <= r.right + 2 && y >= r.top - b.size && y <= r.bottom + 3
             ? { left: r.left, top: r.top, bottom: r.bottom, size: b.size }
