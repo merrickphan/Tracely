@@ -469,11 +469,114 @@
        exactly as before — this is strictly additive. */
     let locateSeq = 0;
     let lastVerdictByHash = new Map();
+
+    /* ── PRIMARY position source: Docs' SVG annotation layer ──────────────
+       Modern Docs keeps an invisible SVG beside each canvas tile: one
+       <rect aria-label="line text" data-font-css="…"> per painted text run.
+       It is ordinary DOM — every line is ALWAYS represented (no repaint
+       churn, so never "one underline at a time") and getBoundingClientRect
+       is always current (no locate round-trip, so no scroll lag). The
+       canvas-paint hook remains only as a fallback for docs where this
+       layer is absent. Matching logic mirrors the hook's (whitespace-free). */
+    const nrm = (s) => s.toLowerCase().replace(/[​‌﻿ ]/g, " ").replace(/\s+/g, "");
+    const SVG_STRIP = /[\s​‌﻿ ]/;
+    function svgRawIndexAt(text, normIdx) {
+      let n = 0;
+      for (let i = 0; i < text.length; i++) {
+        if (SVG_STRIP.test(text[i])) continue;
+        if (n === normIdx) return i;
+        n++;
+      }
+      return text.length;
+    }
+    function svgOverlapRange(L, S) {
+      const i = L.indexOf(S);
+      if (i >= 0) return [i, i + S.length];
+      if (L.length >= 6 && S.includes(L)) return [0, L.length];
+      const lim = Math.min(L.length, S.length);
+      for (let p = lim; p >= 12; p--) {
+        let ok = true;
+        const off = L.length - p;
+        for (let k = 0; k < p; k++) if (L.charCodeAt(off + k) !== S.charCodeAt(k)) { ok = false; break; }
+        if (ok) return [L.length - p, L.length];
+      }
+      const tailMin = /[.!?…"'’”)\]]$/.test(S) ? 5 : 12;
+      for (let p = lim; p >= tailMin; p--) {
+        let ok = true;
+        const off = S.length - p;
+        for (let k = 0; k < p; k++) if (L.charCodeAt(k) !== S.charCodeAt(off + k)) { ok = false; break; }
+        if (ok) return [0, p];
+      }
+      return null;
+    }
+    let svgMeas = null;
+    function svgFrac(node, text, font, rawTo) {
+      if (!svgMeas) svgMeas = document.createElement("canvas").getContext("2d");
+      try {
+        svgMeas.font = font || "16px Arial";
+        const full = svgMeas.measureText(text).width || 1;
+        return svgMeas.measureText(text.slice(0, rawTo)).width / full;
+      } catch {
+        return 0;
+      }
+    }
+    function svgLineNodes() {
+      let nodes = document.querySelectorAll(".kix-canvas-tile-content svg rect[aria-label]");
+      if (!nodes.length) nodes = document.querySelectorAll("svg rect[aria-label][data-font-css]");
+      return [...nodes].filter((n) => (n.getAttribute("aria-label") || "").trim());
+    }
+    // Group nodes into visual lines by rendered top, join normalized text,
+    // find each sentence's covered span, convert boundary coverage into
+    // FRACTIONS of each node's width (zoom-proof), return bar descriptors.
+    function svgLocate(issues) {
+      const nodes = svgLineNodes();
+      if (!nodes.length) return null; // no annotation layer — fall back
+      const buckets = new Map();
+      for (const node of nodes) {
+        const r = node.getBoundingClientRect();
+        if (r.width === 0) continue;
+        const key = Math.round(r.top / 4) * 4;
+        let b = buckets.get(key);
+        if (!b) { b = []; buckets.set(key, b); }
+        b.push({ node, r, raw: node.getAttribute("aria-label"), font: node.getAttribute("data-font-css") || "" });
+      }
+      const lines = [];
+      for (const runs of buckets.values()) {
+        runs.sort((a, b) => a.r.left - b.r.left);
+        let joined = "";
+        const spans = [];
+        for (const run of runs) {
+          const n = nrm(run.raw);
+          spans.push([joined.length, joined.length + n.length, run]);
+          joined += n;
+        }
+        if (joined) lines.push({ joined, spans });
+      }
+      const bars = [];
+      for (const { seg } of issues) {
+        const S = nrm(seg.text);
+        if (S.length < 4) continue;
+        for (const line of lines) {
+          const range = svgOverlapRange(line.joined, S);
+          if (!range) continue;
+          for (const [s, e, run] of line.spans) {
+            if (e <= range[0] || s >= range[1]) continue;
+            let f0 = 0, f1 = 1;
+            if (range[0] > s) f0 = svgFrac(run.node, run.raw, run.font, svgRawIndexAt(run.raw, range[0] - s));
+            if (range[1] < e) f1 = svgFrac(run.node, run.raw, run.font, svgRawIndexAt(run.raw, range[1] - s));
+            if (f1 - f0 <= 0.005) continue;
+            bars.push({ hash: seg.hash, node: run.node, f0, f1 });
+          }
+        }
+      }
+      return bars;
+    }
+
     /* Bars live in OUR OWN fixed layer (v2.6 mounted overlays inside kix's
        tile containers and real Docs rendered nothing — never inject into DOM
-       an app owns), but they are GLUED to the tiles by a per-frame loop:
-       each bar stores canvas-relative coords, and every animation frame the
-       loop reads the live canvas rects and re-places the bars. Scrolling is
+       an app owns), but they are GLUED to the document by a per-frame loop:
+       SVG-mode bars re-read their annotation rect's live position every
+       frame; canvas-fallback bars re-read the tile rect. Scrolling is
        pixel-locked with no locate round-trip, and kix can't wipe the layer. */
     let marksLayer = null;
     let docsBars = []; // [{hash, el, tile, rx, ry, w, size, fallLeft, fallTop}]
@@ -500,12 +603,29 @@
     function glueFrame() {
       glueRaf = 0;
       if (docsBars.length === 0) return;
+      let staleSvg = false;
       for (const t of tileState.values()) {
         if (t.canvas && !t.canvas.isConnected) t.canvas = null;
         if (!t.canvas) continue;
         t.rect = t.canvas.getBoundingClientRect();
       }
       for (const b of docsBars) {
+        if (b.node) {
+          // SVG mode: the annotation rect IS the live position — zero lag.
+          if (!b.node.isConnected) {
+            b.el.style.opacity = "0";
+            staleSvg = true;
+            continue;
+          }
+          const r = b.node.getBoundingClientRect();
+          const x = r.left + b.f0 * r.width;
+          const y = r.bottom + 1;
+          b.el.style.transform = `translate(${x}px, ${y}px)`;
+          b.el.style.width = (b.f1 - b.f0) * r.width + "px";
+          b.el.style.opacity = y < -20 || y > innerHeight + 20 ? "0" : "1";
+          b.size = r.height || b.size;
+          continue;
+        }
         const t = tileState.get(b.tile);
         if (t && t.canvas && t.rect) {
           const x = t.rect.left + b.rx + t.shiftX * t.sx;
@@ -521,6 +641,7 @@
           b.el.style.opacity = "1";
         }
       }
+      if (staleSvg) scheduleDocsMarks(); // Docs recycled annotation nodes — re-match soon
       glueRaf = requestAnimationFrame(glueFrame);
     }
     function startGlue() {
@@ -566,11 +687,36 @@
           }
         }
         // One log per draw — screenshot-diagnosable if bars ever go missing.
-        console.debug(`[tracely] docs marks: ${docsBars.length} bar(s) from ${received} rect(s), tiles resolved: ${[...tileState.values()].filter((t) => t.canvas).length}/${tileState.size}`);
+        console.debug(`[tracely] docs marks (canvas fallback): ${docsBars.length} bar(s) from ${received} rect(s), tiles resolved: ${[...tileState.values()].filter((t) => t.canvas).length}/${tileState.size}`);
         glueFrame(); // position immediately, then keep gluing
         startGlue();
       } catch (err) {
         console.warn("[tracely] docs mark draw failed:", err);
+      }
+    }
+
+    function drawDocsMarksSvg(svgBars) {
+      try {
+        ensureLayer();
+        clearDocsMarks();
+        for (const sb of svgBars) {
+          const color = MARK_COLORS[lastVerdictByHash.get(sb.hash)];
+          if (!color) continue;
+          const bar = document.createElement("div");
+          Object.assign(bar.style, {
+            position: "fixed", left: "0", top: "0",
+            width: "0px", height: "3px",
+            background: color, borderRadius: "2px", pointerEvents: "none",
+            willChange: "transform",
+          });
+          marksLayer.appendChild(bar);
+          docsBars.push({ hash: sb.hash, el: bar, node: sb.node, f0: sb.f0, f1: sb.f1, size: 18 });
+        }
+        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
+        glueFrame();
+        startGlue();
+      } catch (err) {
+        console.warn("[tracely] docs svg mark draw failed:", err);
       }
     }
 
@@ -599,11 +745,24 @@
       if (issues.length === 0) {
         clearDocsMarks();
         hideDocsPopover();
+        // Empty ping still prunes the fallback hook's ledgers. id 0 never
+        // matches locateSeq, so its reply can never wipe drawn bars.
+        window.postMessage({ type: "tracely-docs-locate", id: -1, wants: [] }, "*");
+        return;
       }
       lastVerdictByHash = new Map(issues.map(({ seg, f }) => [seg.hash, f.verdict]));
+      // PRIMARY: the SVG annotation layer — complete and live-positioned.
+      const svgBars = svgLocate(issues);
+      if (svgBars !== null) {
+        drawDocsMarksSvg(svgBars);
+        // Keep the hook's ledgers pruned even though we're not using them.
+        // id 0: the rects listener ignores this reply — it must never clear
+        // the SVG bars we just drew (that exact bug blanked every underline).
+        window.postMessage({ type: "tracely-docs-locate", id: -1, wants: [] }, "*");
+        return;
+      }
+      // FALLBACK: no annotation layer — canvas-paint locate via the hook.
       locateSeq++;
-      // Sent even with zero issues: an empty locate is the hook's cue to prune
-      // ledgers for detached canvas tiles, so clean documents don't accumulate.
       window.postMessage({
         type: "tracely-docs-locate",
         id: locateSeq,
@@ -792,6 +951,7 @@
       }, 140);
     }
 
+    console.debug("[tracely] docs overlay armed");
     setInterval(requestDocsMarks, 900);
     window.addEventListener("scroll", scheduleDocsMarks, { capture: true, passive: true });
     window.addEventListener("wheel", scheduleDocsMarks, { capture: true, passive: true });
