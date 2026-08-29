@@ -126,6 +126,40 @@
     return { headStart, end: pos, entries };
   }
 
+  // ── citation formatting ──
+  // Web sources rarely expose author/year, so all three styles use the
+  // site-name + access-date web-page form. `doc` deliberately omits the URL:
+  // bibliography lines in the doc must stay "N. <text> — <url>" so
+  // sourcesBlock can keep parsing (and deduping) them.
+  const CITE_STYLES = [["apa", "APA"], ["mla", "MLA"], ["chicago", "Chicago"]];
+  const CITE_MONTHS = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+  function formatCitation(src, style) {
+    let host = (src.publisher || "").trim();
+    if (!host) {
+      try { host = new URL(src.url).hostname.replace(/^www\./, ""); } catch { host = "Web source"; }
+    }
+    const title = (src.title || src.url || "").trim().replace(/[.?!]\s*$/, "");
+    const d = new Date();
+    const long = `${CITE_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    const mlaDate = `${d.getDate()} ${CITE_MONTHS[d.getMonth()].slice(0, 3)}. ${d.getFullYear()}`;
+    if (style === "mla") return {
+      doc: `“${title}.” ${host}. Accessed ${mlaDate}.`,
+      ref: `“${title}.” ${host}, ${src.url}. Accessed ${mlaDate}.`,
+      marker: `(${host})`,
+    };
+    if (style === "chicago") return {
+      doc: `${host}. “${title}.” Accessed ${long}.`,
+      ref: `${host}. “${title}.” Accessed ${long}. ${src.url}.`,
+      marker: `(${host}, n.d.)`,
+    };
+    return {
+      doc: `${host}. (n.d.). ${title}.`,
+      ref: `${host}. (n.d.). ${title}. Retrieved ${long}, from ${src.url}`,
+      marker: `(${host}, n.d.)`,
+    };
+  }
+
   function segmentText(text) {
     const segs = [];
     const block = sourcesBlock(text);
@@ -361,7 +395,7 @@
     const cache = new Map();
     const dismissed = new Set(jsonParse(lsGet(DISMISS_KEY) ?? "[]", []));
     const sourcesMap = new Map(); // hash → {loading, list, copiedUrl}
-    let settings = { model: "claude-haiku-4-5", effort: "low", ...jsonParse(lsGet(SETTINGS_KEY) ?? "{}", {}) };
+    let settings = { model: "claude-haiku-4-5", effort: "low", citationStyle: "apa", ...jsonParse(lsGet(SETTINGS_KEY) ?? "{}", {}) };
     let segments = [];
     let inflight = false;
     let sourcesInflight = false;
@@ -656,7 +690,7 @@
           b.el.style.opacity = "1";
         }
       }
-      if (staleSvg) scheduleDocsMarks(); // Docs recycled annotation nodes — re-match soon
+      if (staleSvg) fastDocsMarks(); // Docs recycled annotation nodes — re-match NOW
       glueRaf = requestAnimationFrame(glueFrame);
     }
     function startGlue() {
@@ -754,6 +788,8 @@
 
     function requestDocsMarks() {
       if (document.hidden) return;
+      lastLocateAt = Date.now();
+      armAnnotationObserver();
       // The hook caps at 40 wants — cap here too so nothing is silently dropped
       // on the other side of the protocol.
       const issues = currentIssues().slice(0, 40);
@@ -831,7 +867,7 @@
       popEl = document.createElement("div");
       popEl.setAttribute("data-tracely-docs-popover", "");
       Object.assign(popEl.style, {
-        position: "fixed", zIndex: "901", width: "300px",
+        position: "fixed", zIndex: "901", width: "340px",
         background: "#fff", borderRadius: "14px", padding: "12px 14px",
         border: "1px solid rgba(20,16,10,0.06)", borderLeft: `3px solid ${color}`,
         boxShadow: "0 16px 44px rgba(180,120,60,0.24)",
@@ -911,7 +947,7 @@
       popEl.appendChild(row);
       // Position under the underline; flip above when it would clip the viewport.
       const below = (rect.bottom ?? rect.top + 4) + 8;
-      popEl.style.left = Math.max(12, Math.min(rect.left, innerWidth - 320)) + "px";
+      popEl.style.left = Math.max(12, Math.min(rect.left, innerWidth - 360)) + "px";
       popEl.style.top = below + "px";
       popEl.style.visibility = "hidden";
       document.documentElement.appendChild(popEl);
@@ -929,7 +965,7 @@
         box = document.createElement("div");
         box.setAttribute("data-pop-sources", "");
         Object.assign(box.style, {
-          marginTop: "9px", paddingTop: "8px", maxHeight: "190px", overflowY: "auto",
+          marginTop: "9px", paddingTop: "8px", maxHeight: "250px", overflowY: "auto",
           borderTop: "1px solid rgba(20,16,10,0.07)",
         });
         popEl.appendChild(box);
@@ -947,25 +983,97 @@
         box.textContent = "No usable sources came back — try again from the widget.";
         return;
       }
+      // Header: section label + citation-style pills (persisted, shared with
+      // the widget via the same settings object).
+      const head = document.createElement("div");
+      Object.assign(head.style, {
+        display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px",
+      });
       const title = document.createElement("div");
       title.textContent = "Pick one to cite";
       Object.assign(title.style, {
         fontSize: "9px", fontWeight: "700", textTransform: "uppercase",
-        letterSpacing: ".8px", color: "#ff7f00", marginBottom: "6px",
+        letterSpacing: ".8px", color: "#ff7f00",
       });
-      box.appendChild(title);
+      head.appendChild(title);
+      const pills = document.createElement("div");
+      Object.assign(pills.style, {
+        display: "flex", gap: "2px", background: "#f2f2f3", borderRadius: "8px", padding: "2px",
+      });
+      for (const [key, label] of CITE_STYLES) {
+        const p = document.createElement("button");
+        p.textContent = label;
+        const on = (settings.citationStyle || "apa") === key;
+        Object.assign(p.style, {
+          border: "none", borderRadius: "6px", padding: "3px 8px",
+          fontSize: "9px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
+          background: on ? "#fff" : "transparent",
+          color: on ? "#ff7f00" : "#8e8e93",
+          boxShadow: on ? "0 1px 3px rgba(20,16,10,0.10)" : "none",
+        });
+        p.addEventListener("click", () => {
+          settings.citationStyle = key;
+          lsSet(SETTINGS_KEY, JSON.stringify(settings));
+          renderPopSources(hash); // repaint rows in the new style
+        });
+        pills.appendChild(p);
+      }
+      head.appendChild(pills);
+      box.appendChild(head);
+      const style = settings.citationStyle || "apa";
       st.list.forEach((srcItem, i) => {
+        const c = formatCitation(srcItem, style);
         const row = document.createElement("div");
-        Object.assign(row.style, { padding: "6px 0", borderBottom: "1px solid rgba(20,16,10,0.05)" });
+        Object.assign(row.style, { padding: "7px 0", borderBottom: "1px solid rgba(20,16,10,0.05)" });
+        const line = document.createElement("div");
+        Object.assign(line.style, { display: "flex", alignItems: "flex-start", gap: "6px" });
+        if (srcItem.stance) {
+          const chip = document.createElement("span");
+          chip.textContent = srcItem.stance;
+          const chipColors = {
+            supports: ["#e7f6ee", "#1f9d55"],
+            refutes: ["#fdecec", "#d93636"],
+          }[srcItem.stance] ?? ["#f2f2f3", "#8e8e93"];
+          Object.assign(chip.style, {
+            fontSize: "8px", fontWeight: "700", textTransform: "uppercase",
+            padding: "2px 6px", borderRadius: "8px", flexShrink: "0", marginTop: "2px",
+            background: chipColors[0], color: chipColors[1],
+          });
+          line.appendChild(chip);
+        }
         const a = document.createElement("a");
         a.href = srcItem.url;
         a.target = "_blank";
         a.rel = "noopener noreferrer";
         a.textContent = srcItem.title;
-        Object.assign(a.style, { fontSize: "11.5px", fontWeight: "700", color: "#0e0e10", textDecoration: "none", display: "block" });
+        Object.assign(a.style, { fontSize: "11.5px", fontWeight: "700", color: "#0e0e10", textDecoration: "none", display: "block", minWidth: "0" });
+        line.appendChild(a);
         const meta = document.createElement("div");
-        meta.textContent = `${srcItem.publisher}${srcItem.stance ? " · " + srcItem.stance : ""}`;
-        Object.assign(meta.style, { fontSize: "10px", color: "#a7a7ac", margin: "1px 0 5px", fontWeight: "500" });
+        meta.textContent = srcItem.publisher || "";
+        Object.assign(meta.style, { fontSize: "10px", color: "#a7a7ac", margin: "1px 0 4px", fontWeight: "500" });
+        // Why this source answers the claim — one clamped line of snippet.
+        let snip = null;
+        if (srcItem.snippet) {
+          snip = document.createElement("div");
+          snip.textContent = srcItem.snippet;
+          Object.assign(snip.style, {
+            fontSize: "10.5px", color: "#5c5c60", fontWeight: "500", marginBottom: "5px",
+            display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
+          });
+        }
+        // Live formatted reference in the selected style, plus the in-text form.
+        const refBox = document.createElement("div");
+        Object.assign(refBox.style, {
+          background: "#fdfbf9", border: "1px solid rgba(20,16,10,0.06)",
+          borderRadius: "8px", padding: "6px 8px", marginBottom: "6px",
+          fontSize: "10.5px", fontWeight: "500", lineHeight: "1.45",
+          overflowWrap: "anywhere",
+        });
+        refBox.textContent = c.ref;
+        const marker = document.createElement("div");
+        marker.textContent = `In-text: ${c.marker}`;
+        Object.assign(marker.style, { fontSize: "9.5px", color: "#a7a7ac", marginTop: "3px", fontWeight: "600" });
+        refBox.appendChild(marker);
         const btns = document.createElement("div");
         Object.assign(btns.style, { display: "flex", gap: "6px" });
         if (canEditDoc()) {
@@ -979,14 +1087,24 @@
           });
           btns.appendChild(cite);
         }
-        const copy = popBtn("Copy cite", false);
+        const copy = popBtn("Copy cite", !canEditDoc());
         copy.style.padding = "4px 10px";
         copy.addEventListener("click", () => {
-          try { navigator.clipboard.writeText(`${srcItem.title} — ${srcItem.url}`); } catch { /* denied */ }
+          try { navigator.clipboard.writeText(c.ref); } catch { /* denied */ }
           copy.textContent = "Copied ✓";
         });
         btns.appendChild(copy);
-        row.append(a, meta, btns);
+        const copyIn = popBtn("Copy in-text", false);
+        copyIn.style.padding = "4px 10px";
+        copyIn.addEventListener("click", () => {
+          try { navigator.clipboard.writeText(c.marker); } catch { /* denied */ }
+          copyIn.textContent = "Copied ✓";
+        });
+        btns.appendChild(copyIn);
+        row.appendChild(line);
+        row.appendChild(meta);
+        if (snip) row.appendChild(snip);
+        row.append(refBox, btns);
         box.appendChild(row);
       });
     }
@@ -1037,6 +1155,43 @@
         locateQueued = false;
         requestDocsMarks();
       }, 140);
+    }
+
+    /* ── instant re-match ──────────────────────────────────────────────
+       Bars are repositioned every frame from live annotation-rect geometry,
+       so scrolling itself never lags. What DID lag: after Google recycles or
+       re-coordinates its annotation nodes (typing, reflow, fast scroll), we
+       waited out a 140ms throttle or the 900ms poll before re-matching.
+       A MutationObserver on the editor subtree, filtered to exactly the
+       attributes Google's annotation layer mutates, re-matches within one
+       frame of Google's own update — the earliest any extension can know. */
+    let lastLocateAt = 0;
+    function fastDocsMarks() {
+      // 90ms floor: continuous typing mutates annotations every frame, and a
+      // full locate pass per frame would jank the editor. One locate per 90ms
+      // reads as instant; bursts fall through to the trailing throttle.
+      if (Date.now() - lastLocateAt > 90) requestDocsMarks();
+      else scheduleDocsMarks();
+    }
+    let annoObs = null, annoObsTarget = null, annoRafPending = false;
+    function armAnnotationObserver() {
+      const target = document.querySelector(".kix-appview-editor");
+      if (!target || target === annoObsTarget) return;
+      if (annoObs) annoObs.disconnect();
+      annoObsTarget = target;
+      annoObs = new MutationObserver(() => {
+        if (annoRafPending) return;
+        annoRafPending = true;
+        // Coalesce a mutation burst into one re-match, aligned to the frame.
+        requestAnimationFrame(() => { annoRafPending = false; fastDocsMarks(); });
+      });
+      // Our own layers (marks, popover) hang off documentElement, OUTSIDE this
+      // subtree — the observer can never feed back on our own writes.
+      annoObs.observe(target, {
+        subtree: true, childList: true,
+        attributes: true, attributeFilter: ["aria-label", "x", "y", "width", "height"],
+      });
+      console.debug("[tracely] annotation observer armed");
     }
 
     console.debug("[tracely] docs overlay armed");
@@ -1174,7 +1329,10 @@
         } else {
           num = (block?.entries.length ?? 0) + 1;
           if (!block) await docApply({ action: "appendLine", line: "Sources:" });
-          await docApply({ action: "appendLine", line: `${num}. ${src.title} — ${src.url}` });
+          // Styled reference + " — url" tail: the url tail is what sourcesBlock
+          // parses for numbering/dedupe, so it must survive every style.
+          const styled = formatCitation(src, settings.citationStyle || "apa").doc;
+          await docApply({ action: "appendLine", line: `${num}. ${styled} — ${src.url}` });
         }
         if (!seg.text.includes(`[${num}]`)) {
           const punct = seg.text.match(/[.!?]+["')\]]*$/);
@@ -1314,7 +1472,7 @@
           btn.addEventListener("click", () => {
             const st = sourcesMap.get(btn.dataset.copySrc);
             const src = st?.list?.[Number(btn.dataset.i)];
-            if (src) copyText(`${src.title} — ${src.url}`, btn.dataset.copySrc, src.url);
+            if (src) copyText(formatCitation(src, settings.citationStyle || "apa").ref, btn.dataset.copySrc, src.url);
           });
         }
         for (const btn of shadow.querySelectorAll("[data-doc-fix]")) {
@@ -1421,7 +1579,7 @@
     const cache = new Map();
     const dismissed = new Set(jsonParse(lsGet(DISMISS_KEY) ?? "[]", []));
     const sourcesMap = new Map();
-    let settings = { model: "claude-haiku-4-5", effort: "low", ...jsonParse(lsGet(SETTINGS_KEY) ?? "{}", {}) };
+    let settings = { model: "claude-haiku-4-5", effort: "low", citationStyle: "apa", ...jsonParse(lsGet(SETTINGS_KEY) ?? "{}", {}) };
     let segments = [];
     let inflight = false;
     let sourcesInflight = false;
@@ -2068,7 +2226,7 @@
           btn.addEventListener("click", () => {
             const st = sourcesMap.get(btn.dataset.copySrc);
             const src = st?.list?.[Number(btn.dataset.i)];
-            if (src) copyText(`${src.title} — ${src.url}`, btn.dataset.copySrc, src.url);
+            if (src) copyText(formatCitation(src, settings.citationStyle || "apa").ref, btn.dataset.copySrc, src.url);
           });
         }
         shadow.getElementById("autoSrcTgl")?.addEventListener("change", (e) => {
