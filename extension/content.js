@@ -35,15 +35,17 @@
   const IS_DOCS = !harness && location.hostname === "docs.google.com" && location.pathname.startsWith("/document/");
   if (document.getElementById("tracely-host")) return;
 
-  const ISSUE_VERDICTS = ["false", "questionable", "incoherent"];
-  const VERDICT_LABEL = { false: "False", questionable: "Questionable", incoherent: "Doesn't make sense" };
-  const AUTO_SOURCE_VERDICTS = ["false", "questionable"];
+  const ISSUE_VERDICTS = ["false", "questionable", "incoherent", "needs_citation"];
+  const VERDICT_LABEL = { false: "False", questionable: "Questionable", incoherent: "Doesn't make sense", needs_citation: "Citation needed" };
+  const AUTO_SOURCE_VERDICTS = ["false", "questionable", "needs_citation"];
   // The mark vocabulary — one DISTINCT colour per verdict, used for the
   // underlines, the card accents and the hover popover:
-  //   false → red, questionable → amber, incoherent → violet.
-  // (Violet replaced the old orange: amber-vs-orange was too close to tell
-  // apart at underline weight.)
-  const MARK_COLORS = { false: "#d93636", questionable: "#ffb800", incoherent: "#8e4ec6" };
+  //   false → red, questionable → amber, incoherent → violet,
+  //   needs_citation → blue (the product's home turf: the claim looks right,
+  //   it just needs a source behind it).
+  const MARK_COLORS = { false: "#d93636", questionable: "#ffb800", incoherent: "#8e4ec6", needs_citation: "#2563eb" };
+  const VERDICT_WASH = { false: "#fdecec", questionable: "#fff4d6", incoherent: "#f1e6fb", needs_citation: "#e8f0fd" };
+  const VERDICT_TEXT = { false: "#d93636", questionable: "#a67500", incoherent: "#8e4ec6", needs_citation: "#2563eb" };
   const MARK_PENDING = "#9a9ba1"; // grey dotted while a sentence's check is in flight
 
   // The Faster↔Smarter slider — one control replacing the model + effort
@@ -272,11 +274,13 @@
     .card.c-false { border-left-color: #d93636; }
     .card.c-quest { border-left-color: #ffb800; }
     .card.c-inco { border-left-color: #8e4ec6; }
+    .card.c-cite { border-left-color: #2563eb; }
     .top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .badge { font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; }
     .badge-false { background: #fdecec; color: #d93636; }
     .badge-quest { background: #fff4d6; color: #a67500; }
     .badge-inco { background: #f1e6fb; color: #8e4ec6; }
+    .badge-cite { background: #e8f0fd; color: #2563eb; }
     .x { margin-left: auto; background: none; border: none; color: #a7a7ac; cursor: pointer; font-size: 14px; }
     .x:hover { color: #0e0e10; }
     .quote { font-style: italic; font-size: 12.5px; color: #8e8e93; border-left: 2px solid rgba(20,16,10,0.1); padding-left: 9px; margin-bottom: 7px; font-weight: 500; }
@@ -535,9 +539,7 @@
        Hovering an underline (or the text just above it) opens a compact card:
        verdict badge, explanation, suggested fix, and actions. Lives in the
        page DOM with inline styles only — Docs' stylesheets never touch it. */
-    const VERDICT_LABEL = { false: "False", questionable: "Questionable", incoherent: "Incoherent" };
-    const VERDICT_WASH = { false: "#fdecec", questionable: "#fff4d6", incoherent: "#f1e6fb" };
-    const VERDICT_TEXT = { false: "#d93636", questionable: "#a67500", incoherent: "#8e4ec6" };
+    // (verdict labels/washes/colors are the shared top-level maps)
     let popEl = null, popHash = null, popHideTimer = null, popFontIn = false;
 
     function popFont() {
@@ -619,7 +621,9 @@
         });
         row.appendChild(copy);
       }
-      const src = popBtn("Sources", false);
+      // With no rewrite on offer (citation-needed), finding the source IS the
+      // fix — it gets the primary button.
+      const src = popBtn(f.verdict === "needs_citation" ? "Find a source" : "Sources", !f.revision);
       src.addEventListener("click", () => {
         expanded = true;
         render();
@@ -860,7 +864,7 @@
       let panelHtml = "";
       if (expanded) {
         const cards = issues.map(({ seg, f }) => {
-          const kind = f.verdict === "false" ? "false" : f.verdict === "questionable" ? "quest" : "inco";
+          const kind = f.verdict === "false" ? "false" : f.verdict === "questionable" ? "quest" : f.verdict === "needs_citation" ? "cite" : "inco";
           const st = sourcesMap.get(seg.hash);
           let sourcesHtml = "";
           if (st?.loading) {
@@ -1602,7 +1606,7 @@
       let panelHtml = "";
       if (expanded) {
         const cards = issues.map(({ seg, f }) => {
-          const kind = f.verdict === "false" ? "false" : f.verdict === "questionable" ? "quest" : "inco";
+          const kind = f.verdict === "false" ? "false" : f.verdict === "questionable" ? "quest" : f.verdict === "needs_citation" ? "cite" : "inco";
           const st = sourcesMap.get(seg.hash);
           let sourcesHtml = "";
           if (st?.loading) {

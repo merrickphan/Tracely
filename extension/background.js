@@ -31,7 +31,7 @@ const PROBE_TIMEOUT_MS = 1500;
 const ALLOWED_MODELS = new Set(["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]);
 const ALLOWED_EFFORT = new Set(["low", "medium", "high"]);
 const DEFAULT_MODEL = "claude-haiku-4-5"; // cost mandate: cheap unless explicitly chosen
-const VERDICTS = ["accurate", "false", "questionable", "incoherent", "no_claim"];
+const VERDICTS = ["accurate", "needs_citation", "false", "questionable", "incoherent", "no_claim"];
 
 /* ── server probe ────────────────────────────────────────────────────────── */
 
@@ -133,7 +133,7 @@ const FINDINGS_SCHEMA = {
         type: "object",
         properties: {
           id: { type: "string" },
-          verdict: { type: "string", enum: ["accurate", "false", "questionable", "incoherent", "no_claim"] },
+          verdict: { type: "string", enum: ["accurate", "needs_citation", "false", "questionable", "incoherent", "no_claim"] },
           explanation: { type: "string" },
           revision: { type: "string" },
           confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -157,13 +157,17 @@ Verdicts:
 - "false": the sentence contains at least one factual claim that is verifiably wrong.
 - "questionable": claims that are unverifiable, seriously disputed, misleading, or stated with false precision.
 - "incoherent": the sentence does not make sense — internally contradictory, a non-sequitur, garbled to the point of obscuring meaning, or a conclusion that does not follow from its premise.
-- "accurate": contains factual claims and they are correct.
+- "needs_citation": the claim appears ACCURATE but is the kind of assertion that needs a source — a statistic, study finding, quote, dated event, or specific non-common-knowledge fact — and neither a citation marker nor an attribution appears in or around the sentence.
+- "accurate": contains factual claims and they are correct, and either they are common knowledge or a citation/attribution is present.
 - "no_claim": coherent but contains no checkable factual claim (opinions, greetings, instructions, questions, clearly framed fiction).
 
 Rules:
 - Judge each sentence in the context of the whole document (resolve pronouns and references from surrounding text).
-- explanation: at most 25 words, concrete. For "false", state the correct fact. For "accurate" and "no_claim", use an empty string.
-- revision: a minimal rewrite of the sentence that fixes the problem while preserving the author's voice and intent. Empty string for "accurate" and "no_claim". Never include surrounding sentences.
+- explanation: at most 25 words, concrete. For "false", state the correct fact. For "needs_citation", name what kind of source would support it. For "accurate" and "no_claim", use an empty string.
+- revision: a minimal rewrite of the sentence that fixes the problem while preserving the author's voice and intent. Empty string for "accurate", "no_claim", and "needs_citation" (nothing to rewrite — it needs a source, not different words). Never include surrounding sentences.
+- A citation can be a bracketed marker like [1], a parenthetical (Author, year), or prose attribution ("According to…", "X reported…"). Any of these count as cited — never flag them "needs_citation".
+- Widely known facts (capitals, famous dates, basic science) are common knowledge: "accurate", not "needs_citation".
+- Precedence: a wrong claim is "false" and an unverifiable one "questionable" even if it also lacks a citation.
 - Ignore bracketed citation markers like [1] when judging a sentence.
 - Do not flag style, tone, or grammar unless it makes the sentence incoherent.
 - Reasonable, widely used approximations are accurate, not questionable.
