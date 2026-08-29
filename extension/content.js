@@ -469,107 +469,120 @@
        exactly as before — this is strictly additive. */
     let locateSeq = 0;
     let lastVerdictByHash = new Map();
-    // Per-tile overlays, anchored to the canvas tiles themselves: native DOM
-    // scrolling then carries the bars in the same frame — the old viewport-
-    // fixed layer only caught up after a locate round-trip, so underlines
-    // visibly lagged the text. tileId → {overlay, group, sx, sy, shiftX, shiftY}
-    const tileOverlays = new Map();
-    let docsBars = []; // [{hash, el, size}] — hover hit-testing reads live rects
+    /* Bars live in OUR OWN fixed layer (v2.6 mounted overlays inside kix's
+       tile containers and real Docs rendered nothing — never inject into DOM
+       an app owns), but they are GLUED to the tiles by a per-frame loop:
+       each bar stores canvas-relative coords, and every animation frame the
+       loop reads the live canvas rects and re-places the bars. Scrolling is
+       pixel-locked with no locate round-trip, and kix can't wipe the layer. */
+    let marksLayer = null;
+    let docsBars = []; // [{hash, el, tile, rx, ry, w, size, fallLeft, fallTop}]
+    const tileState = new Map(); // tileId → {canvas, sx, sy, shiftX, shiftY}
+    let glueRaf = 0;
 
-    function clearDocsMarks() {
-      for (const t of tileOverlays.values()) {
-        t.group.textContent = "";
-        t.shiftX = 0;
-        t.shiftY = 0;
-        t.group.style.transform = "";
-      }
-      docsBars = [];
+    function ensureLayer() {
+      if (marksLayer && marksLayer.isConnected) return;
+      marksLayer = document.createElement("div");
+      marksLayer.setAttribute("data-tracely-docs-marks", "");
+      Object.assign(marksLayer.style, {
+        // Modest z: above the editing surface, below Docs menus/dialogs.
+        position: "fixed", inset: "0", pointerEvents: "none", zIndex: "900",
+      });
+      document.documentElement.appendChild(marksLayer);
     }
 
-    function overlayForTile(tileId) {
-      const canvas = document.querySelector(`canvas[data-tracely-tile="${tileId}"]`);
-      if (!canvas || !canvas.parentElement) return null;
-      let t = tileOverlays.get(tileId);
-      if (!t || !t.overlay.isConnected || t.overlay.parentElement !== canvas.parentElement) {
-        t?.overlay.remove();
-        const parent = canvas.parentElement;
-        try {
-          if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
-        } catch { /* leave as-is */ }
-        const overlay = document.createElement("div");
-        overlay.setAttribute("data-tracely-docs-marks", "");
-        const group = document.createElement("div");
-        overlay.appendChild(group);
-        parent.appendChild(overlay);
-        t = { overlay, group, sx: 1, sy: 1, shiftX: 0, shiftY: 0 };
-        tileOverlays.set(tileId, t);
+    function clearDocsMarks() {
+      if (marksLayer) marksLayer.textContent = "";
+      docsBars = [];
+      tileState.clear();
+    }
+
+    function glueFrame() {
+      glueRaf = 0;
+      if (docsBars.length === 0) return;
+      for (const t of tileState.values()) {
+        if (t.canvas && !t.canvas.isConnected) t.canvas = null;
+        if (!t.canvas) continue;
+        t.rect = t.canvas.getBoundingClientRect();
       }
-      const canvasEl = canvas;
-      Object.assign(t.overlay.style, {
-        position: "absolute",
-        left: canvasEl.offsetLeft + "px",
-        top: canvasEl.offsetTop + "px",
-        width: canvasEl.offsetWidth + "px",
-        height: canvasEl.offsetHeight + "px",
-        pointerEvents: "none",
-        overflow: "hidden",
-        zIndex: "3", // above the tile it annotates; far below Docs menus/dialogs
-      });
-      t.sx = canvasEl.offsetWidth / (canvasEl.width || 1);
-      t.sy = canvasEl.offsetHeight / (canvasEl.height || 1);
-      // A fresh authoritative draw resets any interim blit-shift.
-      t.shiftX = 0;
-      t.shiftY = 0;
-      t.group.style.transform = "";
-      return t;
+      for (const b of docsBars) {
+        const t = tileState.get(b.tile);
+        if (t && t.canvas && t.rect) {
+          const x = t.rect.left + b.rx + t.shiftX * t.sx;
+          const y = t.rect.top + b.ry + t.shiftY * t.sy;
+          const off = y < -20 || y > innerHeight + 20;
+          b.el.style.transform = `translate(${x}px, ${y}px)`;
+          b.el.style.opacity = off ? "0" : "1";
+        } else {
+          // Tile unresolvable — fall back to the viewport position the hook
+          // computed at locate time (v2.5-era behavior: right place, lags on
+          // scroll until the next locate instead of showing nothing).
+          b.el.style.transform = `translate(${b.fallLeft}px, ${b.fallTop}px)`;
+          b.el.style.opacity = "1";
+        }
+      }
+      glueRaf = requestAnimationFrame(glueFrame);
+    }
+    function startGlue() {
+      if (!glueRaf && docsBars.length > 0) glueRaf = requestAnimationFrame(glueFrame);
     }
 
     function drawDocsMarks(rects) {
-      clearDocsMarks();
-      const byTile = new Map();
-      for (const [hash, list] of Object.entries(rects ?? {})) {
-        for (const r of list) {
-          if (!r || r.width < 3) continue;
-          let b = byTile.get(r.tile);
-          if (!b) { b = []; byTile.set(r.tile, b); }
-          b.push({ hash, r });
-        }
-      }
-      for (const [tileId, items] of byTile) {
-        const t = overlayForTile(tileId);
-        if (!t) continue;
-        for (const { hash, r } of items) {
+      try {
+        ensureLayer();
+        clearDocsMarks();
+        let received = 0;
+        for (const [hash, list] of Object.entries(rects ?? {})) {
           const verdict = lastVerdictByHash.get(hash);
           const color = MARK_COLORS[verdict];
           if (!color) continue;
-          const bar = document.createElement("div");
-          Object.assign(bar.style, {
-            position: "absolute",
-            left: r.x + "px",
-            top: r.y + "px",
-            width: r.width + "px",
-            height: "3px",
-            background: color, // solid, one distinct colour per verdict
-            borderRadius: "2px",
-            pointerEvents: "none",
-          });
-          t.group.appendChild(bar);
-          docsBars.push({ hash, el: bar, size: r.size || 18 });
+          for (const r of list) {
+            if (!r || r.width < 3) continue;
+            received++;
+            if (!tileState.has(r.tile)) {
+              tileState.set(r.tile, {
+                canvas: document.querySelector(`canvas[data-tracely-tile="${r.tile}"]`),
+                sx: 1, sy: 1, shiftX: 0, shiftY: 0, rect: null,
+              });
+              const t = tileState.get(r.tile);
+              if (t.canvas) {
+                t.sx = (t.canvas.getBoundingClientRect().width || 1) / (t.canvas.width || 1);
+                t.sy = (t.canvas.getBoundingClientRect().height || 1) / (t.canvas.height || 1);
+              }
+            }
+            const bar = document.createElement("div");
+            Object.assign(bar.style, {
+              position: "fixed", left: "0", top: "0",
+              width: r.width + "px", height: "3px",
+              background: color, borderRadius: "2px", pointerEvents: "none",
+              willChange: "transform",
+            });
+            marksLayer.appendChild(bar);
+            docsBars.push({
+              hash, el: bar, tile: r.tile,
+              rx: r.x, ry: r.y, size: r.size || 18,
+              fallLeft: r.left ?? 0, fallTop: r.top ?? 0,
+            });
+          }
         }
+        // One log per draw — screenshot-diagnosable if bars ever go missing.
+        console.debug(`[tracely] docs marks: ${docsBars.length} bar(s) from ${received} rect(s), tiles resolved: ${[...tileState.values()].filter((t) => t.canvas).length}/${tileState.size}`);
+        glueFrame(); // position immediately, then keep gluing
+        startGlue();
+      } catch (err) {
+        console.warn("[tracely] docs mark draw failed:", err);
       }
     }
 
-    // Docs scrolls small distances by blitting INSIDE a canvas — the tile
-    // doesn't move, its pixels do. The hook pushes the shift the moment it
-    // happens; nudging the group in the same frame keeps bars glued to text
-    // between authoritative locate rounds.
+    // Docs' small scrolls blit pixels INSIDE a canvas (the tile doesn't
+    // move) — the hook posts the shift at blit time so bars slide with the
+    // pixels between authoritative locate rounds (which reset shifts).
     window.addEventListener("message", (ev) => {
       if (ev.source !== window || ev.data?.type !== "tracely-docs-shift") return;
-      const t = tileOverlays.get(ev.data.tile);
+      const t = tileState.get(ev.data.tile);
       if (!t) return;
-      t.shiftX += (Number(ev.data.dx) || 0) * t.sx;
-      t.shiftY += (Number(ev.data.dy) || 0) * t.sy;
-      t.group.style.transform = `translate(${t.shiftX}px, ${t.shiftY}px)`;
+      t.shiftX += Number(ev.data.dx) || 0;
+      t.shiftY += Number(ev.data.dy) || 0;
     });
 
     window.addEventListener("message", (ev) => {
