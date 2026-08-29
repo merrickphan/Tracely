@@ -615,12 +615,26 @@
       const row = document.createElement("div");
       Object.assign(row.style, { display: "flex", gap: "7px" });
       if (f.revision) {
-        const copy = popBtn("Copy fix", true);
-        copy.addEventListener("click", () => {
-          try { navigator.clipboard.writeText(f.revision); } catch { /* clipboard denied */ }
-          copy.textContent = "Copied ✓";
-        });
-        row.appendChild(copy);
+        if (canEditDoc()) {
+          // The bridge can rewrite the sentence in the document itself — that
+          // beats a clipboard round-trip, so it takes the primary slot.
+          const fix = popBtn("Fix in doc", true);
+          fix.addEventListener("click", async () => {
+            fix.textContent = "Fixing…";
+            fix.disabled = true;
+            await docFix(hash);
+            hideDocsPopover();
+            requestDocsMarks(); // the fixed sentence's mark clears right away
+          });
+          row.appendChild(fix);
+        } else {
+          const copy = popBtn("Copy fix", true);
+          copy.addEventListener("click", () => {
+            try { navigator.clipboard.writeText(f.revision); } catch { /* clipboard denied */ }
+            copy.textContent = "Copied ✓";
+          });
+          row.appendChild(copy);
+        }
       }
       // With no rewrite on offer (citation-needed), finding the source IS the
       // fix — it gets the primary button.
