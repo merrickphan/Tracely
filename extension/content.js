@@ -38,15 +38,13 @@
   const ISSUE_VERDICTS = ["false", "questionable", "incoherent"];
   const VERDICT_LABEL = { false: "False", questionable: "Questionable", incoherent: "Doesn't make sense" };
   const AUTO_SOURCE_VERDICTS = ["false", "questionable"];
-  // The three-colour mark vocabulary for in-page underlines (field mode).
-  const MARK_COLORS = { false: "#d93636", questionable: "#ffb800", incoherent: "#ff5900" };
+  // The mark vocabulary — one DISTINCT colour per verdict, used for the
+  // underlines, the card accents and the hover popover:
+  //   false → red, questionable → amber, incoherent → violet.
+  // (Violet replaced the old orange: amber-vs-orange was too close to tell
+  // apart at underline weight.)
+  const MARK_COLORS = { false: "#d93636", questionable: "#ffb800", incoherent: "#8e4ec6" };
   const MARK_PENDING = "#9a9ba1"; // grey dotted while a sentence's check is in flight
-
-  // A Grammarly-style wavy underline as a repeatable SVG, tinted to the mark colour.
-  function wavyUnderline(color) {
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='6' height='4' viewBox='0 0 6 4'><path d='M0 3 Q1.5 0.6 3 3 T6 3' stroke='${color}' stroke-width='1.4' fill='none'/></svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-  }
 
   // The Faster↔Smarter slider — one control replacing the model + effort
   // dropdowns on both widget surfaces. Three stops; effort rides along.
@@ -67,27 +65,34 @@
     return `<div class="speedbar">
       <span class="sb-lab${pos === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
       <div class="sb-track">
-        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="1" value="${pos}" style="--sb-fill:${sbFill(pos)}">
+        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${pos}" style="--sb-fill:${sbFill(pos)}">
         <span class="sb-dots">${SPEED_STOPS.map(() => "<i></i>").join("")}</span>
       </div>
       <span class="sb-lab${pos === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter</span>
     </div>`;
   }
   // Wire the slider without re-rendering: a full render mid-drag drops the
-  // thumb. Updates settings + fill + end labels in place.
+  // thumb. The drag is SMOOTH (step 0.01, fill follows the finger); on
+  // release it snaps to the nearest stop, and only the snap saves settings.
   function wireSpeedbar(shadow, settings, saveSettings) {
     const el = shadow.getElementById("speedSel");
     if (!el) return;
     el.addEventListener("input", () => {
-      const pos = Number(el.value);
-      const stop = SPEED_STOPS[pos] ?? SPEED_STOPS[0];
+      el.style.setProperty("--sb-fill", sbFill(Number(el.value)));
+    });
+    const snap = () => {
+      const pos = Math.max(0, Math.min(SPEED_STOPS.length - 1, Math.round(Number(el.value))));
+      el.value = String(pos);
+      const stop = SPEED_STOPS[pos];
       settings.model = stop.model;
       settings.effort = stop.effort;
       saveSettings();
       el.style.setProperty("--sb-fill", sbFill(pos));
       shadow.querySelector('[data-sb-lab="0"]')?.classList.toggle("on", pos === 0);
       shadow.querySelector('[data-sb-lab="max"]')?.classList.toggle("on", pos === SPEED_STOPS.length - 1);
-    });
+    };
+    el.addEventListener("change", snap); // fires on release for range inputs
+    el.addEventListener("keyup", snap); // arrow-key users snap too
   }
 
   /* ── shared helpers (mirror public/app.js) ─────────────────────────────── */
@@ -266,12 +271,12 @@
     .card { background: #fff; border: 1px solid rgba(20,16,10,0.05); border-left: 3px solid #a7a7ac; border-radius: 14px; padding: 12px 14px; box-shadow: 0 4px 14px rgba(180,120,60,0.07); }
     .card.c-false { border-left-color: #d93636; }
     .card.c-quest { border-left-color: #ffb800; }
-    .card.c-inco { border-left-color: #ff5900; }
+    .card.c-inco { border-left-color: #8e4ec6; }
     .top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .badge { font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; }
     .badge-false { background: #fdecec; color: #d93636; }
     .badge-quest { background: #fff4d6; color: #a67500; }
-    .badge-inco { background: #ffe9dd; color: #d95a19; }
+    .badge-inco { background: #f1e6fb; color: #8e4ec6; }
     .x { margin-left: auto; background: none; border: none; color: #a7a7ac; cursor: pointer; font-size: 14px; }
     .x:hover { color: #0e0e10; }
     .quote { font-style: italic; font-size: 12.5px; color: #8e8e93; border-left: 2px solid rgba(20,16,10,0.1); padding-left: 9px; margin-bottom: 7px; font-weight: 500; }
@@ -460,6 +465,7 @@
     let marksLayer = null;
     let locateSeq = 0;
     let lastVerdictByHash = new Map();
+    let docsHitRects = []; // rebuilt per draw — hover hit-testing for the popover
 
     function drawDocsMarks(rects) {
       if (!marksLayer) {
@@ -474,6 +480,7 @@
         document.documentElement.appendChild(marksLayer);
       }
       marksLayer.textContent = "";
+      docsHitRects = [];
       for (const [hash, list] of Object.entries(rects ?? {})) {
         const verdict = lastVerdictByHash.get(hash);
         const color = MARK_COLORS[verdict];
@@ -486,14 +493,13 @@
             left: r.left + "px",
             top: r.top + "px",
             width: r.width + "px",
-            height: "4px",
-            backgroundImage: wavyUnderline(color),
-            backgroundRepeat: "repeat-x",
-            backgroundPosition: "left bottom",
-            backgroundSize: "6px 4px",
+            height: "3px",
+            background: color, // solid, one distinct colour per verdict
+            borderRadius: "2px",
             pointerEvents: "none",
           });
           marksLayer.appendChild(bar);
+          docsHitRects.push({ hash, left: r.left, top: r.top, width: r.width, size: r.size || 18 });
         }
       }
     }
@@ -509,7 +515,11 @@
       // The hook caps at 40 wants — cap here too so nothing is silently dropped
       // on the other side of the protocol.
       const issues = currentIssues().slice(0, 40);
-      if (issues.length === 0 && marksLayer) marksLayer.textContent = "";
+      if (issues.length === 0) {
+        if (marksLayer) marksLayer.textContent = "";
+        docsHitRects = [];
+        hideDocsPopover();
+      }
       lastVerdictByHash = new Map(issues.map(({ seg, f }) => [seg.hash, f.verdict]));
       locateSeq++;
       // Sent even with zero issues: an empty locate is the hook's cue to prune
@@ -520,6 +530,149 @@
         wants: issues.map(({ seg }) => ({ hash: seg.hash, text: seg.text })),
       }, "*");
     }
+
+    /* ── hover popover on the Docs underlines ─────────────────────────────
+       Hovering an underline (or the text just above it) opens a compact card:
+       verdict badge, explanation, suggested fix, and actions. Lives in the
+       page DOM with inline styles only — Docs' stylesheets never touch it. */
+    const VERDICT_LABEL = { false: "False", questionable: "Questionable", incoherent: "Incoherent" };
+    const VERDICT_WASH = { false: "#fdecec", questionable: "#fff4d6", incoherent: "#f1e6fb" };
+    const VERDICT_TEXT = { false: "#d93636", questionable: "#a67500", incoherent: "#8e4ec6" };
+    let popEl = null, popHash = null, popHideTimer = null, popFontIn = false;
+
+    function popFont() {
+      if (popFontIn || !FONT_URL) return;
+      popFontIn = true;
+      const st = document.createElement("style");
+      st.textContent = `@font-face{font-family:'Plus Jakarta Sans';src:url('${FONT_URL}') format('woff2');font-weight:200 800;font-display:swap;}`;
+      document.head.appendChild(st);
+    }
+
+    function hideDocsPopover() {
+      if (popEl) popEl.remove();
+      popEl = null;
+      popHash = null;
+    }
+
+    function popBtn(label, primary) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      Object.assign(b.style, {
+        border: primary ? "none" : "1px solid rgba(20,16,10,0.1)",
+        background: primary ? "#0e0e10" : "#fff",
+        color: primary ? "#fff" : "#0e0e10",
+        borderRadius: "9px", padding: "6px 12px", fontSize: "11.5px",
+        fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
+      });
+      return b;
+    }
+
+    function showDocsPopover(hash, rect) {
+      const f = cache.get(hash);
+      if (!f) return;
+      popFont();
+      hideDocsPopover();
+      popHash = hash;
+      const color = MARK_COLORS[f.verdict] ?? "#8e8e93";
+      popEl = document.createElement("div");
+      popEl.setAttribute("data-tracely-docs-popover", "");
+      Object.assign(popEl.style, {
+        position: "fixed", zIndex: "901", width: "300px",
+        background: "#fff", borderRadius: "14px", padding: "12px 14px",
+        border: "1px solid rgba(20,16,10,0.06)", borderLeft: `3px solid ${color}`,
+        boxShadow: "0 16px 44px rgba(180,120,60,0.24)",
+        fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif",
+        color: "#0e0e10", fontSize: "12.5px", lineHeight: "1.5",
+      });
+      const badge = document.createElement("span");
+      badge.textContent = VERDICT_LABEL[f.verdict] ?? f.verdict;
+      Object.assign(badge.style, {
+        display: "inline-block", fontSize: "9px", fontWeight: "700",
+        letterSpacing: ".8px", textTransform: "uppercase", padding: "3px 8px",
+        borderRadius: "20px", background: VERDICT_WASH[f.verdict] ?? "#f2f2f3",
+        color: VERDICT_TEXT[f.verdict] ?? "#8e8e93", marginBottom: "7px",
+      });
+      popEl.appendChild(badge);
+      if (f.explanation) {
+        const ex = document.createElement("div");
+        ex.textContent = f.explanation;
+        ex.style.marginBottom = "9px";
+        ex.style.fontWeight = "500";
+        popEl.appendChild(ex);
+      }
+      if (f.revision) {
+        const fix = document.createElement("div");
+        Object.assign(fix.style, {
+          background: "#fdfbf9", border: "1px solid rgba(20,16,10,0.06)",
+          borderRadius: "10px", padding: "8px 10px", marginBottom: "9px", fontWeight: "500",
+        });
+        fix.textContent = f.revision;
+        popEl.appendChild(fix);
+      }
+      const row = document.createElement("div");
+      Object.assign(row.style, { display: "flex", gap: "7px" });
+      if (f.revision) {
+        const copy = popBtn("Copy fix", true);
+        copy.addEventListener("click", () => {
+          try { navigator.clipboard.writeText(f.revision); } catch { /* clipboard denied */ }
+          copy.textContent = "Copied ✓";
+        });
+        row.appendChild(copy);
+      }
+      const src = popBtn("Sources", false);
+      src.addEventListener("click", () => {
+        expanded = true;
+        render();
+        fetchSources(hash);
+        hideDocsPopover();
+      });
+      row.appendChild(src);
+      const dis = popBtn("Dismiss", false);
+      dis.addEventListener("click", () => {
+        dismissed.add(hash);
+        lsSet(DISMISS_KEY, JSON.stringify([...dismissed]));
+        hideDocsPopover();
+        requestDocsMarks();
+        render();
+      });
+      row.appendChild(dis);
+      popEl.appendChild(row);
+      // Position under the underline; flip above when it would clip the viewport.
+      popEl.style.left = Math.max(12, Math.min(rect.left, innerWidth - 320)) + "px";
+      popEl.style.top = rect.top + 10 + "px";
+      popEl.style.visibility = "hidden";
+      document.documentElement.appendChild(popEl);
+      const h = popEl.getBoundingClientRect().height;
+      if (rect.top + 10 + h > innerHeight - 10) {
+        popEl.style.top = Math.max(10, rect.top - rect.size - h - 8) + "px";
+      }
+      popEl.style.visibility = "visible";
+    }
+
+    let hoverRafBusy = false;
+    window.addEventListener("mousemove", (e) => {
+      if (hoverRafBusy) return;
+      hoverRafBusy = true;
+      const x = e.clientX, y = e.clientY;
+      requestAnimationFrame(() => {
+        hoverRafBusy = false;
+        const over = (r) => x >= r.left - 2 && x <= r.left + r.width + 2 && y >= r.top - r.size && y <= r.top + 6;
+        if (popEl) {
+          const pb = popEl.getBoundingClientRect();
+          const inPop = x >= pb.left - 8 && x <= pb.right + 8 && y >= pb.top - 8 && y <= pb.bottom + 8;
+          const stillOnMark = docsHitRects.some((r) => r.hash === popHash && over(r));
+          if (inPop || stillOnMark) {
+            clearTimeout(popHideTimer);
+            popHideTimer = null;
+            return;
+          }
+          if (!popHideTimer) popHideTimer = setTimeout(() => { popHideTimer = null; hideDocsPopover(); }, 250);
+          return;
+        }
+        const hit = docsHitRects.find(over);
+        if (hit) showDocsPopover(hit.hash, hit);
+      });
+    }, { passive: true });
 
     // Scroll/wheel fire at frame rate; a trailing 140ms throttle keeps the
     // locate pass (line assembly + matching in the page world) off the hot
@@ -1140,11 +1293,9 @@
             bar.style.borderBottom = `2px dotted ${color}`;
             bar.style.opacity = "0.7";
           } else {
-            // wavy underline drawn along the bottom edge, in the mark colour
-            bar.style.backgroundImage = wavyUnderline(color);
-            bar.style.backgroundRepeat = "repeat-x";
-            bar.style.backgroundPosition = "left bottom";
-            bar.style.backgroundSize = "6px 4px";
+            // solid underline along the bottom edge, one colour per verdict
+            bar.style.borderBottom = `3px solid ${color}`;
+            bar.style.borderRadius = "2px";
           }
           layer.appendChild(bar);
         }
