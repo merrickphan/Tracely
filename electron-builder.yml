@@ -199,6 +199,12 @@ protocols:
 win:
   target: nsis
   icon: build/icon.ico
+  # publisherName belongs here once a certificate exists, set to that
+  # certificate's exact common name: it is what electron-updater compares an
+  # incoming installer against, and it is baked into app-update.yml at build
+  # time — so a placeholder would ship inside every client. The Azure signing
+  # block cannot be written before the signing account exists either. See
+  # BUILDING.md "Code signing".
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -208,6 +214,27 @@ mac:
   target: dmg
   icon: build/icon.icns
   category: public.app-category.productivity
+  # Signing config, inert until a Developer ID certificate reaches the builder.
+  # MacPackager.sign() gives up at "no valid identity" before any key below is
+  # read, and notarization is only attempted after a successful signature — so
+  # with no certificate this whole block is skipped and the build warns and
+  # continues, exactly as it does today.
+  #
+  # forceCodeSigning is deliberately NOT set: it is the one flag that turns that
+  # warning into a hard failure, so it goes in only once signed builds are
+  # proven, together with `zip` (which macOS auto-update needs, and which is
+  # pointless before signing because Squirrel.Mac requires a valid signature).
+  # identity is deliberately left unset so the certificate is auto-discovered.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Also found by filename under directories.buildResources; named explicitly so
+  # a rename cannot silently fall back to electron-builder's bundled default,
+  # which carries an Electron-11-era entitlement this app must not ship.
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Boolean on purpose. The object form (notarize: {teamId}) is deprecated in
+  # electron-builder 25 and removed in 26; the Team ID comes from APPLE_TEAM_ID.
+  notarize: true
 publish:
   provider: github
   owner: merrickphan

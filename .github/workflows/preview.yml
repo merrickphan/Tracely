@@ -117,6 +117,39 @@ jobs:
       # GH_TOKEN is read from the environment here rather than .env.release,
       # which does not and should not exist in CI. GITHUB_TOKEN is scoped to
       # this repository and expires when the job ends.
+      # Same shape as mac-installers.yml, same reason: an absent secret in a
+      # step-level env: becomes "", which electron-builder reads as a real
+      # certificate path. Both credential shapes are pre-wired so whichever
+      # Windows signing route is bought later needs no workflow edit — the
+      # AZURE_* vars stay inert until win.azureSignOptions exists in the yml.
+      - name: resolve Windows signing env
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          if [ -n "$WIN_CSC_LINK" ]; then
+            {
+              echo "WIN_CSC_LINK<<__TRACELY_EOF__"
+              echo "$WIN_CSC_LINK"
+              echo "__TRACELY_EOF__"
+            } >> "$GITHUB_ENV"
+            echo "WIN_CSC_KEY_PASSWORD=$WIN_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
+            echo "AZURE_TENANT_ID=$AZURE_TENANT_ID" >> "$GITHUB_ENV"
+            echo "AZURE_CLIENT_ID=$AZURE_CLIENT_ID" >> "$GITHUB_ENV"
+            echo "AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$WIN_CSC_LINK$AZURE_TENANT_ID" ]; then
+            echo "::notice::Windows signing enabled."
+          else
+            echo "::notice::Windows signing not configured — unsigned, as before."
+          fi
+
       - name: build and publish preview
         shell: bash
         env:

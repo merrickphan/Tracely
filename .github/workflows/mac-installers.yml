@@ -90,13 +90,52 @@ jobs:
 
       - run: npx electron-vite build
 
+      # Signing turns itself on when the secrets appear — no edit here.
+      #
+      # Assembled into $GITHUB_ENV rather than a step-level `env:` block, and
+      # that is load-bearing, not style. `CSC_LINK: ${{ secrets.X }}` with the
+      # secret absent sets the variable to the EMPTY STRING, and
+      # electron-builder only rejects null — so it treats "" as a configured
+      # certificate, resolves it to the project directory and fails the build
+      # with "<projectDir> not a file". That happens before the identity lookup,
+      # so CSC_IDENTITY_AUTO_DISCOVERY=false does not save you. Defining these
+      # only when the secret is non-empty is what keeps the unsigned build green.
+      - name: resolve signing env
+        shell: bash
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "::notice::No MACOS_CERTIFICATE secret — building unsigned, as before."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # Heredoc because a base64 .p12 may arrive line-wrapped, and
+          # $GITHUB_ENV rejects a raw multi-line KEY=value.
+          {
+            echo "CSC_LINK<<__TRACELY_EOF__"
+            echo "$MACOS_CERTIFICATE"
+            echo "__TRACELY_EOF__"
+          } >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$MACOS_CERTIFICATE_PWD" >> "$GITHUB_ENV"
+          echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Signed but NOT notarized — Gatekeeper still blocks the dmg. Add APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID."
+          fi
+
       # onnxruntime-node ships every platform's binding in one package and sharp
       # resolves per-platform, so each arch is built against only its own
       # binaries — a foreign binding is what silently degraded the first mac
       # build to Windows-only ML. Same split as BUILDING.md, one arch at a time.
       - name: build arm64 dmg
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false" # unsigned; signing needs a paid Developer ID
         run: |
           rm -rf node_modules/onnxruntime-node/bin/napi-v6/win32 \
                  node_modules/onnxruntime-node/bin/napi-v6/linux \
@@ -104,8 +143,6 @@ jobs:
           npx electron-builder --mac --arm64 --publish never
 
       - name: build x64 (Intel) dmg
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           npm i --no-save --force @img/sharp-darwin-x64 @img/sharp-libvips-darwin-x64
           rm -rf node_modules/@img/sharp-darwin-arm64 node_modules/@img/sharp-libvips-darwin-arm64

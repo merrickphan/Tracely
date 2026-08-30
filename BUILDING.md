@@ -25,8 +25,10 @@ embed test runs for real.
 
 To build the *other* platform's installer you must (a) provide that platform's
 native binaries and (b) remove this platform's, or the guard fails the build —
-correctly — on a foreign onnxruntime binding. The build is unsigned
-(`CSC_IDENTITY_AUTO_DISCOVERY=false`).
+correctly — on a foreign onnxruntime binding. Local cross-builds stay unsigned
+by design: on a machine that *does* have a Developer ID installed,
+`CSC_IDENTITY_AUTO_DISCOVERY=false` is what keeps a local build byte-comparable
+with CI's. Signed installers come from CI — see "Code signing" below.
 
 **Windows installer from macOS** (x64, matching the released arch):
 
@@ -73,9 +75,56 @@ The job needs the production compile-time values as repository secrets:
 
 There is no fallback to the staging secrets. A build labelled "release" that
 quietly pointed at staging is the failure `scripts/env.mjs` already refuses, so
-the workflow stops with an explicit error instead. Both dmgs are unsigned —
-signing needs a paid Developer ID, and `CSC_IDENTITY_AUTO_DISCOVERY=false` keeps
-the runner from trying.
+the workflow stops with an explicit error instead. Both dmgs are unsigned until
+the signing secrets exist — see the next section.
+
+## Code signing
+
+The configuration is fully wired and dormant. It switches on when — and only
+when — the secrets below exist. There is no code change at that point.
+
+macOS (`mac-installers.yml`):
+
+    MACOS_CERTIFICATE             base64 of the Developer ID Application .p12
+    MACOS_CERTIFICATE_PWD         the .p12 export password
+    APPLE_ID                      Apple ID used for notarization
+    APPLE_APP_SPECIFIC_PASSWORD   appleid.apple.com -> App-Specific Passwords
+    APPLE_TEAM_ID                 10-character Team ID
+
+`MACOS_CERTIFICATE` alone produces a signed but un-notarized dmg, which
+Gatekeeper still blocks; the workflow prints a `::warning::` in that state. All
+five are needed for a download that opens without a dialog.
+
+Windows (`preview.yml`, and the release path once it moves onto a Windows
+runner — electron-builder's Azure signing shells out to PowerShell, so a build
+cross-compiled from macOS silently does not sign):
+
+    WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD    OV .pfx (fallback route)
+    AZURE_TENANT_ID / AZURE_CLIENT_ID /
+    AZURE_CLIENT_SECRET                    Azure Artifact Signing (preferred)
+
+The Azure route also needs a `win.azureSignOptions` block, which cannot be
+written before the signing account exists.
+
+Produce the certificate base64 as a single line:
+
+    base64 < DeveloperID.p12 | tr -d '\n' | pbcopy
+
+**Never write `CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}` into a step's `env:`.**
+An absent secret becomes the empty string, electron-builder treats that as a
+configured certificate path, and the build dies with `<projectDir> not a file` —
+before the identity lookup, so `CSC_IDENTITY_AUTO_DISCOVERY=false` does not
+protect you. That is why the signing environment is assembled by a guarded step
+into `$GITHUB_ENV` instead.
+
+Once signed builds are verified end to end, three things change together:
+`forceCodeSigning: true` (so a silently-unsigned regression fails instead of
+warning), `zip` alongside `dmg` in `mac.target` (macOS auto-update needs it and
+cannot use it before signing), and re-enabling the Windows update signature
+check in `src/main/updater.ts`. Note that moving from ad-hoc to a real Developer
+ID changes the app's signing identity, which invalidates existing macOS TCC
+grants — every current Mac user is re-prompted for Screen Recording and
+Accessibility, which Screen Watch depends on.
 
 ## Why `electron-builder.yml` has one top-level `files:` and no platform block
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- V8 compiles at runtime. Required on Apple silicon under hardened
+         runtime: without it the SIGNED app dies at launch, and only the signed
+         app — a dev build never reproduces it. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- sharp's binding dlopens libvips-cpp from app.asar.unpacked, and
+         onnxruntime_binding.node dlopens libonnxruntime the same way. Library
+         validation refuses both because they are loaded from outside the main
+         bundle, and this app's ML failures are historically silent. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>
