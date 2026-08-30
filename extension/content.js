@@ -613,10 +613,14 @@
        frame; canvas-fallback bars re-read the tile rect. Scrolling is
        pixel-locked with no locate round-trip, and kix can't wipe the layer. */
     let marksLayer = null;
-    let docsBars = []; // [{hash, el, tile, rx, ry, w, size, fallLeft, fallTop}]
+    let docsBars = []; // [{hash, el, tile, rx, ry, w, size, fallLeft, fallTop, inSvg}]
     const tileState = new Map(); // tileId → {canvas, sx, sy, shiftX, shiftY}
     let glueRaf = 0;
     let docsScroller = null;
+    let selfMutating = false;      // our own annotation-SVG writes, for the observer to skip
+    let inTreeDisabledUntil = 0;   // in-tree bars paused until this time if Docs fights us
+    let inTreeCooldown = 60_000;   // doubles per latch, capped at 15min
+    let hostileStrikes = [];       // timestamps of Docs deleting our bars targetedly
 
     function ensureLayer() {
       if (marksLayer && marksLayer.isConnected) return;
@@ -630,15 +634,26 @@
     }
 
     function clearDocsMarks() {
+      // Kill any pending glue frame FIRST: draw paths call glueFrame()
+      // synchronously right after this, and an orphaned pending handle would
+      // self-perpetuate as a second parallel rAF chain (they accumulate).
+      if (glueRaf) { cancelAnimationFrame(glueRaf); glueRaf = 0; }
+      selfMutating = true;
       if (marksLayer) marksLayer.textContent = "";
+      // In-tree bars live inside Docs' annotation SVGs — remove them there,
+      // plus a sweep for strays whose tile was recycled out from under us.
+      for (const b of docsBars) if (b.inSvg) b.el.remove();
+      for (const stray of document.querySelectorAll("rect[data-tracely-bar]")) stray.remove();
       docsBars = [];
       tileState.clear();
+      queueMicrotask(() => { selfMutating = false; });
     }
 
     function glueFrame() {
       glueRaf = 0;
       if (docsBars.length === 0) return;
       let staleSvg = false;
+      let needLoop = false;
       for (const t of tileState.values()) {
         if (t.canvas && !t.canvas.isConnected) t.canvas = null;
         if (!t.canvas) continue;
@@ -653,6 +668,8 @@
       }
       if (docsScroller) clip = docsScroller.getBoundingClientRect();
       for (const b of docsBars) {
+        if (b.inSvg) continue; // compositor-carried: no per-frame work, clipped natively
+        needLoop = true;
         if (b.node) {
           // SVG mode: the annotation rect IS the live position — zero lag.
           // Docs RECYCLES annotation nodes when tiles scroll far: the same
@@ -691,10 +708,13 @@
         }
       }
       if (staleSvg) fastDocsMarks(); // Docs recycled annotation nodes — re-match NOW
-      glueRaf = requestAnimationFrame(glueFrame);
+      // In-tree bars ride the compositor; only glued/canvas bars need frames.
+      // !glueRaf: fastDocsMarks above can synchronously redraw and schedule
+      // its own chain — never stack a second one on top.
+      if (needLoop && !glueRaf) glueRaf = requestAnimationFrame(glueFrame);
     }
     function startGlue() {
-      if (!glueRaf && docsBars.length > 0) glueRaf = requestAnimationFrame(glueFrame);
+      if (!glueRaf && docsBars.some((b) => !b.inSvg)) glueRaf = requestAnimationFrame(glueFrame);
     }
 
     function drawDocsMarks(rects) {
@@ -747,21 +767,68 @@
     function drawDocsMarksSvg(svgBars) {
       try {
         ensureLayer();
+        selfMutating = true;
         clearDocsMarks();
+        let inTree = 0, glued = 0;
         for (const sb of svgBars) {
           const color = MARK_COLORS[lastVerdictByHash.get(sb.hash)];
           if (!color) continue;
-          const bar = document.createElement("div");
-          Object.assign(bar.style, {
-            position: "fixed", left: "0", top: "0",
-            width: "0px", height: "3px",
-            background: color, borderRadius: "2px", pointerEvents: "none",
-            willChange: "transform",
-          });
-          marksLayer.appendChild(bar);
-          docsBars.push({ hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1, size: 18 });
+          const svg = sb.node.ownerSVGElement;
+          const rx = parseFloat(sb.node.getAttribute("x"));
+          const ry = parseFloat(sb.node.getAttribute("y"));
+          const rw = parseFloat(sb.node.getAttribute("width"));
+          const rh = parseFloat(sb.node.getAttribute("height"));
+          if (Date.now() >= inTreeDisabledUntil && svg && [rx, ry, rw, rh].every(Number.isFinite)) {
+            /* IN-TREE bar — Grammarly's actual trick. The rect lives in the
+               same SVG as Google's text geometry, so the COMPOSITOR scrolls
+               it with the text: zero lag with no script in the loop. (The
+               v2.6 "never inject into kix's DOM" lesson was about the tile
+               DIVS, which kix wipes; this SVG layer exists FOR extensions —
+               annotate_canvas_by_ext — and is where Grammarly draws.) */
+            const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            bar.setAttribute("data-tracely-bar", "");
+            bar.setAttribute("aria-hidden", "true");
+            bar.setAttribute("x", String(rx + sb.f0 * rw));
+            bar.setAttribute("y", String(ry + rh - 2));
+            bar.setAttribute("width", String(Math.max(2, (sb.f1 - sb.f0) * rw)));
+            bar.setAttribute("height", "2.5");
+            bar.setAttribute("rx", "1.25");
+            bar.setAttribute("fill", color);
+            bar.setAttribute("pointer-events", "none");
+            const tf = sb.node.getAttribute("transform");
+            if (tf) bar.setAttribute("transform", tf);
+            // Sibling of the matched rect, not the SVG root: inherits the
+            // exact ancestor transform chain (a <g transform> would otherwise
+            // silently offset every bar).
+            sb.node.parentNode.insertBefore(bar, sb.node.nextSibling);
+            inTree++;
+            docsBars.push({
+              hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1,
+              // size feeds hover-band math and popover placement in CSS px —
+              // rh is SVG user units, so measure through the transform chain.
+              size: sb.node.getBoundingClientRect().height || rh || 18,
+              // Baked source geometry: the observer diffs these to follow
+              // in-place re-coordination of the same node.
+              gx: rx, gy: ry, gw: rw, gh: rh, tf: tf || "",
+              inSvg: true,
+            });
+          } else {
+            // Unusable geometry (or Docs proved hostile to in-tree bars):
+            // fixed-layer div glued per-frame — laggy but never absent.
+            const bar = document.createElement("div");
+            Object.assign(bar.style, {
+              position: "fixed", left: "0", top: "0",
+              width: "0px", height: "3px",
+              background: color, borderRadius: "2px", pointerEvents: "none",
+              willChange: "transform",
+            });
+            marksLayer.appendChild(bar);
+            glued++;
+            docsBars.push({ hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1, size: 18 });
+          }
         }
-        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
+        queueMicrotask(() => { selfMutating = false; });
+        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) — ${inTree} in-tree, ${glued} glued — across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
         glueFrame();
         startGlue();
       } catch (err) {
@@ -1118,9 +1185,17 @@
         hoverRafBusy = false;
         // Bars are DOM-anchored now — read their LIVE viewport rects, which
         // are correct mid-scroll by construction.
+        // In-tree bars are PAINT-clipped by the editor natively but their
+        // client rects still exist off-viewport — clip the hit-test too, or
+        // scrolled-away bars open phantom popovers over Docs chrome.
+        if (!docsScroller || !docsScroller.isConnected) {
+          docsScroller = document.querySelector(".kix-appview-editor");
+        }
+        const clip = docsScroller ? docsScroller.getBoundingClientRect() : null;
         const hitOf = (b) => {
-          if (!b.el.isConnected || b.el.style.opacity === "0") return null;
+          if (!b.el.isConnected || b.el.style.opacity === "0" || b.el.style.display === "none") return null;
           const r = b.el.getBoundingClientRect();
+          if (clip && (r.bottom < clip.top + 2 || r.top > clip.bottom - 2 || r.left > clip.right || r.right < clip.left)) return null;
           return x >= r.left - 2 && x <= r.right + 2 && y >= r.top - b.size && y <= r.bottom + 3
             ? { left: r.left, top: r.top, bottom: r.bottom, size: b.size }
             : null;
@@ -1179,7 +1254,76 @@
       if (!target || target === annoObsTarget) return;
       if (annoObs) annoObs.disconnect();
       annoObsTarget = target;
-      annoObs = new MutationObserver(() => {
+      annoObs = new MutationObserver((records) => {
+        // Our own bars live INSIDE the observed subtree now — filter out our
+        // writes or every draw would trigger a re-locate loop.
+        const oursEl = (n) => n.nodeType === 1 && n.hasAttribute("data-tracely-bar");
+        let external = false;
+        const removedOurs = [];
+        for (const rec of records) {
+          if (rec.type === "attributes") {
+            if (oursEl(rec.target)) continue; // our geometry-follow writes below
+            external = true;
+            continue;
+          }
+          const added = [...rec.addedNodes], removed = [...rec.removedNodes];
+          // Insertion-only all-ours records are ALWAYS our own draw — nothing
+          // else creates data-tracely-bar elements. (Gating this on
+          // selfMutating is a microtask-ordering trap: a clear that touched
+          // nothing observable queues its reset BEFORE the first insertion
+          // enqueues the observer callback, so the flag is already false.)
+          if (removed.length === 0 && added.length > 0 && added.every(oursEl)) continue;
+          if (selfMutating && added.every(oursEl) && removed.every(oursEl)) continue; // our clear pass
+          for (const n of removed) if (oursEl(n)) removedOurs.push(n);
+          external = true;
+        }
+        if (!external) return;
+        /* Hostility check — batch-scoped and precise: a strike only when Docs
+           deleted OUR bar while the annotation node it belongs to is still
+           connected. Benign tile teardown (even one removeChild per record, à
+           la Closure) takes the text rects down too, so it never strikes;
+           targeted sanitization of foreign children does. Retry first —
+           re-injection is one locate — and latch to the glued layer on 4
+           strikes in 10s, with a doubling cooldown instead of forever. */
+        if (removedOurs.length && Date.now() >= inTreeDisabledUntil) {
+          const targeted = removedOurs.some((el) => docsBars.find((b) => b.el === el)?.node?.isConnected);
+          if (targeted) {
+            const now = Date.now();
+            hostileStrikes = hostileStrikes.filter((t) => now - t < 10_000);
+            hostileStrikes.push(now);
+            if (hostileStrikes.length >= 4) {
+              inTreeDisabledUntil = now + inTreeCooldown;
+              inTreeCooldown = Math.min(inTreeCooldown * 2, 900_000);
+              hostileStrikes = [];
+              console.warn(`[tracely] Docs keeps deleting in-tree bars — glued fallback for ${Math.round((inTreeDisabledUntil - now) / 1000)}s`);
+            }
+          }
+        }
+        /* Same-microtask maintenance: observer callbacks run BEFORE the next
+           paint, so bars are corrected before a wrong frame can ever hit the
+           screen. Recycled binding → hide until re-match; re-coordinated
+           geometry/transform on the SAME text → follow it in place. */
+        for (const b of docsBars) {
+          if (!b.node || !b.inSvg) continue;
+          if (!b.el.isConnected || !b.node.isConnected || b.node.getAttribute("aria-label") !== b.raw) {
+            b.el.style.display = "none";
+            continue;
+          }
+          const rx = parseFloat(b.node.getAttribute("x"));
+          const ry = parseFloat(b.node.getAttribute("y"));
+          const rw = parseFloat(b.node.getAttribute("width"));
+          const rh = parseFloat(b.node.getAttribute("height"));
+          const tf = b.node.getAttribute("transform") || "";
+          if (![rx, ry, rw, rh].every(Number.isFinite)) { b.el.style.display = "none"; continue; }
+          if (rx !== b.gx || ry !== b.gy || rw !== b.gw || rh !== b.gh || tf !== b.tf) {
+            b.gx = rx; b.gy = ry; b.gw = rw; b.gh = rh; b.tf = tf;
+            b.el.setAttribute("x", String(rx + b.f0 * rw));
+            b.el.setAttribute("y", String(ry + rh - 2));
+            b.el.setAttribute("width", String(Math.max(2, (b.f1 - b.f0) * rw)));
+            if (tf) b.el.setAttribute("transform", tf); else b.el.removeAttribute("transform");
+            b.size = b.node.getBoundingClientRect().height || b.size;
+          }
+        }
         if (annoRafPending) return;
         annoRafPending = true;
         // Coalesce a mutation burst into one re-match, aligned to the frame.
@@ -1189,7 +1333,7 @@
       // subtree — the observer can never feed back on our own writes.
       annoObs.observe(target, {
         subtree: true, childList: true,
-        attributes: true, attributeFilter: ["aria-label", "x", "y", "width", "height"],
+        attributes: true, attributeFilter: ["aria-label", "x", "y", "width", "height", "transform"],
       });
       console.debug("[tracely] annotation observer armed");
     }
