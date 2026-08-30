@@ -33,7 +33,21 @@ import {
 } from '../components/icons'
 import { tracelyApi } from '../lib/api'
 import { useSetGradeLevel } from '../lib/gradeLevel'
+import { usePlan } from '../lib/plan'
 import { GRADE_LEVELS, gradeLevelLabel } from '@shared/gradeLevel'
+import {
+  MODEL_TIERS,
+  MODEL_TIER_DESCRIPTION,
+  MODEL_TIER_LABEL,
+  MODEL_TIER_REQUIRES,
+  PLAN_INCLUDES,
+  PLAN_LABEL,
+  PLAN_PRICE,
+  UPGRADE_URL,
+  modelTierUnlocked,
+  resolveModelTier,
+  type ModelTier
+} from '@shared/plan'
 import { applyTheme } from '../lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize } from '../lib/appearance'
 import type { Tab } from '../App'
@@ -111,6 +125,10 @@ function HotkeyField({
 // finished, because none of them had anything behind them: no notification
 // code, no OAuth provider, no payments. If any of that is ever built, add the
 // section back with the feature, not before it.
+//
+// Billing is the first one to come back on those terms: three plans now exist,
+// the app reads which one the account is on, and the model tier is gated
+// against it. The other three still have nothing behind them.
 type Section =
   | 'profile'
   | 'appearance'
@@ -144,6 +162,7 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
   // directly. Without this, Home's average grade kept the old letter until the
   // app was restarted.
   const setGradingLevel = useSetGradeLevel()
+  const plan = usePlan()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -768,6 +787,31 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                     onChange={(e) => void save({ autoCritiqueCited: e.target.checked })}
                   />
                 </label>
+                {/*
+                  Which model does the work. The select shows the tier that
+                  will actually RUN — resolveModelTier, the same function the
+                  main process clamps with before every relay call — so a
+                  `thorough` row left behind by a lapsed subscription reads as
+                  Fast here rather than naming a model this account is not
+                  getting. The tiers above the plan stay in the list, disabled
+                  and labelled with what they cost; removing them would hide
+                  that there is anything to upgrade to.
+                */}
+                <SettingsField label="Model">
+                  <select
+                    value={resolveModelTier(settings.modelTier, plan)}
+                    onChange={(e) => void save({ modelTier: e.target.value as ModelTier })}
+                  >
+                    {MODEL_TIERS.map((tier) => (
+                      <option key={tier} value={tier} disabled={!modelTierUnlocked(tier, plan)}>
+                        {MODEL_TIER_LABEL[tier]}
+                        {modelTierUnlocked(tier, plan)
+                          ? ''
+                          : ` — ${PLAN_LABEL[MODEL_TIER_REQUIRES[tier]]} plan`}
+                      </option>
+                    ))}
+                  </select>
+                </SettingsField>
                 <SettingsField label={`Claim sensitivity — ${Math.round(settings.claimSensitivity * 100)}%`}>
                   <input
                     type="range"
@@ -789,6 +833,11 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
                 A lower sensitivity flags more sentences, including borderline ones. Screen Watch underlines
                 passively, without you asking about any one sentence, so over-flagging is more annoying here than
                 in a session you started yourself.
+              </p>
+              <p className="muted settings-app-note">
+                Checks, critique and grading run on the {MODEL_TIER_LABEL[resolveModelTier(settings.modelTier, plan)].toLowerCase()} model
+                — {MODEL_TIER_DESCRIPTION[resolveModelTier(settings.modelTier, plan)].toLowerCase()} Tiers your
+                plan does not include are listed but cannot be chosen; Billing says what unlocks them.
               </p>
             </div>
           ) : null}
@@ -843,19 +892,57 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
             />
           ) : null}
 
+          {/*
+            The one of those four frames that now has a feature behind it, so
+            it is a real panel rather than a SettingsUnavailable — the rule at
+            the top of this file is to add the section back WITH the feature.
+            What it still does not have is payments: the checkout, the card and
+            the invoices all live on jointracely.com, so this reads the plan and
+            hands off to the browser rather than reproducing the frame's payment
+            method and billing-history boxes over nothing.
+          */}
           {section === 'billing' ? (
-            <SettingsUnavailable
-              key="billing"
-              title="Billing"
-              description="Manage your plan and payment method."
-              note="Tracely has no plans, no payments and no invoices. Nothing on this screen is charged for and no card is stored anywhere."
-              fields={[
-                { label: 'Plan' },
-                { label: 'Next invoice' },
-                { label: 'Payment method', full: true },
-                { label: 'Billing history', full: true }
-              ]}
-            />
+            <div key="billing" className="settings-panel-content">
+              <div className="settings-panel-header">
+                <h3>Billing</h3>
+                <p>Your plan, and what it unlocks.</p>
+              </div>
+              <div className="settings-plan-card">
+                <div className="settings-plan-head">
+                  <div>
+                    <div className="settings-plan-name">{PLAN_LABEL[plan]}</div>
+                    <div className="settings-plan-price">{PLAN_PRICE[plan]}</div>
+                  </div>
+                  <span className="settings-plan-badge">Current plan</span>
+                </div>
+                <ul className="settings-plan-includes">
+                  {PLAN_INCLUDES[plan].map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+              {plan === 'free' ? (
+                <div className="settings-plan-upgrade">
+                  <div>
+                    <div className="settings-toggle-row-title">Upgrade</div>
+                    <div className="settings-toggle-row-subtitle">
+                      Student is {PLAN_PRICE.student} for unlimited checks and sources and a smarter model. Pro is{' '}
+                      {PLAN_PRICE.pro} and adds the most thorough one.
+                    </div>
+                  </div>
+                  {/* The user's own browser, never a window of ours — the same
+                      route every other outbound link in this app takes. */}
+                  <Button variant="primary" onClick={() => void tracelyApi.openExternal(UPGRADE_URL)}>
+                    See plans
+                  </Button>
+                </div>
+              ) : null}
+              <p className="muted settings-app-note">
+                Plans are bought and cancelled on jointracely.com. No card is stored in this app and nothing on
+                this screen charges you. A change made there reaches this window the next time your session
+                refreshes, or immediately if you sign out and back in.
+              </p>
+            </div>
           ) : null}
 
           {section === 'privacy' ? (
@@ -900,12 +987,15 @@ export default function SettingsView({ onNavigate }: { onNavigate: (tab: Tab) =>
             Notifications, Security, Integrations and Billing were four static
             Figma mockups: hardcoded text, selects bound to local state nothing
             ever read, and "Save changes" buttons with no onClick at all. There
-            is no notification code, no OAuth provider and no payments code
-            anywhere in this repo, so none of them could have done anything.
+            was no notification code, no OAuth provider and no plans anywhere in
+            this repo, so none of them could have done anything.
 
             Each was also rendered TWICE — once in a keyed <div>, then again
             byte-identically in a fragment, both testing the same `section` —
             so selecting Billing painted the panel twice with two dead buttons.
+
+            Billing left that list when the three plans became real. The other
+            three have not.
           */}
 
           {error ? <p className="error-text">{error}</p> : null}

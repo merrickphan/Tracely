@@ -1,4 +1,5 @@
 import { getAccessToken } from './identity'
+import { modelTierForCall } from './modelTier'
 
 // RELAY_URL/RELAY_TOKEN are inlined at build time by electron.vite.config.ts
 // (see the `define` block) — they are not read from user-editable config, so
@@ -72,6 +73,19 @@ async function requestOnce<T>(endpoint: Parameters<typeof callRelay>[0], body: u
   // what is actually wrong.
   const token = await getAccessToken()
   if (token) headers.Authorization = `Bearer ${token}`
+
+  // How much model this account has paid for. Resolved per request, next to the
+  // token and for the same reason: both are properties of the signed-in user at
+  // the moment of the call, and a plan that changed since launch has to reach
+  // the next call rather than the next restart.
+  //
+  // A HEADER rather than a body field, because the body is an endpoint's own
+  // schema — seven of them, validated relay-side — and widening every one of
+  // those to carry a client concern is how a request starts being rejected for
+  // saying something true. The relay maps the tier onto a model; it remains the
+  // authority on what it is willing to spend, and re-derives the plan from the
+  // access token above rather than believing this header.
+  headers['x-tracely-model-tier'] = await modelTierForCall()
 
   const response = await fetch(`${__RELAY_URL__}/api/${endpoint}`, {
     method: 'POST',

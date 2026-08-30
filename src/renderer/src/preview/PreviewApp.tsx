@@ -161,6 +161,13 @@ export default function PreviewApp(): JSX.Element {
               <option value="notConfigured">Auth not configured</option>
             </select>
           </Field>
+          <Field label="Plan">
+            <select value={scenario.plan} onChange={(e) => update('plan', e.target.value as Scenario['plan'])}>
+              <option value="free">Free</option>
+              <option value="student">Student</option>
+              <option value="pro">Pro</option>
+            </select>
+          </Field>
           <Field label="Structure">
             <select
               value={scenario.structure}

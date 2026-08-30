@@ -685,19 +685,6 @@ textarea:disabled {
   border-radius: 12px;
 }
 
-.analyze-input-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.analyze-input .textarea,
-.analyze-input textarea {
-  max-width: 620px;
-}
-
 /* `.btn.analyze-cta`, not `.analyze-cta`. The button carries `btn btn-primary
    analyze-cta`, and `.btn-primary { font-size: 14px }` is declared later in
    this file at the same specificity — so it won, and the 16px the design asks
@@ -781,133 +768,27 @@ textarea:disabled {
   color: #000;
 }
 
-.analyze-input {
-  position: static;
-  width: 100%;
-  /* The scroller, and the opt-out that makes the wheel work over it. Was
-     `min-height: 100%` inside a scrolling card; now it IS the scrolling box, so
-     the back button above it stays put instead of scrolling out of the card
-     when focusing the textarea scrolls it into view.
-     `margin-top` + the matching height reduction leave a 12px strip of
-     `.analyze-view` exposed above this no-drag box — otherwise this element
-     covers the card edge-to-edge and the whole "Start a new session" screen
-     has no draggable area left at all (unlike `.home-canvas`, whose children
-     are small absolutely-positioned icons that don't blanket the card). */
-  height: calc(100% - 12px);
-  margin-top: 12px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-app-region: no-drag;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Figma 58:182 centres the block vertically (`justify-center`, `pb-16`), and
-     the frame bears that out: the heading starts 108px down and the button ends
-     124px up. This was 88px of top padding against 48px of bottom with
-     `flex-start`, which is the "margins are not equal, it's shifted down"
-     report — 40px of the difference was literally in the padding.
-     `safe center` rather than plain `center`: this box scrolls, and a centred
-     flex column whose content is taller than the box pushes the first item off
-     the TOP edge, where overflow is unreachable. `safe` falls back to
-     flex-start exactly in that case, which is when the results list is long. */
-  justify-content: safe center;
-  text-align: center;
-  /* The extra 16px at the bottom is the frame's own `pb-16`: it leaves the
-     block sitting a touch high, which is how body copy is normally set —
-     optically centred rather than measured. */
-  padding: 16px 64px 32px;
-  /* Reserve the scrollbar in both gutters. Without it, everything centred here
-     jumps sideways by the scrollbar's width the moment a claims list makes the
-     box overflow — the other half of "kind of off-center", and the half that
-     only appears after you've run something. */
-  scrollbar-gutter: stable both-edges;
+/* Dark mode for the two survivors above. `.analyze-view`'s only render site is
+   the full-window loading placeholder (AnalyzeView falls back to an empty
+   `.analyze-view` div while a document opens), so it takes --bg rather than
+   --surface: matching the window ground is what stops document-open flashing a
+   white frame in dark mode. `.analyze-back` is live in the Library view.
+   BOTH dark paths, like every dark rule in this file: the explicit Settings
+   toggle and the System-follows-OS fallback. Light mode is untouched — these
+   only ever match a dark root. */
+:root[data-theme='dark'] .analyze-view {
+  background: var(--bg);
+  border-color: var(--border-strong);
 }
-
-.analyze-heading {
-  /* Figma 58:184: Inter Medium, 32px, 44px line box, 4px gap under. Was 26px. */
-  font-family: var(--font-display);
-  font-size: 32px;
-  line-height: 44px;
-  font-weight: 500;
-  color: #000;
-  margin: 0 0 4px;
-}
-
-.analyze-subheading {
-  /* Figma 58:187: 15px / 19.5px, rgba(0,0,0,0.45). Was 13px. */
-  font-size: 15px;
-  line-height: 19.5px;
-  color: rgba(0, 0, 0, 0.45);
-  margin: 0 0 32px;
-}
-
-.source-tile-row {
-  /* One 304px tile, centred. The frame (58:189) draws a 620px row of two, but
-     the second was Paste text; keeping the 620px box would leave the survivor
-     pinned to the left half with a hole beside it, so the row is now as wide as
-     its tile and the column's `align-items: center` centres it. */
-  display: grid;
-  grid-template-columns: 304px;
-  justify-content: center;
-  margin-bottom: 32px;
-  max-width: 100%;
-}
-
-.source-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  height: 104px;
-  /* Figma 58:199: py-20 and no horizontal padding. */
-  padding: 20px 0;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.02);
-  color: var(--muted-2);
-  font-size: 14px;
-  font-weight: 400;
-  cursor: pointer;
-  /* .analyze-view is the frameless window's drag region. Mark the whole
-     control subtree explicitly so Electron never treats a click on the icon
-     or label as an attempt to drag the window. */
-  -webkit-app-region: no-drag;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease,
-    transform 0.08s ease;
-}
-
-.source-tile * {
-  -webkit-app-region: no-drag;
-  pointer-events: none;
-}
-
-.source-tile:hover {
-  border-color: var(--accent);
-}
-
-.source-tile:active {
-  transform: scale(0.98);
-}
-
-.source-tile:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.source-tile.active {
-  border-color: var(--accent);
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.source-tile svg {
-  opacity: 0.85;
+:root[data-theme='dark'] .analyze-back { color: var(--muted-2); }
+:root[data-theme='dark'] .analyze-back:hover { color: var(--text); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .analyze-view {
+    background: var(--bg);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .analyze-back { color: var(--muted-2); }
+  :root:not([data-theme='light']) .analyze-back:hover { color: var(--text); }
 }
 
 .analyze-feedback {
@@ -958,17 +839,6 @@ textarea:disabled {
 /* "Analyzing your source" step-cycle panel — shown while a real detectClaims
    call is in flight. Steps advance on a fixed timer for perceived progress;
    there is no real backend sub-progress to bind to for a single request. */
-.analyzing-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  padding: 32px 20px;
-  gap: 0;
-}
-
 .analyzing-spinner-ring {
   width: 72px;
   height: 72px;
@@ -977,20 +847,6 @@ textarea:disabled {
   border-top-color: var(--accent);
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
-}
-
-.analyzing-panel h3 {
-  margin: 0 0 4px;
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 500;
-  color: #000;
-}
-
-.analyzing-panel p {
-  margin: 0 0 24px;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .analyzing-progress-track {
@@ -1015,45 +871,6 @@ textarea:disabled {
   font-size: 12px;
   font-weight: 600;
   margin: 0 0 24px;
-}
-
-.analyzing-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
-  width: 100%;
-  max-width: 400px;
-}
-
-.analyzing-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 400;
-  color: rgba(0, 0, 0, 0.5);
-}
-
-.analyzing-step.done {
-  color: rgba(0, 0, 0, 0.75);
-}
-
-.analyzing-step.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.analyzing-step-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(0, 0, 0, 0.15);
-  background: rgba(0, 0, 0, 0.03);
-  flex-shrink: 0;
 }
 
 /* "Untitled Doc" editor (Analyze tab, Document source) — a real writing
@@ -1268,43 +1085,6 @@ textarea:disabled {
 .docedit-align-wrap {
   position: relative;
   flex-shrink: 0;
-}
-
-.docedit-align-menu {
-  position: absolute;
-  top: 34px;
-  left: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  padding: 4px;
-  min-width: 90px;
-}
-
-.docedit-align-menu button {
-  border: none;
-  background: transparent;
-  text-align: left;
-  font-size: 12px;
-  color: #333;
-  padding: 6px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-
-.docedit-align-menu button:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.docedit-align-menu button.active {
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-weight: 600;
 }
 
 /* Replaced by `.docedit-tools`, which takes the free space AND holds the
@@ -1992,16 +1772,6 @@ textarea:disabled {
   overflow-y: auto;
   padding: 16px 24px;
   -webkit-app-region: no-drag;
-}
-
-.analyzing-step.active .analyzing-step-dot {
-  border: 2px solid var(--accent);
-  background: rgba(244, 123, 32, 0.12);
-}
-
-.analyzing-step.done .analyzing-step-dot {
-  border: none;
-  background: var(--accent);
 }
 
 .btn {
@@ -3245,8 +3015,6 @@ textarea:disabled {
    Drawn as an SVG rather than a PNG like the other two only because no such
    asset exists; size and opacity match so the row reads as one set. */
 
-.
-
 /* Library — the reader for what "Save to Library" writes. Uses the same card
    shell as the Analyze view: rounded, bordered, its own shadow, and the card
    is the drag handle while the body inside is the scroller (Chromium blocks
@@ -3458,170 +3226,101 @@ textarea:disabled {
   min-width: 0;
 }
 
-/* Home — third quick link, matching the Settings/New Session pair above it.
-   Drawn as an SVG rather than a PNG like the other two only because no such
-   asset exists; size and opacity match so the row reads as one set. */
-
-.
-
-/* Library — the reader for what "Save to Library" writes. Uses the same card
-   shell as the Analyze view: rounded, bordered, its own shadow, and the card
-   is the drag handle while the body inside is the scroller (Chromium blocks
-   wheel scroll inside a drag region — see .analyze-view). */
-.library-view {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  background: var(--surface);
+/* Settings > Billing — the plan the account is on, and the way up from it.
+   Tokens only: this panel is read in both themes and a card built out of
+   literal greys is the thing the dark-mode pass had to go back and undo. */
+.settings-plan-card {
+  padding: 16px;
   border: 1px solid var(--border-strong);
-  border-radius: 28px;
-  box-shadow: -13px 13px 4px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-}
-
-.library-body {
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-app-region: no-drag;
-  padding: 64px 56px 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.library-header h2 {
-  font-family: var(--font-display);
-  font-size: 26px;
-  margin-bottom: 4px;
-}
-
-.library-header p {
-  margin: 0;
-  font-size: 13px;
-}
-
-.library-search {
-  width: 100%;
-  padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-2);
+  margin-bottom: 12px;
+}
+
+.settings-plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-plan-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
   color: var(--text);
-  font-size: 13.5px;
 }
 
-.library-empty {
-  margin: 8px 0 0;
-  line-height: 1.6;
+.settings-plan-price {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
 }
 
-.library-row {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px 18px;
+/* Says which plan is being described, not that anything is wrong — so it takes
+   the accent wash rather than a status colour. */
+.settings-plan-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.settings-plan-includes {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: var(--surface);
-}
-
-.library-row-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.library-row-title {
-  font-size: 14.5px;
-  font-weight: 600;
-  line-height: 1.4;
-  /* A flex child defaults to its content width, so a long unbroken title
-     would push the saved-on date off the card instead of wrapping. */
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.library-row-title a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.library-row-title a:hover {
-  text-decoration: underline;
-}
-
-.library-row-saved {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  color: var(--label);
-  font-variant-numeric: tabular-nums;
-}
-
-.library-row-meta {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.library-row-oa {
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--score-good-wash);
-  color: var(--score-good);
-  white-space: nowrap;
-}
-
-.library-row-notes {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.library-row-notes-edit textarea {
-  width: 100%;
-  min-height: 72px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.55;
-  resize: vertical;
-}
-
-.library-row-tags {
-  display: flex;
-  flex-wrap: wrap;
   gap: 6px;
 }
 
-.library-row-tag {
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  background: var(--accent-wash);
-  color: var(--accent);
-  border: 1px solid var(--accent-border);
+.settings-plan-includes li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 12.5px;
+  color: var(--muted-2);
 }
 
-.library-row-actions {
+.settings-plan-includes li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Same row shape as Privacy's, without borrowing a class called danger. */
+.settings-plan-upgrade {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  margin-bottom: 12px;
+}
+
+.settings-plan-upgrade > div:first-child {
+  min-width: 0;
+}
+
+/* The panel is 620px wide and the sentence beside it is two lines long, so
+   without this the button wraps to "See / plans". */
+.settings-plan-upgrade .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Document editor — autosave indicator. Deliberately quiet: it confirms the
@@ -5055,6 +4754,40 @@ textarea:disabled {
   cursor: default;
 }
 
+/* Dark for the toolbar menus, BOTH ways dark is reachable — the explicit
+   Settings toggle and System on a dark OS. A rule on only one path is a known
+   bug class in this file (see the Documents-family note). The item rule is
+   `:not(.active)` because the :root prefix would otherwise out-specify
+   `.toolbar-menu-item.active` and flatten the accent highlight. */
+:root[data-theme='dark'] .toolbar-menu {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+:root[data-theme='dark'] .toolbar-menu-item:not(.active) {
+  color: var(--text);
+}
+:root[data-theme='dark'] .toolbar-menu-item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+:root[data-theme='dark'] .toolbar-menu-item:disabled {
+  color: var(--label);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .toolbar-menu {
+    background: var(--surface);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .toolbar-menu-item:not(.active) {
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .toolbar-menu-item:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+  :root:not([data-theme='light']) .toolbar-menu-item:disabled {
+    color: var(--label);
+  }
+}
+
 /* Each trigger is the positioning context for its own menu. */
 .docedit-menu-wrap {
   position: relative;
@@ -5073,66 +4806,6 @@ textarea:disabled {
   font: inherit;
   color: inherit;
   cursor: pointer;
-}
-
-/* ---- Analyzing steps list (Figma 127:40) ------------------------------
-   620px block under the progress bar. Three states, all the design's: done is
-   a filled accent disc with a white check, active an accent ring with accent
-   text, pending a grey ring with grey text. */
-.analyzing-steps {
-  width: 100%;
-  max-width: 620px;
-  margin: 22px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: left;
-}
-
-.analyzing-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  line-height: 23px;
-}
-
-.analyzing-step-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.analyzing-step.is-done {
-  color: var(--text);
-}
-
-.analyzing-step.is-done .analyzing-step-mark {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-.analyzing-step.is-active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.analyzing-step.is-active .analyzing-step-mark {
-  border-color: var(--accent);
-}
-
-.analyzing-step.is-pending {
-  color: var(--muted);
 }
 
 /* Visually hidden, still announced. */
@@ -5357,21 +5030,46 @@ textarea:disabled {
   padding: 0 24px;
 }
 
-[data-theme='dark'] .docs-view {
+/* Dark for the Documents family, BOTH ways dark is reachable — an explicit
+   data-theme='dark' AND the system prefers-color-scheme fallback when the
+   setting is System. These rules covered only the explicit attribute for a
+   while, so Theme = System on a dark OS left this tab half light ("only some
+   parts actually change"). The login-canvas note above is the precedent:
+   a dark rule that covers one of the two paths is a bug waiting to be
+   re-reported. */
+:root[data-theme='dark'] .docs-view {
   background: var(--surface);
   border-color: var(--border-strong);
 }
-[data-theme='dark'] .docs-title,
-[data-theme='dark'] .docs-card-title {
+:root[data-theme='dark'] .docs-title,
+:root[data-theme='dark'] .docs-card-title {
   color: var(--text);
 }
-[data-theme='dark'] .docs-card,
-[data-theme='dark'] .docs-sort {
+:root[data-theme='dark'] .docs-card,
+:root[data-theme='dark'] .docs-sort {
   background: var(--surface);
   border-color: var(--border);
 }
-[data-theme='dark'] .docs-card-thumb {
+:root[data-theme='dark'] .docs-card-thumb {
   background: var(--surface-2, #202024);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .docs-view {
+    background: var(--surface);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .docs-title,
+  :root:not([data-theme='light']) .docs-card-title {
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .docs-card,
+  :root:not([data-theme='light']) .docs-sort {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  :root:not([data-theme='light']) .docs-card-thumb {
+    background: var(--surface-2, #202024);
+  }
 }
 
 /* The app's own minimize / maximize / close cluster is gone with
@@ -5451,16 +5149,78 @@ textarea:disabled {
   background: #fdecec;
 }
 
-[data-theme='dark'] .docs-card-menu,
-[data-theme='dark'] .docs-card-menu-popup {
+/* Both dark paths, same as the docs family block above. The :hover/.open
+   rules are new: the base hover sets background #fff, which outranked the
+   old dark rule by order — hovering the menu in dark mode flashed white. */
+:root[data-theme='dark'] .docs-card-menu,
+:root[data-theme='dark'] .docs-card-menu-popup {
   background: var(--surface);
   border-color: var(--border);
   color: var(--text);
+}
+:root[data-theme='dark'] .docs-card-menu:hover,
+:root[data-theme='dark'] .docs-card-menu.open {
+  background: var(--surface-2);
+  color: var(--text);
+}
+:root[data-theme='dark'] .docs-card-menu-delete:hover,
+:root[data-theme='dark'] .docs-card-menu-delete:focus-visible {
+  background: rgba(255, 92, 77, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .docs-card-menu,
+  :root:not([data-theme='light']) .docs-card-menu-popup {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .docs-card-menu:hover,
+  :root:not([data-theme='light']) .docs-card-menu.open {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .docs-card-menu-delete:hover,
+  :root:not([data-theme='light']) .docs-card-menu-delete:focus-visible {
+    background: rgba(255, 92, 77, 0.14);
+  }
 }
 
 /* The thumbnail is the positioning context for both the grade chip and this. */
 .docs-card-thumb {
   position: relative;
+}
+
+/* The grade chip's two palettes, moved here from inline styles in
+   DocumentsView.tsx (CHIP_GREEN / CHIP_AMBER) — CSS cannot reach an inline
+   style, so the chips were the one part of this view dark could not touch.
+   Light values are the frame's own, identical to the constants they replace.
+   Dark takes the app's score tokens (wash background, bright text), covering
+   BOTH dark paths like every block in this family. */
+.docs-card-chip.tone-good {
+  background: #e9f6ec;
+  color: #168449;
+}
+.docs-card-chip.tone-mid {
+  background: #fef5e9;
+  color: #cb5c19;
+}
+:root[data-theme='dark'] .docs-card-chip.tone-good {
+  background: var(--score-good-wash);
+  color: var(--score-good);
+}
+:root[data-theme='dark'] .docs-card-chip.tone-mid {
+  background: var(--score-mid-wash);
+  color: var(--score-mid);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .docs-card-chip.tone-good {
+    background: var(--score-good-wash);
+    color: var(--score-good);
+  }
+  :root:not([data-theme='light']) .docs-card-chip.tone-mid {
+    background: var(--score-mid-wash);
+    color: var(--score-mid);
+  }
 }
 
 /* Prose marks — grammar, mechanics and wordiness. See ProseMarkLayer for why
@@ -5757,12 +5517,21 @@ textarea:disabled {
 }
 
 /* Dark mode keeps the hue and moves the lightness — the green has to stay
-   legible against a dark card without becoming the brightest thing on it. */
+   legible against a dark card without becoming the brightest thing on it.
+   BOTH dark paths, like every dark rule in this file: the bare media query
+   this used to be missed the Settings toggle (data-theme='dark' under a light
+   OS) and wrongly fired under a dark OS with the toggle set to light. */
+:root[data-theme='dark'] .argscore-problem-rewrite {
+  background: rgba(52, 199, 123, 0.12);
+}
+:root[data-theme='dark'] .argscore-problem-rewrite-text {
+  color: #7fe0ae;
+}
 @media (prefers-color-scheme: dark) {
-  .argscore-problem-rewrite {
+  :root:not([data-theme='light']) .argscore-problem-rewrite {
     background: rgba(52, 199, 123, 0.12);
   }
-  .argscore-problem-rewrite-text {
+  :root:not([data-theme='light']) .argscore-problem-rewrite-text {
     color: #7fe0ae;
   }
 }
@@ -5799,12 +5568,19 @@ textarea:disabled {
   display: block;
 }
 
+/* Still white in dark. Most favicons are drawn for a light page and a dark
+   tile puts dark-on-dark marks into an invisible box; a small white chip reads
+   as the site's own icon rather than as a light patch. Only the border-color
+   adapts, and on BOTH dark paths — the bare media query this used to be missed
+   the Settings toggle and also fired under a dark OS with the toggle set to
+   light. */
+:root[data-theme='dark'] .docmark-row-badge.has-icon,
+:root[data-theme='dark'] .argev-badge.has-icon {
+  border-color: rgba(255, 255, 255, 0.14);
+}
 @media (prefers-color-scheme: dark) {
-  /* Still white. Most favicons are drawn for a light page and a dark tile puts
-     dark-on-dark marks into an invisible box; a small white chip reads as the
-     site's own icon rather than as a light patch. */
-  .docmark-row-badge.has-icon,
-  .argev-badge.has-icon {
+  :root:not([data-theme='light']) .docmark-row-badge.has-icon,
+  :root:not([data-theme='light']) .argev-badge.has-icon {
     background: #fff;
     border-color: rgba(255, 255, 255, 0.14);
   }
@@ -5883,6 +5659,11 @@ textarea:disabled {
   --h-line: #d9dbe0;
   --h-accent-wash: #fef2e7;
   --h-foot: #6d6d6d;
+  /* The card ground and the strongest text, as vars rather than the literal
+     #fff / #000 they used to be, so the dark block at the end of this family
+     can re-derive them. Light is unchanged: these ARE those literals. */
+  --h-card: #ffffff;
+  --h-strong: #000000;
   /* The page's ground, sampled off the frame. Everything on Home is a white
      card floating on this; the screen was a flat white page, which is why the
      cards had to be outlined to be visible at all and still read as one
@@ -5974,7 +5755,7 @@ textarea:disabled {
   margin: 0 calc(var(--h-card-edge) - var(--h-gutter));
   padding: 34px 23px 22px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--h-card);
   box-shadow: 0 1px 2px rgba(16, 18, 22, 0.05);
 }
 
@@ -5996,7 +5777,7 @@ textarea:disabled {
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.2px;
-  color: #000;
+  color: var(--h-strong);
 }
 .home-brand img { width: 42px; height: 36px; object-fit: contain; }
 
@@ -6006,7 +5787,7 @@ textarea:disabled {
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.2px;
-  color: #000;
+  color: var(--h-strong);
   text-align: right;
 }
 
@@ -6027,7 +5808,7 @@ textarea:disabled {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.6px;
-  color: #000;
+  color: var(--h-strong);
 }
 
 /* Grey until Screen Watch is genuinely on: a green dot over "Tracely is off."
@@ -6079,7 +5860,7 @@ textarea:disabled {
   padding: 0 14px;
   border: 1px solid var(--h-card-line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--h-card);
 }
 .home-stat b { font-size: 22px; font-weight: 600; color: var(--h-ink); }
 .home-stat span { font-size: 10px; font-weight: 500; color: var(--h-muted); }
@@ -6106,7 +5887,7 @@ textarea:disabled {
   padding: 0 15px;
   border: 1px solid var(--h-card-line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--h-card);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -6138,7 +5919,7 @@ textarea:disabled {
   color: var(--h-muted);
 }
 .home-action.primary .home-action-icon {
-  background: #fff;
+  background: var(--h-card);
   color: var(--h-accent);
 }
 .home-action-icon svg { width: 17px; height: 17px; }
@@ -6209,7 +5990,7 @@ textarea:disabled {
   padding: 0;
   border: 1px solid var(--h-card-line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--h-card);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -6285,7 +6066,7 @@ textarea:disabled {
   padding: 13px;
   border: 1px solid var(--h-card-line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--h-card);
   font: inherit;
   cursor: pointer;
   box-sizing: border-box;
@@ -6365,7 +6146,7 @@ textarea:disabled {
   padding: 0 15px;
   border: 1px solid var(--h-line);
   border-radius: 17px;
-  background: #fff;
+  background: var(--h-card);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   font: inherit;
   font-size: 16px;
@@ -6402,6 +6183,108 @@ textarea:disabled {
   .home-brand { font-size: 26px; }
   .home-status { font-size: 17px; }
   .home-settings { font-size: 16px; }
+}
+
+/* Dark for the Home family, BOTH ways dark is reachable — an explicit
+   data-theme='dark' AND the system prefers-color-scheme fallback when the
+   setting is System, same as the Documents block. Home carries its own
+   `--h-*` palette (the frame's literal light values, see `.home`), so dark
+   re-derives each var from the app's dark tokens and every card, border and
+   line of text migrated onto the vars follows without per-element rules. */
+:root[data-theme='dark'] .home {
+  --h-ink: #f6f6f8;
+  --h-strong: #f6f6f8;
+  --h-muted: rgba(246, 246, 248, 0.66);
+  --h-subtle: rgba(255, 255, 255, 0.04);
+  --h-line: rgba(255, 255, 255, 0.18);
+  --h-card-line: rgba(255, 255, 255, 0.18);
+  --h-accent-wash: rgba(244, 123, 32, 0.16);
+  --h-foot: rgba(246, 246, 248, 0.62);
+  --h-page: #0b0b0d;
+  --h-card: #17171b;
+}
+/* The peach border reads as a glow on a dark card; the dark accent-border
+   token is the same family at dark strength. */
+:root[data-theme='dark'] .home-action.primary {
+  border-color: rgba(244, 123, 32, 0.3);
+}
+/* The settings pill is a filled light-grey control in the frame; on a dark
+   card the fill becomes a white wash so it still reads as a pill. */
+:root[data-theme='dark'] .home-settings {
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme='dark'] .home-settings:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+:root[data-theme='dark'] .home-resource:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+/* The grade chips are hardcoded light bg/fg pairs; in dark they take the
+   app's dark score tokens (wash background, bright text). */
+:root[data-theme='dark'] .home-doc-grade.tone-good {
+  background: var(--score-good-wash);
+  color: var(--score-good);
+}
+:root[data-theme='dark'] .home-doc-grade.tone-mid {
+  background: var(--score-mid-wash);
+  color: var(--score-mid);
+}
+:root[data-theme='dark'] .home-doc-grade.tone-low {
+  background: var(--score-low-wash);
+  color: var(--score-low);
+}
+/* `multiply` drops the artwork's white tile against a LIGHT ground; on a dark
+   ground it multiplies the whole image toward black. Dark shows the tile as a
+   deliberate rounded badge instead, slightly dimmed so it does not glare. */
+:root[data-theme='dark'] .home-tracer-badge {
+  mix-blend-mode: normal;
+  opacity: 0.9;
+  border-radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .home {
+    --h-ink: #f6f6f8;
+    --h-strong: #f6f6f8;
+    --h-muted: rgba(246, 246, 248, 0.66);
+    --h-subtle: rgba(255, 255, 255, 0.04);
+    --h-line: rgba(255, 255, 255, 0.18);
+    --h-card-line: rgba(255, 255, 255, 0.18);
+    --h-accent-wash: rgba(244, 123, 32, 0.16);
+    --h-foot: rgba(246, 246, 248, 0.62);
+    --h-page: #0b0b0d;
+    --h-card: #17171b;
+  }
+  :root:not([data-theme='light']) .home-action.primary {
+    border-color: rgba(244, 123, 32, 0.3);
+  }
+  :root:not([data-theme='light']) .home-settings {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  :root:not([data-theme='light']) .home-settings:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+  :root:not([data-theme='light']) .home-resource:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+  :root:not([data-theme='light']) .home-doc-grade.tone-good {
+    background: var(--score-good-wash);
+    color: var(--score-good);
+  }
+  :root:not([data-theme='light']) .home-doc-grade.tone-mid {
+    background: var(--score-mid-wash);
+    color: var(--score-mid);
+  }
+  :root:not([data-theme='light']) .home-doc-grade.tone-low {
+    background: var(--score-low-wash);
+    color: var(--score-low);
+  }
+  :root:not([data-theme='light']) .home-tracer-badge {
+    mix-blend-mode: normal;
+    opacity: 0.9;
+    border-radius: 10px;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -6530,6 +6413,73 @@ textarea:disabled {
   background: #fef2e7;
   font-size: 13.5px;
   color: #5a4636;
+}
+
+/* Dark for the guide reader, BOTH ways dark is reachable — the explicit
+   Settings toggle and System on a dark OS. The note keeps its warm cast: a 12%
+   accent wash over the card with the text moved toward #f9a050, the dark
+   counterpart of cream-and-brown. */
+:root[data-theme='dark'] .guide-card {
+  background: var(--surface);
+}
+:root[data-theme='dark'] .guide-head {
+  border-bottom-color: var(--border);
+}
+:root[data-theme='dark'] .guide-title {
+  color: var(--text);
+}
+:root[data-theme='dark'] .guide-close {
+  color: var(--muted);
+}
+:root[data-theme='dark'] .guide-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+:root[data-theme='dark'] .guide-standfirst {
+  color: var(--muted-2);
+}
+:root[data-theme='dark'] .guide-section h2 {
+  color: var(--text);
+}
+:root[data-theme='dark'] .guide-section p,
+:root[data-theme='dark'] .guide-section li {
+  color: var(--muted-2);
+}
+:root[data-theme='dark'] .guide-note {
+  background: rgba(244, 123, 32, 0.12);
+  color: #f9a050;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .guide-card {
+    background: var(--surface);
+  }
+  :root:not([data-theme='light']) .guide-head {
+    border-bottom-color: var(--border);
+  }
+  :root:not([data-theme='light']) .guide-title {
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .guide-close {
+    color: var(--muted);
+  }
+  :root:not([data-theme='light']) .guide-close:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .guide-standfirst {
+    color: var(--muted-2);
+  }
+  :root:not([data-theme='light']) .guide-section h2 {
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .guide-section p,
+  :root:not([data-theme='light']) .guide-section li {
+    color: var(--muted-2);
+  }
+  :root:not([data-theme='light']) .guide-note {
+    background: rgba(244, 123, 32, 0.12);
+    color: #f9a050;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -6846,6 +6796,129 @@ textarea:disabled {
 .tracer-rewrite-done { color: #168449; }
 .tracer-rewrite-gone { color: #6b7078; }
 
+/* Dark for the Tracer panel, BOTH ways dark is reachable — the explicit
+   Settings toggle and System on a dark OS. The header, send button and user
+   bubble already ride var(--accent) and are untouched; these cover the
+   hardcoded-light remainder. The log sits on var(--bg) so the surface bubbles
+   still read as cards against it — the same figure-ground as light's
+   #f5f6f8-under-#fff. The input keeps its own :focus rules here because the
+   :root-prefixed base rule would otherwise out-specify the light :focus and
+   lose the accent border. */
+:root[data-theme='dark'] .tracer-panel {
+  background: var(--bg);
+}
+:root[data-theme='dark'] .tracer-msg.from-tracer {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+:root[data-theme='dark'] .tracer-typing i {
+  background: var(--muted);
+}
+:root[data-theme='dark'] .tracer-composer {
+  border-top-color: var(--border);
+  background: var(--surface);
+}
+:root[data-theme='dark'] .tracer-composer input {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+:root[data-theme='dark'] .tracer-composer input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+:root[data-theme='dark'] .tracer-composer input::placeholder {
+  color: var(--label);
+}
+:root[data-theme='dark'] .tracer-rewrite {
+  border-color: rgba(244, 123, 32, 0.3);
+  background: var(--surface);
+}
+:root[data-theme='dark'] .tracer-rewrite b {
+  color: var(--accent-2);
+}
+:root[data-theme='dark'] .tracer-rewrite-was {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+:root[data-theme='dark'] .tracer-rewrite-now {
+  background: var(--surface-2);
+  border-color: rgba(244, 123, 32, 0.3);
+  color: var(--text);
+}
+:root[data-theme='dark'] .tracer-dismiss {
+  border-color: var(--border);
+  color: var(--muted);
+}
+:root[data-theme='dark'] .tracer-dismiss:hover {
+  background: var(--surface-2);
+}
+:root[data-theme='dark'] .tracer-rewrite-done {
+  color: var(--score-good);
+}
+:root[data-theme='dark'] .tracer-rewrite-gone {
+  color: var(--muted);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tracer-panel {
+    background: var(--bg);
+  }
+  :root:not([data-theme='light']) .tracer-msg.from-tracer {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .tracer-typing i {
+    background: var(--muted);
+  }
+  :root:not([data-theme='light']) .tracer-composer {
+    border-top-color: var(--border);
+    background: var(--surface);
+  }
+  :root:not([data-theme='light']) .tracer-composer input {
+    border-color: var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .tracer-composer input:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  :root:not([data-theme='light']) .tracer-composer input::placeholder {
+    color: var(--label);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite {
+    border-color: rgba(244, 123, 32, 0.3);
+    background: var(--surface);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite b {
+    color: var(--accent-2);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite-was {
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite-now {
+    background: var(--surface-2);
+    border-color: rgba(244, 123, 32, 0.3);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .tracer-dismiss {
+    border-color: var(--border);
+    color: var(--muted);
+  }
+  :root:not([data-theme='light']) .tracer-dismiss:hover {
+    background: var(--surface-2);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite-done {
+    color: var(--score-good);
+  }
+  :root:not([data-theme='light']) .tracer-rewrite-gone {
+    color: var(--muted);
+  }
+}
+
 /* The automatic evidence sweep's progress, beside the word count. Same corner,
    same weight — it is status, not an alert, and it disappears on its own. */
 .docedit-checking {
@@ -6891,6 +6964,133 @@ textarea:disabled {
   -webkit-app-region: no-drag;
 }
 .docedit-gradelevel:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Document editor dark mode ────────────────────────────────────────────
+ *
+ * The editor page is a transcription of a light Figma frame — #fff sheet,
+ * black-on-white chrome — and had no dark equivalents at all, so with a dark
+ * theme it stayed a white sheet while its tokenized children (savestate,
+ * checking pill, grade-level chip, results panel, error line) themed
+ * themselves for the dark card they believed they were on. These rules turn
+ * the sheet itself; those children then read correctly with no rule of their
+ * own.
+ *
+ * BOTH dark paths, like every dark rule in this file: the explicit Settings
+ * toggle AND the System-follows-OS fallback. Light mode is untouched — these
+ * selectors only ever match a dark root.
+ *
+ * Two deliberate shapes in here:
+ * - `.docedit-toolbtn` is guarded with `:not(.active)`. The dark base rule
+ *   outweighs `.docedit-toolbtn.active` (three simple selectors against two),
+ *   so an unguarded version would grey out the accent "bold is on" state.
+ * - The `.docedit-insights`/`.docedit-tracer`/`.docedit-back` hovers are
+ *   re-stated: the dark base rules outweigh the light `:hover` rules, so
+ *   without them hovering would do nothing in dark.
+ *
+ * `.docedit-view`'s border-color only matters if the card border ever comes
+ * back — the "Native window" override zeroes border-width on every top-level
+ * view — but it is kept in step with `.library-view`'s var(--border-strong)
+ * so a returning border would return correctly. */
+:root[data-theme='dark'] .docedit-view {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+:root[data-theme='dark'] .docedit-toolbar { border-bottom-color: var(--border); }
+:root[data-theme='dark'] .docedit-back { color: var(--muted-2); }
+:root[data-theme='dark'] .docedit-back:hover { color: var(--text); }
+:root[data-theme='dark'] .docedit-divider { background: var(--border); }
+:root[data-theme='dark'] .docedit-icon { color: var(--muted-2); }
+:root[data-theme='dark'] .docedit-name { color: var(--text); }
+:root[data-theme='dark'] .docedit-name::placeholder { color: var(--muted); }
+:root[data-theme='dark'] .docedit-toolbtn:not(.active) {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+:root[data-theme='dark'] .docedit-toolbtn:not(.active):hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme='dark'] .docedit-fontname,
+:root[data-theme='dark'] .docedit-fontsize {
+  background-color: var(--surface-2);
+  color: var(--muted);
+}
+:root[data-theme='dark'] .docedit-insights {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+:root[data-theme='dark'] .docedit-insights:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='dark'] .docedit-tracer {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--muted-2);
+}
+:root[data-theme='dark'] .docedit-tracer:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+:root[data-theme='dark'] .docedit-body { color: var(--text); }
+:root[data-theme='dark'] .docedit-body:empty::before { color: var(--muted); }
+:root[data-theme='dark'] .docedit-wordcount {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--muted-2);
+}
+:root[data-theme='dark'] .docedit-wordcount b { color: var(--text); }
+:root[data-theme='dark'] .docedit-results { border-top-color: var(--border); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .docedit-view {
+    background: var(--surface);
+    border-color: var(--border-strong);
+  }
+  :root:not([data-theme='light']) .docedit-toolbar { border-bottom-color: var(--border); }
+  :root:not([data-theme='light']) .docedit-back { color: var(--muted-2); }
+  :root:not([data-theme='light']) .docedit-back:hover { color: var(--text); }
+  :root:not([data-theme='light']) .docedit-divider { background: var(--border); }
+  :root:not([data-theme='light']) .docedit-icon { color: var(--muted-2); }
+  :root:not([data-theme='light']) .docedit-name { color: var(--text); }
+  :root:not([data-theme='light']) .docedit-name::placeholder { color: var(--muted); }
+  :root:not([data-theme='light']) .docedit-toolbtn:not(.active) {
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+  :root:not([data-theme='light']) .docedit-toolbtn:not(.active):hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  :root:not([data-theme='light']) .docedit-fontname,
+  :root:not([data-theme='light']) .docedit-fontsize {
+    background-color: var(--surface-2);
+    color: var(--muted);
+  }
+  :root:not([data-theme='light']) .docedit-insights {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  :root:not([data-theme='light']) .docedit-insights:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  :root:not([data-theme='light']) .docedit-tracer {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--muted-2);
+  }
+  :root:not([data-theme='light']) .docedit-tracer:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  :root:not([data-theme='light']) .docedit-body { color: var(--text); }
+  :root:not([data-theme='light']) .docedit-body:empty::before { color: var(--muted); }
+  :root:not([data-theme='light']) .docedit-wordcount {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--muted-2);
+  }
+  :root:not([data-theme='light']) .docedit-wordcount b { color: var(--text); }
+  :root:not([data-theme='light']) .docedit-results { border-top-color: var(--border); }
+}
 
 /* ── Home at a wide window ────────────────────────────────────────────────
  *
@@ -7258,4 +7458,168 @@ textarea:disabled {
 .home-doc,
 .home-resource {
   max-width: 460px;
+}
+
+/* -- Dark theme: Argument Score modal + grading loader ----------------------
+ *
+ * The rules above transcribe the Figma report frames with literal light inks
+ * (#1a1a1f titles, #f8f9f8 panels, the lavender finding cards). Fine in the
+ * light theme they were read from; in dark they were the half of "AI Insights"
+ * that never changed with the appearance setting. The shared Essay Grade panel
+ * itself is themed in TSX (see GradePalette in EssayGradeReport.tsx — it is
+ * inline styles because it also renders in the stylesheet-less overlay
+ * window); these overrides cover the modal chrome and sibling views AROUND it.
+ *
+ * BOTH dark paths, always: the explicit Settings override
+ * (`:root[data-theme='dark']`) and the system fallback
+ * (`prefers-color-scheme: dark` guarded by `:not([data-theme='light'])`).
+ * A rule on only one of them is a known bug class in this file. */
+:root[data-theme='dark'] .argscore-title { color: var(--text); }
+:root[data-theme='dark'] .gradeload-card { background: var(--surface); border-color: var(--border-strong); }
+:root[data-theme='dark'] .gradeload-title { color: var(--text); }
+:root[data-theme='dark'] .gradeload-sub { color: var(--muted); }
+:root[data-theme='dark'] .argscore-para-name { color: var(--text); }
+:root[data-theme='dark'] .argscore-bar-label { color: var(--muted-2); }
+:root[data-theme='dark'] .argscore-bar-pct { color: var(--text); }
+:root[data-theme='dark'] .argscore-bar-track { background: rgba(255, 255, 255, 0.14); }
+:root[data-theme='dark'] .argscore-btn.secondary { border-color: var(--border-strong); }
+:root[data-theme='dark'] .argscore-grade-line { color: var(--muted-2); }
+:root[data-theme='dark'] .argscore-para { background: var(--surface-2); }
+:root[data-theme='dark'] .argscore-boundary-row { background: var(--surface); }
+/* The lavender finding cards keep their hue and drop their lightness — a
+   violet wash on the dark surface, with the title lifted to violet-300. */
+:root[data-theme='dark'] .argscore-flow,
+:root[data-theme='dark'] .argscore-problem {
+  border-color: rgba(196, 181, 253, 0.28);
+  background: rgba(139, 92, 246, 0.14);
+}
+:root[data-theme='dark'] .argscore-problem-title { color: #c4b5fd; }
+:root[data-theme='dark'] .argscore-problem-body { color: var(--text); }
+:root[data-theme='dark'] .argscore-para-index { background: rgba(255, 255, 255, 0.1); color: var(--muted-2); }
+:root[data-theme='dark'] .argscore-checkall-row[data-paid='true'] .argscore-checkall { background: var(--surface); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .argscore-title { color: var(--text); }
+  :root:not([data-theme='light']) .gradeload-card { background: var(--surface); border-color: var(--border-strong); }
+  :root:not([data-theme='light']) .gradeload-title { color: var(--text); }
+  :root:not([data-theme='light']) .gradeload-sub { color: var(--muted); }
+  :root:not([data-theme='light']) .argscore-para-name { color: var(--text); }
+  :root:not([data-theme='light']) .argscore-bar-label { color: var(--muted-2); }
+  :root:not([data-theme='light']) .argscore-bar-pct { color: var(--text); }
+  :root:not([data-theme='light']) .argscore-bar-track { background: rgba(255, 255, 255, 0.14); }
+  :root:not([data-theme='light']) .argscore-btn.secondary { border-color: var(--border-strong); }
+  :root:not([data-theme='light']) .argscore-grade-line { color: var(--muted-2); }
+  :root:not([data-theme='light']) .argscore-para { background: var(--surface-2); }
+  :root:not([data-theme='light']) .argscore-boundary-row { background: var(--surface); }
+  :root:not([data-theme='light']) .argscore-flow,
+  :root:not([data-theme='light']) .argscore-problem {
+    border-color: rgba(196, 181, 253, 0.28);
+    background: rgba(139, 92, 246, 0.14);
+  }
+  :root:not([data-theme='light']) .argscore-problem-title { color: #c4b5fd; }
+  :root:not([data-theme='light']) .argscore-problem-body { color: var(--text); }
+  :root:not([data-theme='light']) .argscore-para-index { background: rgba(255, 255, 255, 0.1); color: var(--muted-2); }
+  :root:not([data-theme='light']) .argscore-checkall-row[data-paid='true'] .argscore-checkall { background: var(--surface); }
+}
+
+/* -- Dark theme: the editor's mark popover cards ---------------------------
+ *
+ * .docmark-* / .docprose-card exist ONLY in the main window — the Screen Watch
+ * overlay draws these frames with inline styles in a window that loads no
+ * stylesheet — so theming them here cannot touch the overlay. The base rules
+ * are the Figma frame's literal white card (#fff on a #000 border) and stay
+ * that way in light; these move the card onto the app's dark tokens so a
+ * popover over a dark document is not a white flashlight. The three mark/dot
+ * colours (#d93636 / #ffb800 / #ff5900) are set inline from the shared
+ * problem-colour map and are deliberately theme-invariant, as is the
+ * credibility green's meaning — only its lightness moves (var(--score-good)).
+ * Both dark paths, as above. */
+:root[data-theme='dark'] .docmark-card {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme='dark'] .docmark-title { color: var(--text); }
+:root[data-theme='dark'] .docmark-count { background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+:root[data-theme='dark'] .docmark-body { color: var(--muted); }
+:root[data-theme='dark'] .docmark-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--ink-contrast); }
+:root[data-theme='dark'] .docmark-btn-primary:hover { background: #fff; }
+:root[data-theme='dark'] .docmark-btn-secondary { background: var(--surface); border-color: var(--border); color: var(--text); }
+:root[data-theme='dark'] .docmark-btn-secondary:hover { background: rgba(255, 255, 255, 0.06); }
+:root[data-theme='dark'] .docmark-chip { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+:root[data-theme='dark'] .docmark-progress { background: rgba(255, 255, 255, 0.12); }
+:root[data-theme='dark'] .docmark-skeleton { background: rgba(255, 255, 255, 0.12); }
+:root[data-theme='dark'] .docmark-skeleton.faint { background: rgba(255, 255, 255, 0.07); }
+:root[data-theme='dark'] .docmark-row.selected { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); }
+:root[data-theme='dark'] .docmark-row-title { color: var(--text); }
+:root[data-theme='dark'] .docmark-match { color: var(--score-good); }
+:root[data-theme='dark'] .docmark-radio { border-color: rgba(255, 255, 255, 0.3); background: var(--surface); }
+:root[data-theme='dark'] .docmark-radio.on {
+  background: var(--ink);
+  box-shadow: inset 0 0 0 6px var(--ink), inset 0 0 0 3px var(--surface);
+}
+:root[data-theme='dark'] .docmark-styles-label { color: var(--muted); }
+:root[data-theme='dark'] .docmark-style-pill { background: var(--surface); border-color: var(--border); color: var(--muted); }
+:root[data-theme='dark'] .docmark-style-pill.on { background: var(--ink); border-color: var(--ink); color: var(--ink-contrast); }
+:root[data-theme='dark'] .docmark-cred { background: var(--score-good-wash); color: var(--score-good); }
+:root[data-theme='dark'] .docmark-cred-unvetted { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+:root[data-theme='dark'] .docmark-block { background: rgba(255, 255, 255, 0.05); }
+:root[data-theme='dark'] .docmark-block-marker { color: var(--text); }
+:root[data-theme='dark'] .docmark-block-body { color: var(--muted); }
+:root[data-theme='dark'] .docmark-cited-title { color: var(--text); }
+:root[data-theme='dark'] .docmark-cited-ok { color: var(--score-good); }
+:root[data-theme='dark'] .docmark-resolved-yes { color: var(--score-good); }
+:root[data-theme='dark'] .docmark-fix-quote { color: var(--text); }
+:root[data-theme='dark'] .docmark-fix-issue-title { color: var(--text); }
+:root[data-theme='dark'] .docprose-card {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme='dark'] .docprose-card-body { color: var(--text); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .docmark-card {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+  :root:not([data-theme='light']) .docmark-title { color: var(--text); }
+  :root:not([data-theme='light']) .docmark-count { background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-body { color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--ink-contrast); }
+  :root:not([data-theme='light']) .docmark-btn-primary:hover { background: #fff; }
+  :root:not([data-theme='light']) .docmark-btn-secondary { background: var(--surface); border-color: var(--border); color: var(--text); }
+  :root:not([data-theme='light']) .docmark-btn-secondary:hover { background: rgba(255, 255, 255, 0.06); }
+  :root:not([data-theme='light']) .docmark-chip { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-progress { background: rgba(255, 255, 255, 0.12); }
+  :root:not([data-theme='light']) .docmark-skeleton { background: rgba(255, 255, 255, 0.12); }
+  :root:not([data-theme='light']) .docmark-skeleton.faint { background: rgba(255, 255, 255, 0.07); }
+  :root:not([data-theme='light']) .docmark-row.selected { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); }
+  :root:not([data-theme='light']) .docmark-row-title { color: var(--text); }
+  :root:not([data-theme='light']) .docmark-match { color: var(--score-good); }
+  :root:not([data-theme='light']) .docmark-radio { border-color: rgba(255, 255, 255, 0.3); background: var(--surface); }
+  :root:not([data-theme='light']) .docmark-radio.on {
+    background: var(--ink);
+    box-shadow: inset 0 0 0 6px var(--ink), inset 0 0 0 3px var(--surface);
+  }
+  :root:not([data-theme='light']) .docmark-styles-label { color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-style-pill { background: var(--surface); border-color: var(--border); color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-style-pill.on { background: var(--ink); border-color: var(--ink); color: var(--ink-contrast); }
+  :root:not([data-theme='light']) .docmark-cred { background: var(--score-good-wash); color: var(--score-good); }
+  :root:not([data-theme='light']) .docmark-cred-unvetted { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-block { background: rgba(255, 255, 255, 0.05); }
+  :root:not([data-theme='light']) .docmark-block-marker { color: var(--text); }
+  :root:not([data-theme='light']) .docmark-block-body { color: var(--muted); }
+  :root:not([data-theme='light']) .docmark-cited-title { color: var(--text); }
+  :root:not([data-theme='light']) .docmark-cited-ok { color: var(--score-good); }
+  :root:not([data-theme='light']) .docmark-resolved-yes { color: var(--score-good); }
+  :root:not([data-theme='light']) .docmark-fix-quote { color: var(--text); }
+  :root:not([data-theme='light']) .docmark-fix-issue-title { color: var(--text); }
+  :root:not([data-theme='light']) .docprose-card {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  }
+  :root:not([data-theme='light']) .docprose-card-body { color: var(--text); }
 }

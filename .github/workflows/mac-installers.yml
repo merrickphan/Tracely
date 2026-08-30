@@ -1,0 +1,138 @@
+name: mac installers
+
+# Builds the macOS installers that no local machine here can produce on its own.
+#
+# Two gaps this closes:
+#
+#  1. INTEL. `--mac --x64` needs the darwin-x64 onnxruntime and sharp binaries,
+#     which an Apple-Silicon machine does not install by default (BUILDING.md).
+#     So every Mac build so far has been arm64 only, and anyone on a pre-2020
+#     Mac had no working download at all. This job installs both sets and
+#     builds both arches from the same commit.
+#
+#  2. HAND-CARRYING. `npm run ship` cuts the release and publishes the Windows
+#     installer, but the dmg had to be built on someone's laptop and dragged
+#     into the release by hand — so it was routinely missing, and the website's
+#     Mac button 404'd. Now publishing a release builds the Mac installers and
+#     attaches them on its own.
+#
+# Deliberately NOT modelled on preview.yml's credential handling: previews are
+# built with staging secrets that already live in this repo, whereas a release
+# build compiles the PRODUCTION relay and Supabase values into the binary. Those
+# are not in CI today, and inventing a fallback here is exactly the mistake
+# scripts/env.mjs refuses to make — a build labelled "release" pointing at
+# staging. So the release path requires its own secrets and fails loudly
+# without them; see BUILDING.md.
+
+on:
+  # Fires when `npm run ship` (or the GitHub UI) publishes a release: the tag
+  # already exists and the Windows installer is already attached, so this only
+  # adds the Mac halves.
+  release:
+    types: [published]
+
+  # Manual path, for filling in a release that predates this workflow or
+  # re-cutting a dmg after a failed run.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach installers to (e.g. v0.3.97)
+        required: true
+        type: string
+
+concurrency:
+  group: mac-installers-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false # never cancel a half-finished upload to a real release
+
+jobs:
+  build:
+    if: github.repository == 'merrickphan/Tracely'
+    runs-on: macos-latest # Apple Silicon; the x64 build is cross-compiled below
+    permissions:
+      contents: write # attach installers to the release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The four values esbuild compiles into the bundle. A release build must
+      # carry production ones; there is no safe default, so stop here rather
+      # than silently shipping something pointed at the wrong backend.
+      - name: write .env
+        shell: bash
+        env:
+          RELAY_URL: ${{ secrets.RELEASE_RELAY_URL }}
+          RELAY_TOKEN: ${{ secrets.RELEASE_RELAY_TOKEN }}
+          SUPABASE_URL: ${{ secrets.RELEASE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.RELEASE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$RELAY_URL" ] || [ -z "$RELAY_TOKEN" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing release secrets. Add RELEASE_RELAY_URL, RELEASE_RELAY_TOKEN, RELEASE_SUPABASE_URL and RELEASE_SUPABASE_ANON_KEY to the repository secrets — these are the production values compiled into the binary, and there is deliberately no fallback to staging."
+            exit 1
+          fi
+          cat > .env <<EOF
+          RELAY_URL=$RELAY_URL
+          RELAY_TOKEN=$RELAY_TOKEN
+          SUPABASE_URL=$SUPABASE_URL
+          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          EOF
+
+      - run: npm run fetch-models
+
+      - run: npx electron-vite build
+
+      # onnxruntime-node ships every platform's binding in one package and sharp
+      # resolves per-platform, so each arch is built against only its own
+      # binaries — a foreign binding is what silently degraded the first mac
+      # build to Windows-only ML. Same split as BUILDING.md, one arch at a time.
+      - name: build arm64 dmg
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # unsigned; signing needs a paid Developer ID
+        run: |
+          rm -rf node_modules/onnxruntime-node/bin/napi-v6/win32 \
+                 node_modules/onnxruntime-node/bin/napi-v6/linux \
+                 node_modules/@img/sharp-win32-x64 node_modules/@img/sharp-libvips-win32-x64
+          npx electron-builder --mac --arm64 --publish never
+
+      - name: build x64 (Intel) dmg
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm i --no-save --force @img/sharp-darwin-x64 @img/sharp-libvips-darwin-x64
+          rm -rf node_modules/@img/sharp-darwin-arm64 node_modules/@img/sharp-libvips-darwin-arm64
+          npx electron-builder --mac --x64 --publish never
+
+      - name: attach installers to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          shopt -s nullglob
+          files=(release/*.dmg release/*.zip)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::electron-builder produced no mac artifacts"
+            exit 1
+          fi
+          printf 'uploading: %s\n' "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --clobber
+
+      # Kept regardless of the upload, so a failed release step still leaves
+      # something installable to download from the run.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-installers
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: warn

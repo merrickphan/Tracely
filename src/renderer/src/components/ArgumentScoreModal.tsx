@@ -31,9 +31,13 @@ import { adjustedScore } from '@shared/gradeLevel'
 import { useGradeLevel } from '../lib/gradeLevel'
 import {
   EssayGradeReportPanel,
+  GRADE_DARK,
+  GRADE_LIGHT,
+  GradePaletteProvider,
   type GradeClaim,
   type GradeInput
 } from './EssayGradeReport'
+import { useEffectiveDark } from '../lib/theme'
 import { hasRelevantSource, problemKindsFor } from '@shared/problemKind'
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { retrievalScopeFor } from '@shared/retrievalScope'
@@ -525,6 +529,11 @@ export default function ArgumentScoreModal({
   // Settings > Preferences. The report shows the same /100 at every level and
   // bands the LETTER against this — see shared/gradeLevel.ts.
   const gradingLevel = useGradeLevel()
+  // The shared Essay Grade report is inline styles (it also renders in the
+  // overlay window, which loads no stylesheet), so CSS variables cannot theme
+  // it. In THIS window it follows the app theme via the palette provider; the
+  // overlay mounts no provider and keeps the frame's light colours verbatim.
+  const dark = useEffectiveDark()
 
   // Its own card, not a state inside the report's card — Figma 391:540
   // ("Analyzing Card") is 340 wide against the report's full width, with its own
@@ -627,18 +636,20 @@ export default function ArgumentScoreModal({
               minHeight: 0
             }}
           >
-            <EssayGradeReportPanel
-              structure={gradeInput(outline, paragraphTexts)}
-              claims={gradeClaims(claims)}
-              gradingLevel={gradingLevel}
-              onClose={onClose}
-              onBackToSummary={() => setView({ name: 'summary' })}
-              onArgumentCheck={() => setView({ name: 'argument' })}
-              onOpenParagraph={(index) => setView({ name: 'paragraph', index })}
-              onFindForClaim={(claimId) =>
-                setView({ name: 'evidence', claimId, from: { name: 'argument' } })
-              }
-            />
+            <GradePaletteProvider palette={dark ? GRADE_DARK : GRADE_LIGHT}>
+              <EssayGradeReportPanel
+                structure={gradeInput(outline, paragraphTexts)}
+                claims={gradeClaims(claims)}
+                gradingLevel={gradingLevel}
+                onClose={onClose}
+                onBackToSummary={() => setView({ name: 'summary' })}
+                onArgumentCheck={() => setView({ name: 'argument' })}
+                onOpenParagraph={(index) => setView({ name: 'paragraph', index })}
+                onFindForClaim={(claimId) =>
+                  setView({ name: 'evidence', claimId, from: { name: 'argument' } })
+                }
+              />
+            </GradePaletteProvider>
           </div>
         ) : (
           <ScoreReport

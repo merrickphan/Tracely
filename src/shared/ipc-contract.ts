@@ -26,6 +26,7 @@ import type {
   TracerConversation,
   TracerMessage
 } from './types'
+import type { ModelTier, Plan } from './plan'
 import type { ScreenWatchProblemKind } from './problemKind'
 import type { Credibility } from './sourceCredibility'
 
@@ -213,6 +214,8 @@ export interface SettingsSetRequest {
   gradingLevel?: number
   /** Auto-critique claims the writer cited. The paid call — see AppSettings. */
   autoCritiqueCited?: boolean
+  /** Requested model tier. Clamped to the plan on every call — see AppSettings. */
+  modelTier?: ModelTier
 }
 export type SettingsSetResponse = AppSettings
 
@@ -1030,6 +1033,17 @@ export type AuthUpdateUsernameResponse = AuthSignResponse
 export type AuthDeleteAccountRequest = Record<string, never>
 export interface AuthDeleteAccountResponse {
   ok: true
+}
+
+export type AuthGetPlanRequest = Record<string, never>
+export interface AuthGetPlanResponse {
+  /**
+   * What the signed-in account has paid for. `free` for a signed-out user, an
+   * unconfigured build, or anything that could not be read — the renderer is
+   * never handed "unknown" to guess about, because every guess it could make
+   * would either nag a paying user or unlock a paid control for nobody.
+   */
+  plan: Plan
 }
 
 export interface DocumentsListResponse {

@@ -6,6 +6,25 @@ directories:
 files:
   - out/**/*
   - package.json
+  # Dev docs and tooling never belong in a shipped app, and they leak the OTHER
+  # environments' relay hosts: README / CONTRIBUTING / AGENTS / ROLLBACK /
+  # .env.example / eval/FINDINGS.md all name tracely-relay-staging and the
+  # tracely-relay.vercel.app alias in prose, which verify-packaged-ml's
+  # foreign-host check correctly fails the build over. None is read at runtime
+  # and nothing in src/ imports markdown, so this is pure dead weight otherwise.
+  # Root-anchored forms (*.md, not **/*.md) are load-bearing: a leading **/ does
+  # NOT match a file at the project root in electron-builder's matcher, which is
+  # why README.md and .env.example survived the first attempt — while the nested
+  # !out/eval/** exclude worked fine.
+  - '!*.md'
+  - '!**/*.md'
+  - '!.env'
+  - '!.env.example'
+  - '!.env.*'
+  - '!.claude'
+  - '!.claude/**'
+  - '!eval'
+  - '!eval/**'
   # 114MB — 45% of the installer — of eval harness. scripts/evaluate.mjs bundles
   # itself into out/eval so plain node can resolve sql.js and the ML stack; it is
   # dev tooling and the app never loads it. It was shipping to every user along
@@ -53,9 +72,15 @@ files:
   - '!node_modules/@huggingface/transformers/src/**'
   - '!node_modules/@huggingface/transformers/types/**'
 
-  # 150MB of onnxruntime binaries for platforms this target is not. Keeping
-  # win32/x64 only. Revisit when a mac build is real — dist:mac needs darwin.
-  - '!node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+  # onnxruntime binaries for architectures no target ever is. darwin and
+  # win32/x64 are deliberately NOT excluded here — each is wanted on its own
+  # platform, and a native `npm install` only ever fetches the current
+  # platform's optional binary, so the OTHER platform's dir simply doesn't
+  # exist to be packaged. (Cross-building from one machine, where both are
+  # force-installed, strips the foreign one as a build step before packing —
+  # see the mac/win build notes in README/CLAUDE. A platform-scoped `files:`
+  # block was tried and silently RESET the whole file list to `**/*`, dropping
+  # every exclude below and shipping the dev docs + .env into the asar.)
   - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
   - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
 

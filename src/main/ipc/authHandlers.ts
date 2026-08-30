@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import type {
   AuthDeleteAccountResponse,
+  AuthGetPlanResponse,
   AuthGetUserResponse,
   AuthSignInWithGoogleResponse,
   AuthSignOutResponse,
@@ -21,6 +22,7 @@ import {
   updateFirstName,
   updateUsername
 } from '../services/auth/client'
+import { getCurrentPlan } from '../services/auth/plan'
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -83,5 +85,14 @@ export function registerAuthHandlers(): void {
   ipcMain.handle(IPC.AUTH_DELETE_ACCOUNT, async (): Promise<AuthDeleteAccountResponse> => {
     await deleteAccount()
     return { ok: true }
+  })
+
+  // Separate from AUTH_GET_USER rather than a field on AuthUser: a plan changes
+  // without the user changing — a subscription starts on the website while the
+  // app is open, or lapses — so the renderer has to be able to ask again. It
+  // re-asks on every auth-state change, which supabase-js also emits on a token
+  // refresh, so an upgrade lands on its own within the hour.
+  ipcMain.handle(IPC.AUTH_GET_PLAN, async (): Promise<AuthGetPlanResponse> => {
+    return { plan: await getCurrentPlan() }
   })
 }

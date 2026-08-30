@@ -44,6 +44,13 @@ const DEFAULTS: Record<string, string> = {
   // costs nothing. Off by default would mean the citation check that makes the
   // report honest is one almost nobody ever turns on.
   autoCritiqueCited: 'true',
+  // How much model the user WANTS behind a check, critique or grade — a
+  // request, not a grant. services/ai/modelTier.ts clamps it to whatever the
+  // signed-in plan allows on every call, so the top tier as a default means
+  // "as thorough as this account is entitled to" rather than "always the
+  // expensive model": a free account resolves it to `fast` and never leaves it.
+  // Anyone who wants quicker answers than they pay for can still choose down.
+  modelTier: 'thorough',
   // Names Tracely taught the spellchecker for the open document, as JSON.
   // Bookkeeping, not a preference: it exists so a crash cannot make
   // session-scoped name learning permanent. Read and cleared at startup — see

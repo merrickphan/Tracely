@@ -15,6 +15,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { createClient } from '@supabase/supabase-js'
+import { DEFAULT_PLAN, planFromMetadata, type Plan } from '@shared/plan'
 
 declare const __SUPABASE_URL__: string
 declare const __SUPABASE_ANON_KEY__: string
@@ -63,15 +64,17 @@ function sessionFile(): string | null {
   return null
 }
 
-/**
- * Returns a provider suitable for setAccessTokenProvider, or null when there
- * is no signed-in session to borrow — the caller decides how loudly to
- * complain, because a retrieval-only run does not need one.
- */
-export function appSessionTokenProvider(): (() => Promise<string | null>) | null {
+// Built once and shared by both providers below. Two clients over one session
+// file would each refresh the token independently and write over each other.
+let client: ReturnType<typeof createClient> | null = null
+let clientBuilt = false
+
+function appSessionClient(): { client: ReturnType<typeof createClient>; path: string } | null {
   if (!__SUPABASE_URL__ || !__SUPABASE_ANON_KEY__) return null
   const path = sessionFile()
   if (!path) return null
+  if (clientBuilt) return client ? { client, path } : null
+  clientBuilt = true
 
   // Reads and writes the same JSON blob shape services/auth/sessionStore.ts
   // uses, so a refresh performed here is picked up by the app on next launch
@@ -100,9 +103,21 @@ export function appSessionTokenProvider(): (() => Promise<string | null>) | null
     }
   }
 
-  const client = createClient(__SUPABASE_URL__, __SUPABASE_ANON_KEY__, {
+  client = createClient(__SUPABASE_URL__, __SUPABASE_ANON_KEY__, {
     auth: { storage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
   })
+  return { client, path }
+}
+
+/**
+ * Returns a provider suitable for setAccessTokenProvider, or null when there
+ * is no signed-in session to borrow — the caller decides how loudly to
+ * complain, because a retrieval-only run does not need one.
+ */
+export function appSessionTokenProvider(): (() => Promise<string | null>) | null {
+  const session = appSessionClient()
+  if (!session) return null
+  const { client, path } = session
 
   let warned = false
   return async () => {
@@ -124,6 +139,27 @@ export function appSessionTokenProvider(): (() => Promise<string | null>) | null
       )
     }
     return token
+  }
+}
+
+/**
+ * The same borrowed session, read for the account's plan.
+ *
+ * Registered alongside the token provider so the harness measures the model
+ * tier the signed-in account actually gets. Without it `getPlan` answers `free`
+ * for want of a provider, and the eval would quietly grade the product at a
+ * tier its paying users never see — the same silent-degradation shape as an
+ * eval that scores lexical ranking while believing it scored the ML model.
+ */
+export function appSessionPlanProvider(): (() => Promise<Plan>) | null {
+  const session = appSessionClient()
+  if (!session) return null
+  const { client } = session
+  return async () => {
+    const { data } = await client.auth.getSession()
+    const user = data.session?.user
+    if (!user) return DEFAULT_PLAN
+    return planFromMetadata(user.app_metadata, user.user_metadata)
   }
 }
 

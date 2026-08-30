@@ -1,3 +1,5 @@
+import type { ModelTier } from './plan'
+
 export type ClaimType = 'statistic' | 'causal' | 'factual' | 'prediction' | 'opinion'
 
 // A signed-in Supabase account. Entirely separate from Profile (local
@@ -297,6 +299,17 @@ export interface AppSettings {
    * broken citation and a good one are equally silent.
    */
   autoCritiqueCited: boolean
+  /**
+   * How much model the user asks for behind a check, critique or grade.
+   *
+   * A REQUEST, not what runs. The plan decides the ceiling and
+   * services/ai/modelTier.ts clamps this against it on every relay call, so a
+   * row saying `thorough` on a free account is not a Pro model — it is a
+   * preference waiting for a plan that allows it. Anything reading this to
+   * DISPLAY the current tier has to clamp it the same way (`resolveModelTier`),
+   * or Settings will name a model the app is not using.
+   */
+  modelTier: ModelTier
 }
 
 // The document editor's saved work. Rich text rather than plain: the editor is

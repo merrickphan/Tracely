@@ -1,6 +1,7 @@
 import { hasInlineCitation } from '@shared/inlineCitation'
 import { byCredibility, credibilityOf } from '@shared/sourceCredibility'
 import { DEFAULT_WIDGET_VIEW_MODE } from '@shared/ipc-contract'
+import type { Plan } from '@shared/plan'
 import type {
   ScreenWatchClaimSummary,
   ScreenWatchWidget,
@@ -46,6 +47,15 @@ import * as fx from './fixtures'
 export type Scenario = {
   /** Signed-in state — drives App.tsx's auth gate. */
   auth: 'ready' | 'signedOut' | 'needsName' | 'notConfigured'
+  /**
+   * What the account has paid for — Settings > Billing, and the locked model
+   * rows in Preferences.
+   *
+   * Its own switch rather than something derived from `auth`, because the two
+   * are independent: reviewing the upgrade prompt needs a signed-in free
+   * account, which is the ordinary case and not an auth state at all.
+   */
+  plan: Plan
   /** With no relay compiled in, every relay-backed action refuses up front. */
   relayConfigured: boolean
   /** Make every relay-backed call reject, to review error states. */
@@ -86,6 +96,8 @@ const FOUND_BREAKDOWN: ScoreBreakdown = {
 
 export const defaultScenario: Scenario = {
   auth: 'ready',
+  // The plan most installs are on, and the only one with an upgrade prompt.
+  plan: 'free',
   relayConfigured: true,
   failRelay: false,
   latencyMs: 0,
@@ -588,7 +600,8 @@ export function createMockApi(scenario: Scenario, log: (method: string) => void)
       signInWithGoogle: () => relay('auth.signInWithGoogle', { ok: true as const }),
       updateName: () => ok('auth.updateName', { user: fx.user }),
       updateUsername: () => ok('auth.updateUsername', { user: fx.user }),
-      deleteAccount: () => ok('auth.deleteAccount', { ok: true as const })
+      deleteAccount: () => ok('auth.deleteAccount', { ok: true as const }),
+      getPlan: () => ok('auth.getPlan', { plan: scenario.plan })
     },
     history: {
       clear: () => ok('history.clear', { ok: true as const })
