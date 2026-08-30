@@ -52,6 +52,31 @@ win32 `.node` cannot execute on darwin); exercise it with a native build of the
 same commit. Intel-mac (`--mac --x64`) needs the `darwin-x64` onnxruntime and
 sharp binaries, which an arm64 machine does not install by default.
 
+## macOS installers are built in CI, not by hand
+
+`.github/workflows/mac-installers.yml` builds both Mac arches and attaches them
+to a release. It runs automatically when a release is published, and can be run
+manually against an existing tag from the Actions tab.
+
+This exists for two reasons. Intel (`--mac --x64`) cannot be produced on an
+Apple-Silicon machine without the darwin-x64 onnxruntime and sharp binaries, so
+in practice it was never built and Intel users had no download. And the dmg was
+otherwise hand-carried into each release, so it was routinely missing while the
+website's Mac button pointed at it.
+
+The job needs the production compile-time values as repository secrets:
+
+    RELEASE_RELAY_URL
+    RELEASE_RELAY_TOKEN
+    RELEASE_SUPABASE_URL
+    RELEASE_SUPABASE_ANON_KEY
+
+There is no fallback to the staging secrets. A build labelled "release" that
+quietly pointed at staging is the failure `scripts/env.mjs` already refuses, so
+the workflow stops with an explicit error instead. Both dmgs are unsigned —
+signing needs a paid Developer ID, and `CSC_IDENTITY_AUTO_DISCOVERY=false` keeps
+the runner from trying.
+
 ## Why `electron-builder.yml` has one top-level `files:` and no platform block
 
 A platform-scoped `files:` containing only negations makes electron-builder
