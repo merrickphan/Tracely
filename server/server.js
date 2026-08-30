@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runFactCheck, findSources, hasApiKey, CheckError } from "./lib/factcheck.js";
+import { runFactCheck, findSources, runFlowCheck, hasApiKey, CheckError } from "./lib/factcheck.js";
 import * as ai from "./lib/ai.js";
 import * as evidence from "./lib/evidence.js";
 import * as store from "./lib/store.js";
@@ -126,7 +126,7 @@ function originAllowed(origin) {
 // the paid pipeline — is app-private: same-origin (or origin-less curl) only,
 // so a hostile Docs add-on or stray extension can't read essays, wipe history,
 // or burn the user's Anthropic credits.
-const EXTENSION_API = new Set(["/api/status", "/api/check", "/api/sources", "/api/cite-url", "/api/docs/apply"]);
+const EXTENSION_API = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply"]);
 function routeAllowedForOrigin(origin, pathname) {
   if (!origin || SELF_ORIGINS.has(origin)) return true;
   if (!pathname.startsWith("/api/")) return true; // static files are harmless
@@ -475,6 +475,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Flow coaching: paragraph-level "this jumps" review over the whole doc.
+    // No web search, one call, cached client-side per structural change.
+    if (req.method === "POST" && url.pathname === "/api/flow") {
+      loadEnvFile();
+      if (!hasApiKey() && !MOCK) {
+        json(res, 503, { error: { kind: "no_key", message: "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env" } }, cors);
+        return;
+      }
+      const { text, model } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || !text.trim()) throw new CheckError("bad_request", "text required");
+      if (text.length > GUARDS.maxInputChars) throw new CheckError("bad_request", "text too long");
+      const started = Date.now();
+      const result = await runFlowCheck({ text, model, mock: MOCK });
+      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      return;
+    }
+
     // ── pipeline routes ────────────────────────────────────────────────
     if (req.method === "POST" && url.pathname === "/api/detect-claims") {
       loadEnvFile();
@@ -565,23 +582,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/grade") {
       loadEnvFile();
       requireKey();
-      const { text, level, rubric } = (await parseJsonBody(req)) ?? {};
+      const { text, level } = (await parseJsonBody(req)) ?? {};
       if (typeof text !== "string" || text.trim().length < 40) throw new CheckError("bad_request", "text too short to grade");
-      if (rubric != null && (typeof rubric !== "string" || rubric.length > 4000)) {
-        throw new CheckError("bad_request", "rubric must be a string of at most 4000 characters");
-      }
-      const customRubric = typeof rubric === "string" ? rubric.trim() : "";
       const model = pickModel("grade");
       const clipped = text.slice(0, GUARDS.maxInputChars);
-      // Re-grading an unchanged draft is free. The rubric is in the key:
-      // editing the pasted rubric must re-grade, and clearing it must fall
-      // back to the built-in grade rather than replaying the custom one.
-      const key = hashKey(`grade|${model}|${level ?? 12}|${customRubric}|${clipped}`);
+      // Re-grading an unchanged draft is free.
+      const key = hashKey(`grade|${model}|${level ?? 12}|${clipped}`);
       let result = MOCK ? null : cacheGet("grade", key, { maxAgeMs: 7 * 24 * 3600_000 });
       if (!result) {
-        result = customRubric
-          ? await ai.gradeWithCustomRubric({ text: clipped, rubric: customRubric, level, model })
-          : await ai.gradeDraft({ text: clipped, level, model });
+        result = await ai.gradeDraft({ text: clipped, level, model });
         if (!MOCK) cacheSet("grade", key, result);
       }
       json(res, 200, result, cors);

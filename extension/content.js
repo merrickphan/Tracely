@@ -48,6 +48,12 @@
   const VERDICT_TEXT = { false: "#d93636", questionable: "#a67500", incoherent: "#8e4ec6", needs_citation: "#2563eb" };
   const MARK_PENDING = "#9a9ba1"; // grey dotted while a sentence's check is in flight
 
+  /* Flow flags — passage-level coaching, drawn as a margin bracket rather
+     than an underline (Figma "Overlay Mockup — Inline Flow Flag"). Colors
+     sampled from that file: bracket/badge, then the chip + link accent. */
+  const FLOW_COLOR = "#7344f1";
+  const FLOW_ACCENT = "#7b44d4";
+
   // The Faster↔Smarter slider — one control replacing the model + effort
   // dropdowns on both widget surfaces. Three stops; effort rides along.
   const SPEED_STOPS = [
@@ -434,6 +440,7 @@
     const DISMISS_KEY = `tracely.widget.dismissed.${DOC_ID}`;
     const VCACHE_KEY = `tracely.widget.vcache.${DOC_ID}`;
     const SCACHE_KEY = `tracely.widget.scache.${DOC_ID}`;
+    const FCACHE_KEY = `tracely.widget.fcache.${DOC_ID}`;
 
     // ── state ──
     // Verdicts and source lists persist per doc: reopening the tab re-checks
@@ -443,6 +450,68 @@
     const dismissed = new Set(jsonParse(lsGet(DISMISS_KEY) ?? "[]", []));
     const sourcesMap = new Map(jsonParse(lsGet(SCACHE_KEY) ?? "[]", [])
       .map(([h, st]) => [h, { loading: false, list: st.list, copiedUrl: null, citedUrl: st.citedUrl ?? null }]));
+    /* ── flow coaching state ──────────────────────────────────────────────
+       Flow is judged on the SHAPE of the document, so it re-runs only when
+       the paragraph structure actually changes — not on every keystroke like
+       the sentence checker. One Haiku call per structural change, cached
+       across reloads, so the whole feature costs a fraction of a cent. */
+    const flowSaved = jsonParse(lsGet(FCACHE_KEY) ?? "null", null);
+    let flowIssues = Array.isArray(flowSaved?.issues) ? flowSaved.issues : [];
+    let flowSig = String(flowSaved?.sig ?? "");
+    let flowAt = 0;
+    let flowInflight = false;
+    let flowDismissed = new Set(Array.isArray(flowSaved?.dismissed) ? flowSaved.dismissed : []);
+    const FLOW_MIN_CHARS = harness ? 0 : 400; // below this there's no structure to judge
+    const FLOW_MIN_INTERVAL = 45_000; // never more than one flow call per 45s
+
+    // Signature of the document's SHAPE: paragraph count plus each one's
+    // opening and closing words. Editing inside a sentence doesn't move it;
+    // adding, cutting, or reordering a paragraph does.
+    function flowSignature(text) {
+      const paras = text.split(/\n{1,}/).map((p) => p.trim()).filter((p) => p.split(/\s+/).length >= 12);
+      return paras.length + "|" + paras.map((p) => {
+        const w = p.split(/\s+/);
+        return w.slice(0, 4).join(" ") + "…" + w.slice(-3).join(" ");
+      }).join("¶");
+    }
+
+    function persistFlow() {
+      lsSet(FCACHE_KEY, JSON.stringify({ sig: flowSig, issues: flowIssues, dismissed: [...flowDismissed] }));
+    }
+
+    function flowHashOf(issue) { return "flow" + hashText(issue.passage); }
+
+    function activeFlowIssues() {
+      return flowIssues.filter((i) => !flowDismissed.has(flowHashOf(i)));
+    }
+
+    async function requestFlow() {
+      if (flowInflight || document.hidden) return;
+      const text = docText;
+      if (text.length < FLOW_MIN_CHARS) { // too short to have a shape
+        if (flowIssues.length) { flowIssues = []; flowSig = ""; persistFlow(); scheduleDocsMarks(); }
+        return;
+      }
+      const sig = flowSignature(text);
+      if (sig === flowSig) return;                            // structure unchanged — cached answer stands
+      if (Date.now() - flowAt < FLOW_MIN_INTERVAL) return;    // rate floor
+      flowInflight = true;
+      flowAt = Date.now();
+      try {
+        const data = await api("/api/flow", { text: text.slice(0, MAX_INPUT_CHARS), model: effModel(settings) });
+        flowIssues = Array.isArray(data.issues) ? data.issues : [];
+        flowSig = sig;
+        persistFlow();
+        render();
+        scheduleDocsMarks();
+      } catch {
+        // Flow is an enhancement — a failure must never disturb the checker's
+        // status line. Retry naturally on the next structural change.
+      } finally {
+        flowInflight = false;
+      }
+    }
+
     function persistCaches() {
       // Doc-aware eviction: verdicts for sentences STILL IN the doc are what
       // stop reload re-checks — persist those first, pad with recent others.
@@ -549,8 +618,9 @@
           autoFindSources(data.findings ?? []); // fire-and-forget, capped
         }
         statusKind = "idle";
-        const n = currentIssues().length;
+        const n = currentIssues().length + activeFlowIssues().length;
         statusMsg = n > 0 ? `${n} issue${n === 1 ? "" : "s"} found` : "all clear";
+        requestFlow(); // fire-and-forget; gated on structure change + rate floor
       } catch (err) {
         if (err?.kind === "no_key") {
           statusKind = "error";
@@ -735,7 +805,7 @@
       // In-tree bars live inside Docs' annotation SVGs — remove them there,
       // plus a sweep for strays whose tile was recycled out from under us.
       for (const b of docsBars) if (b.inSvg) b.el.remove();
-      for (const stray of document.querySelectorAll("rect[data-tracely-bar]")) stray.remove();
+      for (const stray of document.querySelectorAll("[data-tracely-bar]")) stray.remove();
       docsBars = [];
       tileState.clear();
       queueMicrotask(() => { selfMutating = false; });
@@ -856,7 +926,129 @@
       }
     }
 
-    function drawDocsMarksSvg(svgBars) {
+    /* Visual rows of the page, in reading order: one entry per painted line,
+       carrying its annotation rect(s) and attribute-space geometry. The
+       underline matcher buckets the same nodes by top; flow needs whole rows
+       (and their extents) so it can bracket a paragraph in the margin. */
+    function svgRows() {
+      const rows = new Map();
+      for (const node of svgLineNodes()) {
+        const r = node.getBoundingClientRect();
+        if (r.width === 0) continue;
+        const key = Math.round(r.top / 4) * 4;
+        let row = rows.get(key);
+        if (!row) { row = { key, nodes: [], clientTop: r.top }; rows.set(key, row); }
+        row.nodes.push(node);
+      }
+      const out = [];
+      for (const row of [...rows.values()].sort((a, b) => a.clientTop - b.clientTop)) {
+        row.nodes.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        const joined = row.nodes.map((n) => nrm(n.getAttribute("aria-label"))).join("");
+        if (!joined) continue;
+        const g = row.nodes.map((n) => ({
+          x: parseFloat(n.getAttribute("x")), y: parseFloat(n.getAttribute("y")),
+          w: parseFloat(n.getAttribute("width")), h: parseFloat(n.getAttribute("height")),
+          svg: n.ownerSVGElement, node: n,
+        })).filter((v) => [v.x, v.y, v.w, v.h].every(Number.isFinite) && v.svg);
+        if (!g.length) continue;
+        out.push({
+          joined, nodes: row.nodes, svg: g[0].svg,
+          x: Math.min(...g.map((v) => v.x)),
+          right: Math.max(...g.map((v) => v.x + v.w)),
+          y: Math.min(...g.map((v) => v.y)),
+          bottom: Math.max(...g.map((v) => v.y + v.h)),
+        });
+      }
+      return out;
+    }
+
+    /* Locate each flow issue's PARAGRAPH on the page. The model anchors an
+       issue to one verbatim sentence; the bracket spans the whole paragraph
+       that sentence belongs to, which is what the design shows. */
+    function svgFlowLocate(flows) {
+      if (!flows.length) return [];
+      const rows = svgRows();
+      if (!rows.length) return [];
+      const paras = docText.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+      const out = [];
+      for (const issue of flows) {
+        const S = nrm(issue.passage);
+        if (S.length < 8) continue;
+        const para = paras.find((p) => nrm(p).includes(S)) ?? issue.passage;
+        const P = nrm(para);
+        const start = rows.findIndex((r) => r.joined && (P.includes(r.joined) || r.joined.includes(S.slice(0, 24))));
+        if (start === -1) continue;
+        // Extend while rows still belong to this paragraph and the same tile:
+        // a bracket is one shape, so it can't straddle two annotation layers.
+        let end = start;
+        for (let i = start + 1; i < rows.length; i++) {
+          if (rows[i].svg !== rows[start].svg) break;
+          if (!rows[i].joined || !P.includes(rows[i].joined)) break;
+          if (rows[i].y > rows[end].bottom + rows[end].bottom - rows[end].y) break; // paragraph gap
+          end = i;
+        }
+        out.push({
+          hash: flowHashOf(issue), issue,
+          svg: rows[start].svg,
+          x: Math.min(...rows.slice(start, end + 1).map((r) => r.x)),
+          right: Math.max(...rows.slice(start, end + 1).map((r) => r.right)),
+          top: rows[start].y,
+          bottom: rows[end].bottom,
+          lineH: Math.max(8, rows[start].bottom - rows[start].y),
+        });
+      }
+      return out;
+    }
+
+    const SVGNS = "http://www.w3.org/2000/svg";
+    function svgEl(name, attrs) {
+      const el = document.createElementNS(SVGNS, name);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+      return el;
+    }
+
+    /* Draw one flow flag in the annotation layer: margin bracket, badge, and
+       a right-margin chip — all in-tree, so they ride the compositor with the
+       text exactly like the underlines do. Geometry mirrors the Figma frame. */
+    function drawFlowFlag(f) {
+      const g = svgEl("g", { "data-tracely-bar": "", "data-tracely-flow": "", "aria-hidden": "true", "pointer-events": "none" });
+      const lh = f.lineH;
+      const bx = f.x - lh * 1.55;              // bracket sits in the left margin
+      const top = f.top + lh * 0.15;
+      const bot = f.bottom;
+      const r = lh * 0.34;                     // corner radius, scales with type size
+      // Vertical spine with a rounded elbow into a short arrow at the foot.
+      g.appendChild(svgEl("path", {
+        d: `M ${bx} ${top + r} L ${bx} ${bot - r} Q ${bx} ${bot} ${bx + r} ${bot} L ${bx + r * 1.5} ${bot}`,
+        fill: "none", stroke: FLOW_COLOR, "stroke-width": Math.max(1.2, lh * 0.075),
+        "stroke-linecap": "round", "stroke-linejoin": "round",
+      }));
+      g.appendChild(svgEl("path", {
+        d: `M ${bx + r * 0.9} ${bot - r * 0.5} L ${bx + r * 1.7} ${bot} L ${bx + r * 0.9} ${bot + r * 0.5} Z`,
+        fill: FLOW_COLOR,
+      }));
+      // Badge: filled disc at the head of the bracket with a flow glyph.
+      const cy = f.top + lh * 0.42, cr = lh * 0.62;
+      g.appendChild(svgEl("circle", { cx: bx, cy, r: cr, fill: FLOW_COLOR }));
+      g.appendChild(svgEl("path", {
+        d: `M ${bx - cr * 0.5} ${cy + cr * 0.08} q ${cr * 0.25} ${-cr * 0.55} ${cr * 0.5} 0 q ${cr * 0.25} ${cr * 0.55} ${cr * 0.5} 0`,
+        fill: "none", stroke: "#fff", "stroke-width": Math.max(1, cr * 0.22),
+        "stroke-linecap": "round",
+      }));
+      // Right-margin chip — dot plus label, aligned to the first line.
+      const chipX = f.right + lh * 0.9, chipY = f.top + lh * 0.62;
+      g.appendChild(svgEl("circle", { cx: chipX, cy: chipY - lh * 0.2, r: Math.max(2, lh * 0.13), fill: FLOW_ACCENT }));
+      const label = svgEl("text", {
+        x: chipX + lh * 0.42, y: chipY, fill: FLOW_ACCENT,
+        "font-size": lh * 0.62, "font-family": "Arial, Helvetica, sans-serif", "font-weight": "500",
+      });
+      label.textContent = "Flow issue";
+      g.appendChild(label);
+      f.svg.appendChild(g);
+      return g;
+    }
+
+    function drawDocsMarksSvg(svgBars, flows = []) {
       try {
         ensureLayer();
         selfMutating = true;
@@ -919,8 +1111,18 @@
             docsBars.push({ hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1, size: 18 });
           }
         }
+        // Flow flags: one bracket per located paragraph, same in-tree layer.
+        let flowDrawn = 0;
+        for (const f of svgFlowLocate(flows)) {
+          const g = drawFlowFlag(f);
+          flowDrawn++;
+          docsBars.push({
+            hash: f.hash, el: g, node: f.svg, raw: null, inSvg: true, flow: f.issue,
+            size: f.lineH, gx: f.x, gy: f.top, gw: f.right - f.x, gh: f.bottom - f.top, tf: "",
+          });
+        }
         queueMicrotask(() => { selfMutating = false; });
-        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) — ${inTree} in-tree, ${glued} glued — across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
+        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) — ${inTree} in-tree, ${glued} glued, ${flowDrawn} flow — across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
         glueFrame();
         startGlue();
       } catch (err) {
@@ -952,7 +1154,8 @@
       // The hook caps at 40 wants — cap here too so nothing is silently dropped
       // on the other side of the protocol.
       const issues = currentIssues().slice(0, 40);
-      if (issues.length === 0) {
+      const flows = activeFlowIssues();
+      if (issues.length === 0 && flows.length === 0) {
         clearDocsMarks();
         hideDocsPopover();
         // Empty ping still prunes the fallback hook's ledgers. id 0 never
@@ -962,9 +1165,9 @@
       }
       lastVerdictByHash = new Map(issues.map(({ seg, f }) => [seg.hash, f.verdict]));
       // PRIMARY: the SVG annotation layer — complete and live-positioned.
-      const svgBars = svgLocate(issues);
+      const svgBars = issues.length ? svgLocate(issues) : [];
       if (svgBars !== null) {
-        drawDocsMarksSvg(svgBars);
+        drawDocsMarksSvg(svgBars, flows);
         // Keep the hook's ledgers pruned even though we're not using them.
         // id 0: the rects listener ignores this reply — it must never clear
         // the SVG bars we just drew (that exact bug blanked every underline).
@@ -1091,6 +1294,134 @@
         fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
       });
       return b;
+    }
+
+    /* Flow callout — the card from the Figma flow frame: purple dot + title,
+       the explanation, and one action that writes the suggested transition
+       into the document ahead of the flagged passage. */
+    function showFlowPopover(bar, rect, anchorBar) {
+      const issue = bar.flow;
+      console.debug("[tracely] flow popover open", bar.hash);
+      popFont();
+      hideDocsPopover();
+      popHash = bar.hash;
+      popEl = document.createElement("div");
+      popEl.setAttribute("data-tracely-docs-popover", "");
+      Object.assign(popEl.style, {
+        position: "fixed", zIndex: "901", width: "300px",
+        background: "#fff", borderRadius: "14px", padding: "14px 16px",
+        border: "1px solid rgba(20,16,10,0.06)",
+        boxShadow: "0 16px 44px rgba(88,60,170,0.20)",
+        fontFamily: "'Plus Jakarta Sans', -apple-system, sans-serif",
+        color: "#0d0d0f", fontSize: "12.5px", lineHeight: "1.5",
+      });
+      const arrow = document.createElement("div");
+      arrow.setAttribute("data-pop-arrow", "");
+      Object.assign(arrow.style, {
+        position: "absolute", width: "11px", height: "11px", background: "#fff",
+        transform: "rotate(45deg)", border: "solid rgba(20,16,10,0.08)",
+        borderWidth: "1px 0 0 1px", top: "-6.5px", left: "20px", borderRadius: "2px 0 0 0",
+      });
+      popEl.appendChild(arrow);
+
+      const head = document.createElement("div");
+      Object.assign(head.style, { display: "flex", alignItems: "center", gap: "7px", marginBottom: "8px" });
+      const dot = document.createElement("span");
+      Object.assign(dot.style, { width: "7px", height: "7px", borderRadius: "50%", background: FLOW_ACCENT, flexShrink: "0" });
+      const title = document.createElement("span");
+      title.textContent = "Flow issue";
+      Object.assign(title.style, { fontWeight: "700", fontSize: "14.5px", letterSpacing: "-0.01em" });
+      head.append(dot, title);
+      popEl.appendChild(head);
+
+      const body = document.createElement("div");
+      body.textContent = issue.explanation;
+      Object.assign(body.style, { color: "#40454c", fontWeight: "500", marginBottom: "10px" });
+      popEl.appendChild(body);
+
+      if (issue.transition) {
+        const prev = document.createElement("div");
+        prev.textContent = `“${issue.transition}”`;
+        Object.assign(prev.style, {
+          background: "#f7f4ff", border: "1px solid rgba(115,68,241,0.14)", borderRadius: "10px",
+          padding: "8px 10px", marginBottom: "10px", fontWeight: "500", color: "#3b3550",
+        });
+        popEl.appendChild(prev);
+      }
+
+      const row = document.createElement("div");
+      Object.assign(row.style, { display: "flex", alignItems: "center", gap: "12px" });
+      const act = document.createElement("button");
+      act.textContent = canEditDoc() ? "Add transition →" : "Copy transition →";
+      Object.assign(act.style, {
+        border: "none", background: "none", padding: "0", cursor: "pointer",
+        color: FLOW_ACCENT, fontWeight: "700", fontSize: "13px", fontFamily: "inherit",
+      });
+      act.addEventListener("click", async () => {
+        if (!issue.transition) return;
+        if (!canEditDoc()) {
+          try { await navigator.clipboard.writeText(issue.transition); } catch { /* denied */ }
+          act.textContent = "Copied ✓";
+          return;
+        }
+        act.textContent = "Adding…";
+        act.disabled = true;
+        await addTransition(bar.hash, issue);
+        hideDocsPopover();
+      });
+      row.appendChild(act);
+      const dis = document.createElement("button");
+      dis.textContent = "Dismiss";
+      Object.assign(dis.style, {
+        border: "none", background: "none", padding: "0", cursor: "pointer",
+        color: "#8e8e93", fontWeight: "600", fontSize: "12.5px", fontFamily: "inherit",
+      });
+      dis.addEventListener("click", () => {
+        flowDismissed.add(bar.hash);
+        persistFlow();
+        hideDocsPopover();
+        requestDocsMarks();
+        render();
+      });
+      row.appendChild(dis);
+      popEl.appendChild(row);
+
+      popEl.style.visibility = "hidden";
+      document.documentElement.appendChild(popEl);
+      placeDocsPopover(rect);
+      popEl.style.visibility = "visible";
+      popAnchor = anchorBar ?? null;
+      popLastTop = rect.top;
+      popLostAt = 0;
+      if (!popFollowRaf) popFollowRaf = requestAnimationFrame(popFollowFrame);
+    }
+
+    // Insert the suggested transition as its own sentence ahead of the
+    // flagged passage, then let the next structural pass re-judge the flow.
+    async function addTransition(hash, issue) {
+      if (docBusy) return;
+      docBusy = true;
+      render();
+      try {
+        const line = docText.split(/\n+/).find((p) => p.includes(issue.passage));
+        if (!line) throw new Error("that passage moved — re-checking");
+        const bridge = issue.transition.trim().replace(/\s+/g, " ");
+        const replacement = line.replace(issue.passage, `${bridge} ${issue.passage}`);
+        await docApply({ action: "replace", find: line, replacement });
+        flowDismissed.add(hash);          // resolved — clears immediately
+        flowSig = "";                     // structure changed: re-run flow next cycle
+        persistFlow();
+        statusKind = "idle";
+        statusMsg = "transition added";
+        lastCheckEnd = Date.now() - CHECK_INTERVAL_MS + 3000;
+        requestDocsMarks();
+      } catch (e) {
+        statusKind = "error";
+        statusMsg = e?.message ?? "couldn't add that transition";
+      } finally {
+        docBusy = false;
+        render();
+      }
     }
 
     function showDocsPopover(hash, rect, anchorBar) {
@@ -1417,7 +1748,11 @@
         }
         for (const b of docsBars) {
           const hit = hitOf(b);
-          if (hit) { showDocsPopover(b.hash, hit, b); break; }
+          if (hit) {
+            if (b.flow) showFlowPopover(b, hit, b);
+            else showDocsPopover(b.hash, hit, b);
+            break;
+          }
         }
       }
     }, { passive: true });
@@ -1508,6 +1843,10 @@
            geometry/transform on the SAME text → follow it in place. */
         for (const b of docsBars) {
           if (!b.node || !b.inSvg) continue;
+          if (b.flow) { // brackets are re-located wholesale by the next pass
+            if (!b.el.isConnected || !b.node.isConnected) b.el.style.display = "none";
+            continue;
+          }
           if (!b.el.isConnected || !b.node.isConnected || b.node.getAttribute("aria-label") !== b.raw) {
             b.el.style.display = "none";
             continue;

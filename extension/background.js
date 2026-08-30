@@ -244,6 +244,81 @@ async function checkBatch({ text, sentences, model, effort, apiKey }) {
 
 /* ── /api/sources equivalent (ported from lib/factcheck.js findSources) ──── */
 
+/* ── flow coaching (standalone) — mirrors lib/factcheck.js runFlowCheck ──── */
+const FLOW_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["issues"],
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["passage", "explanation", "transition"],
+        properties: {
+          passage: { type: "string", description: "The first sentence of the passage that reads abruptly, copied VERBATIM from the document." },
+          explanation: { type: "string", description: "One or two sentences: what the reader loses at this jump." },
+          transition: { type: "string", description: "A single sentence that could be inserted immediately BEFORE the passage to bridge the gap. Plain prose, no quotes." },
+        },
+      },
+    },
+  },
+};
+
+const FLOW_SYSTEM = `You are Tracely's flow coach. You read a student's essay as a whole and find places where the WRITING JUMPS — where a reader would lose the thread.
+
+Flag a passage only when one of these is true:
+- The paragraph changes subject with no transition from what came before.
+- An idea, term, or example arrives before it has been set up.
+- Two adjacent paragraphs are in the wrong order for the argument.
+- A conclusion appears without the step that earns it.
+
+Do NOT flag: grammar, word choice, tone, sentence length, factual errors, or anything a proofreader would catch. Those are other tools' jobs. Do not flag a paragraph merely for starting a new topic if a transition is already present.
+
+Be strict. Most well-organized essays have ZERO flow issues; return an empty list in that case. Never report more than 3, and rank the most damaging first.
+
+For each issue:
+- "passage": copy the FIRST SENTENCE of the offending passage exactly as it appears in the document, character for character. It must be findable with an exact string search. Never paraphrase it, never add ellipses.
+- "explanation": what the reader loses here, in plain language, addressed to the writer. Max 2 sentences.
+- "transition": one sentence the writer could insert immediately before that passage to bridge the gap, written in their voice and using their subject matter. It must stand alone as prose.`;
+
+async function standaloneFlow(body, cfg) {
+  const model = pickModel(body?.model, cfg.model);
+  const text = String(body?.text ?? "");
+  if (!text.trim()) throw apiErr("bad_request", "No text to review.");
+  const doc = text.length > 12_000 ? text.slice(0, 12_000) + "\n[… document truncated …]" : text;
+
+  const response = await anthropicFetch(cfg.apiKey, {
+    model,
+    max_tokens: 8_000,
+    system: [{ type: "text", text: FLOW_SYSTEM, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: `DOCUMENT:\n\n${doc}\n\nFind the flow problems. Return an empty list if the piece already reads smoothly.` }],
+    output_config: { format: { type: "json_schema", schema: FLOW_SCHEMA } },
+  });
+
+  if (response.stop_reason === "refusal") throw apiErr("refusal", "The model declined to review this document.");
+  const textBlock = (response.content ?? []).find((b) => b.type === "text");
+  let parsed = {};
+  try {
+    parsed = JSON.parse(textBlock?.text ?? "{}");
+  } catch {
+    throw apiErr("server", "Model returned unparseable output.");
+  }
+  // Drop anything we could not find verbatim — an unlocatable anchor draws nothing.
+  const norm = (v) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  const hay = norm(text);
+  const issues = (Array.isArray(parsed.issues) ? parsed.issues : [])
+    .map((i) => ({
+      passage: String(i?.passage ?? "").trim().slice(0, 400),
+      explanation: String(i?.explanation ?? "").slice(0, 400),
+      transition: String(i?.transition ?? "").slice(0, 400),
+    }))
+    .filter((i) => i.passage.length >= 12 && hay.includes(norm(i.passage)))
+    .slice(0, 3);
+  return { issues, model: response.model };
+}
+
 const SOURCES_SYSTEM = `You are Tracely's source finder. Given a claim from a document (and optionally a proposed correction), use web search to find authoritative sources that address it.
 
 After researching, your FINAL message must be ONLY a JSON object, no prose, in this exact shape:
@@ -363,6 +438,7 @@ async function standalone(path, body, cfg) {
   }
   if (path === "/api/check") return { ok: true, data: await standaloneCheck(body, cfg) };
   if (path === "/api/sources") return { ok: true, data: await standaloneSources(body, cfg) };
+  if (path === "/api/flow") return { ok: true, data: await standaloneFlow(body, cfg) };
   // /api/cite-url and /api/docs/apply have no standalone equivalent — the
   // widget hides those affordances when it learns the mode.
   return { ok: false, kind: "standalone_unsupported", message: "This feature needs the local Tracely server" };

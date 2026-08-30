@@ -38,7 +38,7 @@ const FINDINGS_SCHEMA = {
         type: "object",
         properties: {
           id: { type: "string" },
-          verdict: { type: "string", enum: ["accurate", "false", "questionable", "incoherent", "no_claim"] },
+          verdict: { type: "string", enum: ["accurate", "needs_citation", "false", "questionable", "incoherent", "no_claim"] },
           explanation: { type: "string" },
           revision: { type: "string" },
           confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -62,13 +62,17 @@ Verdicts:
 - "false": the sentence contains at least one factual claim that is verifiably wrong.
 - "questionable": claims that are unverifiable, seriously disputed, misleading, or stated with false precision.
 - "incoherent": the sentence does not make sense — internally contradictory, a non-sequitur, garbled to the point of obscuring meaning, or a conclusion that does not follow from its premise.
-- "accurate": contains factual claims and they are correct.
+- "needs_citation": the claim appears ACCURATE but is the kind of assertion that needs a source — a statistic, study finding, quote, dated event, or specific non-common-knowledge fact — and neither a citation marker nor an attribution appears in or around the sentence.
+- "accurate": contains factual claims and they are correct, and either they are common knowledge or a citation/attribution is present.
 - "no_claim": coherent but contains no checkable factual claim (opinions, greetings, instructions, questions, clearly framed fiction).
 
 Rules:
 - Judge each sentence in the context of the whole document (resolve pronouns and references from surrounding text).
-- explanation: at most 25 words, concrete. For "false", state the correct fact. For "accurate" and "no_claim", use an empty string.
-- revision: a minimal rewrite of the sentence that fixes the problem while preserving the author's voice and intent. Empty string for "accurate" and "no_claim". Never include surrounding sentences.
+- explanation: at most 25 words, concrete. For "false", state the correct fact. For "needs_citation", name what kind of source would support it. For "accurate" and "no_claim", use an empty string.
+- revision: a minimal rewrite of the sentence that fixes the problem while preserving the author's voice and intent. Empty string for "accurate", "no_claim", and "needs_citation" (nothing to rewrite — it needs a source, not different words). Never include surrounding sentences.
+- A citation can be a bracketed marker like [1], a parenthetical (Author, year), or prose attribution ("According to…", "X reported…"). Any of these count as cited — never flag them "needs_citation".
+- Widely known facts (capitals, famous dates, basic science) are common knowledge: "accurate", not "needs_citation".
+- Precedence: a wrong claim is "false" and an unverifiable one "questionable" even if it also lacks a citation.
 - Ignore bracketed citation markers like [1] when judging a sentence.
 - Do not flag style, tone, or grammar unless it makes the sentence incoherent.
 - Reasonable, widely used approximations are accurate, not questionable.
@@ -161,7 +165,7 @@ async function checkBatch({ text, sentences, model, effort }) {
     .filter((f) => f && validIds.has(f.id))
     .map((f) => ({
       id: f.id,
-      verdict: ["accurate", "false", "questionable", "incoherent", "no_claim"].includes(f.verdict) ? f.verdict : "no_claim",
+      verdict: ["accurate", "needs_citation", "false", "questionable", "incoherent", "no_claim"].includes(f.verdict) ? f.verdict : "no_claim",
       explanation: String(f.explanation ?? "").slice(0, 400),
       revision: String(f.revision ?? "").slice(0, 2000),
       confidence: ["high", "medium", "low"].includes(f.confidence) ? f.confidence : "medium",
@@ -361,6 +365,114 @@ function mockFindings(sentences, model) {
     };
   });
   return { findings, model: `${model} (mock)`, usage: { input: 0, output: 0, cached: 0 } };
+}
+
+// ---------------------------------------------------------------------------
+// Flow check: paragraph-level coaching. Where the fact checker judges single
+// sentences, this reads the piece as a whole and flags places where the
+// writing JUMPS — a paragraph that changes subject with no transition, an
+// idea introduced before it is set up. One cheap call per structural change.
+// ---------------------------------------------------------------------------
+const FLOW_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["issues"],
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["passage", "explanation", "transition"],
+        properties: {
+          passage: { type: "string", description: "The first sentence of the passage that reads abruptly, copied VERBATIM from the document." },
+          explanation: { type: "string", description: "One or two sentences: what the reader loses at this jump." },
+          transition: { type: "string", description: "A single sentence that could be inserted immediately BEFORE the passage to bridge the gap. Plain prose, no quotes." },
+        },
+      },
+    },
+  },
+};
+
+function flowSystemPrompt() {
+  return `You are Tracely's flow coach. You read a student's essay as a whole and find places where the WRITING JUMPS — where a reader would lose the thread.
+
+Flag a passage only when one of these is true:
+- The paragraph changes subject with no transition from what came before.
+- An idea, term, or example arrives before it has been set up.
+- Two adjacent paragraphs are in the wrong order for the argument.
+- A conclusion appears without the step that earns it.
+
+Do NOT flag: grammar, word choice, tone, sentence length, factual errors, or anything a proofreader would catch. Those are other tools' jobs. Do not flag a paragraph merely for starting a new topic if a transition is already present.
+
+Be strict. Most well-organized essays have ZERO flow issues; return an empty list in that case. Never report more than 3, and rank the most damaging first.
+
+For each issue:
+- "passage": copy the FIRST SENTENCE of the offending passage exactly as it appears in the document, character for character. It must be findable with an exact string search. Never paraphrase it, never add ellipses.
+- "explanation": what the reader loses here, in plain language, addressed to the writer. Max 2 sentences.
+- "transition": one sentence the writer could insert immediately before that passage to bridge the gap, written in their voice and using their subject matter. It must stand alone as prose.`;
+}
+
+export async function runFlowCheck({ text, model, mock = false }) {
+  const chosenModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
+  if (mock) return mockFlow(chosenModel);
+
+  const anthropic = getClient();
+  // Flow is judged on structure, so the WHOLE piece goes in (clamped) — unlike
+  // the sentence checker, a trimmed body would hide the very jumps we hunt.
+  const body = text.length > 12_000 ? text.slice(0, 12_000) + "\n[… document truncated …]" : text;
+  const params = {
+    model: chosenModel,
+    max_tokens: 8_000,
+    system: [{ type: "text", text: flowSystemPrompt(), cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: `DOCUMENT:\n\n${body}\n\nFind the flow problems. Return an empty list if the piece already reads smoothly.` }],
+    output_config: { format: { type: "json_schema", schema: FLOW_SCHEMA } },
+  };
+
+  let response;
+  try {
+    response = await createMessage(anthropic, params, false);
+  } catch (err) {
+    throw mapApiError(err);
+  }
+  if (response.stop_reason === "refusal") {
+    throw new CheckError("refusal", "The model declined to review this document.", { status: 502 });
+  }
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  let parsed;
+  try {
+    parsed = JSON.parse(textBlock?.text ?? "{}");
+  } catch {
+    throw new CheckError("server", "Model returned unparseable output.", { status: 502 });
+  }
+
+  // Only keep issues whose passage really is in the document — a paraphrased
+  // anchor can't be located on the page, so it would render nothing.
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const hay = norm(text);
+  const issues = (Array.isArray(parsed.issues) ? parsed.issues : [])
+    .map((i) => ({
+      passage: String(i?.passage ?? "").trim().slice(0, 400),
+      explanation: String(i?.explanation ?? "").slice(0, 400),
+      transition: String(i?.transition ?? "").slice(0, 400),
+    }))
+    .filter((i) => i.passage.length >= 12 && hay.includes(norm(i.passage)))
+    .slice(0, 3);
+
+  return { issues, model: response.model, usage: usageOf(response) };
+}
+
+function mockFlow(model) {
+  return {
+    issues: [{
+      passage: "Grid storage remains one of the biggest technical challenges facing renewable adoption today.",
+      explanation: "This part of the text doesn't flow correctly — it jumps into grid storage without transitioning from the point about solar and wind costs.",
+      transition: "Falling costs, however, only solve half the problem.",
+    }],
+    model: `${model} (mock)`,
+    usage: { input: 0, output: 0, cached: 0 },
+  };
 }
 
 function mockSources(claim, model) {
