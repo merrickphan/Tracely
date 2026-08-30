@@ -74,6 +74,25 @@ CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT );
 const MIGRATIONS = [
   // v1 — baseline lives in SCHEMA; this slot exists so user_version starts at 1.
   () => {},
+  // v2 — entitlement: free-tier metering and the Stripe webhook ledger. These
+  // are not in SCHEMA because a database created before entitlement existed
+  // must gain them too, and SCHEMA only ever runs its CREATE IF NOT EXISTS.
+  () => {
+    db.exec(`
+CREATE TABLE IF NOT EXISTS entitlement_usage (
+  account_id TEXT NOT NULL, day TEXT NOT NULL, kind TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER,
+  PRIMARY KEY (account_id, day, kind)
+);
+CREATE TABLE IF NOT EXISTS billing_events (
+  id TEXT PRIMARY KEY, type TEXT, user_id TEXT, customer_id TEXT,
+  plan TEXT, outcome TEXT, received_at INTEGER, payload_json TEXT
+);
+CREATE TABLE IF NOT EXISTS billing_customers (
+  customer_id TEXT PRIMARY KEY, user_id TEXT, email TEXT, updated_at INTEGER
+);
+`);
+  },
 ];
 
 export function migrate() {
@@ -131,6 +150,59 @@ export function upsertSource(s) {
   ).run(id, s.doi ?? null, s.title ?? "", JSON.stringify(s.authors ?? []), s.year ?? null, s.venue ?? null,
         s.venueType ?? null, s.url ?? null, s.abstract ?? null, s.provider ?? null, s.oaUrl ?? null, Date.now());
   return db.prepare("SELECT * FROM sources WHERE id = ?").get(id);
+}
+
+// ── entitlement usage: one counter per account, per calendar day, per kind.
+// Counted here rather than in memory because a free account must not get its
+// quota back by restarting the server, and because the count is the only
+// evidence when someone asks why they saw a 429.
+export function usageCount(accountId, day, kind) {
+  const row = db.prepare("SELECT count FROM entitlement_usage WHERE account_id = ? AND day = ? AND kind = ?")
+    .get(accountId, day, kind);
+  return row?.count ?? 0;
+}
+
+/** Increments and returns the NEW count. Stamped before the call it meters. */
+export function usageBump(accountId, day, kind) {
+  db.prepare(
+    "INSERT INTO entitlement_usage (account_id, day, kind, count, updated_at) VALUES (?, ?, ?, 1, ?) " +
+    "ON CONFLICT(account_id, day, kind) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at"
+  ).run(accountId, day, kind, Date.now());
+  return usageCount(accountId, day, kind);
+}
+
+// ── billing ledger: every Stripe event we accepted, keyed on Stripe's own id.
+// Stripe retries deliveries, so "already recorded" must mean "already applied":
+// the insert IS the replay guard, which is why it returns whether it won.
+export function billingEventRecord({ id, type, userId, customerId, plan, outcome, payload }) {
+  const existing = db.prepare("SELECT id FROM billing_events WHERE id = ?").get(id);
+  if (existing) return false;
+  db.prepare(
+    "INSERT INTO billing_events (id, type, user_id, customer_id, plan, outcome, received_at, payload_json) VALUES (?,?,?,?,?,?,?,?)"
+  ).run(id, type ?? null, userId ?? null, customerId ?? null, plan ?? null, outcome ?? null, Date.now(),
+        payload == null ? null : JSON.stringify(payload).slice(0, 100_000));
+  return true;
+}
+
+export function billingEventSeen(id) {
+  return Boolean(db.prepare("SELECT id FROM billing_events WHERE id = ?").get(id));
+}
+
+// The Stripe customer → Supabase user mapping, learned at checkout.
+// Later subscription events carry a customer id and no user id at all, so
+// without this the renewal that matters most would have nobody to write to.
+export function billingCustomerLink({ customerId, userId, email }) {
+  if (!customerId) return;
+  db.prepare(
+    "INSERT INTO billing_customers (customer_id, user_id, email, updated_at) VALUES (?,?,?,?) " +
+    "ON CONFLICT(customer_id) DO UPDATE SET " +
+    "user_id = COALESCE(excluded.user_id, user_id), email = COALESCE(excluded.email, email), updated_at = excluded.updated_at"
+  ).run(customerId, userId ?? null, email ?? null, Date.now());
+}
+
+export function billingCustomerLookup(customerId) {
+  if (!customerId) return null;
+  return db.prepare("SELECT customer_id, user_id, email FROM billing_customers WHERE customer_id = ?").get(customerId) ?? null;
 }
 
 export function settingsGet() {

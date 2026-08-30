@@ -81,7 +81,27 @@
   }
   button:hover { transform: translateY(-1px); }
   button:active { transform: translateY(0); }
+  button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  button.ghost { background: var(--cream); border: 1px solid var(--line); color: var(--gray); }
+  button.ghost:hover { border-color: var(--orange); color: var(--orange); background: #fff; }
   .saved { font-size: 12.5px; color: #1f9d55; font-weight: 600; margin-top: 10px; min-height: 16px; }
+  .saved.warn { color: var(--orange); }
+
+  /* account */
+  .linkbtn {
+    display: inline-flex; align-items: center; text-decoration: none;
+    border-radius: 12px; padding: 11px 20px; font-size: 13.5px; font-weight: 700;
+    background: linear-gradient(150deg, var(--orange), var(--orange-2)); color: #fff;
+    box-shadow: 0 6px 16px rgba(255,127,0,0.24); transition: transform .12s;
+  }
+  .linkbtn:hover { transform: translateY(-1px); }
+  .acct { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .acct-email { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+  .plan {
+    font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 9px; background: var(--cream); border: 1px solid var(--line); color: var(--gray);
+  }
+  .plan.paid { background: linear-gradient(150deg, var(--orange), var(--orange-2)); border-color: transparent; color: #fff; }
 
   /* Faster ↔ Smarter slider */
   .slider-labels { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
@@ -108,6 +128,9 @@
   .ticks { display: flex; justify-content: space-between; padding: 0 11px; margin-top: 10px; }
   .tick { font-size: 12px; font-weight: 600; color: var(--gray); text-align: center; flex: 1; }
   .tick.active { color: var(--orange); }
+  .tick.locked { color: var(--gray-soft); opacity: .55; }
+  .upgrade-link { font-size: 12px; font-weight: 700; color: var(--orange); text-decoration: none; }
+  .upgrade-link:hover { text-decoration: underline; }
   .model-note { font-size: 12px; color: var(--gray-soft); margin-top: 12px; font-weight: 500; }
 
   ul { list-style: none; }
@@ -133,23 +156,35 @@
     <span id="serverStatus" class="status"><span class="dot"></span><span id="serverStatusText">Checking for a local Tracely server…</span></span>
 
     <section>
-      <h2>Anthropic API key</h2>
-      <p class="hint">Stored locally in this browser and sent only to api.anthropic.com. Leave empty if you run the Tracely server — the server has all the features (URL citing, Docs write-back) and uses its own key.</p>
+      <h2>Tracely account</h2>
+      <p class="hint" id="acctHint">Checking your account…</p>
+      <div id="signedOut" hidden>
+        <div class="row">
+          <button id="signIn">Sign in</button>
+          <a class="linkbtn" href="https://jointracely.com/order" target="_blank" rel="noopener noreferrer">See plans</a>
+        </div>
+      </div>
+      <div id="signedIn" hidden>
+        <div class="acct">
+          <span class="acct-email" id="acctEmail"></span>
+          <span class="plan" id="acctPlan"></span>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <a class="linkbtn" id="manageLink" href="https://jointracely.com/order" target="_blank" rel="noopener noreferrer">Upgrade</a>
+          <button id="signOut" class="ghost">Sign out</button>
+        </div>
+      </div>
+      <p id="acctStatus" class="saved"></p>
+    </section>
+
+    <section>
+      <h2>Anthropic API key — no account needed</h2>
+      <p class="hint">Bring your own key and you pay Anthropic directly for every check, so there is nothing for us to meter: no sign-in, no plan, every model unlocked. Stored locally in this browser and sent only to api.anthropic.com. Leave it empty to use the Tracely server instead — the server has all the features (URL citing, Docs write-back) and uses its own key on your plan.</p>
       <div class="row">
         <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
         <button id="saveKey">Save</button>
       </div>
       <p id="keySaved" class="saved"></p>
-    </section>
-
-    <section>
-      <h2>Tracely Pro</h2>
-      <p class="hint">The free tier runs on Faster (Haiku) — quick and accurate for everyday checking. A Pro code unlocks the Faster ↔ Smarter slider everywhere.</p>
-      <div class="row">
-        <input type="text" id="proCode" placeholder="TRACELY-PRO-…" autocomplete="off" spellcheck="false">
-        <button id="saveProCode">Apply</button>
-      </div>
-      <p id="proStatus" class="saved"></p>
     </section>
 
     <section>
@@ -165,6 +200,7 @@
         <span class="tick" data-i="2">Opus</span>
       </div>
       <p class="model-note" id="modelNote"></p>
+      <p class="model-note" id="modelLocked" hidden>Smarter models come with a paid plan. <a class="upgrade-link" href="https://jointracely.com/order" target="_blank" rel="noopener noreferrer">See plans →</a></p>
     </section>
 
     <section>

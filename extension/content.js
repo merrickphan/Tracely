@@ -66,59 +66,112 @@
     return i === -1 ? 0 : i;
   }
 
-  /* ── Tracely Pro gate ────────────────────────────────────────────────────
-     Free tier runs Haiku; the Faster↔Smarter slider is a Pro feature. The
-     entitlement is an access code saved from the options page (chrome.storage)
-     — a stand-in until real billing exists, but the gate is real: every API
-     call resolves its model through effModel(), so a free tier can never
-     reach Sonnet/Opus even by editing localStorage. */
-  let tierPro = false;
+  /* ── plan gate ───────────────────────────────────────────────────────────
+     Which stops of the Faster↔Smarter slider this account can reach: free
+     stops at Haiku, student at Sonnet, pro at Opus. The plan comes from the
+     signed-in Supabase account, resolved by the SERVER (GET /api/entitlement)
+     and relayed here by the background worker.
+
+     THIS GATE IS COSMETIC. It exists so the slider tells the truth about what
+     the account will actually get, and so a stale paid setting does not sit in
+     localStorage looking active. It prevents nothing: the model in a request
+     body is a request, and the server clamps it to the plan on the token it
+     received. Anyone editing this file can move the slider; they still get the
+     model their account pays for.
+
+     Two exceptions open every stop, and neither is a loophole — in both the
+     server has already decided there is no plan to apply:
+     • `byoKey` — standalone mode. The call is served by the user's own
+       Anthropic API key, billed to them by Anthropic. Nothing of ours to meter.
+     • `unenforced` — the local server reported `enforced: false`: it has no
+       Supabase project configured, so it clamps NOTHING. Locking the slider
+       here would show an upgrade prompt for a server that will serve Opus on
+       request — a lie in the one mode a plain `node server.js` runs in. */
+  const ORDER_URL = "https://jointracely.com/order";
+  const PLAN_MAX_STOP = { free: 0, student: 1, pro: 2 };
+  let tier = { plan: "free", byoKey: false, unenforced: false };
   const tierListeners = []; // widget re-renders to run when the tier resolves
-  const PRO_CODE_RE = /^TRACELY-PRO-[A-Z0-9]{4,}$/i;
-  function effModel(settings) { return tierPro ? settings.model : SPEED_STOPS[0].model; }
-  function effEffort(settings) { return tierPro ? settings.effort : SPEED_STOPS[0].effort; }
+
+  // The highest slider stop this account may use. Unknown plan → free, always.
+  function maxStop() {
+    if (tier.byoKey || tier.unenforced) return SPEED_STOPS.length - 1;
+    return PLAN_MAX_STOP[tier.plan] ?? 0;
+  }
+  function effModel(settings) { return SPEED_STOPS[Math.min(speedPos(settings.model), maxStop())].model; }
+  function effEffort(settings) {
+    const pos = speedPos(settings.model);
+    return pos <= maxStop() ? settings.effort : SPEED_STOPS[maxStop()].effort;
+  }
+  // Pull a stored preference down to what the plan reaches. Returns whether it
+  // moved, so the caller knows to persist.
+  function clampSettingsToPlan(settings) {
+    if (speedPos(settings.model) <= maxStop()) return false;
+    const stop = SPEED_STOPS[maxStop()];
+    settings.model = stop.model;
+    settings.effort = stop.effort;
+    return true;
+  }
   function tierChanged() {
     for (const fn of tierListeners) { try { fn(); } catch { /* widget torn down */ } }
   }
-  try {
-    chrome.storage?.local?.get({ proCode: "" }, (cfg) => {
-      tierPro = PRO_CODE_RE.test(String(cfg.proCode ?? "").trim());
-      tierChanged(); // always: free-tier listeners clamp stale paid settings
-    });
-    chrome.storage?.onChanged?.addListener((changes, area) => {
-      if (area !== "local" || !changes.proCode) return;
-      tierPro = PRO_CODE_RE.test(String(changes.proCode.newValue ?? "").trim());
-      tierChanged();
-    });
-  } catch { /* harness page: no chrome.storage — stays free tier */ }
+  let tierResolved = false;
+  function refreshTier() {
+    if (!useRelay) return; // harness page: no background worker — stays free
+    chrome.runtime.sendMessage({ type: "tracely-entitlement" }).then((r) => {
+      if (!r?.ok) return;
+      const next = { plan: r.plan ?? "free", byoKey: Boolean(r.byoKey), unenforced: Boolean(r.unenforced) };
+      if (tierResolved && next.plan === tier.plan && next.byoKey === tier.byoKey && next.unenforced === tier.unenforced) return;
+      tier = next;
+      tierResolved = true;
+      tierChanged(); // first resolve fires too: free-tier listeners clamp stale paid settings
+    }).catch(() => { /* worker asleep or extension reloaded — stays free */ });
+  }
+  // Called once `useRelay` is known (below) — refreshTier depends on it.
+  function initTier() {
+    try {
+      refreshTier();
+      // The background worker writes the entitlement cache and the API key
+      // lives in the same area, so watching storage is how a sign-in on the
+      // options page reaches an already-open tab without a reload.
+      chrome.storage?.onChanged?.addListener((changes, area) => {
+        if (area === "local" && (changes.entitlement || changes.apiKey)) refreshTier();
+      });
+      setInterval(refreshTier, 5 * 60_000); // matches the worker's entitlement TTL
+    } catch { /* harness page: no chrome.* — stays free tier */ }
+  }
   function sbFill(pos) {
     const pct = (pos / (SPEED_STOPS.length - 1)) * 100;
     return `linear-gradient(90deg, #ff7f00 0%, #f9a35a ${pct}%, rgba(20,16,10,0.08) ${pct}%, rgba(20,16,10,0.08) 100%)`;
   }
   function speedbarHtml(pos) {
-    const locked = !tierPro;
-    const p = locked ? 0 : pos; // free tier pins to Faster (Haiku)
-    return `<div class="speedbar${locked ? " locked" : ""}"${locked ? ' title="Faster ↔ Smarter is a Tracely Pro feature"' : ""}>
+    const ceiling = maxStop();
+    const locked = ceiling < SPEED_STOPS.length - 1; // some stops are above this plan
+    const p = Math.min(pos, ceiling);
+    const title = locked ? ' title="Smarter models come with a paid Tracely plan"' : "";
+    return `<div class="speedbar${locked ? " locked" : ""}"${title}>
       <span class="sb-lab${p === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
       <div class="sb-track">
-        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${p}" style="--sb-fill:${sbFill(p)}"${locked ? " disabled" : ""}>
-        <span class="sb-dots">${SPEED_STOPS.map(() => "<i></i>").join("")}</span>
+        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${p}" style="--sb-fill:${sbFill(p)}"${ceiling === 0 ? " disabled" : ""}>
+        <span class="sb-dots">${SPEED_STOPS.map((_, i) => `<i${i > ceiling ? ' class="off"' : ""}></i>`).join("")}</span>
       </div>
-      <span class="sb-lab${p === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter${locked ? '<span class="sb-pro">PRO</span>' : ""}</span>
+      <span class="sb-lab${p === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter${locked ? `<a class="sb-pro" href="${ORDER_URL}" target="_blank" rel="noopener noreferrer">PRO</a>` : ""}</span>
     </div>`;
   }
   // Wire the slider without re-rendering: a full render mid-drag drops the
   // thumb. The drag is SMOOTH (step 0.01, fill follows the finger); on
   // release it snaps to the nearest stop, and only the snap saves settings.
+  // The drag stops dead at the plan's ceiling so the thumb never sits over a
+  // stop the account would not actually be served.
   function wireSpeedbar(shadow, settings, saveSettings) {
     const el = shadow.getElementById("speedSel");
-    if (!el) return;
-    if (!tierPro) return; // locked: disabled input, nothing to wire
+    if (!el || el.disabled) return; // free tier has a single stop: nothing to drag
+    const ceiling = maxStop();
     el.addEventListener("input", () => {
+      if (Number(el.value) > ceiling) el.value = String(ceiling);
       el.style.setProperty("--sb-fill", sbFill(Number(el.value)));
     });
     const snap = () => {
-      const pos = Math.max(0, Math.min(SPEED_STOPS.length - 1, Math.round(Number(el.value))));
+      const pos = Math.max(0, Math.min(ceiling, Math.round(Number(el.value))));
       el.value = String(pos);
       const stop = SPEED_STOPS[pos];
       settings.model = stop.model;
@@ -254,6 +307,8 @@
   // The harness and plain-script test pages fetch the server directly.
   const useRelay = !harness && typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
 
+  initTier(); // the plan gate asks the worker, so it can only start once useRelay is known
+
   async function api(path, body) {
     if (useRelay) {
       let resp;
@@ -336,8 +391,9 @@
     .selects { display: flex; gap: 6px; padding: 9px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); align-items: center; }
     .speedbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); }
     .speedbar.locked .sb-track { opacity: .5; }
-    .speedbar.locked input { cursor: not-allowed; }
-    .sb-pro { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 8px; background: linear-gradient(150deg, #ff7f00, #f9a35a); color: #fff; font-size: 8px; font-weight: 800; letter-spacing: .6px; vertical-align: 1px; }
+    .speedbar.locked input[disabled] { cursor: not-allowed; }
+    .sb-pro { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 8px; background: linear-gradient(150deg, #ff7f00, #f9a35a); color: #fff; font-size: 8px; font-weight: 800; letter-spacing: .6px; vertical-align: 1px; text-decoration: none; cursor: pointer; }
+    .sb-dots i.off { background: rgba(20,16,10,0.18); box-shadow: none; }
     .sb-lab { font-size: 12px; font-weight: 700; color: #8e8e93; flex-shrink: 0; }
     .sb-lab.on { color: #0e0e10; }
     .sb-track { position: relative; flex: 1; display: flex; align-items: center; }
@@ -2059,12 +2115,9 @@
     const { shadow, root } = makeWidget();
     tierListeners.push(() => {
       // On downgrade, clamp the STORED choice too — a stale opus setting must
-      // not sit in localStorage looking active (API calls already clamp).
-      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
-        settings.model = SPEED_STOPS[0].model;
-        settings.effort = SPEED_STOPS[0].effort;
-        lsSet(SETTINGS_KEY, JSON.stringify(settings));
-      }
+      // not sit in localStorage looking active (API calls already clamp, and
+      // the server clamps again regardless of what we send).
+      if (clampSettingsToPlan(settings)) lsSet(SETTINGS_KEY, JSON.stringify(settings));
       render();
     });
 
@@ -2307,11 +2360,7 @@
     }
     tierListeners.push(() => {
       // Same downgrade clamp as docs mode; only repaint if the panel exists.
-      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
-        settings.model = SPEED_STOPS[0].model;
-        settings.effort = SPEED_STOPS[0].effort;
-        lsSet(SETTINGS_KEY, JSON.stringify(settings));
-      }
+      if (clampSettingsToPlan(settings)) lsSet(SETTINGS_KEY, JSON.stringify(settings));
       if (widget) render();
     });
 

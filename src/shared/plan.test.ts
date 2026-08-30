@@ -38,24 +38,30 @@ describe('normalizePlan', () => {
 
 describe('planFromMetadata', () => {
   it('reads app_metadata', () => {
-    strictEqual(planFromMetadata({ plan: 'student' }, {}), 'student')
+    strictEqual(planFromMetadata({ plan: 'student' }), 'student')
   })
 
-  it('falls back to user_metadata when the server set nothing', () => {
-    strictEqual(planFromMetadata({}, { plan: 'student' }), 'student')
-    strictEqual(planFromMetadata(null, { plan: 'pro' }), 'pro')
+  it('IGNORES user_metadata entirely', () => {
+    // The account holder can write user_metadata themselves with one request
+    // (PUT /auth/v1/user {"data":{"plan":"pro"}}), so consulting it at all is
+    // a self-service upgrade button. It was previously read as a "fallback"
+    // when app_metadata carried no plan — which is the state EVERY free
+    // account is in, so the fallback was the only field consulted for exactly
+    // the users who had not paid.
+    strictEqual(planFromMetadata({}), 'free')
+    strictEqual(planFromMetadata(null), 'free')
   })
 
-  it('never lets user_metadata overrule app_metadata', () => {
-    // user_metadata is writable by the account holder through
-    // auth.updateUser — if it could win, it would be an upgrade button.
-    strictEqual(planFromMetadata({ plan: 'free' }, { plan: 'pro' }), 'free')
+  it('takes only one argument, so the fallback cannot be reintroduced', () => {
+    strictEqual(planFromMetadata.length, 1)
   })
 
-  it('is free when neither says anything', () => {
-    strictEqual(planFromMetadata({}, {}), 'free')
-    strictEqual(planFromMetadata(undefined, undefined), 'free')
-    strictEqual(planFromMetadata('pro', 'pro'), 'free')
+  it('is free when app_metadata says nothing usable', () => {
+    strictEqual(planFromMetadata({}), 'free')
+    strictEqual(planFromMetadata(undefined), 'free')
+    strictEqual(planFromMetadata('pro'), 'free')
+    strictEqual(planFromMetadata({ plan: null }), 'free')
+    strictEqual(planFromMetadata({ plan: 'platinum' }), 'free')
   })
 })
 

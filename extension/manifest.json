@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tracely — live fact-check while you write",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "description": "Live AI fact-checking as you write. Underlines false or shaky sentences in any text field and suggests fixes with sources.",
   "options_page": "options.html",
   "icons": {
@@ -17,7 +17,8 @@
     }
   },
   "permissions": [
-    "storage"
+    "storage",
+    "identity"
   ],
   "content_scripts": [
     {
@@ -46,7 +47,8 @@
   },
   "host_permissions": [
     "http://localhost:4477/*",
-    "https://api.anthropic.com/*"
+    "https://api.anthropic.com/*",
+    "https://epafyygdvvkgpdkbevqi.supabase.co/*"
   ],
   "web_accessible_resources": [
     {

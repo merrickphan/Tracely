@@ -48,6 +48,16 @@ With the bridge set up, the widget gains **Fix in doc**, **Cite in doc**, **High
 
 *Why "Anyone"?* The local server calls the URL without a Google login; the random URL plus the secret token are the lock. Anyone who has both could edit your docs, so treat `.env` as private (it's already gitignored).
 
+## Accounts and plans (optional)
+
+The server can enforce paid plans — clamping the model a call may use and
+metering the free tier's 5 daily source searches — and accept Stripe webhooks
+that set a plan on the account. It needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STUDENT`
+and `STRIPE_PRICE_PRO` in `.env`. **Set none of them and nothing changes** —
+no clamping, no metering, everything works exactly as described above. See
+[BILLING.md](BILLING.md).
+
 ## Notes
 
 - Server runs on port `4477` (`PORT=…` to change).

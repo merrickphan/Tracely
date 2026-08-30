@@ -42,23 +42,29 @@ export function normalizePlan(value: unknown): Plan {
 }
 
 /**
- * The plan a Supabase user carries, read from their metadata.
+ * The plan a Supabase user carries, read from `app_metadata` ONLY.
  *
- * **`app_metadata` wins, and that is the point of reading both.** It is the
- * half of a Supabase user only the service role can write, so it is the half a
- * checkout can be trusted to have set. `user_metadata` is writable by the
- * account holder themselves through `auth.updateUser`, which makes it a
- * self-service upgrade button — it is read only as a fallback for accounts
- * provisioned before the app_metadata convention, and it can never override a
- * plan the server actually set.
+ * That is the half of a Supabase user which only the service role can write,
+ * so it is the only half a checkout can be trusted to have set.
  *
- * The relay verifies entitlement independently before it spends anything. What
- * is decided here governs this app's own behaviour, not the bill.
+ * **`user_metadata` is deliberately not consulted, and reading it as a
+ * "fallback" was a working free-to-Pro escalation.** The account holder can
+ * write it themselves with one request against Supabase's own API:
+ *
+ *     PUT /auth/v1/user   {"data": {"plan": "pro"}}
+ *
+ * The earlier version defended the fallback on the grounds that app_metadata
+ * still won, so a user could not override a plan the server had set. True, and
+ * beside the point: an account that has never been through the webhook has NO
+ * app_metadata plan at all — that is every free account — so the fallback was
+ * the only field consulted for precisely the people who had not paid.
+ *
+ * Anything unreadable, absent or unrecognised is `free`. Guessing high spends
+ * the top model on an unpaid account; guessing low shows a paying user a
+ * prompt they can clear by signing in again.
  */
-export function planFromMetadata(appMetadata: unknown, userMetadata: unknown): Plan {
-  const fromApp = readPlanField(appMetadata)
-  if (fromApp !== null) return normalizePlan(fromApp)
-  return normalizePlan(readPlanField(userMetadata))
+export function planFromMetadata(appMetadata: unknown): Plan {
+  return normalizePlan(readPlanField(appMetadata))
 }
 
 function readPlanField(metadata: unknown): unknown {

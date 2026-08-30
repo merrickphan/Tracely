@@ -17,13 +17,18 @@
 
    The relay is not an open proxy: it only talks to the local Tracely server
    or api.anthropic.com, and only on the endpoints listed below. The API key
-   is read from chrome.storage.local and sent ONLY to api.anthropic.com. */
+   is read from chrome.storage.local and sent ONLY to api.anthropic.com.
+
+   Accounts: an optional Supabase sign-in (options page) puts an access token
+   in chrome.storage.local, which rides along as an Authorization header on
+   every server-mode relay. The SERVER reads that header and decides which
+   model tier the account may use — this worker only carries the token. */
 "use strict";
 
 const SERVER = "http://localhost:4477";
 // Mirrors the server's EXTENSION_API set. Docs mode relays through here too,
 // so the Docs bridge endpoint is included (server mode only).
-const API_PATHS = new Set(["/api/status", "/api/check", "/api/sources", "/api/cite-url", "/api/docs/apply"]);
+const API_PATHS = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply", "/api/entitlement"]);
 
 const PROBE_INTERVAL_MS = 60_000;
 const PROBE_TIMEOUT_MS = 1500;
@@ -67,14 +72,240 @@ function getConfig() {
   return chrome.storage.local.get({ apiKey: "", model: DEFAULT_MODEL, enabledSites: [] });
 }
 
+/* ── accounts (Supabase) ─────────────────────────────────────────────────── */
+
+/* The same Supabase project the desktop app signs into, so one account covers
+   both. The anon key is not a secret — it names the project, not a user, and
+   every Supabase browser client ships it; access control is Supabase's RLS
+   plus the server's own token verification.
+
+   Blank these two and the extension still works: `authConfigured()` goes
+   false, the options page says accounts are not set up in this build, and
+   everyone is a free user with an unmetered local server. That is the mode
+   Sam and Merrick run in.
+
+   Changing the project means changing the matching entry in manifest.json's
+   host_permissions too — the token refresh below is a direct fetch to it. */
+const SUPABASE_URL = "https://epafyygdvvkgpdkbevqi.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwYWZ5eWdkdnZrZ3Bka2JldnFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NTUwOTIsImV4cCI6MjEwMTQzMTA5Mn0.8H-PInYTl37J2YZ7N1uKoUr_oDwVG53QmgloCJ3vETA";
+
+const PLANS = ["free", "student", "pro"];
+const DEFAULT_PLAN = "free";
+const ENTITLEMENT_TTL_MS = 5 * 60_000; // fresh enough to notice a checkout, cheap enough to ask on every render
+
+function authConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+// Mirrors normalizePlan in the desktop app's shared/plan.ts: case and stray
+// space are forgiven because the value is written by whatever provisions the
+// subscription, and ANYTHING else is free. Nothing here ever fails open.
+function normalizePlan(value) {
+  if (typeof value !== "string") return DEFAULT_PLAN;
+  const normalized = value.trim().toLowerCase();
+  return PLANS.includes(normalized) ? normalized : DEFAULT_PLAN;
+}
+
+function getAuth() {
+  return chrome.storage.local.get({ authToken: "", refreshToken: "" });
+}
+
+async function clearAuth() {
+  await chrome.storage.local.set({ authToken: "", refreshToken: "", entitlement: null });
+}
+
+// One attempt, then give up and sign the user out locally. A refresh token
+// that Supabase has already rotated or revoked is not going to start working
+// on a retry, and a checker that keeps stalling on auth is worse than a
+// checker that quietly drops to free.
+async function refreshAccessToken() {
+  if (!authConfigured()) return "";
+  const { refreshToken } = await getAuth();
+  if (!refreshToken) return "";
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) {
+      await clearAuth();
+      return "";
+    }
+    const data = await res.json().catch(() => ({}));
+    const token = String(data?.access_token ?? "");
+    if (!token) {
+      await clearAuth();
+      return "";
+    }
+    await chrome.storage.local.set({
+      authToken: token,
+      refreshToken: String(data?.refresh_token ?? refreshToken),
+      entitlement: null, // a new token can carry a new plan — re-ask rather than trust the cache
+    });
+    return token;
+  } catch {
+    // Offline. Keep the tokens: the network coming back should not cost a
+    // sign-in, and every caller already treats "no answer" as free.
+    return "";
+  }
+}
+
+/* Sign-in runs entirely in Chrome's own auth window. Supabase's implicit flow
+   hands the tokens back in the fragment of the redirect URL, which is exactly
+   what launchWebAuthFlow resolves with — no PKCE code exchange, and no remote
+   code, which the Web Store forbids.
+
+   The redirect target is https://<extension-id>.chromiumapp.org/, so that URL
+   has to be on the Supabase project's allowed-redirect list or Supabase
+   refuses the hand-back. */
+async function signIn() {
+  if (!authConfigured()) throw new Error("This build has no Supabase project configured, so accounts are unavailable.");
+  const redirectUri = chrome.identity.getRedirectURL();
+  const authUrl =
+    `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUri)}`;
+
+  const finalUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
+  if (!finalUrl) throw new Error("Sign-in was cancelled.");
+
+  const url = new URL(finalUrl);
+  const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+  // Supabase reports refusals as query params and successes in the fragment.
+  const error = url.searchParams.get("error_description") ?? url.searchParams.get("error") ?? fragment.get("error_description");
+  if (error) throw new Error(error);
+
+  const accessToken = fragment.get("access_token") ?? "";
+  if (!accessToken) throw new Error("Sign-in returned no access token.");
+  await chrome.storage.local.set({
+    authToken: accessToken,
+    refreshToken: fragment.get("refresh_token") ?? "",
+    entitlement: null,
+  });
+  return fetchEntitlement({ force: true });
+}
+
+async function signOut() {
+  const { authToken } = await getAuth();
+  if (authConfigured() && authToken) {
+    // Best effort: revoking the session server-side is good hygiene, but the
+    // sign-out the user asked for is the local one, and it must not fail
+    // because the network did.
+    try {
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${authToken}` },
+      });
+    } catch { /* already gone as far as this browser is concerned */ }
+  }
+  await clearAuth();
+}
+
+/* ── entitlement (GET /api/entitlement) ──────────────────────────────────── */
+
+// `enforced: true` is the safe default for a non-answer: it means "assume the
+// server WILL clamp", which shows the free tier rather than opening stops the
+// call would not actually be served at.
+const FREE_ENTITLEMENT = { plan: DEFAULT_PLAN, email: null, enforced: true };
+
+// Cached in chrome.storage rather than in a worker variable: the service
+// worker is evicted constantly, and the options page and every content script
+// want the same answer. Content scripts watch the `entitlement` key to know
+// when a plan changed.
+async function cachedEntitlement() {
+  const { entitlement } = await chrome.storage.local.get({ entitlement: null });
+  if (!entitlement || typeof entitlement !== "object") return null;
+  if (Date.now() - Number(entitlement.fetchedAt ?? 0) > ENTITLEMENT_TTL_MS) return null;
+  return entitlement;
+}
+
+// `enforced` is what the server says about itself: false means it has no
+// Supabase project configured and clamps nothing, so the picker should not
+// pretend otherwise. Only an explicit `false` counts — a server too old to
+// send the field, or a body missing it, stays enforced.
+async function storeEntitlement(plan, email, enforced) {
+  const entitlement = {
+    plan: normalizePlan(plan),
+    email: email ?? null,
+    enforced: enforced !== false,
+    fetchedAt: Date.now(),
+  };
+  await chrome.storage.local.set({ entitlement });
+  return entitlement;
+}
+
+/* Never throws and never answers above free — this is on the path of every
+   render and every relayed call. Signed out, server down, a body in a shape
+   nobody expected: all free. Guessing high spends money on an account that is
+   not paying; guessing low shows a paying user an upgrade prompt that one
+   refresh clears. */
+async function fetchEntitlement({ force = false } = {}) {
+  if (!force) {
+    const cached = await cachedEntitlement();
+    if (cached) return cached;
+  }
+  const { authToken } = await getAuth();
+  if (!authToken) {
+    // Signed out still asks, because the answer carries `enforced` — a server
+    // with no Supabase project clamps nothing and the picker must say so.
+    if (!(await serverReachable())) return storeEntitlement(DEFAULT_PLAN, null, true);
+    try {
+      const res = await fetch(`${SERVER}/api/entitlement`);
+      if (!res.ok) return storeEntitlement(DEFAULT_PLAN, null, true);
+      const data = await res.json().catch(() => ({}));
+      return storeEntitlement(DEFAULT_PLAN, null, data?.enforced);
+    } catch {
+      return storeEntitlement(DEFAULT_PLAN, null, true);
+    }
+  }
+  if (!(await serverReachable())) {
+    // No server to ask. Do not cache a guess — the answer is "we don't know",
+    // and the next call once the server is back should be a real one.
+    return { ...FREE_ENTITLEMENT, fetchedAt: 0 };
+  }
+  try {
+    let res = await fetch(`${SERVER}/api/entitlement`, { headers: { Authorization: `Bearer ${authToken}` } });
+    if (res.status === 401) {
+      const fresh = await refreshAccessToken();
+      if (!fresh) {
+        await clearAuth();
+        return storeEntitlement(DEFAULT_PLAN, null, true);
+      }
+      res = await fetch(`${SERVER}/api/entitlement`, { headers: { Authorization: `Bearer ${fresh}` } });
+    }
+    if (!res.ok) return { ...FREE_ENTITLEMENT, fetchedAt: 0 };
+    const data = await res.json().catch(() => ({}));
+    return storeEntitlement(data?.plan, typeof data?.email === "string" ? data.email : null, data?.enforced);
+  } catch {
+    return { ...FREE_ENTITLEMENT, fetchedAt: 0 };
+  }
+}
+
 /* ── server relay (unchanged behavior) ───────────────────────────────────── */
 
 // Throws on network failure (server just died) so the caller can fall through
 // to standalone; returns the protocol envelope for HTTP responses.
-async function relay(path, body) {
+//
+// The access token rides along when there is one. The server is what reads it
+// and decides which model the call actually runs at — the `model` in the body
+// is a request, not a grant.
+async function relay(path, body, { token = "", retried = false } = {}) {
+  const headers = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${SERVER}${path}`, body === undefined
-    ? undefined
-    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    ? (token ? { headers } : undefined)
+    : { method: "POST", headers, body: JSON.stringify(body) });
+
+  // An expired token must cost the user a re-auth at worst, never a broken
+  // check: refresh once, and failing that drop to anonymous — which the
+  // server serves as a free user.
+  if (res.status === 401 && token && !retried) {
+    const fresh = await refreshAccessToken();
+    if (fresh) return relay(path, body, { token: fresh, retried: true });
+    await clearAuth();
+    return relay(path, body, { token: "", retried: true });
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     return { ok: false, status: res.status, message: data?.error?.message ?? `HTTP ${res.status}`, kind: data?.error?.kind };
@@ -461,6 +692,66 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // async sendResponse
   }
 
+  /* What the options page and the widgets ask to learn the account state.
+
+     Two flags say "there is no plan to apply here", for different reasons, and
+     the UIs open every model stop on either:
+
+     • `byoKey` — standalone mode. The call is served by the user's own
+       Anthropic key and billed to them by Anthropic, so there is nothing of
+       ours to meter and no sign-in to require.
+     • `unenforced` — the local server reported `enforced: false`, meaning it
+       has no Supabase project configured and clamps nothing. Locking the
+       picker there would show an upgrade prompt for a server that will serve
+       Opus on request. That is the mode a plain `node server.js` with the
+       stock .env runs in.
+
+     Both default to false on any non-answer, so an unreachable worker or a
+     server too old to send the field leaves the picker on the free tier. */
+  if (msg?.type === "tracely-entitlement") {
+    (async () => {
+      try {
+        const [{ authToken }, cfg, ent, up] = await Promise.all([getAuth(), getConfig(), fetchEntitlement({ force: msg.force === true }), serverReachable()]);
+        sendResponse({
+          ok: true,
+          configured: authConfigured(),
+          signedIn: Boolean(authToken),
+          plan: normalizePlan(ent?.plan),
+          email: ent?.email ?? null,
+          byoKey: !up && Boolean(cfg.apiKey),
+          unenforced: Boolean(up) && ent?.enforced === false,
+        });
+      } catch (err) {
+        // Fail closed, but still answer: an unanswered probe would leave the
+        // widget with no tier at all.
+        sendResponse({ ok: true, configured: authConfigured(), signedIn: false, plan: DEFAULT_PLAN, email: null, byoKey: false, unenforced: false, message: err?.message });
+      }
+    })();
+    return true; // async sendResponse
+  }
+
+  if (msg?.type === "tracely-signIn") {
+    (async () => {
+      try {
+        const ent = await signIn();
+        sendResponse({ ok: true, plan: normalizePlan(ent?.plan), email: ent?.email ?? null });
+      } catch (err) {
+        sendResponse({ ok: false, message: err?.message ?? String(err) });
+      }
+    })();
+    return true; // async sendResponse
+  }
+
+  if (msg?.type === "tracely-signOut") {
+    (async () => {
+      try {
+        await signOut();
+      } catch { /* clearAuth already ran, or storage is gone with the profile */ }
+      sendResponse({ ok: true });
+    })();
+    return true; // async sendResponse
+  }
+
   if (msg?.type !== "tracely-api" || typeof msg.path !== "string" || !API_PATHS.has(msg.path)) {
     return false;
   }
@@ -468,7 +759,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     try {
       if (await serverReachable()) {
         try {
-          sendResponse(await relay(msg.path, msg.body));
+          const { authToken } = await getAuth();
+          sendResponse(await relay(msg.path, msg.body, { token: authToken }));
           return;
         } catch {
           // Server died between probe and call — remember, fall to standalone.
