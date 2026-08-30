@@ -214,12 +214,6 @@ function DocumentEditor({
   const [proseMarks, setProseMarks] = useState<ProseMark[]>([])
   /** Claims found and being searched right now — a progress line, not a finding. */
   const [pendingMarks, setPendingMarks] = useState<PendingMark[]>([])
-  /**
-   * Claims measured as tangents. Null until measured, and null again whenever
-   * the check could not run — see shared/claimRelevance.ts for why that
-   * distinction is carried rather than collapsed to an empty set.
-   */
-  const [offTopicIds, setOffTopicIds] = useState<ReadonlySet<string> | null>(null)
   const [activeMark, setActiveMark] = useState<{ mark: DocumentMark; rect: MarkRect } | null>(null)
   // The prose issue under the pointer, and whether its fix is being applied.
   // Hit-tested exactly like `activeMark`: nothing in either layer may accept a
@@ -522,9 +516,6 @@ function DocumentEditor({
     // current value so an already-stale outline does not re-render per
     // keystroke.
     setOutlineStale((wasStale) => wasStale || outlineRef.current !== null)
-    // Typing is the writer saying they have finished looking at where "Show me"
-    // landed — and a band over the words they are editing is in the way.
-    clearFlash()
     // Every keystroke reflows the text the marks were measured against.
     setMeasureTick((n) => n + 1)
     setTextTick((n) => n + 1)
@@ -770,7 +761,7 @@ function DocumentEditor({
     if (!body || !wrap) return
     return scheduleFrame(window, () => {
       const live = (claims ?? []).filter((claim) => !dismissed.has(claim.id))
-      setMarks(measureMarks(body, wrap, live, articleCounts, offTopicIds))
+      setMarks(measureMarks(body, wrap, live, articleCounts))
       // In the same frame as the claim marks, not behind a debounce of its own:
       // findProseIssues is pure and local — a thousand-word draft is a few
       // milliseconds — and measuring both together is what keeps the two layers
@@ -797,7 +788,7 @@ function DocumentEditor({
     // `checking` is in the deps so the pending lines appear when a sweep starts
     // and clear when it ends — without it they would only ever be measured on
     // the next keystroke.
-  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align, checking, offTopicIds])
+  }, [claims, dismissed, articleCounts, measureTick, fontFamily, fontSize, align, checking])
 
   // The editor reflows on window resize, which does not go through
   // handleInput.
@@ -903,34 +894,12 @@ function DocumentEditor({
     ])
   }
 
-  /**
-   * Holds the "Show me" highlight until the writer does something else.
-   *
-   * It used to fade after 1.4s, and that is not long enough to be useful:
-   * "Show me" is pressed from a full-screen modal, so the writer arrives on a
-   * document they have not been looking at, has to find where the page jumped
-   * to, and by then the band has gone. Owner, 2026-08-22: *"it just highlights
-   * for a split second before disappearing."*
-   *
-   * So the timer is a BACKSTOP (8s) rather than the mechanism. What normally
-   * clears it is the writer's next action — a click or a keystroke in the
-   * editor — which is both the moment they have finished looking and the moment
-   * a persistent band would start being in the way. `clearFlash` is wired into
-   * the editor's own input and pointer handlers.
-   */
   function flashRects(rects: MarkRect[]): void {
     setFlash(rects)
     if (flashTimer.current) clearTimeout(flashTimer.current)
-    flashTimer.current = setTimeout(() => setFlash([]), 8000)
-  }
-
-  /** Dismisses the "Show me" band. Safe to call when nothing is showing. */
-  function clearFlash(): void {
-    if (flashTimer.current) {
-      clearTimeout(flashTimer.current)
-      flashTimer.current = null
-    }
-    setFlash((prev) => (prev.length === 0 ? prev : []))
+    // Matches the CSS animation's duration, so the nodes leave the tree once
+    // they have finished fading rather than sitting there invisible.
+    flashTimer.current = setTimeout(() => setFlash([]), 1500)
   }
 
   /**
@@ -1666,37 +1635,6 @@ function DocumentEditor({
   }, [textTick])
 
   /**
-   * Which claims are tangents — recomputed whenever the claims change.
-   *
-   * Free and local (two batched MiniLM embeddings, no relay), which is what
-   * lets it run unasked on the same rule the evidence sweep runs under. It is
-   * keyed off `claims` rather than the text, because a tangent is a property of
-   * a detected claim and the claims are what changes when the draft does.
-   *
-   * A failure leaves the previous answer alone rather than clearing it: a
-   * transient worker error should not make every underline in the document
-   * change colour.
-   */
-  useEffect(() => {
-    const body = editorRef.current
-    if (!body || !claims || claims.length === 0) {
-      setOffTopicIds(null)
-      return
-    }
-    let cancelled = false
-    void window.tracely.evidence
-      .offTopic({ text: body.innerText, claims })
-      .then((res) => {
-        if (cancelled) return
-        setOffTopicIds(res.offTopicClaimIds === null ? null : new Set(res.offTopicClaimIds))
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [claims])
-
-  /**
    * Search evidence for claims nothing has looked at yet — automatically.
    *
    * This is what makes the underlines appear. `measureMarks` draws no mark for
@@ -2206,10 +2144,6 @@ function DocumentEditor({
           suppressContentEditableWarning
           data-placeholder="Start typing…"
           onInput={handleInput}
-          // Clicking into the page is the other way a writer says they are done
-          // looking at where "Show me" landed. Pointer-down rather than click,
-          // so the band goes the instant the caret moves.
-          onPointerDown={clearFlash}
         />
         {/*
           Drawn after the body so it paints over the text, but the layer and
@@ -2291,7 +2225,16 @@ function DocumentEditor({
                     setCitationFlow((prev) => {
                       const next =
                         prev && prev.state.step === 'picking'
-                          ? { ...prev, state: { ...prev.state, selectedId: sourceId, preview: null } }
+                          ? {
+                              ...prev,
+                              state: {
+                                ...prev.state,
+                                // Clicking the selected row again deselects it —
+                                // radio look, toggle feel.
+                                selectedId: prev.state.selectedId === sourceId ? null : sourceId,
+                                preview: null
+                              }
+                            }
                           : prev
                       // Format it straight away rather than behind a button.
                       // The block says what will be inserted, and a writer who

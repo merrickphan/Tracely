@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracely — Options</title>
+<style>
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    src: url('fonts/PlusJakartaSans.woff2') format('woff2');
+    font-weight: 200 800; font-style: normal; font-display: swap;
+  }
+  :root {
+    --ink: #0e0e10;
+    --gray: #8e8e93;
+    --gray-soft: #a7a7ac;
+    --orange: #ff7f00;
+    --orange-2: #f9a35a;
+    --cream: #fdfbf9;
+    --card: #ffffff;
+    --line: rgba(20,16,10,0.08);
+    --line-soft: rgba(20,16,10,0.05);
+    --shadow: 0 12px 34px rgba(180,120,60,0.10);
+    --shadow-sm: 0 6px 18px rgba(180,120,60,0.09);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background:
+      radial-gradient(120% 60% at 50% -10%, rgba(255,127,0,0.08), rgba(255,127,0,0) 60%),
+      var(--cream);
+    color: var(--ink);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 600px; margin: 0 auto; padding: 48px 24px 72px; }
+
+  header { display: flex; align-items: center; gap: 13px; margin-bottom: 6px; }
+  .plane {
+    width: 42px; height: 42px; border-radius: 13px;
+    background: linear-gradient(150deg, var(--orange) 0%, var(--orange-2) 100%);
+    display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
+    box-shadow: 0 8px 20px rgba(255,127,0,0.28);
+  }
+  .plane svg { width: 22px; height: 22px; }
+  h1 { font-size: 27px; font-weight: 800; letter-spacing: -0.03em; }
+  .tag { color: var(--gray); font-size: 14.5px; font-weight: 500; margin: 4px 0 26px; }
+
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 600; color: var(--gray);
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 16px; margin-bottom: 28px; box-shadow: var(--shadow-sm);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-soft); flex-shrink: 0; }
+  .status.on .dot { background: #1f9d55; box-shadow: 0 0 0 3px rgba(31,157,85,0.16); }
+  .status.off .dot { background: var(--orange); box-shadow: 0 0 0 3px rgba(255,127,0,0.16); }
+
+  section {
+    background: var(--card); border: 1px solid var(--line-soft); border-radius: 20px;
+    padding: 22px 24px; margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  h2 {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px;
+    color: var(--orange); margin-bottom: 8px;
+  }
+  .hint { font-size: 13px; color: var(--gray); margin-bottom: 14px; line-height: 1.55; font-weight: 500; }
+  .row { display: flex; gap: 10px; }
+  input[type="password"], input[type="text"] {
+    flex: 1; min-width: 0;
+    border: 1.5px solid var(--line); border-radius: 12px; padding: 11px 14px;
+    font-size: 13.5px; color: var(--ink); background: var(--cream); outline: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    transition: border-color .15s, background .15s;
+  }
+  input:focus { border-color: var(--orange); background: #fff; }
+  button {
+    border: none; background: var(--ink); color: #fff;
+    border-radius: 12px; padding: 11px 20px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+    font-family: inherit; transition: transform .12s, opacity .12s;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  .saved { font-size: 12.5px; color: #1f9d55; font-weight: 600; margin-top: 10px; min-height: 16px; }
+
+  /* Faster ↔ Smarter slider */
+  .slider-labels { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+  .slider-labels .l { color: var(--gray); }
+  .slider-labels .l.active { color: var(--ink); }
+  .track-wrap { position: relative; padding: 4px 0 2px; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 14px;
+    border-radius: 999px; outline: none; cursor: pointer; margin: 0;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 14px; border-radius: 999px;
+    background: var(--range-fill, linear-gradient(90deg, var(--orange), var(--orange-2)));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; border-radius: 50%; background: #fff;
+    border: 1px solid rgba(20,16,10,0.10);
+    box-shadow: 0 3px 10px rgba(180,120,60,0.35);
+    margin-top: -6px; cursor: grab;
+  }
+  input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; }
+  .ticks { display: flex; justify-content: space-between; padding: 0 11px; margin-top: 10px; }
+  .tick { font-size: 12px; font-weight: 600; color: var(--gray); text-align: center; flex: 1; }
+  .tick.active { color: var(--orange); }
+  .model-note { font-size: 12px; color: var(--gray-soft); margin-top: 12px; font-weight: 500; }
+
+  ul { list-style: none; }
+  li {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 2px; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; font-weight: 500;
+  }
+  li:last-child { border-bottom: none; }
+  li .origin { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li button { padding: 5px 13px; font-size: 12px; background: var(--cream); border: 1px solid var(--line); color: var(--gray); }
+  li button:hover { border-color: var(--orange); color: var(--orange); background: #fff; transform: none; }
+  .foot { font-size: 12px; color: var(--gray-soft); margin-top: 26px; line-height: 1.6; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></span>
+      <h1>Tracely</h1>
+    </header>
+    <p class="tag">Live fact-checking while you write — anywhere on the web.</p>
+
+    <span id="serverStatus" class="status"><span class="dot"></span><span id="serverStatusText">Checking for a local Tracely server…</span></span>
+
+    <section>
+      <h2>Anthropic API key</h2>
+      <p class="hint">Stored locally in this browser and sent only to api.anthropic.com. Leave empty if you run the Tracely server — the server has all the features (URL citing, Docs write-back) and uses its own key.</p>
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+        <button id="saveKey">Save</button>
+      </div>
+      <p id="keySaved" class="saved"></p>
+    </section>
+
+    <section>
+      <h2>Tracely Pro</h2>
+      <p class="hint">The free tier runs on Faster (Haiku) — quick and accurate for everyday checking. A Pro code unlocks the Faster ↔ Smarter slider everywhere.</p>
+      <div class="row">
+        <input type="text" id="proCode" placeholder="TRACELY-PRO-…" autocomplete="off" spellcheck="false">
+        <button id="saveProCode">Apply</button>
+      </div>
+      <p id="proStatus" class="saved"></p>
+    </section>
+
+    <section>
+      <h2>Speed vs. depth</h2>
+      <p class="hint" id="sliderHint">How hard Tracely thinks. Faster is cheaper and near-instant; Smarter catches subtler problems.</p>
+      <div class="slider-labels"><span class="l" id="labFaster">Faster</span><span class="l" id="labSmarter">Smarter</span></div>
+      <div class="track-wrap">
+        <input type="range" id="modelSlider" min="0" max="2" step="1" value="0">
+      </div>
+      <div class="ticks">
+        <span class="tick" data-i="0">Haiku</span>
+        <span class="tick" data-i="1">Sonnet</span>
+        <span class="tick" data-i="2">Opus</span>
+      </div>
+      <p class="model-note" id="modelNote"></p>
+    </section>
+
+    <section>
+      <h2>Sites with auto-check on</h2>
+      <p class="hint">Automatic 10-second checking runs only on these sites. Everywhere else, nothing leaves the page until you click “Check once” in the widget.</p>
+      <ul id="sites"></ul>
+      <p id="noSites" class="hint" style="margin-bottom:0">None yet — click into a text field on a site and flip “Auto-check on this site” in the Tracely widget.</p>
+    </section>
+
+    <p class="foot">Tracely never sends your writing anywhere except the engine you chose: your local Tracely server, or api.anthropic.com with the key above. Google Docs checks read the doc through your own signed-in session.</p>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

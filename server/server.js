@@ -1,0 +1,790 @@
+import http from "node:http";
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runFactCheck, findSources, runFlowCheck, hasApiKey, CheckError } from "./lib/factcheck.js";
+import * as ai from "./lib/ai.js";
+import * as evidence from "./lib/evidence.js";
+import * as store from "./lib/store.js";
+import * as watch from "./lib/watch.js";
+import { db, uuid, cacheGet, cacheSet, hashKey, upsertSource } from "./lib/db.js";
+import { GUARDS, rollingCounter } from "./shared/guards.js";
+import { problemsFor, markFor } from "./shared/marks.js";
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PORT = process.env.PORT ? Number(process.env.PORT) : 4477;
+const MOCK = process.env.TRACELY_MOCK === "1";
+
+const STATIC_FILES = {
+  "/": { file: "public/index.html", type: "text/html; charset=utf-8" },
+  "/index.html": { file: "public/index.html", type: "text/html; charset=utf-8" },
+  "/classic": { file: "public/index.html", type: "text/html; charset=utf-8" },
+  "/classic/": { file: "public/index.html", type: "text/html; charset=utf-8" },
+  "/style.css": { file: "public/style.css", type: "text/css; charset=utf-8" },
+  "/harness.html": { file: "public/harness.html", type: "text/html; charset=utf-8" },
+  "/ext-content.js": { file: "extension/content.js", type: "text/javascript; charset=utf-8" },
+};
+
+// ── the built Electron renderer (ui/dist-web) is THE app when present ──
+// Their build lands at ui/dist-web (index.html, floating.html, overlay.html,
+// assets/*). When index.html exists there, / serves it; until the first build
+// exists, / falls back to public/index.html so nothing breaks. The vanilla
+// app stays reachable at /classic/ either way (its /app/* and /shared/*
+// absolute paths are untouched below).
+// Two layouts: standalone (~/tracely with the renderer vendored at ui/) and
+// in-repo (server/ inside the Tracely repo, renderer built at ../dist-web).
+import { existsSync as _existsSync } from "node:fs";
+const UI_DIST = ["ui/dist-web", "../dist-web"].find((p) => _existsSync(path.join(ROOT, p, "index.html"))) ?? "ui/dist-web";
+const UI_PAGES = {
+  "/": "index.html",
+  "/index.html": "index.html",
+  "/floating.html": "floating.html",
+  "/overlay.html": "overlay.html",
+};
+function resolveUiPage(pathname) {
+  const name = UI_PAGES[pathname];
+  if (!name) return null;
+  const file = path.join(UI_DIST, name);
+  if (!existsSync(path.join(ROOT, file))) return null; // pre-build fallback
+  return { file, type: "text/html; charset=utf-8" };
+}
+
+// Directory-based static serving for the app modules and shared decision code,
+// plus the built renderer's hashed assets. Same traversal guard for all of
+// them: flat directories, [A-Za-z0-9._-] filenames only (Vite's hashed names
+// fit), and only extensions we have a content type for.
+const STATIC_DIRS = { "/app/": "public/app", "/shared/": "shared", "/assets/": path.join(UI_DIST, "assets") };
+const STATIC_TYPES = {
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".map": "application/json; charset=utf-8",
+};
+function resolveStatic(pathname) {
+  for (const [prefix, dir] of Object.entries(STATIC_DIRS)) {
+    if (!pathname.startsWith(prefix)) continue;
+    const rel = pathname.slice(prefix.length);
+    if (!/^[A-Za-z0-9._-]+$/.test(rel)) return null; // flat dir, no traversal
+    const type = STATIC_TYPES[path.extname(rel)];
+    if (!type) return null;
+    return { file: path.join(dir, rel), type };
+  }
+  return null;
+}
+
+// .env values may be corrected while the server runs; values we loaded from
+// .env may be overwritten by .env again, but real shell-exported vars win.
+const envFileKeys = new Set();
+function loadEnvFile() {
+  const envPath = path.join(ROOT, ".env");
+  if (!existsSync(envPath)) return;
+  const seen = new Set();
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    if (/^\s*#/.test(line)) continue;
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    const [, key, raw] = m;
+    const value = raw.replace(/^["']|["']$/g, "");
+    if (!value) continue;
+    seen.add(key);
+    if (!process.env[key] || envFileKeys.has(key)) {
+      process.env[key] = value;
+      envFileKeys.add(key);
+    }
+  }
+  for (const key of [...envFileKeys]) {
+    if (!seen.has(key)) {
+      delete process.env[key];
+      envFileKeys.delete(key);
+    }
+  }
+}
+loadEnvFile();
+
+// ── request gatekeeping ────────────────────────────────────────────────
+// This server fronts the user's Anthropic API key, so hostile web pages must
+// not be able to drive it: origins are allowlisted (docs.google.com for the
+// extension widget, plus our own pages), the Host header is pinned to kill
+// DNS-rebinding, and we listen on loopback only.
+const SELF_ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
+const PINNED_EXTENSION = process.env.TRACELY_EXTENSION_ID
+  ? `chrome-extension://${process.env.TRACELY_EXTENSION_ID}`
+  : null;
+
+function originAllowed(origin) {
+  if (!origin) return true; // curl / non-browser clients; Host check still applies
+  if (SELF_ORIGINS.has(origin) || origin === "https://docs.google.com") return true;
+  if (PINNED_EXTENSION) return origin === PINNED_EXTENSION;
+  return origin.startsWith("chrome-extension://");
+}
+
+// The extension surface (docs.google.com widget + chrome-extension pages) only
+// needs the legacy check endpoints. Every other /api route — storage CRUD and
+// the paid pipeline — is app-private: same-origin (or origin-less curl) only,
+// so a hostile Docs add-on or stray extension can't read essays, wipe history,
+// or burn the user's Anthropic credits.
+const EXTENSION_API = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply"]);
+function routeAllowedForOrigin(origin, pathname) {
+  if (!origin || SELF_ORIGINS.has(origin)) return true;
+  if (!pathname.startsWith("/api/")) return true; // static files are harmless
+  return EXTENSION_API.has(pathname);
+}
+
+function hostAllowed(host) {
+  return host === `localhost:${PORT}` || host === `127.0.0.1:${PORT}` || host === `[::1]:${PORT}`;
+}
+
+function corsHeaders(req) {
+  const origin = req.headers.origin ?? "";
+  if (originAllowed(origin) && origin && !SELF_ORIGINS.has(origin)) {
+    return {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "600",
+      Vary: "Origin",
+    };
+  }
+  return {};
+}
+
+function json(res, status, body, extraHeaders = {}) {
+  if (res.headersSent) { res.destroy(); return; }
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req, limit = 1_000_000) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(new CheckError("bad_request", "Request body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+async function parseJsonBody(req) {
+  if (!/^application\/json/i.test(req.headers["content-type"] ?? "")) {
+    throw new CheckError("bad_request", "Content-Type must be application/json", { status: 415 });
+  }
+  try {
+    return JSON.parse(await readBody(req));
+  } catch (e) {
+    if (e instanceof CheckError) throw e;
+    throw new CheckError("bad_request", "Invalid JSON body");
+  }
+}
+
+// ── Google Docs bridge (Apps Script web app the user deployed once) ────
+// The one place verdicts map to in-doc highlight colors, so every surface agrees.
+const HIGHLIGHT_COLORS = {
+  false: "#F5C6C2",        // red tint — a fact the check believes is wrong
+  questionable: "#FCE8B2", // amber tint — attribution / unverifiable
+  incoherent: "#FBD8BE",   // orange tint — doesn't carry / doesn't make sense
+};
+const BRIDGE_ACTIONS = new Set(["ping", "highlight", "clearHighlights", "replace", "appendLine"]);
+
+function bridgeConfigured() {
+  return Boolean(process.env.GOOGLE_DOCS_BRIDGE_URL && process.env.TRACELY_BRIDGE_TOKEN);
+}
+
+async function applyToDoc(body) {
+  const { docId, action, sentence, verdict, find, replacement, line } = body;
+  if (typeof docId !== "string" || !/^[A-Za-z0-9_-]{10,100}$/.test(docId)) {
+    throw new CheckError("bad_request", "docId missing or malformed");
+  }
+  if (!BRIDGE_ACTIONS.has(action)) {
+    throw new CheckError("bad_request", "unknown docs action");
+  }
+  const payload = { token: process.env.TRACELY_BRIDGE_TOKEN, docId, action };
+  if (action === "highlight") {
+    if (typeof sentence !== "string" || !sentence.trim() || sentence.length > 4000) {
+      throw new CheckError("bad_request", "highlight needs a sentence (max 4000 chars)");
+    }
+    payload.sentence = sentence;
+    payload.color = HIGHLIGHT_COLORS[verdict] ?? HIGHLIGHT_COLORS.questionable;
+  } else if (action === "replace") {
+    if (typeof find !== "string" || !find.trim() || find.length > 4000 || typeof replacement !== "string" || replacement.length > 4000) {
+      throw new CheckError("bad_request", "replace needs find + replacement (max 4000 chars)");
+    }
+    payload.find = find;
+    payload.replacement = replacement;
+  } else if (action === "appendLine") {
+    if (typeof line !== "string" || !line.trim() || line.length > 1200) {
+      throw new CheckError("bad_request", "appendLine needs a line (max 1200 chars)");
+    }
+    payload.line = line;
+  }
+
+  let res;
+  try {
+    res = await fetch(process.env.GOOGLE_DOCS_BRIDGE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+      redirect: "follow", // Apps Script answers via a 302 to googleusercontent
+    });
+  } catch (e) {
+    throw new CheckError("server", `Could not reach the Docs bridge: ${e?.message ?? e}`, { status: 502 });
+  }
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new CheckError("server", "Docs bridge returned a non-JSON response — check the deployment is a Web App with access set to Anyone", { status: 502 });
+  }
+  if (!data.ok) {
+    throw new CheckError("server", `Docs bridge error: ${data.error ?? "unknown"}`, { status: 502 });
+  }
+  return data;
+}
+
+// ── "Paste a URL and cite it" — free metadata fetch, no AI involved ────
+const PRIVATE_HOST = /^(localhost$|.*\.local$|127\.|10\.|192\.168\.|169\.254\.|0\.|\[::1\]$|172\.(1[6-9]|2\d|3[01])\.)/i;
+
+function metaLookup(html, attr, name) {
+  const tags = html.match(/<meta\s[^>]*>/gi) ?? [];
+  for (const t of tags) {
+    if (new RegExp(`${attr}\\s*=\\s*["']${name}["']`, "i").test(t)) {
+      const c = t.match(/content\s*=\s*["']([^"']*)["']/i);
+      if (c?.[1]) return decodeEntities(c[1]);
+    }
+  }
+  return "";
+}
+
+function decodeEntities(s) {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ");
+}
+
+async function fetchUrlMetadata(raw) {
+  let u;
+  try {
+    u = new URL(String(raw ?? "").trim());
+  } catch {
+    throw new CheckError("bad_request", "That doesn't look like a URL");
+  }
+  if (!/^https?:$/.test(u.protocol)) throw new CheckError("bad_request", "Only http(s) URLs can be cited");
+  if (PRIVATE_HOST.test(u.hostname)) throw new CheckError("bad_request", "Local and private addresses can't be cited");
+
+  let res;
+  try {
+    res = await fetch(u, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Tracely/1.0; local fact-checker)" },
+    });
+  } catch (e) {
+    throw new CheckError("server", `Couldn't fetch that URL: ${e?.cause?.message ?? e?.message ?? e}`, { status: 502 });
+  }
+  // Per the reference: 404/410 mean the page doesn't exist; auth walls and rate limits do not.
+  if (res.status === 404 || res.status === 410) {
+    throw new CheckError("bad_request", `That page returns ${res.status} — it doesn't seem to exist`);
+  }
+  let html = "";
+  try {
+    html = (await res.text()).slice(0, 500_000);
+  } catch { /* binary or unreadable body — fall through to URL-derived metadata */ }
+
+  const title =
+    metaLookup(html, "property", "og:title") ||
+    decodeEntities(html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? "") ||
+    u.href;
+  const publisher = metaLookup(html, "property", "og:site_name") || u.hostname.replace(/^www\./, "");
+  const snippet = metaLookup(html, "name", "description") || metaLookup(html, "property", "og:description");
+
+  return {
+    title: title.trim().slice(0, 200),
+    url: u.href.slice(0, 600),
+    publisher: publisher.trim().slice(0, 100),
+    snippet: snippet.trim().slice(0, 300),
+    stance: "manual",
+  };
+}
+
+// Rolling-window backstops (spec §14): the caps that hold when "one analysis"
+// stops being a meaningful unit. Stamped BEFORE each call.
+const webSearchCounter = rollingCounter(GUARDS.maxWebSearchesPerHour);
+const critiqueCounter = rollingCounter(60);
+
+// ── model tiering (token optimization) ─────────────────────────────────
+// Decided here, once, so every surface prices identically.
+//   economy (default): Haiku for EVERYTHING — a full essay session lands in
+//     single-digit cents. This is the hard cost mandate.
+//   smart: Haiku for the frequent mechanical passes, Sonnet for the two
+//     judgment calls (critique, grading).
+//   uniform: the user's chosen model everywhere (they pay for what they pick).
+const H = "claude-haiku-4-5";
+const S = "claude-sonnet-5";
+const TIERS = {
+  economy: { detect: H, structure: H, tracer: H, critique: H, grade: H, sources: H, check: H },
+  smart:   { detect: H, structure: H, tracer: H, critique: S, grade: S, sources: H, check: S },
+};
+function pickModel(task) {
+  const p = store.prefs.get();
+  const strat = p.modelStrategy ?? "economy";
+  if (strat === "uniform") return p.model;
+  return (TIERS[strat] ?? TIERS.economy)[task] ?? p.model;
+}
+
+// The watch loop reuses the exact same tiering — detection is always priced
+// like every other surface's detection.
+watch.init({ pickModel });
+
+function requireKey() {
+  if (!hasApiKey() && !MOCK) {
+    throw new CheckError("no_key", "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env", { status: 503 });
+  }
+}
+
+const server = http.createServer(async (req, res) => {
+  const cors = corsHeaders(req);
+
+  try {
+    let url;
+    try {
+      url = new URL(req.url, `http://localhost:${PORT}`);
+    } catch {
+      json(res, 400, { error: { kind: "bad_request", message: "Malformed request URL" } }, cors);
+      return;
+    }
+
+    if (!hostAllowed(req.headers.host ?? "")) {
+      json(res, 403, { error: { kind: "forbidden", message: "Bad Host header" } });
+      return;
+    }
+    if (!originAllowed(req.headers.origin)) {
+      json(res, 403, { error: { kind: "forbidden", message: "Origin not allowed" } });
+      return;
+    }
+    if (!routeAllowedForOrigin(req.headers.origin, url.pathname)) {
+      // No ACAO header on purpose — the browser must not see this response.
+      json(res, 403, { error: { kind: "forbidden", message: "Origin not allowed for this endpoint" } });
+      return;
+    }
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, cors);
+      res.end();
+      return;
+    }
+
+    const staticHit = (req.method === "GET" && (resolveUiPage(url.pathname) ?? STATIC_FILES[url.pathname] ?? resolveStatic(url.pathname))) || null;
+    if (staticHit) {
+      const { file, type } = staticHit;
+      let data;
+      try {
+        data = readFileSync(path.join(ROOT, file));
+      } catch {
+        json(res, 404, { error: { kind: "not_found", message: `${file} is missing on disk` } }, cors);
+        return;
+      }
+      res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+      res.end(data);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/status") {
+      loadEnvFile(); // hot-pickup: user just added or corrected the key in .env
+      json(res, 200, { hasKey: hasApiKey() || MOCK, mock: MOCK, docsBridge: bridgeConfigured() }, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/docs/apply") {
+      loadEnvFile();
+      if (!bridgeConfigured()) {
+        json(res, 503, { error: { kind: "no_bridge", message: "Docs bridge not set up — see README: paste docs-bridge/Code.gs into script.google.com, deploy, and put the URL in .env" } }, cors);
+        return;
+      }
+      const body = (await parseJsonBody(req)) ?? {};
+      const result = await applyToDoc(body);
+      json(res, 200, result, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/check") {
+      loadEnvFile();
+      if (!hasApiKey() && !MOCK) {
+        json(res, 503, { error: { kind: "no_key", message: "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env" } }, cors);
+        return;
+      }
+
+      const { text, sentences, model, effort } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || text.length > 30_000) {
+        throw new CheckError("bad_request", "text must be a string of at most 30,000 characters");
+      }
+      if (!Array.isArray(sentences) || sentences.length === 0 || sentences.length > 40) {
+        throw new CheckError("bad_request", "sentences must be a non-empty array of at most 40 items");
+      }
+      for (const s of sentences) {
+        if (!s || typeof s.id !== "string" || typeof s.text !== "string" || s.text.length > 2000 || s.id.length > 40) {
+          throw new CheckError("bad_request", "each sentence needs an id and text (max 2000 chars)");
+        }
+      }
+
+      const started = Date.now();
+      // Tiering owns the model — the widget's dropdown only applies in
+      // "uniform" strategy (cost mandate: economy = Haiku everywhere).
+      const result = await runFactCheck({ text, sentences, model: pickModel("check"), effort, mock: MOCK });
+      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/sources") {
+      loadEnvFile();
+      if (!hasApiKey() && !MOCK) {
+        json(res, 503, { error: { kind: "no_key", message: "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env" } }, cors);
+        return;
+      }
+
+      const { claim, correction, context, model } = (await parseJsonBody(req)) ?? {};
+      if (typeof claim !== "string" || !claim.trim() || claim.length > 2000) {
+        throw new CheckError("bad_request", "claim must be a non-empty string of at most 2000 characters");
+      }
+      if (correction != null && (typeof correction !== "string" || correction.length > 2000)) {
+        throw new CheckError("bad_request", "correction must be a string of at most 2000 characters");
+      }
+      if (context != null && (typeof context !== "string" || context.length > 6000)) {
+        throw new CheckError("bad_request", "context must be a string of at most 6000 characters");
+      }
+
+      if (!webSearchCounter.ok()) {
+        throw new CheckError("rate_limit", "Web-search hourly cap reached — try again later.", { status: 429, retryAfter: 600 });
+      }
+      webSearchCounter.stamp(); // before the call, not after
+      const started = Date.now();
+      const result = await findSources({ claim, correction, context, model: pickModel("sources"), mock: MOCK });
+      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      return;
+    }
+
+    // Flow coaching: paragraph-level "this jumps" review over the whole doc.
+    // No web search, one call, cached client-side per structural change.
+    if (req.method === "POST" && url.pathname === "/api/flow") {
+      loadEnvFile();
+      if (!hasApiKey() && !MOCK) {
+        json(res, 503, { error: { kind: "no_key", message: "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env" } }, cors);
+        return;
+      }
+      const { text, model } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || !text.trim()) throw new CheckError("bad_request", "text required");
+      if (text.length > GUARDS.maxInputChars) throw new CheckError("bad_request", "text too long");
+      const started = Date.now();
+      const result = await runFlowCheck({ text, model, mock: MOCK });
+      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      return;
+    }
+
+    // ── pipeline routes ────────────────────────────────────────────────
+    if (req.method === "POST" && url.pathname === "/api/detect-claims") {
+      loadEnvFile();
+      requireKey();
+      const { text, effort } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || !text.trim()) throw new CheckError("bad_request", "text required");
+      const clipped = text.slice(0, GUARDS.maxInputChars);
+      const model = pickModel("detect");
+      const key = hashKey(`${model}|${effort ?? ""}|${clipped}`);
+      let result = MOCK ? null : cacheGet("detect", key, { maxAgeMs: 24 * 3600_000 });
+      if (!result) {
+        result = await ai.detectClaims({ text: clipped, model, effort });
+        // The id is salted with the start offset so the same claim text asserted
+        // in two sentences gets two ids (dismissal/merge state stays per-occurrence).
+        result.claims = (result.claims ?? []).slice(0, GUARDS.maxClaimsPerAnalysis)
+          .map((c) => ({ ...c, id: hashKey(`claim|${c.text}|${c.start}`).slice(0, 16) }));
+        if (!MOCK) cacheSet("detect", key, result);
+      }
+      json(res, 200, { ...result, cachedAt: undefined }, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/evidence") {
+      // Free scholarly retrieval — no key required, providers fail to empty.
+      const { claim, query, claimType } = (await parseJsonBody(req)) ?? {};
+      if (typeof claim !== "string" || !claim.trim() || claim.length > 2000) throw new CheckError("bad_request", "claim required (max 2000 chars)");
+      const key = hashKey(`${claimType ?? ""}|${query ?? ""}|${claim}`);
+      let result = cacheGet("evidence", key, { maxAgeMs: 6 * 3600_000, version: 2 });
+      // Degraded sweeps (a provider failed) and empty results go stale fast:
+      // a moment of network trouble must not be frozen as "no evidence" for 6h.
+      if (result && ((result.searched?.failed?.length ?? 0) > 0 || (result.sources ?? []).length === 0)) {
+        result = cacheGet("evidence", key, { maxAgeMs: 5 * 60_000, version: 2 });
+      }
+      if (!result) {
+        result = await evidence.gatherEvidence({ claim, query, claimType });
+        for (const s of result.sources ?? []) {
+          const row = upsertSource(s);
+          s.id = row.id;
+        }
+        // An all-providers-failed sweep is a failure, not an empty result —
+        // never cache it (lib/db.js: failures are simply not cached).
+        if ((result.searched?.providers?.length ?? 0) > 0) {
+          cacheSet("evidence", key, result, { version: 2 });
+        }
+      }
+      json(res, 200, result, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/critique") {
+      loadEnvFile();
+      requireKey();
+      if (!critiqueCounter.ok()) throw new CheckError("rate_limit", "Critique hourly cap reached — try again later.", { status: 429, retryAfter: 600 });
+      const body = (await parseJsonBody(req)) ?? {};
+      if (typeof body.claim !== "string" || !body.claim.trim()) throw new CheckError("bad_request", "claim required");
+      body.model = pickModel("critique");
+      // Trim the evidence payload to what the judgment needs — top 4 sources,
+      // short fields only. Abstracts are the token hog.
+      body.sources = (Array.isArray(body.sources) ? body.sources : []).slice(0, 4).map((s) => ({
+        title: String(s?.title ?? "").slice(0, 200),
+        venue: String(s?.venue ?? "").slice(0, 100),
+        year: s?.year ?? null,
+        url: String(s?.url ?? "").slice(0, 300),
+        abstract: String(s?.abstract ?? "").slice(0, 240),
+      }));
+      // Cached on claim TEXT (not id), but the verdict also depends on the
+      // sentence wording, the model, and which sources were provided — all of
+      // them key segments so a stale verdict is never replayed against
+      // different evidence.
+      const key = hashKey([
+        "crit",
+        body.claim,
+        body.sentence ?? "",
+        body.citedRef ?? "",
+        body.model ?? "",
+        hashKey(JSON.stringify((Array.isArray(body.sources) ? body.sources : []).map((s) => s?.url ?? s?.title ?? ""))),
+      ].join("|"));
+      let result = MOCK ? null : cacheGet("critique", key, { maxAgeMs: 7 * 24 * 3600_000 });
+      if (!result) {
+        critiqueCounter.stamp(); // before the call
+        result = await ai.critiqueClaim(body);
+        if (!MOCK) cacheSet("critique", key, result);
+      }
+      json(res, 200, result, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/grade") {
+      loadEnvFile();
+      requireKey();
+      const { text, level } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || text.trim().length < 40) throw new CheckError("bad_request", "text too short to grade");
+      const model = pickModel("grade");
+      const clipped = text.slice(0, GUARDS.maxInputChars);
+      // Re-grading an unchanged draft is free.
+      const key = hashKey(`grade|${model}|${level ?? 12}|${clipped}`);
+      let result = MOCK ? null : cacheGet("grade", key, { maxAgeMs: 7 * 24 * 3600_000 });
+      if (!result) {
+        result = await ai.gradeDraft({ text: clipped, level, model });
+        if (!MOCK) cacheSet("grade", key, result);
+      }
+      json(res, 200, result, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/structure") {
+      loadEnvFile();
+      requireKey();
+      const { text } = (await parseJsonBody(req)) ?? {};
+      if (typeof text !== "string" || !text.trim()) throw new CheckError("bad_request", "text required");
+      const model = pickModel("structure");
+      const key = hashKey(`struct|${model}|${text}`);
+      let result = MOCK ? null : cacheGet("structure", key, { maxAgeMs: 24 * 3600_000 });
+      if (!result) {
+        result = await ai.classifyStructure({ text: text.slice(0, GUARDS.maxInputChars), model });
+        if (!MOCK) cacheSet("structure", key, result);
+      }
+      json(res, 200, result, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tracer") {
+      loadEnvFile();
+      requireKey();
+      const { conversationId, documentId, message, draft } = (await parseJsonBody(req)) ?? {};
+      const model = pickModel("tracer");
+      if (typeof message !== "string" || !message.trim()) throw new CheckError("bad_request", "message required");
+      let convId = conversationId;
+      if (!convId) {
+        convId = uuid();
+        db.prepare("INSERT INTO tracer_conversations (id, document_id, created_at) VALUES (?,?,?)").run(convId, documentId ?? null, Date.now());
+      }
+      // Newest 30, re-sorted ascending for the prompt. rowid breaks the tie for
+      // user/assistant pairs stamped in the same millisecond; leading assistant
+      // rows are dropped because the API requires the first message to be a user's.
+      const history = db.prepare("SELECT role, content FROM tracer_messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 30").all(convId).reverse();
+      while (history.length > 0 && history[0].role !== "user") history.shift();
+      db.prepare("INSERT INTO tracer_messages (id, conversation_id, role, content, created_at) VALUES (?,?,?,?,?)")
+        .run(uuid(), convId, "user", message.slice(0, 4000), Date.now());
+      const { reply } = await ai.tracerReply({
+        messages: [...history, { role: "user", content: message.slice(0, 4000) }],
+        draft: typeof draft === "string" ? draft.slice(0, GUARDS.maxInputChars) : "",
+        model,
+      });
+      db.prepare("INSERT INTO tracer_messages (id, conversation_id, role, content, created_at) VALUES (?,?,?,?,?)")
+        .run(uuid(), convId, "assistant", reply, Date.now());
+      json(res, 200, { conversationId: convId, reply }, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/compare-source") {
+      // Free — resolves the writer's own citation against Crossref + Open Library.
+      const { citedRef } = (await parseJsonBody(req)) ?? {};
+      if (typeof citedRef !== "string" || !citedRef.trim()) throw new CheckError("bad_request", "citedRef required");
+      if (typeof evidence.compareSource !== "function") throw new CheckError("server", "compare not built yet", { status: 501 });
+      json(res, 200, await evidence.compareSource({ citedRef }), cors);
+      return;
+    }
+
+    // ── macOS Screen Watch routes ──────────────────────────────────────
+    // App-private on purpose: NOT in EXTENSION_API, so docs.google.com and
+    // chrome-extension origins are rejected by routeAllowedForOrigin above.
+    if (req.method === "GET" && url.pathname === "/api/watch/state") {
+      json(res, 200, { ...watch.getState(), watchApps: store.prefs.get().watchApps ?? [] }, cors);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/watch/toggle") {
+      const { enabled } = (await parseJsonBody(req)) ?? {};
+      if (typeof enabled !== "boolean") throw new CheckError("bad_request", "enabled must be a boolean");
+      store.prefs.set({ watchEnabled: enabled });
+      watch.setEnabled(enabled);
+      json(res, 200, { ...watch.getState(), watchApps: store.prefs.get().watchApps ?? [] }, cors);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/watch/critique") {
+      // Paid, button-triggered — the ONLY path to a critique on this surface.
+      loadEnvFile();
+      requireKey();
+      const { key } = (await parseJsonBody(req)) ?? {};
+      if (typeof key !== "string" || !key.trim()) throw new CheckError("bad_request", "key required");
+      json(res, 200, await watch.critiqueFinding(key), cors);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/watch/fix") {
+      const { key } = (await parseJsonBody(req)) ?? {};
+      if (typeof key !== "string" || !key.trim()) throw new CheckError("bad_request", "key required");
+      json(res, 200, await watch.applyFix(key), cors);
+      return;
+    }
+
+    // ── contract-gap routes for the Electron renderer's bridge ─────────
+    // App-private (NOT in EXTENSION_API). Shapes track ui/src/shared/
+    // ipc-contract.ts as closely as our data allows; the bridge adapts.
+    if (url.pathname === "/api/documents/latest" && req.method === "GET") {
+      // DOCUMENTS_LATEST → { document: <row> | null } (most recently opened).
+      json(res, 200, { document: store.documents.latest() }, cors);
+      return;
+    }
+    if (url.pathname === "/api/evidence/for-claim" && req.method === "GET") {
+      // EVIDENCE_GET_FOR_CLAIM, keyed by claim TEXT (our claim ids are
+      // per-analysis salts, so text is the stable key our DB can answer with).
+      json(res, 200, store.evidenceForClaim(url.searchParams.get("claimText") ?? ""), cors);
+      return;
+    }
+    if (url.pathname === "/api/settings/scan-apps" && req.method === "POST") {
+      // SETTINGS_SCAN_INSTALLED_APPS — static macOS candidate list; the real
+      // scan is a Windows registry read we don't have. `exe` matches the
+      // contract's ScannedApp shape.
+      json(res, 200, {
+        found: [
+          { name: "TextEdit", exe: "TextEdit.app" },
+          { name: "Notes", exe: "Notes.app" },
+          { name: "Pages", exe: "Pages.app" },
+          { name: "Microsoft Word", exe: "Microsoft Word.app" },
+          { name: "Mail", exe: "Mail.app" },
+        ],
+      }, cors);
+      return;
+    }
+
+    // ── storage routes ─────────────────────────────────────────────────
+    if (url.pathname === "/api/documents" && req.method === "GET") {
+      json(res, 200, { documents: store.documents.list(url.searchParams.get("sort") ?? undefined) }, cors);
+      return;
+    }
+    if (url.pathname === "/api/documents" && req.method === "POST") {
+      json(res, 200, store.documents.create((await parseJsonBody(req)) ?? {}), cors);
+      return;
+    }
+    const docMatch = url.pathname.match(/^\/api\/documents\/([A-Za-z0-9-]{8,40})$/);
+    if (docMatch) {
+      if (req.method === "GET") { json(res, 200, store.documents.get(docMatch[1]), cors); return; }
+      if (req.method === "PUT") { json(res, 200, store.documents.update(docMatch[1], (await parseJsonBody(req)) ?? {}), cors); return; }
+      if (req.method === "DELETE") { json(res, 200, store.documents.remove(docMatch[1]), cors); return; }
+    }
+    if (url.pathname === "/api/library" && req.method === "GET") {
+      json(res, 200, { items: store.library.list(url.searchParams.get("q") ?? "") }, cors);
+      return;
+    }
+    if (url.pathname === "/api/library" && req.method === "POST") {
+      json(res, 200, store.library.add((await parseJsonBody(req)) ?? {}), cors);
+      return;
+    }
+    const libMatch = url.pathname.match(/^\/api\/library\/([A-Za-z0-9-]{8,40})$/);
+    if (libMatch) {
+      if (req.method === "PUT") { json(res, 200, store.library.update(libMatch[1], (await parseJsonBody(req)) ?? {}), cors); return; }
+      if (req.method === "DELETE") { json(res, 200, store.library.remove(libMatch[1]), cors); return; }
+    }
+    if (url.pathname === "/api/prefs" && req.method === "GET") { json(res, 200, store.prefs.get(), cors); return; }
+    if (url.pathname === "/api/prefs" && req.method === "PUT") { json(res, 200, store.prefs.set((await parseJsonBody(req)) ?? {}), cors); return; }
+    if (url.pathname === "/api/stats" && req.method === "GET") { json(res, 200, store.stats(), cors); return; }
+    if (url.pathname === "/api/analyses" && req.method === "POST") { json(res, 200, store.analyses.create((await parseJsonBody(req)) ?? {}), cors); return; }
+    if (url.pathname === "/api/analyses" && req.method === "GET") {
+      json(res, 200, { analyses: store.analyses.forDocument(url.searchParams.get("documentId") ?? "") }, cors);
+      return;
+    }
+    if (url.pathname === "/api/clear-history" && req.method === "POST") {
+      json(res, 200, store.clearHistory((await parseJsonBody(req)) ?? {}), cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/cite-url") {
+      const { url: pageUrl } = (await parseJsonBody(req)) ?? {};
+      if (typeof pageUrl !== "string" || pageUrl.length > 2000) {
+        throw new CheckError("bad_request", "url must be a string of at most 2000 characters");
+      }
+      const source = await fetchUrlMetadata(pageUrl);
+      json(res, 200, { source }, cors);
+      return;
+    }
+
+    json(res, 404, { error: { kind: "not_found", message: "Not found" } }, cors);
+  } catch (err) {
+    if (res.headersSent) { res.destroy(); return; }
+    if (err instanceof CheckError) {
+      json(res, err.status, { error: { kind: err.kind, message: err.message, retryAfter: err.retryAfter } }, cors);
+    } else {
+      console.error("[tracely] unexpected error:", err);
+      json(res, 500, { error: { kind: "server", message: "Internal server error" } }, cors);
+    }
+  }
+});
+
+process.on("unhandledRejection", (err) => console.error("[tracely] unhandled rejection:", err));
+
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`Tracely running at http://localhost:${PORT}${MOCK ? "  (MOCK MODE — no API calls)" : ""}`);
+  if (!hasApiKey() && !MOCK) {
+    console.log("No ANTHROPIC_API_KEY found yet — add it to tracely/.env and the server will pick it up automatically.");
+  }
+  // Screen Watch survives restarts: resume when the user left it on.
+  if (process.platform === "darwin" && store.prefs.get().watchEnabled) {
+    watch.setEnabled(true);
+    console.log("Screen Watch resumed (prefs.watchEnabled).");
+  }
+});

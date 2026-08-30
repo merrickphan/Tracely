@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Tracely — live fact-check while you write",
+  "version": "2.11.0",
+  "description": "Live AI fact-checking as you write. Underlines false or shaky sentences in any text field and suggests fixes with sources.",
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://docs.google.com/document/*"
+      ],
+      "js": [
+        "docs-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "minimum_chrome_version": "111",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://localhost:4477/*",
+    "https://api.anthropic.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/*.woff2"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

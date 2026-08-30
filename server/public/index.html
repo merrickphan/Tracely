@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tracely — credibility for student writing</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f97316' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 2 11 13'/%3E%3Cpath d='M22 2 15 22l-4-9-9-4 20-7z'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="keyBanner" class="key-banner hidden">
+    <div class="key-banner-inner">
+      <span class="key-icon">🔑</span>
+      <div>
+        <strong>Add your Anthropic API key to get started.</strong>
+        <div class="key-detail">Open <code>~/tracely/.env</code> and set <code>ANTHROPIC_API_KEY=sk-ant-…</code> — the server picks it up automatically.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand" data-nav="home" title="Home">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/>
+          </svg>
+        </span>
+        <span class="brand-name">Tracely</span>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button data-nav="home">Home</button>
+        <button data-nav="documents">Documents</button>
+        <button data-nav="analyze">Analyze</button>
+        <button data-nav="library">Library</button>
+        <button data-nav="watch">Watch</button>
+        <button data-nav="settings">Settings</button>
+      </nav>
+      <div class="top-status" id="topStatus">
+        <span id="usageMeter" class="usage-meter hidden" title="estimated Anthropic spend this session"></span>
+        <span id="serverState"></span>
+      </div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+
+  <div id="tracerDock" class="tracer-dock hidden"></div>
+  <div id="modalRoot"></div>
+  <div id="toasts" class="toasts"></div>
+
+  <script type="module" src="/app/main.js"></script>
+</body>
+</html>

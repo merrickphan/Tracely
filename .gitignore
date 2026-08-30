@@ -52,3 +52,16 @@ resources/models/
 
 # Playwright/e2e run artifacts — a local record of the last run, not source.
 test-results/
+
+# local Anthropic backend (server/) — secrets and per-user data never commit
+server/.env
+server/data/
+server/node_modules/
+# browser builds of the renderer
+dist-web/
+dist-demo/
+demo.html
+
+# Tracely live preview (dev-only, generated/gitignored)
+extension-dev/
+.env.live
