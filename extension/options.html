@@ -143,8 +143,18 @@
     </section>
 
     <section>
+      <h2>Tracely Pro</h2>
+      <p class="hint">The free tier runs on Faster (Haiku) — quick and accurate for everyday checking. A Pro code unlocks the Faster ↔ Smarter slider everywhere.</p>
+      <div class="row">
+        <input type="text" id="proCode" placeholder="TRACELY-PRO-…" autocomplete="off" spellcheck="false">
+        <button id="saveProCode">Apply</button>
+      </div>
+      <p id="proStatus" class="saved"></p>
+    </section>
+
+    <section>
       <h2>Speed vs. depth</h2>
-      <p class="hint">How hard Tracely thinks when checks go straight to Anthropic (no local server). Faster is cheaper and near-instant; Smarter catches subtler problems.</p>
+      <p class="hint" id="sliderHint">How hard Tracely thinks. Faster is cheaper and near-instant; Smarter catches subtler problems.</p>
       <div class="slider-labels"><span class="l" id="labFaster">Faster</span><span class="l" id="labSmarter">Smarter</span></div>
       <div class="track-wrap">
         <input type="range" id="modelSlider" min="0" max="2" step="1" value="0">

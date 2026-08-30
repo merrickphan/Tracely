@@ -59,18 +59,46 @@
     const i = SPEED_STOPS.findIndex((s) => s.model === model);
     return i === -1 ? 0 : i;
   }
+
+  /* ── Tracely Pro gate ────────────────────────────────────────────────────
+     Free tier runs Haiku; the Faster↔Smarter slider is a Pro feature. The
+     entitlement is an access code saved from the options page (chrome.storage)
+     — a stand-in until real billing exists, but the gate is real: every API
+     call resolves its model through effModel(), so a free tier can never
+     reach Sonnet/Opus even by editing localStorage. */
+  let tierPro = false;
+  const tierListeners = []; // widget re-renders to run when the tier resolves
+  const PRO_CODE_RE = /^TRACELY-PRO-[A-Z0-9]{4,}$/i;
+  function effModel(settings) { return tierPro ? settings.model : SPEED_STOPS[0].model; }
+  function effEffort(settings) { return tierPro ? settings.effort : SPEED_STOPS[0].effort; }
+  function tierChanged() {
+    for (const fn of tierListeners) { try { fn(); } catch { /* widget torn down */ } }
+  }
+  try {
+    chrome.storage?.local?.get({ proCode: "" }, (cfg) => {
+      tierPro = PRO_CODE_RE.test(String(cfg.proCode ?? "").trim());
+      tierChanged(); // always: free-tier listeners clamp stale paid settings
+    });
+    chrome.storage?.onChanged?.addListener((changes, area) => {
+      if (area !== "local" || !changes.proCode) return;
+      tierPro = PRO_CODE_RE.test(String(changes.proCode.newValue ?? "").trim());
+      tierChanged();
+    });
+  } catch { /* harness page: no chrome.storage — stays free tier */ }
   function sbFill(pos) {
     const pct = (pos / (SPEED_STOPS.length - 1)) * 100;
     return `linear-gradient(90deg, #ff7f00 0%, #f9a35a ${pct}%, rgba(20,16,10,0.08) ${pct}%, rgba(20,16,10,0.08) 100%)`;
   }
   function speedbarHtml(pos) {
-    return `<div class="speedbar">
-      <span class="sb-lab${pos === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
+    const locked = !tierPro;
+    const p = locked ? 0 : pos; // free tier pins to Faster (Haiku)
+    return `<div class="speedbar${locked ? " locked" : ""}"${locked ? ' title="Faster ↔ Smarter is a Tracely Pro feature"' : ""}>
+      <span class="sb-lab${p === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
       <div class="sb-track">
-        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${pos}" style="--sb-fill:${sbFill(pos)}">
+        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${p}" style="--sb-fill:${sbFill(p)}"${locked ? " disabled" : ""}>
         <span class="sb-dots">${SPEED_STOPS.map(() => "<i></i>").join("")}</span>
       </div>
-      <span class="sb-lab${pos === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter</span>
+      <span class="sb-lab${p === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter${locked ? '<span class="sb-pro">PRO</span>' : ""}</span>
     </div>`;
   }
   // Wire the slider without re-rendering: a full render mid-drag drops the
@@ -79,6 +107,7 @@
   function wireSpeedbar(shadow, settings, saveSettings) {
     const el = shadow.getElementById("speedSel");
     if (!el) return;
+    if (!tierPro) return; // locked: disabled input, nothing to wire
     el.addEventListener("input", () => {
       el.style.setProperty("--sb-fill", sbFill(Number(el.value)));
     });
@@ -184,7 +213,16 @@
       const words = seg.text.split(/\s+/).length;
       const endsTerminal = /[.!?]["')\]]*$/.test(seg.text);
       const moreAfter = text.slice(seg.end).trim().length > 0;
-      seg.checkable = words >= 3 && seg.text.length <= 2000 && (endsTerminal || moreAfter);
+      seg.checkable = words >= 3 && seg.text.length <= 2000 && (endsTerminal || moreAfter)
+        // Raw-code claim gate: never spend an API call on text that cannot
+        // be a factual claim. Conservative on purpose — a skipped real claim
+        // costs trust, a checked non-claim only costs pennies. (No opinion-
+        // opener filter: "I think the Great Wall is visible from space" is a
+        // checkable falsehood wearing a hedge.)
+        && !/\?\s*$/.test(seg.text)                       // bare questions aren't claims ("(or was it 1945?)" tails still check)
+        && /\p{L}/u.test(seg.text)                        // any-script letters — numbers/dividers only
+        && !/^[\d\s.)\-–—•*#]+$/.test(seg.text)           // list markers / rules
+        && !(!endsTerminal && words <= 6);                // short unpunctuated line = heading (or mid-typing)
     }
     return segs;
   }
@@ -291,6 +329,9 @@
     .status.error { color: #d93636; }
     .selects { display: flex; gap: 6px; padding: 9px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); align-items: center; }
     .speedbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); }
+    .speedbar.locked .sb-track { opacity: .5; }
+    .speedbar.locked input { cursor: not-allowed; }
+    .sb-pro { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 8px; background: linear-gradient(150deg, #ff7f00, #f9a35a); color: #fff; font-size: 8px; font-weight: 800; letter-spacing: .6px; vertical-align: 1px; }
     .sb-lab { font-size: 12px; font-weight: 700; color: #8e8e93; flex-shrink: 0; }
     .sb-lab.on { color: #0e0e10; }
     .sb-track { position: relative; flex: 1; display: flex; align-items: center; }
@@ -375,7 +416,8 @@
   }
 
   function lsGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
-  function lsSet(key, value) { try { localStorage.setItem(key, value); } catch { /* sandboxed page */ } }
+  function lsSet(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } } // false: sandboxed page or quota
+  function lsDel(key) { try { localStorage.removeItem(key); } catch { /* sandboxed */ } }
   function jsonParse(raw, fallback) { try { return JSON.parse(raw); } catch { return fallback; } }
 
   if (harness || IS_DOCS) docsMode();
@@ -390,11 +432,60 @@
 
     const SETTINGS_KEY = "tracely.widget.settings";
     const DISMISS_KEY = `tracely.widget.dismissed.${DOC_ID}`;
+    const VCACHE_KEY = `tracely.widget.vcache.${DOC_ID}`;
+    const SCACHE_KEY = `tracely.widget.scache.${DOC_ID}`;
 
     // ── state ──
-    const cache = new Map();
+    // Verdicts and source lists persist per doc: reopening the tab re-checks
+    // NOTHING that hasn't changed (hash-keyed, stale entries just never
+    // match) and never re-searches a claim it already has sources for.
+    const cache = new Map(jsonParse(lsGet(VCACHE_KEY) ?? "[]", []));
     const dismissed = new Set(jsonParse(lsGet(DISMISS_KEY) ?? "[]", []));
-    const sourcesMap = new Map(); // hash → {loading, list, copiedUrl}
+    const sourcesMap = new Map(jsonParse(lsGet(SCACHE_KEY) ?? "[]", [])
+      .map(([h, st]) => [h, { loading: false, list: st.list, copiedUrl: null, citedUrl: st.citedUrl ?? null }]));
+    function persistCaches() {
+      // Doc-aware eviction: verdicts for sentences STILL IN the doc are what
+      // stop reload re-checks — persist those first, pad with recent others.
+      // Blind slice(-400) on a long doc evicted live verdicts and re-spent
+      // API calls on every reload, forever.
+      const live = new Set(segments.map((s) => s.hash));
+      const entries = [...cache];
+      const keep = entries.filter(([h]) => live.has(h)).slice(-400);
+      if (keep.length < 400) {
+        keep.push(...entries.filter(([h]) => !live.has(h)).slice(-(400 - keep.length)));
+      }
+      const src = [...sourcesMap]
+        .filter(([, st]) => st.list?.length)
+        .map(([h, st]) => [h, { list: st.list.slice(0, 5), citedUrl: st.citedUrl ?? null }]);
+      let ok = lsSet(VCACHE_KEY, JSON.stringify(keep));
+      ok = lsSet(SCACHE_KEY, JSON.stringify(src.slice(-20))) && ok;
+      if (!ok) {
+        // Quota (shared with Google Docs' own storage): drop other docs'
+        // Tracely caches, then retry once at reduced size. Never throw.
+        try {
+          for (const k of Object.keys(localStorage)) {
+            if (/^tracely\.widget\.(vcache|scache)\./.test(k) && k !== VCACHE_KEY && k !== SCACHE_KEY) lsDel(k);
+          }
+        } catch { /* sandboxed */ }
+        lsSet(VCACHE_KEY, JSON.stringify(keep.slice(-100)));
+        lsSet(SCACHE_KEY, JSON.stringify(src.slice(-5)));
+      }
+    }
+    // LRU registry of docs holding Tracely caches — GC the oldest beyond 20
+    // so dead docs never fill the origin's localStorage (shared with Docs).
+    {
+      const REG_KEY = "tracely.widget.docs";
+      const reg = jsonParse(lsGet(REG_KEY) ?? "[]", []).filter((e) => Array.isArray(e) && e[0] !== DOC_ID);
+      reg.push([DOC_ID, Date.now()]);
+      reg.sort((a, b) => a[1] - b[1]);
+      while (reg.length > 20) {
+        const [old] = reg.shift();
+        lsDel(`tracely.widget.vcache.${old}`);
+        lsDel(`tracely.widget.scache.${old}`);
+        lsDel(`tracely.widget.dismissed.${old}`);
+      }
+      lsSet(REG_KEY, JSON.stringify(reg));
+    }
     let settings = { model: "claude-haiku-4-5", effort: "low", citationStyle: "apa", ...jsonParse(lsGet(SETTINGS_KEY) ?? "{}", {}) };
     let segments = [];
     let inflight = false;
@@ -448,12 +539,13 @@
           const data = await api("/api/check", {
             text: docText.slice(0, MAX_INPUT_CHARS),
             sentences: todo.map((s) => ({ id: s.hash, text: s.text })),
-            model: settings.model,
-            effort: settings.effort,
+            model: effModel(settings),
+            effort: effEffort(settings),
           });
           for (const f of data.findings ?? []) {
             cache.set(f.id, { verdict: f.verdict, explanation: f.explanation, revision: f.revision, confidence: f.confidence });
           }
+          persistCaches();
           autoFindSources(data.findings ?? []); // fire-and-forget, capped
         }
         statusKind = "idle";
@@ -919,30 +1011,29 @@
        the card and its arrow stay welded to the bar while the doc scrolls. */
     function placeDocsPopover(r) {
       if (!popEl) return;
-      const h = popEl.getBoundingClientRect().height;
-      const below = (r.bottom ?? r.top + 4) + 8;
-      const flip = below + h > innerHeight - 10;
-      const top = flip ? Math.max(10, r.top - (r.size ?? 18) - h - 8) : below;
+      // The card DROPS DOWN, always. Near the viewport bottom the scrollable
+      // sources list shrinks to fit instead of the card flipping above the
+      // line — the caret stays on the top edge, pointing at the underline.
+      let top = (r.bottom ?? r.top + 4) + 8;
       const left = Math.max(12, Math.min(r.left, innerWidth - 360));
+      const box = popEl.querySelector("[data-pop-sources]");
+      if (box) {
+        const fixedH = popEl.getBoundingClientRect().height - box.getBoundingClientRect().height;
+        const avail = innerHeight - top - fixedH - 14;
+        box.style.maxHeight = Math.max(90, Math.min(250, avail)) + "px";
+      }
+      // Clamp so the buttons never land below the fold (a fixed card can't be
+      // scrolled to). At the extreme bottom this overlaps the line — still
+      // never above it.
+      const cardH = popEl.getBoundingClientRect().height;
+      top = Math.max(12, Math.min(top, innerHeight - cardH - 10));
       const leftPx = left + "px", topPx = top + "px";
       if (popEl.style.left !== leftPx) popEl.style.left = leftPx;
       if (popEl.style.top !== topPx) popEl.style.top = topPx;
       const arrow = popEl.querySelector("[data-pop-arrow]");
       if (arrow) {
         const cx = r.centerX ?? r.left + 24;
-        const ax = Math.max(14, Math.min(cx - left - 6, 340 - 26));
-        arrow.style.left = ax + "px";
-        if (flip) {
-          arrow.style.top = "";
-          arrow.style.bottom = "-6.5px";
-          arrow.style.borderWidth = "0 1px 1px 0";
-          arrow.style.borderRadius = "0 0 2px 0";
-        } else {
-          arrow.style.bottom = "";
-          arrow.style.top = "-6.5px";
-          arrow.style.borderWidth = "1px 0 0 1px";
-          arrow.style.borderRadius = "2px 0 0 0";
-        }
+        arrow.style.left = Math.max(14, Math.min(cx - left - 6, 340 - 26)) + "px";
       }
     }
 
@@ -1071,16 +1162,30 @@
       }
       // With no rewrite on offer (citation-needed), finding the source IS the
       // fix — it gets the primary button. Sources load INTO the popover, so
-      // picking one never requires a trip to the widget.
-      const src = popBtn(f.verdict === "needs_citation" ? "Find a source" : "Sources", !f.revision);
-      src.addEventListener("click", async () => {
-        src.textContent = "Searching…";
-        src.disabled = true;
-        try { await fetchSources(hash); } catch { /* state lands in sourcesMap */ }
-        src.remove();
-        renderPopSources(hash);
-      });
-      row.appendChild(src);
+      // picking one never requires a trip to the widget. Already-searched
+      // claims render straight from the cache — closing and reopening the
+      // card never repeats a search.
+      const st0 = sourcesMap.get(hash);
+      const haveSources = !!(st0 && (st0.loading || st0.list?.length));
+      if (!haveSources) {
+        const label = f.verdict === "needs_citation" ? "Find a source" : "Sources";
+        const src = popBtn(label, !f.revision);
+        src.addEventListener("click", async () => {
+          src.textContent = "Searching…";
+          src.disabled = true;
+          let started = true;
+          try { started = await fetchSources(hash); } catch { /* state lands in sourcesMap */ }
+          if (started === false) {
+            // Another claim's search holds the slot — don't fake progress.
+            src.textContent = label;
+            src.disabled = false;
+            return;
+          }
+          src.remove();
+          renderPopSources(hash);
+        });
+        row.appendChild(src);
+      }
       const dis = popBtn("Dismiss", false);
       dis.addEventListener("click", () => {
         dismissed.add(hash);
@@ -1091,10 +1196,10 @@
       });
       row.appendChild(dis);
       popEl.appendChild(row);
+      if (haveSources) renderPopSources(hash); // cached or in-flight — zero new API work
       // Stubby caret aimed at the underline — a rotated square whose opaque
-      // face covers the card border where it meets the edge. placeDocsPopover
-      // sets which two sides carry the border (top-left below, bottom-right
-      // when the card flips above the line).
+      // face covers the card border where it meets the top edge (the card
+      // always sits below the line; placeDocsPopover aims the caret's x).
       const arrow = document.createElement("div");
       arrow.setAttribute("data-pop-arrow", "");
       Object.assign(arrow.style, {
@@ -1130,7 +1235,9 @@
       box.textContent = "";
       const st = sourcesMap.get(hash);
       if (!st || st.loading) {
-        box.textContent = "Searching the web for sources…";
+        box.textContent = !st && !sourcesInflight
+          ? "Source search failed — close and reopen this card to retry."
+          : "Searching the web for sources…";
         Object.assign(box.style, { color: "#a7a7ac", fontStyle: "italic", fontSize: "11.5px" });
         return;
       }
@@ -1271,7 +1378,13 @@
       if (hoverRafBusy) return;
       hoverRafBusy = true;
       const x = e.clientX, y = e.clientY;
-      requestAnimationFrame(() => {
+      // rAF starves in hidden/throttled tabs — a lone mousemove during a
+      // tab-hide must not wedge hover forever, so a timer backstops the frame.
+      let hoverRan = false;
+      const runHover = (fn) => { if (hoverRan) return; hoverRan = true; fn(); };
+      setTimeout(() => runHover(hoverHit), 90);
+      requestAnimationFrame(() => runHover(hoverHit));
+      function hoverHit() {
         hoverRafBusy = false;
         // Bars are DOM-anchored now — read their LIVE viewport rects, which
         // are correct mid-scroll by construction.
@@ -1306,7 +1419,7 @@
           const hit = hitOf(b);
           if (hit) { showDocsPopover(b.hash, hit, b); break; }
         }
-      });
+      }
     }, { passive: true });
 
     // Scroll/wheel fire at frame rate; a trailing 140ms throttle keeps the
@@ -1435,9 +1548,13 @@
     window.addEventListener("resize", scheduleDocsMarks, { passive: true });
 
     async function fetchSources(hash, auto = false) {
-      if (sourcesInflight) return;
+      // Returns false when NOTHING was started (another claim's search holds
+      // the slot, or the sentence vanished) so callers can restore their UI
+      // instead of pretending a search is running.
+      if (sourcesMap.get(hash)?.list?.length) return true; // cached — never re-search
+      if (sourcesInflight) return false;
       const seg = segments.find((s) => s.hash === hash);
-      if (!seg) return;
+      if (!seg) return false;
       const f = cache.get(hash);
       sourcesInflight = true;
       sourcesMap.set(hash, { loading: true, list: null, copiedUrl: null });
@@ -1447,9 +1564,10 @@
           claim: seg.text,
           correction: f?.revision || undefined,
           context: docText.slice(0, 6000),
-          model: settings.model,
+          model: effModel(settings),
         });
         sourcesMap.set(hash, { loading: false, list: data.sources ?? [], copiedUrl: null });
+        persistCaches();
       } catch (err) {
         sourcesMap.delete(hash);
         if (!auto) statusKind = "error";
@@ -1457,7 +1575,9 @@
       } finally {
         sourcesInflight = false;
         render();
+        renderPopSources(hash); // popover may be waiting on this claim
       }
+      return true;
     }
 
     // Auto-sources for flagged claims — capped per cycle and per rolling hour.
@@ -1488,6 +1608,7 @@
         st.list = st.list ?? [];
         if (!st.list.some((s) => s.url === src.url)) st.list.unshift(src);
         sourcesMap.set(hash, st);
+        persistCaches(); // pasted-URL sources survive reloads too
         if (canEditDoc()) {
           await docCite(hash, st.list.findIndex((s) => s.url === src.url));
         } else {
@@ -1535,6 +1656,7 @@
         await docApply({ action: "replace", find: seg.text, replacement: withMarkers(seg.text, f.revision) });
         docFixed.add(hash);
         cache.delete(hash); // the rewritten sentence gets re-verified on the next read
+        persistCaches();
         statusKind = "idle";
         statusMsg = "fixed in doc";
         lastCheckEnd = Date.now() - CHECK_INTERVAL_MS + 3000; // re-read soon (export lags slightly)
@@ -1578,6 +1700,7 @@
           if (sourcesMap.has(hash) && !sourcesMap.has(newHash)) sourcesMap.set(newHash, sourcesMap.get(hash));
         }
         st.citedUrl = src.url;
+        persistCaches();
         statusKind = "idle";
         statusMsg = `cited [${num}] in doc`;
         lastCheckEnd = Date.now() - CHECK_INTERVAL_MS + 3000;
@@ -1595,6 +1718,16 @@
 
     // ── widget UI ──
     const { shadow, root } = makeWidget();
+    tierListeners.push(() => {
+      // On downgrade, clamp the STORED choice too — a stale opus setting must
+      // not sit in localStorage looking active (API calls already clamp).
+      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
+        settings.model = SPEED_STOPS[0].model;
+        settings.effort = SPEED_STOPS[0].effort;
+        lsSet(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      render();
+    });
 
     function render() {
       const issues = currentIssues();
@@ -1833,6 +1966,15 @@
       if (!widget) widget = makeWidget();
       return widget;
     }
+    tierListeners.push(() => {
+      // Same downgrade clamp as docs mode; only repaint if the panel exists.
+      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
+        settings.model = SPEED_STOPS[0].model;
+        settings.effort = SPEED_STOPS[0].effort;
+        lsSet(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      if (widget) render();
+    });
 
     /* ── editable tracking ── */
 
@@ -2139,8 +2281,8 @@
           const data = await api("/api/check", {
             text: fieldText.slice(0, MAX_INPUT_CHARS),
             sentences: todo.map((s) => ({ id: s.hash, text: s.text })),
-            model: settings.model,
-            effort: settings.effort,
+            model: effModel(settings),
+            effort: effEffort(settings),
           });
           checkedOnce = true;
           for (const f of data.findings ?? []) {
@@ -2185,7 +2327,7 @@
           claim: seg.text,
           correction: f?.revision || undefined,
           context: fieldText.slice(0, 6000),
-          model: settings.model,
+          model: effModel(settings),
         });
         sourcesMap.set(hash, { loading: false, list: data.sources ?? [], copiedUrl: null });
       } catch (err) {

@@ -30,15 +30,49 @@ function paintSlider(pos) {
 
 /* ── load + save ─────────────────────────────────────────────────────────── */
 
+const PRO_CODE_RE = /^TRACELY-PRO-[A-Z0-9]{4,}$/i;
+let proActive = false;
+
+function applyProState() {
+  const slider = $("modelSlider");
+  slider.disabled = !proActive;
+  slider.closest("section").style.opacity = proActive ? "" : "0.55";
+  $("sliderHint").textContent = proActive
+    ? "How hard Tracely thinks. Faster is cheaper and near-instant; Smarter catches subtler problems."
+    : "Locked on Faster (Haiku) — enter a Tracely Pro code above to unlock Sonnet and Opus.";
+  if (!proActive) {
+    slider.value = "0";
+    paintSlider(0);
+    chrome.storage.local.set({ model: MODELS[0] }); // free tier is pinned to Haiku
+  }
+}
+
 function load() {
-  chrome.storage.local.get({ apiKey: "", model: "claude-haiku-4-5", enabledSites: [] }, (cfg) => {
+  chrome.storage.local.get({ apiKey: "", model: "claude-haiku-4-5", enabledSites: [], proCode: "" }, (cfg) => {
     $("apiKey").value = cfg.apiKey;
-    const pos = Math.max(0, MODELS.indexOf(cfg.model));
+    $("proCode").value = cfg.proCode;
+    proActive = PRO_CODE_RE.test(String(cfg.proCode).trim());
+    const pos = proActive ? Math.max(0, MODELS.indexOf(cfg.model)) : 0;
     $("modelSlider").value = String(pos);
     paintSlider(pos);
+    applyProState();
     renderSites(cfg.enabledSites);
   });
 }
+
+$("saveProCode").addEventListener("click", () => {
+  const proCode = $("proCode").value.trim();
+  proActive = PRO_CODE_RE.test(proCode);
+  chrome.storage.local.set({ proCode }, () => {
+    $("proStatus").textContent = proCode
+      ? (proActive ? "Pro active — the slider is unlocked." : "That code doesn't look right — codes start with TRACELY-PRO-.")
+      : "Code removed — back on the free tier (Faster).";
+    applyProState();
+  });
+});
+$("proCode").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("saveProCode").click();
+});
 
 let savedTimer = null;
 function flashSaved(text) {
