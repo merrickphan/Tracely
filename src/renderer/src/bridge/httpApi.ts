@@ -33,6 +33,7 @@ import type {
   CitationResolveCitedResponse,
   ProfileInfo,
   ResolvedCitedWork,
+  ScreenWatchSourceCandidate,
   ScreenWatchStatus,
   SettingsSetRequest
 } from '@shared/ipc-contract'
@@ -43,6 +44,7 @@ import { formatInTextCitation } from '@shared/citationInText'
 import { bibliographyReferences } from '@shared/bibliography'
 import { splitParagraphs, bucketClaimsByParagraph } from '@shared/paragraphSplit'
 import { computeClaimSpans } from '@shared/claimSpans'
+import { credibilityOf } from '@shared/sourceCredibility'
 import { gradeFor } from '@shared/gradeLevel'
 import {
   accentHexOf,
@@ -450,7 +452,46 @@ export function createHttpApi(): TracelyApi {
       getForClaim: async (req) => {
         const rec = claimsById.get(req.claimId)
         return { evidence: rec?.evidence ?? [] }
-      }
+      },
+      // Home's source finder: the same retrieval as evidence.find, but for a
+      // sentence the user typed rather than a stored claim, so nothing is
+      // persisted and the citation is precomputed per row.
+      forText: async (req) => {
+        const text = req.text.trim()
+        if (!text) return { candidates: [], citations: {}, note: null }
+        const result = await post<ServerEvidenceResponse>('/api/evidence', { claim: text })
+        const rows = result.sources ?? []
+        const candidates: ScreenWatchSourceCandidate[] = []
+        const citations: Record<string, string> = {}
+        rows.forEach((row, i) => {
+          const source = sourceFromServer(row, `txt-${hashText(text)}-${i}`)
+          registerSource(source)
+          candidates.push({
+            sourceRef: source.id,
+            title: source.title,
+            venue: source.venue ?? null,
+            year: source.year ?? null,
+            provider: source.provider,
+            url: source.url ?? null,
+            // The server ranks best-first and does not score a row against the
+            // text, so position is the only honest signal of fit we have.
+            matchPercent: Math.max(1, Math.round(((rows.length - i) / rows.length) * 100)),
+            faviconDataUrl: null,
+            credibility: credibilityOf(source)
+          })
+          citations[source.id] = formatCitation(source, req.style)
+        })
+        return {
+          candidates,
+          citations,
+          note: candidates.length ? null : 'No sources came back for that text.'
+        }
+      },
+      // Off-topic detection runs on local MiniLM embeddings in the desktop
+      // build; a browser tab has no model to ask. Null is the contract's
+      // "could not be measured", which reads differently from "nothing was
+      // off topic" — the caller must not draw a finding from silence.
+      offTopic: async () => ({ offTopicClaimIds: null })
     },
     sources: {
       // Google's public favicon service, keyed by the URL exactly as asked —
