@@ -894,6 +894,7 @@
        page DOM with inline styles only — Docs' stylesheets never touch it. */
     // (verdict labels/washes/colors are the shared top-level maps)
     let popEl = null, popHash = null, popHideTimer = null, popFontIn = false;
+    let popAnchor = null, popLastTop = 0, popFollowRaf = 0, popLostAt = 0;
 
     function popFont() {
       if (popFontIn || !FONT_URL) return;
@@ -908,6 +909,84 @@
       if (popEl) popEl.remove();
       popEl = null;
       popHash = null;
+      popAnchor = null;
+      popLostAt = 0;
+      if (popFollowRaf) { cancelAnimationFrame(popFollowRaf); popFollowRaf = 0; }
+    }
+
+    /* Position the popover against its underline's LIVE rect and aim the
+       caret at it. Shared by the open path and the per-frame follow loop, so
+       the card and its arrow stay welded to the bar while the doc scrolls. */
+    function placeDocsPopover(r) {
+      if (!popEl) return;
+      const h = popEl.getBoundingClientRect().height;
+      const below = (r.bottom ?? r.top + 4) + 8;
+      const flip = below + h > innerHeight - 10;
+      const top = flip ? Math.max(10, r.top - (r.size ?? 18) - h - 8) : below;
+      const left = Math.max(12, Math.min(r.left, innerWidth - 360));
+      const leftPx = left + "px", topPx = top + "px";
+      if (popEl.style.left !== leftPx) popEl.style.left = leftPx;
+      if (popEl.style.top !== topPx) popEl.style.top = topPx;
+      const arrow = popEl.querySelector("[data-pop-arrow]");
+      if (arrow) {
+        const cx = r.centerX ?? r.left + 24;
+        const ax = Math.max(14, Math.min(cx - left - 6, 340 - 26));
+        arrow.style.left = ax + "px";
+        if (flip) {
+          arrow.style.top = "";
+          arrow.style.bottom = "-6.5px";
+          arrow.style.borderWidth = "0 1px 1px 0";
+          arrow.style.borderRadius = "0 0 2px 0";
+        } else {
+          arrow.style.bottom = "";
+          arrow.style.top = "-6.5px";
+          arrow.style.borderWidth = "1px 0 0 1px";
+          arrow.style.borderRadius = "2px 0 0 0";
+        }
+      }
+    }
+
+    /* Follow loop — only alive while a popover is open. The underlines are
+       compositor-carried now, so a card parked at its open position visibly
+       detaches on the first scroll; this re-pins it every frame. When a
+       re-locate rebuilds docsBars, the old anchor element dies — re-bind to
+       the same claim's nearest bar. Anchor gone >400ms → the text left the
+       viewport (or the claim resolved): let the card go. */
+    function popFollowFrame() {
+      popFollowRaf = 0;
+      if (!popEl) return;
+      const ok = (b) => b && b.el.isConnected && b.el.style.display !== "none" && b.el.style.opacity !== "0";
+      if (!ok(popAnchor)) {
+        let best = null, bestD = Infinity;
+        for (const b of docsBars) {
+          if (b.hash !== popHash || !ok(b)) continue;
+          const d = Math.abs(b.el.getBoundingClientRect().top - popLastTop);
+          if (d < bestD) { best = b; bestD = d; }
+        }
+        if (best) popAnchor = best;
+      }
+      let placed = false;
+      if (ok(popAnchor)) {
+        const r = popAnchor.el.getBoundingClientRect();
+        if (!docsScroller || !docsScroller.isConnected) {
+          docsScroller = document.querySelector(".kix-appview-editor");
+        }
+        const clip = docsScroller ? docsScroller.getBoundingClientRect() : null;
+        if (!clip || (r.bottom >= clip.top + 2 && r.top <= clip.bottom - 2)) {
+          popLastTop = r.top;
+          popLostAt = 0;
+          placeDocsPopover({
+            left: r.left, top: r.top, bottom: r.bottom,
+            size: popAnchor.size, centerX: r.left + r.width / 2,
+          });
+          placed = true;
+        }
+      }
+      if (!placed) {
+        if (!popLostAt) popLostAt = performance.now();
+        else if (performance.now() - popLostAt > 400) { hideDocsPopover(); return; }
+      }
+      popFollowRaf = requestAnimationFrame(popFollowFrame);
     }
 
     function popBtn(label, primary) {
@@ -923,7 +1002,7 @@
       return b;
     }
 
-    function showDocsPopover(hash, rect) {
+    function showDocsPopover(hash, rect, anchorBar) {
       console.debug("[tracely] popover open", hash);
       const f = cache.get(hash);
       if (!f) { console.debug("[tracely] popover abort: no finding"); return; }
@@ -1012,17 +1091,28 @@
       });
       row.appendChild(dis);
       popEl.appendChild(row);
-      // Position under the underline; flip above when it would clip the viewport.
-      const below = (rect.bottom ?? rect.top + 4) + 8;
-      popEl.style.left = Math.max(12, Math.min(rect.left, innerWidth - 360)) + "px";
-      popEl.style.top = below + "px";
+      // Stubby caret aimed at the underline — a rotated square whose opaque
+      // face covers the card border where it meets the edge. placeDocsPopover
+      // sets which two sides carry the border (top-left below, bottom-right
+      // when the card flips above the line).
+      const arrow = document.createElement("div");
+      arrow.setAttribute("data-pop-arrow", "");
+      Object.assign(arrow.style, {
+        position: "absolute", width: "11px", height: "11px",
+        background: "#fff", transform: "rotate(45deg)",
+        border: "solid rgba(20,16,10,0.08)", borderWidth: "1px 0 0 1px",
+        top: "-6.5px", left: "20px", borderRadius: "2px 0 0 0",
+      });
+      popEl.appendChild(arrow);
+      // Position against the LIVE bar rect, then keep following it.
       popEl.style.visibility = "hidden";
       document.documentElement.appendChild(popEl);
-      const h = popEl.getBoundingClientRect().height;
-      if (below + h > innerHeight - 10) {
-        popEl.style.top = Math.max(10, rect.top - rect.size - h - 8) + "px";
-      }
+      placeDocsPopover(rect);
       popEl.style.visibility = "visible";
+      popAnchor = anchorBar ?? null;
+      popLastTop = rect.top;
+      popLostAt = 0;
+      if (!popFollowRaf) popFollowRaf = requestAnimationFrame(popFollowFrame);
     }
 
     function renderPopSources(hash) {
@@ -1197,7 +1287,7 @@
           const r = b.el.getBoundingClientRect();
           if (clip && (r.bottom < clip.top + 2 || r.top > clip.bottom - 2 || r.left > clip.right || r.right < clip.left)) return null;
           return x >= r.left - 2 && x <= r.right + 2 && y >= r.top - b.size && y <= r.bottom + 3
-            ? { left: r.left, top: r.top, bottom: r.bottom, size: b.size }
+            ? { left: r.left, top: r.top, bottom: r.bottom, size: b.size, centerX: r.left + r.width / 2 }
             : null;
         };
         if (popEl) {
@@ -1214,7 +1304,7 @@
         }
         for (const b of docsBars) {
           const hit = hitOf(b);
-          if (hit) { showDocsPopover(b.hash, hit); break; }
+          if (hit) { showDocsPopover(b.hash, hit, b); break; }
         }
       });
     }, { passive: true });
