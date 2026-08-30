@@ -34,6 +34,9 @@ const WORKER = join(REPO, 'out', 'main', 'mlWorker.js')
 // built and before anything is published. Defaults to the standard Windows
 // output so it can also be run by hand against an existing build.
 const RESOURCES = process.argv[2] ?? join(REPO, 'release', 'win-unpacked', 'resources')
+// Which platform's binaries this build must carry. afterPack passes it; run
+// by hand it defaults to win32, matching the default RESOURCES above.
+const PLATFORM = process.argv[3] ?? 'win32'
 const MODELS = join(RESOURCES, 'models')
 const ASAR = join(RESOURCES, 'app.asar')
 
@@ -57,16 +60,40 @@ const packed = asar.listPackage(ASAR).map((path) => path.replace(/\\/g, '/'))
 // `out/eval/` expectation below for what happens when it does not.
 const count = (fragment) => packed.filter((path) => path.includes(fragment)).length
 
+// Per-platform binary expectations. Everything else in the list is
+// platform-neutral; these four fragments are what "the right binaries for
+// THIS build" means. The list hardcoded win32 while afterPack skipped darwin,
+// which is how the first mac dmg packed only the Windows binding.
+const RUNTIME = {
+  win32: {
+    need: 'onnxruntime-node/bin/napi-v6/win32/x64',
+    sharp: '@img/sharp-win32-x64',
+    forbid: [
+      ['onnxruntime-node/bin/napi-v6/win32/arm64', 'wrong architecture'],
+      ['onnxruntime-node/bin/napi-v6/darwin', 'wrong platform'],
+      ['@img/sharp-darwin', 'wrong platform']
+    ]
+  },
+  darwin: {
+    need: 'onnxruntime-node/bin/napi-v6/darwin',
+    sharp: '@img/sharp-darwin',
+    forbid: [
+      ['onnxruntime-node/bin/napi-v6/win32', 'wrong platform'],
+      ['@img/sharp-win32', 'wrong platform']
+    ]
+  }
+}[PLATFORM]
+if (!RUNTIME) fail(`no packaging expectations defined for platform '${PLATFORM}'`)
+
 // [fragment, must be present?, why it matters]
 const EXPECTATIONS = [
   ['@huggingface/transformers/dist', true, 'the library itself'],
   ['@huggingface/jinja', true, 'transitive dependency of transformers'],
-  ['onnxruntime-node/bin/napi-v6/win32/x64', true, 'the inference runtime for this target'],
-  ['@img/sharp-win32-x64', true, 'transformers.node.mjs imports sharp at the top level'],
+  [RUNTIME.need, true, 'the inference runtime for this target'],
+  [RUNTIME.sharp, true, 'transformers.node.mjs imports sharp at the top level'],
   ['@huggingface/transformers/.cache', false, '202MB of dev-downloaded weights'],
   ['@huggingface/transformers/src', false, 'TypeScript sources; dist is what runs'],
-  ['onnxruntime-node/bin/napi-v6/win32/arm64', false, 'wrong architecture'],
-  ['onnxruntime-node/bin/napi-v6/darwin', false, 'wrong platform'],
+  ...RUNTIME.forbid.map(([fragment, why]) => [fragment, false, why]),
   ['onnxruntime-node/bin/napi-v6/linux', false, 'wrong platform'],
   ['onnxruntime-web', false, '128MB of browser WASM the node entry never imports'],
   // Trailing slash is load-bearing. As `out/eval` this also matched
@@ -265,6 +292,23 @@ if (!existsSync(PACKED_WORKER)) {
 ` +
       `      asarUnpack must list out/main/mlWorker.js — see electron-builder.yml`
   )
+}
+
+// The runtime embed is native and can only run on its OWN platform: a Windows
+// onnxruntime_binding.node cannot load on macOS, and vice versa. On a
+// cross-build the static checks above (closure unpacked, weights + the right
+// platform's binary present, one relay) are everything decidable here — the
+// actual embed has to be exercised by a native run of the same commit. Skipping
+// it silently would be the invisible-degradation trap this whole script exists
+// to prevent, so it is loud, and the worker-file existence check above still
+// ran. When target === host (a native build) the embed runs and must pass.
+const HOST = process.platform
+if (PLATFORM !== HOST) {
+  console.log(
+    `SKIP  offline embed test — cross-build (host ${HOST} → target ${PLATFORM}); ` +
+      `a ${PLATFORM} onnxruntime binding cannot execute on ${HOST}. Run this on ${PLATFORM} to exercise it.`
+  )
+  process.exit(0)
 }
 
 const worker = new Worker(PACKED_WORKER, {

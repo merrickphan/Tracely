@@ -1,3 +1,5 @@
+import { createContext, useContext } from 'react'
+import type { ReactNode } from 'react'
 import type { ParagraphRole, StructureComponents, StructureWeaknessKind } from '@shared/types'
 import { needsWork } from '@shared/weaknessSeverity'
 import type { ScreenWatchProblemKind } from '@shared/ipc-contract'
@@ -127,17 +129,187 @@ export const GRADE_RING_TRACK = '#e7ebe8'
 export const GRADE_GREEN = '#168449'
 export const GRADE_PILL_BG = '#ddf2e0'
 
-export function gradeRingColor(score: number): string {
-  if (score >= 70) return GRADE_GREEN
-  if (score >= 40) return '#b3690a'
-  return '#d6301a'
+/**
+ * Every colour this report paints, under a semantic name.
+ *
+ * The report renders in two windows with two different obligations. The
+ * overlay window draws over OTHER applications and was built verbatim from
+ * Figma — it must keep exactly the frame's colours, always. The main window's
+ * report modal follows the app theme, so in dark mode the same markup needs a
+ * second set of inks. One palette type, two constant instances, and a context
+ * that defaults to the light one — so a surface that mounts no provider (the
+ * overlay) is byte-identical to what it drew before this type existed.
+ *
+ * The three mark colours (#d93636 / #ffb800 / #ff5900) are NOT here: they are
+ * the 3-colour underline system and deliberately theme-invariant.
+ */
+export interface GradePalette {
+  /** Primary ink — titles, figures, bold spans. */
+  text: string
+  /** The frame's caption grey (DIM). */
+  dim: string
+  /** The frame's body grey (W_BODY). */
+  body: string
+  /** Hairline between header / footer and the body. */
+  divider: string
+  /** The card/button surface — the frame's white. */
+  surface: string
+  /** The tinted panel behind the rubric bars, paragraph cards and score row. */
+  panelBg: string
+  /** The empty part of a MiniBar meter. */
+  trackBg: string
+  /** The unfilled part of the score ring. */
+  ringTrack: string
+  /** The role chip behind "Thesis" / "Evidence" etc. */
+  chipBg: string
+  /** The `›` affordance on a paragraph card. */
+  chevron: string
+  /** Score green — ring, bars, "Strong". */
+  green: string
+  /** The letter pill's green wash. */
+  greenWash: string
+  /** The "Strong" badge wash (a different light green than the pill's). */
+  strongWash: string
+  /** Ring colour for a mid score. */
+  ringMid: string
+  /** Ring colour for a low score. */
+  ringLow: string
+  /** MiniBar colour for a mid band. */
+  barMid: string
+  /** MiniBar colour for a low band. */
+  barLow: string
+  /** "Needs Work" text. */
+  warnText: string
+  /** "Needs Work" wash. */
+  warnWash: string
+  /** Link blue — "Open Argument Check →", "Find →", the Summary dot. */
+  blue: string
+  /** The round close button's wash. */
+  closeBg: string
+  /** The round close button's glyph. */
+  closeText: string
+  /** The secondary pill's outline. */
+  btnBorder: string
+  /** The secondary pill's label. */
+  btnText: string
+  /** Text on the filled primary pill (and on the `!` badge). */
+  onPrimary: string
+  /** The primary pill's orange→red fill. */
+  primaryGradient: string
+  /** A claim issue card's wash. */
+  issueBg: string
+  /** The `!` badge's fill. */
+  issueBadge: string
+  /** An issue card's headline. */
+  issueTitle: string
+  /** An issue card's body text. */
+  issueBody: string
+}
+
+/** The frame's own colours — exactly what both surfaces drew before theming. */
+export const GRADE_LIGHT: GradePalette = {
+  text: '#1a1a1f',
+  dim: DIM,
+  body: W_BODY,
+  divider: '#e7e7e7',
+  surface: '#fff',
+  panelBg: '#f8f9f8',
+  trackBg: '#eaeaea',
+  ringTrack: GRADE_RING_TRACK,
+  chipBg: '#e8e9ec',
+  chevron: '#999a9e',
+  green: GRADE_GREEN,
+  greenWash: GRADE_PILL_BG,
+  strongWash: '#e0f2e5',
+  ringMid: '#b3690a',
+  ringLow: '#d6301a',
+  barMid: '#c79216',
+  barLow: '#d3514b',
+  warnText: '#cb5c19',
+  warnWash: '#fff1e5',
+  blue: '#2563eb',
+  closeBg: '#eaf2ec',
+  closeText: '#376049',
+  btnBorder: '#d3d8d4',
+  btnText: '#2d362f',
+  onPrimary: '#fff',
+  primaryGradient: 'linear-gradient(to right, #f97316, #dc2626)',
+  issueBg: '#fff7f0',
+  issueBadge: '#d95319',
+  issueTitle: '#b35116',
+  issueBody: '#5a3e1b'
+}
+
+/**
+ * The same report on the app's dark tokens (styles/index.css,
+ * `:root[data-theme='dark']`): surface #17171b, text #f6f6f8, borders as white
+ * washes, and the score colours moved to their dark-token equivalents
+ * (--score-good #34d399, --score-mid #ffab3d, --score-low #ff5a36). Light-grey
+ * panels become translucent light-on-dark washes so they read as the same
+ * grouping without glowing.
+ */
+export const GRADE_DARK: GradePalette = {
+  text: '#f6f6f8',
+  dim: 'rgba(246, 246, 248, 0.62)',
+  body: 'rgba(246, 246, 248, 0.78)',
+  divider: 'rgba(255, 255, 255, 0.18)',
+  surface: '#17171b',
+  panelBg: 'rgba(255, 255, 255, 0.04)',
+  trackBg: 'rgba(255, 255, 255, 0.14)',
+  ringTrack: 'rgba(255, 255, 255, 0.12)',
+  chipBg: 'rgba(255, 255, 255, 0.08)',
+  chevron: 'rgba(246, 246, 248, 0.45)',
+  green: '#34d399',
+  greenWash: 'rgba(52, 211, 153, 0.16)',
+  strongWash: 'rgba(52, 211, 153, 0.16)',
+  ringMid: '#ffab3d',
+  ringLow: '#ff5a36',
+  barMid: '#ffab3d',
+  barLow: '#ff5a36',
+  warnText: '#ffab3d',
+  warnWash: 'rgba(255, 171, 61, 0.18)',
+  blue: '#60a5fa',
+  closeBg: 'rgba(52, 211, 153, 0.16)',
+  closeText: '#34d399',
+  btnBorder: 'rgba(255, 255, 255, 0.28)',
+  btnText: '#f6f6f8',
+  onPrimary: '#fff',
+  primaryGradient: 'linear-gradient(to right, #f97316, #dc2626)',
+  issueBg: 'rgba(255, 171, 61, 0.1)',
+  issueBadge: '#d95319',
+  issueTitle: '#ffab3d',
+  issueBody: 'rgba(246, 246, 248, 0.75)'
+}
+
+/**
+ * Defaults to LIGHT, which is what keeps the overlay untouched: that window
+ * mounts no provider, so every component below reads the frame's own values.
+ * The main window's modal wraps the report in a provider when dark is active.
+ */
+const GradePaletteContext = createContext<GradePalette>(GRADE_LIGHT)
+
+export function GradePaletteProvider({
+  palette,
+  children
+}: {
+  palette: GradePalette
+  children: ReactNode
+}): JSX.Element {
+  return <GradePaletteContext.Provider value={palette}>{children}</GradePaletteContext.Provider>
+}
+
+export function gradeRingColor(score: number, palette: GradePalette = GRADE_LIGHT): string {
+  if (score >= 70) return palette.green
+  if (score >= 40) return palette.ringMid
+  return palette.ringLow
 }
 
 /** The header both frames draw: 19px title left, 30px close circle right. */
 export function GradeHeader({ title, onClose }: { title: string; onClose: () => void }): JSX.Element {
+  const P = useContext(GradePaletteContext)
   return (
     <div style={{ height: 30, position: 'relative', flexShrink: 0, width: '100%' }}>
-      <div style={{ position: 'absolute', left: 0, top: 3.5, fontSize: 19, fontWeight: 600, color: '#1a1a1f' }}>
+      <div style={{ position: 'absolute', left: 0, top: 3.5, fontSize: 19, fontWeight: 600, color: P.text }}>
         {title}
       </div>
       <button
@@ -152,8 +324,8 @@ export function GradeHeader({ title, onClose }: { title: string; onClose: () => 
           height: 30,
           borderRadius: 999,
           border: 'none',
-          background: '#eaf2ec',
-          color: '#376049',
+          background: P.closeBg,
+          color: P.closeText,
           fontFamily: 'inherit',
           fontSize: 17,
           lineHeight: 1,
@@ -168,7 +340,8 @@ export function GradeHeader({ title, onClose }: { title: string; onClose: () => 
 }
 
 export function GradeDivider(): JSX.Element {
-  return <div style={{ height: 1, background: '#e7e7e7', flexShrink: 0, width: '100%' }} />
+  const P = useContext(GradePaletteContext)
+  return <div style={{ height: 1, background: P.divider, flexShrink: 0, width: '100%' }} />
 }
 
 /** The ring + band block, byte-identical between 370:191 and 404:185. */
@@ -186,6 +359,7 @@ export function GradeScoreSection({
   //
   // The rubric's own measurement is not lost; the report prints it, and the
   // adjustment, as their own line under the breakdown.
+  const P = useContext(GradePaletteContext)
   const raw = structure?.score ?? 0
   const score = adjustedScore(raw, gradingLevel)
   const { letter, line } = gradeFor(raw, gradingLevel)
@@ -198,13 +372,13 @@ export function GradeScoreSection({
     <div style={{ height: 116, position: 'relative', flexShrink: 0, width: '100%' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, width: 116, height: 116 }}>
         <svg width={116} height={116} viewBox="0 0 116 116" aria-hidden="true">
-          <circle cx={58} cy={58} r={R} fill="none" stroke={GRADE_RING_TRACK} strokeWidth={10} />
+          <circle cx={58} cy={58} r={R} fill="none" stroke={P.ringTrack} strokeWidth={10} />
           <circle
             cx={58}
             cy={58}
             r={R}
             fill="none"
-            stroke={gradeRingColor(score)}
+            stroke={gradeRingColor(score, P)}
             strokeWidth={10}
             strokeLinecap="round"
             strokeDasharray={`${(CIRC * Math.max(0, Math.min(100, score))) / 100} ${CIRC}`}
@@ -220,19 +394,21 @@ export function GradeScoreSection({
             textAlign: 'center',
             fontSize: 30,
             fontWeight: 600,
-            color: '#1a1a1f',
+            color: P.text,
             lineHeight: 1
           }}
         >
           {structure ? score : '—'}
         </div>
-        <div style={{ position: 'absolute', left: 0, right: 0, top: 74, textAlign: 'center', fontSize: 12, color: DIM }}>
+        <div
+          style={{ position: 'absolute', left: 0, right: 0, top: 74, textAlign: 'center', fontSize: 12, color: P.dim }}
+        >
           / 100
         </div>
       </div>
 
       <div style={{ position: 'absolute', left: 144, top: 22.5, width: 241, height: 71 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>OVERALL SCORE</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: P.dim, letterSpacing: 0.6 }}>OVERALL SCORE</div>
         <div
           style={{
             position: 'absolute',
@@ -240,8 +416,8 @@ export function GradeScoreSection({
             left: 0,
             height: 24,
             borderRadius: 999,
-            background: GRADE_PILL_BG,
-            color: GRADE_GREEN,
+            background: P.greenWash,
+            color: P.green,
             fontSize: 13,
             fontWeight: 600,
             display: 'inline-flex',
@@ -254,7 +430,7 @@ export function GradeScoreSection({
         {/* The frame says "Above average for this assignment type" here. There
             is no cohort and no assignment type, so the slot keeps its place
             and says what the band means — see essayGrade.ts. */}
-        <div style={{ position: 'absolute', top: 55, left: 0, fontSize: 13, fontWeight: 600, color: W_BODY }}>
+        <div style={{ position: 'absolute', top: 55, left: 0, fontSize: 13, fontWeight: 600, color: P.body }}>
           {structure ? line : 'No reading of this draft yet'}
         </div>
       </div>
@@ -270,6 +446,7 @@ export function GradeScoreSection({
  * above is already live and a re-grade would do nothing but redraw it.
  */
 export function GradeButtonRow({ primaryLabel, onPrimary }: { primaryLabel: string; onPrimary: () => void }): JSX.Element {
+  const P = useContext(GradePaletteContext)
   return (
     <div style={{ height: 41, display: 'flex', gap: 10, flexShrink: 0, width: '100%' }}>
       <button
@@ -280,8 +457,8 @@ export function GradeButtonRow({ primaryLabel, onPrimary }: { primaryLabel: stri
           height: 41,
           border: 'none',
           borderRadius: 999,
-          background: 'linear-gradient(to right, #f97316, #dc2626)',
-          color: '#fff',
+          background: P.primaryGradient,
+          color: P.onPrimary,
           fontFamily: 'inherit',
           fontSize: 14,
           fontWeight: 500,
@@ -297,10 +474,10 @@ export function GradeButtonRow({ primaryLabel, onPrimary }: { primaryLabel: stri
         style={{
           width: 251,
           height: 41,
-          border: '1.5px solid #d3d8d4',
+          border: `1.5px solid ${P.btnBorder}`,
           borderRadius: 999,
-          background: '#fff',
-          color: '#2d362f',
+          background: P.surface,
+          color: P.btnText,
           fontFamily: 'inherit',
           fontSize: 14,
           fontWeight: 500,
@@ -320,6 +497,7 @@ export const OVERLAY_READING_WPM = 238
 
 /** One stat chip from 404:203 — 18px figure over a 10px tracked caption. */
 export function StatChip({ value, label }: { value: string; label: string }): JSX.Element {
+  const P = useContext(GradePaletteContext)
   return (
     // Flow, not an absolutely-positioned caption. The chip used to take its
     // width from the VALUE alone with the label floating out of the box, which
@@ -327,13 +505,13 @@ export function StatChip({ value, label }: { value: string; label: string }): JS
     // the right edge the moment the row was laid out anywhere else. Measuring
     // the wider of the two is what lets the row space itself.
     <div style={{ height: 37, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-      <div style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1f', whiteSpace: 'nowrap' }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, color: P.text, whiteSpace: 'nowrap' }}>{value}</div>
       <div
         style={{
           marginTop: 3,
           fontSize: 10,
           fontWeight: 600,
-          color: DIM,
+          color: P.dim,
           letterSpacing: 0.4,
           whiteSpace: 'nowrap'
         }}
@@ -346,15 +524,16 @@ export function StatChip({ value, label }: { value: string; label: string }): JS
 
 /** The 4px rounded meter the frame draws under every metric label. */
 export function MiniBar({ label, percent, color }: { label: string; percent: number; color: string }): JSX.Element {
+  const P = useContext(GradePaletteContext)
   const pct = Math.max(0, Math.min(100, percent))
   return (
     <div style={{ position: 'relative', height: 22, flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, whiteSpace: 'nowrap' }}>
-        <span style={{ fontWeight: 500, color: W_BODY }}>{label}</span>
-        <span style={{ fontWeight: 600, color: '#1a1a1f' }}>{Math.round(pct)}%</span>
+        <span style={{ fontWeight: 500, color: P.body }}>{label}</span>
+        <span style={{ fontWeight: 600, color: P.text }}>{Math.round(pct)}%</span>
       </div>
       <div
-        style={{ position: 'absolute', top: 18, left: 0, right: 0, height: 4, borderRadius: 999, background: '#eaeaea' }}
+        style={{ position: 'absolute', top: 18, left: 0, right: 0, height: 4, borderRadius: 999, background: P.trackBg }}
       >
         <div style={{ width: `${pct}%`, height: 4, borderRadius: 999, background: color }} />
       </div>
@@ -363,10 +542,10 @@ export function MiniBar({ label, percent, color }: { label: string; percent: num
 }
 
 /** The frame's three meter colours, by band. */
-export function miniBarColor(percent: number): string {
-  if (percent >= 85) return GRADE_GREEN
-  if (percent >= 70) return '#c79216'
-  return '#d3514b'
+export function miniBarColor(percent: number, palette: GradePalette = GRADE_LIGHT): string {
+  if (percent >= 85) return palette.green
+  if (percent >= 70) return palette.barMid
+  return palette.barLow
 }
 
 /**
@@ -414,6 +593,7 @@ export function EssayGradeReportPanel({
   onOpenParagraph: (index: number) => void
   onFindForClaim: (claimId: string) => void
 }): JSX.Element {
+  const P = useContext(GradePaletteContext)
   const stats = structure?.stats ?? null
   const readMinutes = stats ? Math.max(1, Math.round(stats.words / OVERLAY_READING_WPM)) : 0
   const perSentence = stats ? (stats.words / Math.max(1, stats.sentences)).toFixed(1) : '—'
@@ -457,7 +637,7 @@ export function EssayGradeReportPanel({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: DIM, letterSpacing: 0.6 }}>BREAKDOWN BY PARAGRAPH</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: P.dim, letterSpacing: 0.6 }}>BREAKDOWN BY PARAGRAPH</div>
           {/* The frame's link. There is no separate Argument Check panel in the
               overlay, and the claim list IS where a claim is checked one at a
               time, so it goes there rather than nowhere. */}
@@ -471,7 +651,7 @@ export function EssayGradeReportPanel({
               fontFamily: 'inherit',
               fontSize: 12,
               fontWeight: 600,
-              color: '#2563eb',
+              color: P.blue,
               cursor: 'pointer'
             }}
           >
@@ -483,7 +663,7 @@ export function EssayGradeReportPanel({
             are not repeated inside every paragraph card as the frame draws. */}
         <div
           style={{
-            background: '#f8f9f8',
+            background: P.panelBg,
             borderRadius: 12,
             padding: 14,
             display: 'flex',
@@ -497,7 +677,7 @@ export function EssayGradeReportPanel({
             const pct = structure ? ((structure.components[key] ?? 0) / max) * 100 : 0
             return (
               <div key={key} style={{ flex: '1 1 232px', minWidth: 0, display: 'flex' }}>
-                <MiniBar label={label} percent={pct} color={miniBarColor(pct)} />
+                <MiniBar label={label} percent={pct} color={miniBarColor(pct, P)} />
               </div>
             )
           })}
@@ -530,7 +710,7 @@ export function EssayGradeReportPanel({
               onClick={() => onOpenParagraph(paragraph.index)}
               title={`Open ${name}`}
               style={{
-                background: '#f8f9f8',
+                background: P.panelBg,
                 border: 'none',
                 font: 'inherit',
                 color: 'inherit',
@@ -548,7 +728,7 @@ export function EssayGradeReportPanel({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
                 <span
                   style={{
-                    background: '#e8e9ec',
+                    background: P.chipBg,
                     borderRadius: 6,
                     height: 19,
                     display: 'inline-flex',
@@ -556,18 +736,18 @@ export function EssayGradeReportPanel({
                     padding: '0 8px',
                     fontSize: 11,
                     fontWeight: 600,
-                    color: W_BODY,
+                    color: P.body,
                     flexShrink: 0
                   }}
                 >
                   {ROLE_LABEL[paragraph.role]}
                 </span>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1a1a1f' }}>{name}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: P.text }}>{name}</span>
                 <span style={{ flex: 1 }} />
                 <span
                   style={{
-                    background: strong ? '#e0f2e5' : '#fff1e5',
-                    color: strong ? GRADE_GREEN : '#cb5c19',
+                    background: strong ? P.strongWash : P.warnWash,
+                    color: strong ? P.green : P.warnText,
                     borderRadius: 999,
                     height: 23,
                     display: 'inline-flex',
@@ -580,7 +760,7 @@ export function EssayGradeReportPanel({
                 >
                   {strong ? 'Strong' : 'Needs Work'}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#999a9e', flexShrink: 0 }} aria-hidden="true">
+                <span style={{ fontSize: 14, fontWeight: 500, color: P.chevron, flexShrink: 0 }} aria-hidden="true">
                   ›
                 </span>
               </div>
@@ -589,12 +769,12 @@ export function EssayGradeReportPanel({
                   there is a weakness that IS the assessment; otherwise the
                   paragraph's own opening line says which paragraph this is,
                   which a role label alone does not. */}
-              <div style={{ fontSize: 12.5, color: W_BODY, lineHeight: 1.35 }}>
+              <div style={{ fontSize: 12.5, color: P.body, lineHeight: 1.35 }}>
                 {issues[0]?.message ?? preview}
               </div>
 
               {paragraph.claimIds.length > 0 ? (
-                <div style={{ fontSize: 12, fontWeight: 500, color: W_BODY }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: P.body }}>
                   {cited} of {paragraph.claimIds.length} claim{paragraph.claimIds.length === 1 ? '' : 's'} cited in this
                   paragraph
                 </div>
@@ -608,7 +788,7 @@ export function EssayGradeReportPanel({
                     <div
                       key={`${issue.kind}-${i}`}
                       style={{
-                        background: '#fff7f0',
+                        background: P.issueBg,
                         borderRadius: 10,
                         padding: '10px 12px',
                         display: 'flex',
@@ -622,8 +802,8 @@ export function EssayGradeReportPanel({
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                           <span
                             style={{
-                              background: '#d95319',
-                              color: '#fff',
+                              background: P.issueBadge,
+                              color: P.onPrimary,
                               borderRadius: 999,
                               width: 18,
                               height: 18,
@@ -637,7 +817,7 @@ export function EssayGradeReportPanel({
                           >
                             !
                           </span>
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#b35116' }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: P.issueTitle }}>
                             {/* `problemKinds` can be EMPTY on a claim a
                                 weakness points at — the finding came off the
                                 prose or the role vector, not off the claim —
@@ -670,7 +850,7 @@ export function EssayGradeReportPanel({
                               fontFamily: 'inherit',
                               fontSize: 12,
                               fontWeight: 600,
-                              color: '#2563eb',
+                              color: P.blue,
                               cursor: 'pointer',
                               flexShrink: 0
                             }}
@@ -679,7 +859,7 @@ export function EssayGradeReportPanel({
                           </button>
                         ) : null}
                       </div>
-                      <div style={{ fontSize: 12, color: '#5a3e1b', lineHeight: 1.35 }}>{issue.message}</div>
+                      <div style={{ fontSize: 12, color: P.issueBody, lineHeight: 1.35 }}>{issue.message}</div>
                     </div>
                   )
                 })}
@@ -705,34 +885,34 @@ export function EssayGradeReportPanel({
             justifyContent: 'space-between',
             padding: '10px 14px',
             borderRadius: 10,
-            background: '#f8f9f8',
+            background: P.panelBg,
             fontSize: 12.5,
-            color: W_BODY,
+            color: P.body,
             boxSizing: 'border-box'
           }}
         >
           <span>
-            Rubric score <b style={{ color: '#1a1a1f' }}>{structure.score}</b> · grade{' '}
+            Rubric score <b style={{ color: P.text }}>{structure.score}</b> · grade{' '}
             {REFERENCE_LEVEL - gradeLevelCredit(gradingLevel) / POINTS_PER_LEVEL} credit{' '}
-            <b style={{ color: '#1a1a1f' }}>+{gradeLevelCredit(gradingLevel)}</b>
+            <b style={{ color: P.text }}>+{gradeLevelCredit(gradingLevel)}</b>
           </span>
           <span>
-            <b style={{ color: '#1a1a1f' }}>{adjustedScore(structure.score, gradingLevel)}</b> / 100
+            <b style={{ color: P.text }}>{adjustedScore(structure.score, gradingLevel)}</b> / 100
           </span>
         </div>
       ) : null}
 
       <div style={{ width: '100%', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13, height: 17 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1f' }}>Summary</span>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: P.blue, flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: P.text }}>Summary</span>
         </div>
         {/* The frame's summary is written prose ("You're in great shape!").
             Nothing here writes prose about a draft — weaknesses come from local
             templates, never a model (see structure/weaknesses.ts) — so the block
             carries the whole-draft findings, which is what it would be
             summarising, and the band line when there are none. */}
-        <div style={{ marginTop: 6, fontSize: 13.5, lineHeight: 1.4, color: W_BODY }}>
+        <div style={{ marginTop: 6, fontSize: 13.5, lineHeight: 1.4, color: P.body }}>
           {draftWeaknesses.length > 0
             ? draftWeaknesses.map((w) => w.message).join(' ')
             : structure

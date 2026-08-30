@@ -34,14 +34,14 @@ const CARD_WIDTH = 181.5
 const CARD_GAP = 16
 const THUMB_HEIGHT = 122
 
-/** The chip's two palettes, read off the frame: green for the A band, amber for
- *  everything below it. The design only draws those two, and inventing a third
- *  for C/D/F is exactly the near-miss-palette mistake CLAUDE.md records. */
-const CHIP_GREEN = { bg: '#e9f6ec', fg: '#168449' }
-const CHIP_AMBER = { bg: '#fef5e9', fg: '#cb5c19' }
-
-function chipColors(letter: string): { bg: string; fg: string } {
-  return letter.startsWith('A') ? CHIP_GREEN : CHIP_AMBER
+/** The chip's two palettes: green for the A band, amber for everything below
+ *  it. The design only draws those two, and inventing a third for C/D/F is
+ *  exactly the near-miss-palette mistake CLAUDE.md records. The colours are
+ *  CSS classes (`.docs-card-chip.tone-*` in index.css), not inline styles,
+ *  because an inline style is unreachable by the dark-theme rules — the chips
+ *  stayed light-mode pastel on a dark card. Light values are unchanged. */
+function chipTone(letter: string): string {
+  return letter.startsWith('A') ? 'tone-good' : 'tone-mid'
 }
 
 /**
@@ -65,7 +65,6 @@ function DocumentCard({
 }): JSX.Element {
   const gradingLevel = useGradeLevel()
   const grade = doc.score === null ? null : gradeFor(doc.score, gradingLevel)
-  const chip = grade ? chipColors(grade.letter) : null
   // The menu, not a bare delete on the card. Opening it IS the deliberate
   // step: a destructive item chosen from a menu you had to open is the
   // pattern every file manager uses, and it is far harder to hit by accident
@@ -110,10 +109,8 @@ function DocumentCard({
         {THUMB_BARS.map((width, i) => (
           <span key={i} className="docs-card-bar" style={{ width }} />
         ))}
-        {grade && chip ? (
-          <span className="docs-card-chip" style={{ background: chip.bg, color: chip.fg }}>
-            {grade.letter}
-          </span>
+        {grade ? (
+          <span className={`docs-card-chip ${chipTone(grade.letter)}`}>{grade.letter}</span>
         ) : null}
       </span>
       {/* Spans with role=button rather than <button>s: this card is itself a

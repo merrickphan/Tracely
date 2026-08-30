@@ -6,6 +6,7 @@ import Spinner from './components/Spinner'
 import TextArea from './components/TextArea'
 import { tracelyApi } from './lib/api'
 import { applyTheme } from './lib/theme'
+import { applyAccentColor, applyDensity, applyFontSize } from './lib/appearance'
 import Logo from './components/Logo'
 
 export default function FloatingApp(): JSX.Element {
@@ -15,7 +16,15 @@ export default function FloatingApp(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    tracelyApi.getSettings().then((s) => applyTheme(s.theme))
+    // All four appearance settings, not just theme — this window applied only
+    // the theme for a while, so accent, density and font size changed in the
+    // main window and silently not here ("only some parts actually change").
+    tracelyApi.getSettings().then((s) => {
+      applyTheme(s.theme)
+      applyAccentColor(s.accentColor)
+      applyDensity(s.density)
+      applyFontSize(s.fontSize)
+    })
   }, [])
 
   useEffect(() => {

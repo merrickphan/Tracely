@@ -15,18 +15,23 @@ const { spawnSync } = require('child_process')
 const { join } = require('path')
 
 exports.default = async function afterPack(context) {
-  // The expectations are Windows-x64 specific (onnxruntime and sharp ship
-  // per-platform binaries), so a mac build would fail them for the wrong
-  // reason. Extend the check before enabling it there.
-  if (context.electronPlatformName !== 'win32') {
-    console.log(`  • skipping ML packaging check  platform=${context.electronPlatformName}`)
+  const platform = context.electronPlatformName
+  if (platform !== 'win32' && platform !== 'darwin') {
+    console.log(`  • skipping ML packaging check  platform=${platform}`)
     return
   }
 
-  const resources = join(context.appOutDir, 'resources')
+  // Resources live beside the exe on Windows and inside the bundle on mac.
+  // The darwin path went unchecked while this hook skipped non-win32, and the
+  // first real mac dmg shipped with only the win32 onnxruntime binding —
+  // silent lexical degradation, the exact class this hook exists to stop.
+  const resources =
+    platform === 'darwin'
+      ? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
+      : join(context.appOutDir, 'resources')
   const script = join(__dirname, 'verify-packaged-ml.mjs')
 
-  const result = spawnSync(process.execPath, [script, resources], { stdio: 'inherit' })
+  const result = spawnSync(process.execPath, [script, resources, platform], { stdio: 'inherit' })
 
   if (result.error) {
     throw new Error(`ML packaging check could not run: ${result.error.message}`)
