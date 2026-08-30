@@ -44,6 +44,7 @@ import { formatInTextCitation } from '@shared/citationInText'
 import { bibliographyReferences } from '@shared/bibliography'
 import { splitParagraphs, bucketClaimsByParagraph } from '@shared/paragraphSplit'
 import { computeClaimSpans } from '@shared/claimSpans'
+import type { ModelTier, Plan } from '@shared/plan'
 import { credibilityOf } from '@shared/sourceCredibility'
 import { gradeFor } from '@shared/gradeLevel'
 import {
@@ -143,6 +144,7 @@ interface SettingsExtras {
   screenWatchHotkeyAccelerator: string
   suppressSaveConfirm: boolean
   username: string
+  modelTier: ModelTier
 }
 
 interface ProfileExtras {
@@ -173,7 +175,10 @@ const DEFAULT_EXTRAS: SettingsExtras = {
   claimSensitivity: 0.5,
   screenWatchHotkeyAccelerator: '',
   suppressSaveConfirm: false,
-  username: 'local'
+  username: 'local',
+  // Matches settingsRepo's default. It is a request either way — the relay
+  // clamps it to the plan, and this build has no paid plan behind it.
+  modelTier: 'thorough'
 }
 
 // ── bridge state ────────────────────────────────────────────────────────────
@@ -333,6 +338,7 @@ export function createHttpApi(): TracelyApi {
       screenWatchHotkeyAccelerator: extras.screenWatchHotkeyAccelerator,
       screenWatchAllowedApps: (p.watchApps ?? []).join(','),
       suppressSaveConfirm: extras.suppressSaveConfirm,
+      modelTier: extras.modelTier,
       gradingLevel: p.gradingLevel ?? 12,
       autoCritiqueCited: p.autoCritique !== false
     }
@@ -879,6 +885,7 @@ export function createHttpApi(): TracelyApi {
           extras.screenWatchHotkeyAccelerator = req.screenWatchHotkeyAccelerator
         }
         if (typeof req.suppressSaveConfirm === 'boolean') extras.suppressSaveConfirm = req.suppressSaveConfirm
+        if (req.modelTier) extras.modelTier = req.modelTier
         saveJson(KEYS.extras, extras)
         const updated = Object.keys(serverPatch).length
           ? await put<ServerPrefs>('/api/prefs', serverPatch)
@@ -925,6 +932,10 @@ export function createHttpApi(): TracelyApi {
       // Local single-user stub — there is no Supabase behind this build.
       // `configured: true` keeps the app on its normal signed-in path.
       getUser: async () => ({ user: await currentUser(), configured: true }),
+      // No Supabase account behind this build, so there is no subscription to
+      // read. `free` is the contract's answer for anything unreadable, and it
+      // is the honest one here: the local stub has not paid for anything.
+      getPlan: async () => ({ plan: 'free' as Plan }),
       signUp: async (req) => {
         window.localStorage.removeItem(KEYS.signedOut)
         const p = await put<ServerPrefs>('/api/prefs', { firstName: req.firstName })
