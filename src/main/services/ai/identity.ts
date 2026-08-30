@@ -1,4 +1,4 @@
-// Who the relay should bill this call to.
+// Who the relay should bill this call to, and what that account has paid for.
 //
 // A registry rather than a direct import of services/auth/client, because the
 // two callers of the AI layer resolve identity in genuinely different ways and
@@ -14,7 +14,10 @@
 // would put Electron in the eval bundle and break `npm run evaluate` — the
 // primary quality gate — to fix an auth problem. Hence the indirection.
 
+import { DEFAULT_PLAN, type Plan } from '@shared/plan'
+
 let provider: (() => Promise<string | null>) | null = null
+let planProvider: (() => Promise<Plan>) | null = null
 
 /**
  * Called once at startup by whoever knows how to get a token — main/index.ts
@@ -22,6 +25,13 @@ let provider: (() => Promise<string | null>) | null = null
  */
 export function setAccessTokenProvider(fn: () => Promise<string | null>): void {
   provider = fn
+}
+
+/**
+ * The same registration, for the plan the account is on — see getPlan below.
+ */
+export function setPlanProvider(fn: () => Promise<Plan>): void {
+  planProvider = fn
 }
 
 /**
@@ -44,4 +54,23 @@ export async function getAccessToken(): Promise<string | null> {
     throw new Error('No access-token provider registered — this entry point cannot make AI calls.')
   }
   return await provider()
+}
+
+/**
+ * Which plan this call is entitled to, defaulting to `free`.
+ *
+ * Unlike getAccessToken this does NOT throw when unregistered, and the
+ * difference is which way each one is wrong when nobody registered anything. A
+ * missing token produces a 401 the user cannot act on, so it is loud. A missing
+ * plan produces the free tier, which is a working app — and an entry point that
+ * spends on the top model because it forgot to register a provider is the one
+ * outcome this whole module exists to prevent.
+ */
+export async function getPlan(): Promise<Plan> {
+  if (!planProvider) return DEFAULT_PLAN
+  try {
+    return await planProvider()
+  } catch {
+    return DEFAULT_PLAN
+  }
 }

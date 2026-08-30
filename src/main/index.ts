@@ -3,8 +3,9 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { IPC_EVENTS } from '@shared/ipc-channels'
 import { registerGlobalHotkey, registerScreenWatchHotkey, unregisterGlobalHotkey, unregisterScreenWatchHotkey } from './hotkey'
 import { registerIpcHandlers } from './ipc'
-import { setAccessTokenProvider } from './services/ai/identity'
+import { setAccessTokenProvider, setPlanProvider } from './services/ai/identity'
 import { getSupabase, handleOAuthRedirect, isAuthConfigured } from './services/auth/client'
+import { getCurrentPlan } from './services/auth/plan'
 import { warmUpUia } from './services/screenWatch/uiaSnapshot'
 import { initScreenWatch, shutdownScreenWatch } from './services/screenWatch/screenWatchService'
 import { warmUp as warmUpMl } from './services/ml'
@@ -99,6 +100,9 @@ if (!gotLock) {
       const { data } = await getSupabase().auth.getSession()
       return data.session?.access_token ?? null
     })
+    // And what that account has paid for, which decides the model tier every
+    // one of those calls runs at — see services/ai/modelTier.ts.
+    setPlanProvider(getCurrentPlan)
 
     createMainWindow()
     createFloatingWindow()

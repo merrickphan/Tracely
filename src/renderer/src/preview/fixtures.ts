@@ -61,7 +61,10 @@ export const settings: AppSettings = {
   // Off, so the harness shows the Save changes dialog rather than skipping it.
   suppressSaveConfirm: false,
   gradingLevel: 12,
-  autoCritiqueCited: true
+  autoCritiqueCited: true,
+  // The stored request, not what runs: the harness's default scenario is a free
+  // account, so Preferences resolves this to Fast with the other two locked.
+  modelTier: 'thorough'
 }
 
 export const sources: Source[] = [

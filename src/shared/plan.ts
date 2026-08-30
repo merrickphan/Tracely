@@ -1,0 +1,165 @@
+/**
+ * Which plan an account is on, and what that entitles it to.
+ *
+ * Three tiers exist on jointracely.com and the desktop app had no concept of
+ * any of them: someone who paid got exactly what someone who did not got. This
+ * is the whole vocabulary — the plan, the model tiers it unlocks, and the one
+ * function that decides which model a call is allowed to use.
+ *
+ * **`free` is the answer to every question this module cannot answer.** Signed
+ * out, a build with no Supabase project, a metadata field holding something
+ * nobody anticipated, a read that threw — all of them land on `free`. The
+ * failure mode of guessing high is that an unpaid account quietly spends on the
+ * top model; the failure mode of guessing low is a paying user seeing an
+ * upgrade prompt they can dismiss by signing in again. Only one of those is
+ * recoverable, so nothing here ever fails open.
+ *
+ * A leaf: no relative value imports, so `npm test` can load it.
+ */
+
+export type Plan = 'free' | 'student' | 'pro'
+
+/** Cheapest first. The order IS the entitlement ordering — see planRank. */
+export const PLANS = ['free', 'student', 'pro'] as const
+
+export const DEFAULT_PLAN: Plan = 'free'
+
+export function isPlan(value: unknown): value is Plan {
+  return typeof value === 'string' && (PLANS as readonly string[]).includes(value)
+}
+
+/**
+ * Anything at all, narrowed to a plan.
+ *
+ * Case and surrounding space are forgiven because the value is written by
+ * whatever provisions the subscription rather than by this app; a stored
+ * `"Pro "` is the same intent as `"pro"`. Everything else is `free`.
+ */
+export function normalizePlan(value: unknown): Plan {
+  if (typeof value !== 'string') return DEFAULT_PLAN
+  const normalized = value.trim().toLowerCase()
+  return isPlan(normalized) ? normalized : DEFAULT_PLAN
+}
+
+/**
+ * The plan a Supabase user carries, read from their metadata.
+ *
+ * **`app_metadata` wins, and that is the point of reading both.** It is the
+ * half of a Supabase user only the service role can write, so it is the half a
+ * checkout can be trusted to have set. `user_metadata` is writable by the
+ * account holder themselves through `auth.updateUser`, which makes it a
+ * self-service upgrade button — it is read only as a fallback for accounts
+ * provisioned before the app_metadata convention, and it can never override a
+ * plan the server actually set.
+ *
+ * The relay verifies entitlement independently before it spends anything. What
+ * is decided here governs this app's own behaviour, not the bill.
+ */
+export function planFromMetadata(appMetadata: unknown, userMetadata: unknown): Plan {
+  const fromApp = readPlanField(appMetadata)
+  if (fromApp !== null) return normalizePlan(fromApp)
+  return normalizePlan(readPlanField(userMetadata))
+}
+
+function readPlanField(metadata: unknown): unknown {
+  if (typeof metadata !== 'object' || metadata === null) return null
+  const value = (metadata as Record<string, unknown>).plan
+  return value ?? null
+}
+
+/**
+ * How much model a check, critique or grade is allowed to use.
+ *
+ * Named for what the reader gets rather than for a model, because the models
+ * behind them are the relay's to choose and have been renamed twice already —
+ * see `CHEAP_MODEL`/`REASONING_MODEL` in the relay's environment.
+ */
+export type ModelTier = 'fast' | 'balanced' | 'thorough'
+
+/** Cheapest first, like PLANS. */
+export const MODEL_TIERS = ['fast', 'balanced', 'thorough'] as const
+
+export function isModelTier(value: unknown): value is ModelTier {
+  return typeof value === 'string' && (MODEL_TIERS as readonly string[]).includes(value)
+}
+
+/** The best tier each plan may reach. Free never leaves `fast`. */
+export const PLAN_MODEL_CEILING: Record<Plan, ModelTier> = {
+  free: 'fast',
+  student: 'balanced',
+  pro: 'thorough'
+}
+
+export function planRank(plan: Plan): number {
+  return PLANS.indexOf(plan)
+}
+
+export function modelTierRank(tier: ModelTier): number {
+  return MODEL_TIERS.indexOf(tier)
+}
+
+/** Whether a plan may ask for this tier at all — what greys out a UI row. */
+export function modelTierUnlocked(tier: ModelTier, plan: Plan): boolean {
+  return modelTierRank(tier) <= modelTierRank(PLAN_MODEL_CEILING[plan])
+}
+
+/**
+ * The tier a call actually runs at: the stored preference, clamped to the plan.
+ *
+ * `preferred` is deliberately `unknown`. It arrives from a settings row that
+ * long outlives the plan that was current when it was written — a cancelled Pro
+ * subscription leaves `'thorough'` sitting in SQLite — and a row can also be
+ * hand-edited. Narrowing it here rather than at the call site is what makes
+ * "a stale preference cannot leak a paid model" a property of the type rather
+ * than of every caller remembering.
+ *
+ * An unreadable preference resolves to the plan's ceiling rather than to
+ * `fast`: the result can never exceed the ceiling, so the safe answer and the
+ * useful one are the same value.
+ */
+export function resolveModelTier(preferred: unknown, plan: Plan): ModelTier {
+  const ceiling = PLAN_MODEL_CEILING[plan] ?? PLAN_MODEL_CEILING[DEFAULT_PLAN]
+  if (!isModelTier(preferred)) return ceiling
+  return modelTierRank(preferred) <= modelTierRank(ceiling) ? preferred : ceiling
+}
+
+export const PLAN_LABEL: Record<Plan, string> = {
+  free: 'Free',
+  student: 'Student',
+  pro: 'Pro'
+}
+
+export const PLAN_PRICE: Record<Plan, string> = {
+  free: '$0',
+  student: '$4.99/mo',
+  pro: '$9.99/mo'
+}
+
+/** What each plan gets, in the order the pricing page lists it. */
+export const PLAN_INCLUDES: Record<Plan, readonly string[]> = {
+  free: ['The fast model', '5 source searches a day'],
+  student: ['Unlimited checks and sources', 'A smarter model'],
+  pro: ['Everything in Student', 'The most thorough model']
+}
+
+export const MODEL_TIER_LABEL: Record<ModelTier, string> = {
+  fast: 'Fast',
+  balanced: 'Smarter',
+  thorough: 'Most thorough'
+}
+
+export const MODEL_TIER_DESCRIPTION: Record<ModelTier, string> = {
+  fast: 'Quickest answers, on every plan.',
+  balanced: 'A stronger model for checks, critique and grading.',
+  thorough: 'The most careful read Tracely can give a draft.'
+}
+
+/** The plan each tier first becomes available on — what an upgrade prompt names. */
+export const MODEL_TIER_REQUIRES: Record<ModelTier, Plan> = {
+  fast: 'free',
+  balanced: 'student',
+  thorough: 'pro'
+}
+
+/** Opened in the user's own browser, never in a window of ours. */
+export const UPGRADE_URL = 'https://jointracely.com/order'
