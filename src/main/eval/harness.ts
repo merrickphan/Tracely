@@ -19,8 +19,8 @@ import type { Claim, EvidenceItem, ScoreBreakdown, Source } from '@shared/types'
 import { sentenceAround } from '@shared/inlineCitation'
 import { detectClaims, type DetectedClaim } from '../services/ai/claimDetection'
 import { generateCritique } from '../services/ai/critique'
-import { setAccessTokenProvider } from '../services/ai/identity'
-import { appSessionTokenProvider, noSessionMessage } from './identity'
+import { setAccessTokenProvider, setPlanProvider } from '../services/ai/identity'
+import { appSessionPlanProvider, appSessionTokenProvider, noSessionMessage } from './identity'
 import { findEvidence, type RankedSourceResult } from '../services/search/aggregator'
 import { warmUp as warmUpMl } from '../services/ml'
 import { isReady as worldBankReady, warmUp as warmUpWorldBank } from '../services/search/worldBank'
@@ -442,6 +442,10 @@ export async function main(): Promise<void> {
   const tokenProvider = appSessionTokenProvider()
   if (!tokenProvider) console.warn(`\n${noSessionMessage()}\n`)
   setAccessTokenProvider(tokenProvider ?? (async () => null))
+  // The same borrowed session decides the model tier these calls run at, so a
+  // measured run reflects what that account is actually served.
+  const planProvider = appSessionPlanProvider()
+  if (planProvider) setPlanProvider(planProvider)
 
   const files = readdirSync(essayDir)
     .filter((f) => f.endsWith('.txt') || f.endsWith('.md'))

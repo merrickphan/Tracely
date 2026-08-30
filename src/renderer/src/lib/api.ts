@@ -99,6 +99,8 @@ export const tracelyApi = {
   updateAuthName: (firstName: string) => call(window.tracely.auth.updateName({ firstName })),
   updateAuthUsername: (username: string) => call(window.tracely.auth.updateUsername({ username })),
   deleteAuthAccount: () => call(window.tracely.auth.deleteAccount()),
+  /** The signed-in account's plan — see lib/plan.tsx, which is what reads it. */
+  getPlan: () => call(window.tracely.auth.getPlan()),
   onAuthStateChanged: (cb: Parameters<typeof window.tracely.onAuthStateChanged>[0]) =>
     window.tracely.onAuthStateChanged(cb),
   onAuthOAuthError: (cb: Parameters<typeof window.tracely.onAuthOAuthError>[0]) =>

@@ -11,6 +11,7 @@ import { applyTheme } from './lib/theme'
 import { applyAccentColor, applyDensity, applyFontSize, trackWindowZoom } from './lib/appearance'
 import { tracelyApi } from './lib/api'
 import { GradeLevelProvider } from './lib/gradeLevel'
+import { PlanProvider } from './lib/plan'
 
 export type Tab = 'home' | 'documents' | 'analyze' | 'library' | 'settings'
 
@@ -125,6 +126,9 @@ export default function App(): JSX.Element {
     // Settings > Preferences. The provider reads it once; the six places that
     // draw a letter take it from context rather than from four layers of props.
     <GradeLevelProvider>
+    {/* What this account has paid for. Settings > Billing names it, and the
+        model rows in Preferences lock against it. */}
+    <PlanProvider>
     <div className="app-shell">
       {/* The window has no title bar to drag by — see mainWindow.ts. This is
           the strip that replaces its caption area; it stops short of the
@@ -166,6 +170,7 @@ export default function App(): JSX.Element {
         {tab === 'settings' ? <SettingsView onNavigate={setTab} /> : null}
       </main>
     </div>
+    </PlanProvider>
     </GradeLevelProvider>
   )
 }

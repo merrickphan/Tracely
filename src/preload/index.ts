@@ -7,6 +7,7 @@ import type {
   AnalyzeGetResultRequest,
   AnalyzeGetResultResponse,
   AuthDeleteAccountResponse,
+  AuthGetPlanResponse,
   AuthGetUserResponse,
   AuthSignInRequest,
   AuthSignInWithGoogleResponse,
@@ -211,7 +212,9 @@ const api = {
       ipcRenderer.invoke(IPC.AUTH_UPDATE_NAME, req),
     updateUsername: (req: AuthUpdateUsernameRequest): Promise<AuthUpdateUsernameResponse> =>
       ipcRenderer.invoke(IPC.AUTH_UPDATE_USERNAME, req),
-    deleteAccount: (): Promise<AuthDeleteAccountResponse> => ipcRenderer.invoke(IPC.AUTH_DELETE_ACCOUNT, {})
+    deleteAccount: (): Promise<AuthDeleteAccountResponse> => ipcRenderer.invoke(IPC.AUTH_DELETE_ACCOUNT, {}),
+    /** Which plan this account is on. Never throws, never answers above free. */
+    getPlan: (): Promise<AuthGetPlanResponse> => ipcRenderer.invoke(IPC.AUTH_GET_PLAN, {})
   },
   history: {
     clear: (req: HistoryClearRequest): Promise<HistoryClearResponse> =>

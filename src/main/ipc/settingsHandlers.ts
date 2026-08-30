@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/ipc-channels'
 import { REFERENCE_LEVEL, isGradeLevel } from '@shared/gradeLevel'
+import { MODEL_TIERS, isModelTier } from '@shared/plan'
 import type { SettingsScanInstalledAppsResponse, SettingsSetResponse } from '@shared/ipc-contract'
 import type { AccentColor, AppSettings, CitationStyle, Density, FontSize, Theme } from '@shared/types'
 import { scanInstalledApps } from '../services/appScan'
@@ -22,7 +23,8 @@ const setSchema = z.object({
   screenWatchAllowedApps: z.string().optional(),
   suppressSaveConfirm: z.boolean().optional(),
   gradingLevel: z.number().int().min(3).max(12).optional(),
-  autoCritiqueCited: z.boolean().optional()
+  autoCritiqueCited: z.boolean().optional(),
+  modelTier: z.enum(MODEL_TIERS).optional()
 })
 
 function buildSettings(): AppSettings {
@@ -42,7 +44,12 @@ function buildSettings(): AppSettings {
     // Number(), then the shared guard on the way out: a row written by a hand
     // edit or a future build must not reach the bands as NaN.
     gradingLevel: isGradeLevel(Number(raw.gradingLevel)) ? Number(raw.gradingLevel) : REFERENCE_LEVEL,
-    autoCritiqueCited: raw.autoCritiqueCited === 'true'
+    autoCritiqueCited: raw.autoCritiqueCited === 'true',
+    // The stored REQUEST, not the tier a call ends up running at — that is
+    // resolved against the plan in services/ai/modelTier.ts. Guarded on the way
+    // out the same way gradingLevel is, so a row from a future build cannot
+    // reach the renderer as a tier it has no label for.
+    modelTier: isModelTier(raw.modelTier) ? raw.modelTier : 'thorough'
   }
 }
 
@@ -73,6 +80,10 @@ export function registerSettingsHandlers(): void {
     if (patch.gradingLevel !== undefined) setSetting('gradingLevel', String(patch.gradingLevel))
     if (patch.autoCritiqueCited !== undefined)
       setSetting('autoCritiqueCited', String(patch.autoCritiqueCited))
+    // Stored as asked for, even when the current plan cannot reach it: a Pro
+    // subscriber who lets it lapse and renews should find their choice intact,
+    // and the clamp that makes that safe runs on every call rather than here.
+    if (patch.modelTier !== undefined) setSetting('modelTier', patch.modelTier)
     // Persist only if the OS actually gave us the shortcut. globalShortcut
     // .register returns false when the accelerator is malformed or already
     // claimed by another app — and the return value was previously ignored, so
