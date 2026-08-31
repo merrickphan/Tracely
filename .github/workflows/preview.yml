@@ -150,6 +150,30 @@ jobs:
             echo "::notice::Windows signing not configured — unsigned, as before."
           fi
 
+      # The per-platform binary split is a BUILD STEP, not config: a
+      # platform-scoped `files:` block silently resets the exclude list to
+      # **/* and drops every other exclude (BUILDING.md). electron-builder.yml
+      # therefore excludes only linux and win32/arm64 and KEEPS darwin, because
+      # the mac build needs it — so a Windows build has to remove it here, and
+      # mac-installers.yml does the mirror of this for the other direction.
+      #
+      # Missing this is what has failed every preview run since the
+      # cross-platform packaging change landed: afterPack's ML guard correctly
+      # rejected an installer carrying "onnxruntime-node/bin/napi-v6/darwin
+      # ... wrong platform". The guard was doing its job; nothing fed it a
+      # clean tree.
+      - name: strip foreign-platform native binaries
+        shell: bash
+        run: |
+          rm -rf node_modules/onnxruntime-node/bin/napi-v6/darwin \
+                 node_modules/onnxruntime-node/bin/napi-v6/linux \
+                 node_modules/@img/sharp-darwin-arm64 \
+                 node_modules/@img/sharp-libvips-darwin-arm64 \
+                 node_modules/@img/sharp-darwin-x64 \
+                 node_modules/@img/sharp-libvips-darwin-x64
+          echo "remaining onnxruntime platforms:"
+          ls node_modules/onnxruntime-node/bin/napi-v6/ || true
+
       - name: build and publish preview
         shell: bash
         env:
