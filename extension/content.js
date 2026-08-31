@@ -1032,7 +1032,19 @@
         if (S.length < 8) continue;
         const para = paras.find((p) => nrm(p).includes(S)) ?? issue.passage;
         const P = nrm(para);
-        const start = rows.findIndex((r) => r.joined && (P.includes(r.joined) || r.joined.includes(S.slice(0, 24))));
+        /* Anchor on the PASSAGE, not on "any row that happens to appear inside
+           the paragraph". The looser test matched the first SHORT row whose
+           text coincided with something in the paragraph — a title fragment, a
+           table cell like "1492" — which put the bracket at the top of the
+           document and, because a short row's right edge is far left, stranded
+           the chip out in the margin with no bracket beside it. */
+        const key = S.slice(0, 24);
+        let start = rows.findIndex((r) => r.joined.includes(key));
+        if (start === -1) {
+          // The passage may begin mid-row-break. Fall back only to rows long
+          // enough that containment means something.
+          start = rows.findIndex((r) => r.joined.length >= 24 && P.includes(r.joined));
+        }
         if (start === -1) continue;
         // Extend while rows still belong to this paragraph and the same tile:
         // a bracket is one shape, so it can't straddle two annotation layers.
