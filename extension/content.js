@@ -1135,9 +1135,18 @@
           if (rows[i].y > rows[end].bottom + rows[end].bottom - rows[end].y) break; // paragraph gap
           end = i;
         }
+        /* The chip belongs in the MARGIN, past the text — which means it must
+           be placed from the text COLUMN's right edge, not from the matched
+           row's. A row's rects do not always span the whole visual line (the
+           rest of the line can sit in a separate rect that buckets
+           elsewhere), and positioning off that partial edge dropped the chip
+           on top of the next words on the same line. The column edge is the
+           widest row on this page, which is stable whatever the line does. */
+        const colRight = Math.max(...rows.filter((r) => r.svg === rows[start].svg).map((r) => r.right));
         out.push({
           hash: flowHashOf(issue), issue,
           svg: rows[start].svg,
+          colRight,
           x: Math.min(...rows.slice(start, end + 1).map((r) => r.x)),
           right: Math.max(...rows.slice(start, end + 1).map((r) => r.right)),
           top: rows[start].y,
@@ -1184,7 +1193,7 @@
         "stroke-linecap": "round",
       }));
       // Right-margin chip — dot plus label, aligned to the first line.
-      const chipX = f.right + lh * 0.9, chipY = f.top + lh * 0.62;
+      const chipX = (f.colRight ?? f.right) + lh * 0.9, chipY = f.top + lh * 0.62;
       g.appendChild(svgEl("circle", { cx: chipX, cy: chipY - lh * 0.2, r: Math.max(2, lh * 0.13), fill: FLOW_ACCENT }));
       const label = svgEl("text", {
         x: chipX + lh * 0.42, y: chipY, fill: FLOW_ACCENT,
