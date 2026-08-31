@@ -48,6 +48,11 @@
   const VERDICT_TEXT = { false: "#d93636", questionable: "#a67500", incoherent: "#8e4ec6", needs_citation: "#2563eb" };
   const MARK_PENDING = "#9a9ba1"; // grey dotted while a sentence's check is in flight
 
+  // Read from the manifest so it can never disagree with the shipped version.
+  const EXT_VERSION = (() => {
+    try { return chrome.runtime.getManifest().version; } catch { return "dev"; }
+  })();
+
   /* Flow flags — passage-level coaching, drawn as a margin bracket rather
      than an underline (Figma "Overlay Mockup — Inline Flow Flag"). Colors
      sampled from that file: bracket/badge, then the chip + link accent. */
@@ -1233,7 +1238,7 @@
           });
         }
         queueMicrotask(() => { selfMutating = false; });
-        console.debug(`[tracely] docs marks (svg): ${docsBars.length} bar(s) — ${inTree} in-tree, ${glued} glued, ${flowDrawn} flow — across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
+        console.debug(`[tracely] v${EXT_VERSION} docs marks (svg): ${docsBars.length} bar(s) — ${inTree} in-tree, ${glued} glued, ${flowDrawn} flow — across ${new Set(svgBars.map((b) => b.node)).size} line node(s)`);
         glueFrame();
         startGlue();
       } catch (err) {
@@ -1991,7 +1996,11 @@
       console.debug("[tracely] annotation observer armed");
     }
 
-    console.debug("[tracely] docs overlay armed");
+    /* Stamp the version. Several "it's still broken" reports have turned out
+       to be an older build still loaded — a stale unpacked copy, a tab that
+       was never reloaded, or the Web Store copy running alongside a dev one.
+       A version in the console settles that from a screenshot. */
+    console.log(`[tracely] v${EXT_VERSION} docs overlay armed`);
     setInterval(requestDocsMarks, 900);
     window.addEventListener("scroll", scheduleDocsMarks, { capture: true, passive: true });
     window.addEventListener("wheel", scheduleDocsMarks, { capture: true, passive: true });
