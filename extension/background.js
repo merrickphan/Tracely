@@ -25,7 +25,22 @@
    model tier the account may use — this worker only carries the token. */
 "use strict";
 
-const SERVER = "http://localhost:4477";
+/* Two possible backends, probed in order.
+
+   LOCAL first, because a developer running the server on their own machine
+   must keep working exactly as before. HOSTED is Tracely's own API.
+
+   The hosted host is declared in the manifest and probed FROM THE START, even
+   before it exists. That is deliberate: adding a host permission later is a
+   PRIVILEGE INCREASE, and Chrome disables an extension for every existing
+   user until they manually re-accept it — the single largest silent
+   user-loss event available to us. Reserving it now costs an unanswered
+   request per probe and makes switching the backend on a pure server-side
+   change. It is also genuinely used rather than declared "just in case",
+   which is what an unused permission would be. */
+const LOCAL_SERVER = "http://localhost:4477";
+const HOSTED_SERVER = "https://api.jointracely.com";
+let SERVER = LOCAL_SERVER;
 // Mirrors the server's EXTENSION_API set. Docs mode relays through here too,
 // so the Docs bridge endpoint is included (server mode only).
 const API_PATHS = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply", "/api/entitlement"]);
@@ -47,11 +62,12 @@ let probePromise = null;
 function probeServer() {
   if (probePromise) return probePromise;
   probePromise = (async () => {
-    try {
-      const res = await fetch(`${SERVER}/api/status`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-      serverUp = res.ok;
-    } catch {
-      serverUp = false;
+    serverUp = false;
+    for (const base of [LOCAL_SERVER, HOSTED_SERVER]) {
+      try {
+        const res = await fetch(`${base}/api/status`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        if (res.ok) { SERVER = base; serverUp = true; break; }
+      } catch { /* not reachable — try the next, then fall back to BYO key */ }
     }
     lastProbeAt = Date.now();
     probePromise = null;
