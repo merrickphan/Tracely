@@ -53,6 +53,37 @@
     try { return chrome.runtime.getManifest().version; } catch { return "dev"; }
   })();
 
+  /* An ORPHANED content script — the extension was reloaded or updated while
+     this page kept running — keeps executing, but every chrome.* call then
+     throws "Extension context invalidated" SYNCHRONOUSLY. That is why a
+     .catch() on a promise never caught it, and why the console filled with
+     repeats rather than one error: every timer tick and every storage event
+     tried again.
+
+     chrome.runtime.id is the liveness test — it becomes undefined the instant
+     the context dies. Latch it, because an orphaned script never recovers
+     until the tab reloads, and stop calling out at all once it has.
+
+     These wrappers take the SAME arguments as the calls they replace, so the
+     call sites keep their shape. */
+  let extDead = false;
+  function extAlive() {
+    if (extDead) return false;
+    try {
+      if (chrome?.runtime?.id) return true;
+    } catch { /* even reading it can throw */ }
+    extDead = true;
+    return false;
+  }
+  function extCall(fn, fallback) {
+    if (!extAlive()) return fallback;
+    try { return fn(); } catch { extDead = true; return fallback; }
+  }
+  const storageGet = (defaults, cb) => extCall(() => storageGet(defaults, cb));
+  const storageSet = (obj) => extCall(() => storageSet(obj));
+  const storageOnChanged = (cb) => extCall(() => storageOnChanged(cb));
+  const sendMsg = (msg) => extCall(() => chrome.runtime.sendMessage(msg), Promise.resolve(null));
+
   /* Flow flags — passage-level coaching, drawn as a margin bracket rather
      than an underline (Figma "Overlay Mockup — Inline Flow Flag"). Colors
      sampled from that file: bracket/badge, then the chip + link accent. */
@@ -125,6 +156,7 @@
     if (!useRelay) return; // harness page: no background worker — stays free
     let pending;
     try {
+      if (!extAlive()) throw new Error("orphaned");
       pending = chrome.runtime.sendMessage({ type: "tracely-entitlement" });
     } catch {
       /* The extension was reloaded or updated while this page kept running.
@@ -2360,17 +2392,17 @@
     let siteOn = lsGet(SITE_KEY) === "1"; // seed from the legacy flag, then sync below
     const siteEnabled = () => siteOn;
     if (extStorage) {
-      chrome.storage.local.get({ enabledSites: [] }, (st) => {
+      storageGet({ enabledSites: [] }, (st) => {
         const list = Array.isArray(st.enabledSites) ? st.enabledSites : [];
         if (siteOn && !list.includes(location.origin)) {
-          chrome.storage.local.set({ enabledSites: [...list, location.origin] }); // migrate legacy opt-in
+          storageSet({ enabledSites: [...list, location.origin] }); // migrate legacy opt-in
         } else if (siteOn !== list.includes(location.origin)) {
           siteOn = list.includes(location.origin);
           lsSet(SITE_KEY, siteOn ? "1" : "0");
           if (widget) render();
         }
       });
-      chrome.storage.onChanged.addListener((changes, area) => {
+      storageOnChanged((changes, area) => {
         if (area !== "local" || !changes.enabledSites) return;
         const on = (changes.enabledSites.newValue ?? []).includes(location.origin);
         if (on !== siteOn) {
@@ -2387,7 +2419,7 @@
     async function refreshEngine() {
       if (!useRelay) return;
       try {
-        const s = await chrome.runtime.sendMessage({ type: "tracely-getState" });
+        const s = await sendMsg({ type: "tracely-getState" });
         if (s?.ok) {
           const changed = s.mode !== engine.mode;
           engine = s;
@@ -2907,10 +2939,10 @@
       siteOn = on;
       lsSet(SITE_KEY, on ? "1" : "0");
       if (extStorage) {
-        chrome.storage.local.get({ enabledSites: [] }, (st) => {
+        storageGet({ enabledSites: [] }, (st) => {
           const list = (Array.isArray(st.enabledSites) ? st.enabledSites : []).filter((o) => o !== location.origin);
           if (on) list.push(location.origin);
-          chrome.storage.local.set({ enabledSites: list });
+          storageSet({ enabledSites: list });
         });
       }
       if (on) {
