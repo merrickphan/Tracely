@@ -733,13 +733,13 @@
       } catch (err) {
         if (err?.kind === "no_key") {
           statusKind = "error";
-          statusMsg = "add ANTHROPIC_API_KEY to tracely/.env";
+          statusMsg = "Add your Anthropic API key in Tracely's settings";
         } else if (err?.kind === "no_engine") {
           statusKind = "offline";
           statusMsg = err.message;
         } else if (offlineError(err)) {
           statusKind = "offline";
-          statusMsg = "Tracely server offline — run: node ~/tracely/server.js";
+          statusMsg = "Can't reach Tracely — add your API key in settings to keep checking";
         } else {
           statusKind = "error";
           statusMsg = err?.message ?? "check failed";
@@ -2824,7 +2824,7 @@
       } catch (err) {
         if (err?.kind === "no_key") {
           statusKind = "error";
-          statusMsg = "add ANTHROPIC_API_KEY to tracely/.env";
+          statusMsg = "Add your Anthropic API key in Tracely's settings";
         } else if (err?.kind === "no_engine") {
           statusKind = "offline";
           statusMsg = err.message;
