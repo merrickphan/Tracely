@@ -2033,10 +2033,45 @@
        was never reloaded, or the Web Store copy running alongside a dev one.
        A version in the console settles that from a screenshot. */
     console.log(`[tracely] v${EXT_VERSION} docs overlay armed`);
-    setInterval(requestDocsMarks, 900);
+    const marksTimer = setInterval(requestDocsMarks, 900);
     window.addEventListener("scroll", scheduleDocsMarks, { capture: true, passive: true });
     window.addEventListener("wheel", scheduleDocsMarks, { capture: true, passive: true });
     window.addEventListener("resize", scheduleDocsMarks, { passive: true });
+
+    /* THE GHOST INSTANCE.
+       Reloading the extension does not stop the content script already running
+       in an open tab. Its chrome.* calls start failing, but NOTHING about
+       drawing needs chrome.* — it keeps its cached findings, keeps its 900ms
+       timer, and keeps painting marks into the same annotation SVG the NEW
+       instance is painting into. Two instances, two sets of marks.
+
+       Underlines hid it: two identical bars stack on the same pixels and look
+       like one. The flow CHIP is text, and text drawn twice a few pixels apart
+       reads as garbled overlap — which is what "Flow issue" doubling was. The
+       two also fight, because each one's clear sweeps `[data-tracely-bar]` and
+       so deletes the other's marks, provoking a redraw.
+
+       So an orphaned instance must not merely stop calling chrome.* — it has
+       to stand down completely and take its marks with it. */
+    function standDown(why) {
+      clearInterval(marksTimer);
+      if (annoObs) { annoObs.disconnect(); annoObs = null; }
+      window.removeEventListener("scroll", scheduleDocsMarks, { capture: true });
+      window.removeEventListener("wheel", scheduleDocsMarks, { capture: true });
+      window.removeEventListener("resize", scheduleDocsMarks);
+      hideDocsPopover();
+      clearDocsMarks();
+      console.log(`[tracely] v${EXT_VERSION} stood down (${why}) — reload the tab to resume`);
+    }
+    /* Only meaningful where there WAS an extension context to lose. The
+       harness page has no chrome.* at all, so extAlive() is false from the
+       first tick — without this gate the overlay would stand itself down
+       immediately and the harness would render nothing. */
+    const orphanTimer = useRelay ? setInterval(() => {
+      if (extAlive()) return;
+      clearInterval(orphanTimer);
+      standDown("extension reloaded");
+    }, 900) : 0;
 
     async function fetchSources(hash, auto = false) {
       // Returns false when NOTHING was started (another claim's search holds
