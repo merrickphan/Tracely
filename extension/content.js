@@ -495,6 +495,8 @@
     .st-supports { background: #e7f6ee; color: #1f9d55; }
     .st-refutes { background: #fdecec; color: #d93636; }
     .st-context { background: #f2f2f3; color: #8e8e93; }
+    .c-flow { border-left-color: #7344f1; }
+    .badge-flow { background: #f2ecff; color: #7b44d4; }
     .src-body { flex: 1; min-width: 0; }
     .src a { font-size: 11.5px; font-weight: 700; color: #0e0e10; text-decoration: none; display: block; }
     .src a:hover { color: #ff7f00; }
@@ -571,6 +573,8 @@
     let flowInflight = false;
     let flowDismissed = new Set(Array.isArray(flowSaved?.dismissed) ? flowSaved.dismissed : []);
     const FLOW_MIN_CHARS = harness ? 0 : 400; // below this there's no structure to judge
+    // Opt-in escape hatch, read once. See the comment at the draw site.
+    const FLOW_IN_DOC = lsGet("tracely.flowInDoc") === "1";
     const FLOW_MIN_INTERVAL = 45_000; // never more than one flow call per 45s
 
     // Signature of the document's SHAPE: paragraph count plus each one's
@@ -1268,9 +1272,16 @@
             docsBars.push({ hash: sb.hash, el: bar, node: sb.node, raw: sb.raw, f0: sb.f0, f1: sb.f1, size: 18 });
           }
         }
-        // Flow flags: one bracket per located paragraph, same in-tree layer.
+        /* IN-DOCUMENT FLOW BRACKETS ARE OFF BY DEFAULT.
+           Placing them against Google's rendered text has now failed in five
+           distinct ways — anchored to a title, to a table header, to a partial
+           line, drawn twice, and drawn over the words themselves. The feature
+           is fine; POSITIONING it is what keeps breaking, and a flag in the
+           wrong place is worse than one the reader opens the panel to find.
+           Flow issues render as cards there, needing no position at all.
+           localStorage tracely.flowInDoc = "1" re-enables the bracket. */
         let flowDrawn = 0;
-        for (const f of svgFlowLocate(flows)) {
+        for (const f of (FLOW_IN_DOC ? svgFlowLocate(flows) : [])) {
           const g = drawFlowFlag(f);
           flowDrawn++;
           docsBars.push({
@@ -2269,6 +2280,26 @@
 
       let panelHtml = "";
       if (expanded) {
+        /* Flow issues live in the PANEL, not only in the document. The
+           in-document bracket is off by default (FLOW_IN_DOC) after repeated
+           mis-positioning, so this is where the feature actually reads — and
+           it needs no position to be useful. */
+        const flowCards = activeFlowIssues().map((fi) => {
+          const h = flowHashOf(fi);
+          const act = canEditDoc() ? "Add transition" : "Copy transition";
+          return `
+            <div class="card c-flow">
+              <div class="top"><span class="badge badge-flow">Flow issue</span><button class="x" data-flow-x="${esc(h)}">✕</button></div>
+              <div class="quote">${esc(fi.passage.slice(0, 160))}</div>
+              <div class="fix">
+                <div class="fix-label">Why it jumps</div>
+                <div class="fix-text">${esc(fi.explanation)}</div>
+                ${fi.transition ? `<div class="fix-label" style="margin-top:8px">Suggested bridge</div><div class="fix-text">${esc(fi.transition)}</div>` : ""}
+                ${fi.transition ? `<div class="row"><button class="act primary" data-flow-go="${esc(h)}">${act}</button></div>` : ""}
+              </div>
+            </div>`;
+        }).join("");
+
         const cards = issues.map(({ seg, f }) => {
           const kind = f.verdict === "false" ? "false" : f.verdict === "questionable" ? "quest" : f.verdict === "needs_citation" ? "cite" : "inco";
           const st = sourcesMap.get(seg.hash);
@@ -2323,7 +2354,7 @@
           </div>
           ${speedbarHtml(speedPos(settings.model))}
           <div class="list">
-            ${cards || `<div class="empty">${statusKind === "offline" ? "Start the Tracely server, then reopen this doc." : "Nothing flagged. Keep writing — checking every 10s."}</div>`}
+            ${flowCards}${cards || (flowCards ? "" : `<div class="empty">${statusKind === "offline" ? "Start the Tracely server, then reopen this doc." : "Nothing flagged. Keep writing — checking every 10s."}</div>`)}
           </div>
           <div class="foot">
             <span class="foot-left">
@@ -2366,6 +2397,28 @@
         }
         for (const btn of shadow.querySelectorAll("[data-sources]")) {
           btn.addEventListener("click", () => fetchSources(btn.dataset.sources));
+        }
+        for (const btn of shadow.querySelectorAll("[data-flow-go]")) {
+          btn.addEventListener("click", async () => {
+            const fi = activeFlowIssues().find((x) => flowHashOf(x) === btn.dataset.flowGo);
+            if (!fi) return;
+            if (!canEditDoc()) {
+              try { await navigator.clipboard.writeText(fi.transition); } catch { /* denied */ }
+              btn.textContent = "Copied \u2713";
+              return;
+            }
+            btn.textContent = "Adding\u2026";
+            btn.disabled = true;
+            await addTransition(btn.dataset.flowGo, fi);
+          });
+        }
+        for (const btn of shadow.querySelectorAll("[data-flow-x]")) {
+          btn.addEventListener("click", () => {
+            flowDismissed.add(btn.dataset.flowX);
+            persistFlow();
+            requestDocsMarks();
+            render();
+          });
         }
         for (const btn of shadow.querySelectorAll("[data-copy-src]")) {
           btn.addEventListener("click", () => {
