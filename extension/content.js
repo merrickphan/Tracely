@@ -1007,12 +1007,24 @@
           svg: n.ownerSVGElement, node: n,
         })).filter((v) => [v.x, v.y, v.w, v.h].every(Number.isFinite) && v.svg);
         if (!g.length) continue;
+        // Rects are bucketed by their TOP, which quietly merges a table's
+        // cells into one pseudo-row: its text is every column concatenated and
+        // its box spans the whole table. Prose runs on one line sit flush
+        // against each other, so the widest horizontal gap tells the two
+        // apart, and a flow bracket must never anchor to the table shape.
+        const sorted = [...g].sort((a, b) => a.x - b.x);
+        let maxGap = 0;
+        for (let i = 1; i < sorted.length; i++) {
+          maxGap = Math.max(maxGap, sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w));
+        }
+        const y = Math.min(...g.map((v) => v.y));
+        const bottom = Math.max(...g.map((v) => v.y + v.h));
         out.push({
           joined, nodes: row.nodes, svg: g[0].svg,
           x: Math.min(...g.map((v) => v.x)),
           right: Math.max(...g.map((v) => v.x + v.w)),
-          y: Math.min(...g.map((v) => v.y)),
-          bottom: Math.max(...g.map((v) => v.y + v.h)),
+          y, bottom,
+          segmented: maxGap > Math.max(12, (bottom - y) * 1.5),
         });
       }
       return out;
@@ -1027,6 +1039,7 @@
       if (!rows.length) return [];
       const paras = docText.split(/\n+/).map((p) => p.trim()).filter(Boolean);
       const out = [];
+      const used = new Set();
       for (const issue of flows) {
         const S = nrm(issue.passage);
         if (S.length < 8) continue;
@@ -1039,18 +1052,23 @@
            document and, because a short row's right edge is far left, stranded
            the chip out in the margin with no bracket beside it. */
         const key = S.slice(0, 24);
-        let start = rows.findIndex((r) => r.joined.includes(key));
-        if (start === -1) {
-          // The passage may begin mid-row-break. Fall back only to rows long
-          // enough that containment means something.
-          start = rows.findIndex((r) => r.joined.length >= 24 && P.includes(r.joined));
-        }
+        const start = rows.findIndex((r) => !r.segmented && r.joined.includes(key));
+        // No confident anchor: draw NOTHING. The looser fallbacks that used to
+        // sit here are what put a bracket on a title and a pair of chips on a
+        // table header. The issue still counts in the widget, where it needs
+        // no position to be useful — a flag in the wrong place is worse than
+        // one the reader has to open the panel to see.
         if (start === -1) continue;
+        // Two issues resolving to one line drew their chips on top of each
+        // other, which reads as corrupted text rather than as two findings.
+        if (used.has(start)) continue;
+        used.add(start);
         // Extend while rows still belong to this paragraph and the same tile:
         // a bracket is one shape, so it can't straddle two annotation layers.
         let end = start;
         for (let i = start + 1; i < rows.length; i++) {
           if (rows[i].svg !== rows[start].svg) break;
+          if (rows[i].segmented) break; // a table below the paragraph ends it
           if (!rows[i].joined || !P.includes(rows[i].joined)) break;
           if (rows[i].y > rows[end].bottom + rows[end].bottom - rows[end].y) break; // paragraph gap
           end = i;
