@@ -115,9 +115,23 @@
     for (const fn of tierListeners) { try { fn(); } catch { /* widget torn down */ } }
   }
   let tierResolved = false;
+  let tierTimer = 0;
   function refreshTier() {
     if (!useRelay) return; // harness page: no background worker — stays free
-    chrome.runtime.sendMessage({ type: "tracely-entitlement" }).then((r) => {
+    let pending;
+    try {
+      pending = chrome.runtime.sendMessage({ type: "tracely-entitlement" });
+    } catch {
+      /* The extension was reloaded or updated while this page kept running.
+         chrome.runtime.sendMessage THROWS SYNCHRONOUSLY in that state rather
+         than returning a rejected promise, so the .catch() below never sees
+         it and the error escapes uncaught — once here, and then again on
+         every interval tick forever. This content script is orphaned until
+         the tab reloads, so stop asking. */
+      if (tierTimer) { clearInterval(tierTimer); tierTimer = 0; }
+      return;
+    }
+    pending.then((r) => {
       if (!r?.ok) return;
       const next = { plan: r.plan ?? "free", byoKey: Boolean(r.byoKey), unenforced: Boolean(r.unenforced) };
       if (tierResolved && next.plan === tier.plan && next.byoKey === tier.byoKey && next.unenforced === tier.unenforced) return;
@@ -134,9 +148,11 @@
       // lives in the same area, so watching storage is how a sign-in on the
       // options page reaches an already-open tab without a reload.
       chrome.storage?.onChanged?.addListener((changes, area) => {
-        if (area === "local" && (changes.entitlement || changes.apiKey)) refreshTier();
+        try {
+          if (area === "local" && (changes.entitlement || changes.apiKey)) refreshTier();
+        } catch { /* orphaned content script — refreshTier already stood down */ }
       });
-      setInterval(refreshTier, 5 * 60_000); // matches the worker's entitlement TTL
+      tierTimer = setInterval(refreshTier, 5 * 60_000); // matches the worker's entitlement TTL
     } catch { /* harness page: no chrome.* — stays free tier */ }
   }
   function sbFill(pos) {
@@ -1051,8 +1067,17 @@
            table cell like "1492" — which put the bracket at the top of the
            document and, because a short row's right edge is far left, stranded
            the chip out in the margin with no bracket beside it. */
-        const key = S.slice(0, 24);
-        const start = rows.findIndex((r) => !r.segmented && r.joined.includes(key));
+        /* Match the anchor on letters and digits only. `nrm` strips whitespace
+           but KEEPS punctuation, and the text Docs exports does not always
+           punctuate identically to the text it renders — a straight quote for
+           a curly one, an en dash for a hyphen — so a key carrying a comma or
+           a quote can fail to match a line that is plainly the right one. The
+           underline matcher keeps `nrm`, which has earned its keep on
+           sentences; only this anchor needs to be forgiving. */
+        const loose = (t) => t.replace(/[^a-z0-9]/g, "");
+        const key = loose(S).slice(0, 24);
+        const start = key.length < 12 ? -1
+          : rows.findIndex((r) => !r.segmented && loose(r.joined).includes(key));
         // No confident anchor: draw NOTHING. The looser fallbacks that used to
         // sit here are what put a bracket on a title and a pair of chips on a
         // table header. The issue still counts in the widget, where it needs
