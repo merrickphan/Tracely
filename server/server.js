@@ -7,7 +7,11 @@ import * as ai from "./lib/ai.js";
 import * as evidence from "./lib/evidence.js";
 import * as store from "./lib/store.js";
 import * as watch from "./lib/watch.js";
-import { db, uuid, cacheGet, cacheSet, hashKey, upsertSource } from "./lib/db.js";
+import { db, uuid, cacheGet, cacheSet, hashKey, upsertSource,
+         billingEventSeen, billingEventRecord, billingCustomerLink, billingCustomerLookup } from "./lib/db.js";
+import { planForRequest, sourceSearchQuota, recordSourceSearch, forgetCachedPlans } from "./lib/entitlement.js";
+import { verifyStripeSignature, planChangeForEvent, writePlanToSupabase, findUserIdByEmail, webhookConfigured } from "./lib/billing.js";
+import { clampModel } from "./shared/plan.js";
 import { GUARDS, rollingCounter } from "./shared/guards.js";
 import { problemsFor, markFor } from "./shared/marks.js";
 
@@ -126,7 +130,10 @@ function originAllowed(origin) {
 // the paid pipeline — is app-private: same-origin (or origin-less curl) only,
 // so a hostile Docs add-on or stray extension can't read essays, wipe history,
 // or burn the user's Anthropic credits.
-const EXTENSION_API = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply"]);
+// /api/billing/webhook is deliberately NOT here: Stripe calls it server-to-
+// server with no Origin, and listing it would also hand it to every page the
+// extension surface can reach.
+const EXTENSION_API = new Set(["/api/status", "/api/check", "/api/flow", "/api/sources", "/api/cite-url", "/api/docs/apply", "/api/entitlement"]);
 function routeAllowedForOrigin(origin, pathname) {
   if (!origin || SELF_ORIGINS.has(origin)) return true;
   if (!pathname.startsWith("/api/")) return true; // static files are harmless
@@ -143,7 +150,10 @@ function corsHeaders(req) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      // Authorization is not a CORS-safelisted request header: without it here
+      // the preflight fails and the extension's signed-in calls never leave
+      // the browser — silently, as a network error rather than a 401.
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Max-Age": "600",
       Vary: "Origin",
     };
@@ -348,6 +358,108 @@ function pickModel(task) {
 // like every other surface's detection.
 watch.init({ pickModel });
 
+// ── entitlement ────────────────────────────────────────────────────────
+// Tiering above decides what this server WANTS to spend; the plan decides
+// what the caller is allowed to. The clamp is applied last, so a request can
+// only ever move a model down.
+//
+// `ent.enforced` is false when no Supabase project is configured, and then
+// nothing is clamped at all — not "clamped to free". A local run with an
+// empty .env must reach the same model it reached before entitlement existed.
+function allowedModel(ent, requested) {
+  return ent.enforced ? clampModel(requested, ent.plan) : requested;
+}
+
+/**
+ * POST /api/billing/webhook.
+ *
+ * The raw body is read as a string and verified BEFORE anything parses it —
+ * see lib/billing.js for why a re-serialized body can never match. Stripe
+ * retries until it gets a 2xx, so the recorded event id is the replay guard:
+ * a duplicate delivery is a 200 that did nothing.
+ */
+async function handleStripeWebhook(req, res) {
+  loadEnvFile(); // the secret may have been pasted in while the server ran
+  if (!webhookConfigured()) {
+    json(res, 503, { error: { kind: "no_billing", message: "Billing is not configured — see BILLING.md" } });
+    return;
+  }
+
+  const raw = await readBody(req);
+  const verdict = verifyStripeSignature(raw, req.headers["stripe-signature"] ?? "", process.env.STRIPE_WEBHOOK_SECRET);
+  if (!verdict.ok) {
+    console.error(`[tracely] rejected Stripe webhook (${verdict.reason})`);
+    json(res, 400, { error: { kind: "bad_signature", message: "Signature verification failed" } });
+    return;
+  }
+
+  let event;
+  try {
+    event = JSON.parse(raw);
+  } catch {
+    json(res, 400, { error: { kind: "bad_request", message: "Invalid JSON body" } });
+    return;
+  }
+  if (!event?.id) {
+    json(res, 400, { error: { kind: "bad_request", message: "Event has no id" } });
+    return;
+  }
+  // Replay: answer 200 so Stripe stops retrying something already applied.
+  if (billingEventSeen(event.id)) {
+    json(res, 200, { received: true, duplicate: true });
+    return;
+  }
+
+  const change = planChangeForEvent(event);
+  if (!change) {
+    billingEventRecord({ id: event.id, type: event.type, outcome: "ignored", payload: event });
+    json(res, 200, { received: true, ignored: true });
+    return;
+  }
+
+  // Learn the customer → user mapping first: later subscription events carry a
+  // customer and no user id, and this is where that link is available.
+  billingCustomerLink(change);
+
+  let userId = change.userId ?? billingCustomerLookup(change.customerId)?.user_id ?? null;
+  if (!userId && change.email) userId = await findUserIdByEmail(change.email);
+
+  let outcome = "recorded";
+  if (change.plan == null) outcome = "no_plan"; // an unrecognised price is not a downgrade
+  else if (!userId) outcome = "no_user";
+  else {
+    const written = await writePlanToSupabase(userId, change.plan);
+    outcome = written.ok ? "applied" : `failed:${written.reason}`;
+    if (written.ok) {
+      billingCustomerLink({ ...change, userId });
+      forgetCachedPlans(); // an upgrade must not wait out the 60s plan cache
+    }
+  }
+
+  // Record only after the write is decided, so the replay guard never marks an
+  // event done that never landed — anything unapplied stays retryable.
+  //
+  // `no_user` is retryable and NOT recorded, which is the whole reason it is
+  // grouped with a failed write. Stripe does not guarantee event ordering, and
+  // customer.subscription.created/updated routinely arrives BEFORE the
+  // checkout.session.completed that carries the Supabase user id — so the
+  // event that actually says "this account is Pro" can land while
+  // billing_customers still knows nothing about the customer. Recording it
+  // would 200 the only event that mattered and Stripe would never send it
+  // again: the customer pays and is never upgraded, with `no_user` sitting in
+  // the ledger as the only trace. A 500 buys Stripe's retry schedule (~3 days
+  // of backoff), by which time the checkout event has landed and the lookup
+  // resolves. `no_plan` is different and IS recorded: it is a settled answer,
+  // not a missing prerequisite.
+  if (outcome.startsWith("failed:") || outcome === "no_user") {
+    console.error(`[tracely] Stripe event ${event.id} (${event.type}) not applied: ${outcome} — asking Stripe to retry`);
+    json(res, 500, { error: { kind: "billing_retry", message: "Could not apply the plan change yet" } });
+    return;
+  }
+  billingEventRecord({ id: event.id, type: event.type, userId, customerId: change.customerId, plan: change.plan, outcome, payload: event });
+  json(res, 200, { received: true, outcome });
+}
+
 function requireKey() {
   if (!hasApiKey() && !MOCK) {
     throw new CheckError("no_key", "No Anthropic API key configured. Add ANTHROPIC_API_KEY to tracely/.env", { status: 503 });
@@ -407,6 +519,27 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Who is signed in, and what they get. Never an error: an anonymous user
+    // is a free user, and the extension must keep working while signed out.
+    //
+    // `enforced` is the honest half. When no Supabase project is configured
+    // this server clamps NOTHING (see allowedModel), so a client that locked
+    // its model picker to the free tier and showed an upgrade prompt would be
+    // lying about a server that will happily serve Opus. Reporting it lets the
+    // extension open every stop in exactly the mode the README calls "set none
+    // of these env vars and nothing changes".
+    if (req.method === "GET" && url.pathname === "/api/entitlement") {
+      loadEnvFile();
+      const ent = await planForRequest(req);
+      json(res, 200, { plan: ent.plan, email: ent.email, enforced: ent.enforced, checkedAt: Date.now() }, cors);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/billing/webhook") {
+      await handleStripeWebhook(req, res);
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/docs/apply") {
       loadEnvFile();
       if (!bridgeConfigured()) {
@@ -441,9 +574,12 @@ const server = http.createServer(async (req, res) => {
 
       const started = Date.now();
       // Tiering owns the model — the widget's dropdown only applies in
-      // "uniform" strategy (cost mandate: economy = Haiku everywhere).
-      const result = await runFactCheck({ text, sentences, model: pickModel("check"), effort, mock: MOCK });
-      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      // "uniform" strategy (cost mandate: economy = Haiku everywhere) — and
+      // the plan owns the ceiling above that.
+      const ent = await planForRequest(req);
+      const modelUsed = allowedModel(ent, pickModel("check"));
+      const result = await runFactCheck({ text, sentences, model: modelUsed, effort, mock: MOCK });
+      json(res, 200, { ...result, modelUsed, plan: ent.plan, ms: Date.now() - started }, cors);
       return;
     }
 
@@ -468,10 +604,26 @@ const server = http.createServer(async (req, res) => {
       if (!webSearchCounter.ok()) {
         throw new CheckError("rate_limit", "Web-search hourly cap reached — try again later.", { status: 429, retryAfter: 600 });
       }
+
+      // The free tier's daily quota, on top of the cost guard above. Only
+      // identified free accounts are metered — an anonymous local caller is
+      // counted by nothing, exactly as before entitlement existed.
+      const ent = await planForRequest(req);
+      const quota = sourceSearchQuota(ent);
+      if (!quota.allowed) {
+        throw new CheckError(
+          "plan_limit",
+          `Free accounts get ${quota.limit} source searches a day, and today's ${quota.limit} are used. It resets at midnight — or upgrade for unlimited searches.`,
+          { status: 429 },
+        );
+      }
+      recordSourceSearch(ent); // before the call, not after
+
       webSearchCounter.stamp(); // before the call, not after
       const started = Date.now();
-      const result = await findSources({ claim, correction, context, model: pickModel("sources"), mock: MOCK });
-      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      const modelUsed = allowedModel(ent, pickModel("sources"));
+      const result = await findSources({ claim, correction, context, model: modelUsed, mock: MOCK });
+      json(res, 200, { ...result, modelUsed, plan: ent.plan, ms: Date.now() - started }, cors);
       return;
     }
 
@@ -487,8 +639,12 @@ const server = http.createServer(async (req, res) => {
       if (typeof text !== "string" || !text.trim()) throw new CheckError("bad_request", "text required");
       if (text.length > GUARDS.maxInputChars) throw new CheckError("bad_request", "text too long");
       const started = Date.now();
-      const result = await runFlowCheck({ text, model, mock: MOCK });
-      json(res, 200, { ...result, ms: Date.now() - started }, cors);
+      // The only route that ever honoured the client's model directly, which
+      // makes it the one the clamp matters most on.
+      const ent = await planForRequest(req);
+      const modelUsed = allowedModel(ent, model);
+      const result = await runFlowCheck({ text, model: modelUsed, mock: MOCK });
+      json(res, 200, { ...result, modelUsed, plan: ent.plan, ms: Date.now() - started }, cors);
       return;
     }
 

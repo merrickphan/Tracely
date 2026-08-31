@@ -27,7 +27,7 @@ export async function getCurrentPlan(): Promise<Plan> {
     if (error) return DEFAULT_PLAN
     const user = data.session?.user
     if (!user) return DEFAULT_PLAN
-    return planFromMetadata(user.app_metadata, user.user_metadata)
+    return planFromMetadata(user.app_metadata)
   } catch {
     return DEFAULT_PLAN
   }

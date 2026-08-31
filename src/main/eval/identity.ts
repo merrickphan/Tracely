@@ -159,7 +159,7 @@ export function appSessionPlanProvider(): (() => Promise<Plan>) | null {
     const { data } = await client.auth.getSession()
     const user = data.session?.user
     if (!user) return DEFAULT_PLAN
-    return planFromMetadata(user.app_metadata, user.user_metadata)
+    return planFromMetadata(user.app_metadata)
   }
 }
 

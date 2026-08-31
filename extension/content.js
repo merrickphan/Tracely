@@ -66,59 +66,128 @@
     return i === -1 ? 0 : i;
   }
 
-  /* ── Tracely Pro gate ────────────────────────────────────────────────────
-     Free tier runs Haiku; the Faster↔Smarter slider is a Pro feature. The
-     entitlement is an access code saved from the options page (chrome.storage)
-     — a stand-in until real billing exists, but the gate is real: every API
-     call resolves its model through effModel(), so a free tier can never
-     reach Sonnet/Opus even by editing localStorage. */
-  let tierPro = false;
+  /* ── plan gate ───────────────────────────────────────────────────────────
+     Which stops of the Faster↔Smarter slider this account can reach: free
+     stops at Haiku, student at Sonnet, pro at Opus. The plan comes from the
+     signed-in Supabase account, resolved by the SERVER (GET /api/entitlement)
+     and relayed here by the background worker.
+
+     THIS GATE IS COSMETIC. It exists so the slider tells the truth about what
+     the account will actually get, and so a stale paid setting does not sit in
+     localStorage looking active. It prevents nothing: the model in a request
+     body is a request, and the server clamps it to the plan on the token it
+     received. Anyone editing this file can move the slider; they still get the
+     model their account pays for.
+
+     Two exceptions open every stop, and neither is a loophole — in both the
+     server has already decided there is no plan to apply:
+     • `byoKey` — standalone mode. The call is served by the user's own
+       Anthropic API key, billed to them by Anthropic. Nothing of ours to meter.
+     • `unenforced` — the local server reported `enforced: false`: it has no
+       Supabase project configured, so it clamps NOTHING. Locking the slider
+       here would show an upgrade prompt for a server that will serve Opus on
+       request — a lie in the one mode a plain `node server.js` runs in. */
+  const ORDER_URL = "https://jointracely.com/order";
+  const PLAN_MAX_STOP = { free: 0, student: 1, pro: 2 };
+  let tier = { plan: "free", byoKey: false, unenforced: false };
   const tierListeners = []; // widget re-renders to run when the tier resolves
-  const PRO_CODE_RE = /^TRACELY-PRO-[A-Z0-9]{4,}$/i;
-  function effModel(settings) { return tierPro ? settings.model : SPEED_STOPS[0].model; }
-  function effEffort(settings) { return tierPro ? settings.effort : SPEED_STOPS[0].effort; }
+
+  // The highest slider stop this account may use. Unknown plan → free, always.
+  function maxStop() {
+    if (tier.byoKey || tier.unenforced) return SPEED_STOPS.length - 1;
+    return PLAN_MAX_STOP[tier.plan] ?? 0;
+  }
+  function effModel(settings) { return SPEED_STOPS[Math.min(speedPos(settings.model), maxStop())].model; }
+  function effEffort(settings) {
+    const pos = speedPos(settings.model);
+    return pos <= maxStop() ? settings.effort : SPEED_STOPS[maxStop()].effort;
+  }
+  // Pull a stored preference down to what the plan reaches. Returns whether it
+  // moved, so the caller knows to persist.
+  function clampSettingsToPlan(settings) {
+    if (speedPos(settings.model) <= maxStop()) return false;
+    const stop = SPEED_STOPS[maxStop()];
+    settings.model = stop.model;
+    settings.effort = stop.effort;
+    return true;
+  }
   function tierChanged() {
     for (const fn of tierListeners) { try { fn(); } catch { /* widget torn down */ } }
   }
-  try {
-    chrome.storage?.local?.get({ proCode: "" }, (cfg) => {
-      tierPro = PRO_CODE_RE.test(String(cfg.proCode ?? "").trim());
-      tierChanged(); // always: free-tier listeners clamp stale paid settings
-    });
-    chrome.storage?.onChanged?.addListener((changes, area) => {
-      if (area !== "local" || !changes.proCode) return;
-      tierPro = PRO_CODE_RE.test(String(changes.proCode.newValue ?? "").trim());
-      tierChanged();
-    });
-  } catch { /* harness page: no chrome.storage — stays free tier */ }
+  let tierResolved = false;
+  let tierTimer = 0;
+  function refreshTier() {
+    if (!useRelay) return; // harness page: no background worker — stays free
+    let pending;
+    try {
+      pending = chrome.runtime.sendMessage({ type: "tracely-entitlement" });
+    } catch {
+      /* The extension was reloaded or updated while this page kept running.
+         chrome.runtime.sendMessage THROWS SYNCHRONOUSLY in that state rather
+         than returning a rejected promise, so the .catch() below never sees
+         it and the error escapes uncaught — once here, and then again on
+         every interval tick forever. This content script is orphaned until
+         the tab reloads, so stop asking. */
+      if (tierTimer) { clearInterval(tierTimer); tierTimer = 0; }
+      return;
+    }
+    pending.then((r) => {
+      if (!r?.ok) return;
+      const next = { plan: r.plan ?? "free", byoKey: Boolean(r.byoKey), unenforced: Boolean(r.unenforced) };
+      if (tierResolved && next.plan === tier.plan && next.byoKey === tier.byoKey && next.unenforced === tier.unenforced) return;
+      tier = next;
+      tierResolved = true;
+      tierChanged(); // first resolve fires too: free-tier listeners clamp stale paid settings
+    }).catch(() => { /* worker asleep or extension reloaded — stays free */ });
+  }
+  // Called once `useRelay` is known (below) — refreshTier depends on it.
+  function initTier() {
+    try {
+      refreshTier();
+      // The background worker writes the entitlement cache and the API key
+      // lives in the same area, so watching storage is how a sign-in on the
+      // options page reaches an already-open tab without a reload.
+      chrome.storage?.onChanged?.addListener((changes, area) => {
+        try {
+          if (area === "local" && (changes.entitlement || changes.apiKey)) refreshTier();
+        } catch { /* orphaned content script — refreshTier already stood down */ }
+      });
+      tierTimer = setInterval(refreshTier, 5 * 60_000); // matches the worker's entitlement TTL
+    } catch { /* harness page: no chrome.* — stays free tier */ }
+  }
   function sbFill(pos) {
     const pct = (pos / (SPEED_STOPS.length - 1)) * 100;
     return `linear-gradient(90deg, #ff7f00 0%, #f9a35a ${pct}%, rgba(20,16,10,0.08) ${pct}%, rgba(20,16,10,0.08) 100%)`;
   }
   function speedbarHtml(pos) {
-    const locked = !tierPro;
-    const p = locked ? 0 : pos; // free tier pins to Faster (Haiku)
-    return `<div class="speedbar${locked ? " locked" : ""}"${locked ? ' title="Faster ↔ Smarter is a Tracely Pro feature"' : ""}>
+    const ceiling = maxStop();
+    const locked = ceiling < SPEED_STOPS.length - 1; // some stops are above this plan
+    const p = Math.min(pos, ceiling);
+    const title = locked ? ' title="Smarter models come with a paid Tracely plan"' : "";
+    return `<div class="speedbar${locked ? " locked" : ""}"${title}>
       <span class="sb-lab${p === 0 ? " on" : ""}" data-sb-lab="0">Faster</span>
       <div class="sb-track">
-        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${p}" style="--sb-fill:${sbFill(p)}"${locked ? " disabled" : ""}>
-        <span class="sb-dots">${SPEED_STOPS.map(() => "<i></i>").join("")}</span>
+        <input type="range" class="speed" id="speedSel" min="0" max="${SPEED_STOPS.length - 1}" step="0.01" value="${p}" style="--sb-fill:${sbFill(p)}"${ceiling === 0 ? " disabled" : ""}>
+        <span class="sb-dots">${SPEED_STOPS.map((_, i) => `<i${i > ceiling ? ' class="off"' : ""}></i>`).join("")}</span>
       </div>
-      <span class="sb-lab${p === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter${locked ? '<span class="sb-pro">PRO</span>' : ""}</span>
+      <span class="sb-lab${p === SPEED_STOPS.length - 1 ? " on" : ""}" data-sb-lab="max">Smarter${locked ? `<a class="sb-pro" href="${ORDER_URL}" target="_blank" rel="noopener noreferrer">PRO</a>` : ""}</span>
     </div>`;
   }
   // Wire the slider without re-rendering: a full render mid-drag drops the
   // thumb. The drag is SMOOTH (step 0.01, fill follows the finger); on
   // release it snaps to the nearest stop, and only the snap saves settings.
+  // The drag stops dead at the plan's ceiling so the thumb never sits over a
+  // stop the account would not actually be served.
   function wireSpeedbar(shadow, settings, saveSettings) {
     const el = shadow.getElementById("speedSel");
-    if (!el) return;
-    if (!tierPro) return; // locked: disabled input, nothing to wire
+    if (!el || el.disabled) return; // free tier has a single stop: nothing to drag
+    const ceiling = maxStop();
     el.addEventListener("input", () => {
+      if (Number(el.value) > ceiling) el.value = String(ceiling);
       el.style.setProperty("--sb-fill", sbFill(Number(el.value)));
     });
     const snap = () => {
-      const pos = Math.max(0, Math.min(SPEED_STOPS.length - 1, Math.round(Number(el.value))));
+      const pos = Math.max(0, Math.min(ceiling, Math.round(Number(el.value))));
       el.value = String(pos);
       const stop = SPEED_STOPS[pos];
       settings.model = stop.model;
@@ -254,6 +323,8 @@
   // The harness and plain-script test pages fetch the server directly.
   const useRelay = !harness && typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
 
+  initTier(); // the plan gate asks the worker, so it can only start once useRelay is known
+
   async function api(path, body) {
     if (useRelay) {
       let resp;
@@ -336,8 +407,9 @@
     .selects { display: flex; gap: 6px; padding: 9px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); align-items: center; }
     .speedbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid rgba(20,16,10,0.05); }
     .speedbar.locked .sb-track { opacity: .5; }
-    .speedbar.locked input { cursor: not-allowed; }
-    .sb-pro { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 8px; background: linear-gradient(150deg, #ff7f00, #f9a35a); color: #fff; font-size: 8px; font-weight: 800; letter-spacing: .6px; vertical-align: 1px; }
+    .speedbar.locked input[disabled] { cursor: not-allowed; }
+    .sb-pro { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 8px; background: linear-gradient(150deg, #ff7f00, #f9a35a); color: #fff; font-size: 8px; font-weight: 800; letter-spacing: .6px; vertical-align: 1px; text-decoration: none; cursor: pointer; }
+    .sb-dots i.off { background: rgba(20,16,10,0.18); box-shadow: none; }
     .sb-lab { font-size: 12px; font-weight: 700; color: #8e8e93; flex-shrink: 0; }
     .sb-lab.on { color: #0e0e10; }
     .sb-track { position: relative; flex: 1; display: flex; align-items: center; }
@@ -951,12 +1023,24 @@
           svg: n.ownerSVGElement, node: n,
         })).filter((v) => [v.x, v.y, v.w, v.h].every(Number.isFinite) && v.svg);
         if (!g.length) continue;
+        // Rects are bucketed by their TOP, which quietly merges a table's
+        // cells into one pseudo-row: its text is every column concatenated and
+        // its box spans the whole table. Prose runs on one line sit flush
+        // against each other, so the widest horizontal gap tells the two
+        // apart, and a flow bracket must never anchor to the table shape.
+        const sorted = [...g].sort((a, b) => a.x - b.x);
+        let maxGap = 0;
+        for (let i = 1; i < sorted.length; i++) {
+          maxGap = Math.max(maxGap, sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w));
+        }
+        const y = Math.min(...g.map((v) => v.y));
+        const bottom = Math.max(...g.map((v) => v.y + v.h));
         out.push({
           joined, nodes: row.nodes, svg: g[0].svg,
           x: Math.min(...g.map((v) => v.x)),
           right: Math.max(...g.map((v) => v.x + v.w)),
-          y: Math.min(...g.map((v) => v.y)),
-          bottom: Math.max(...g.map((v) => v.y + v.h)),
+          y, bottom,
+          segmented: maxGap > Math.max(12, (bottom - y) * 1.5),
         });
       }
       return out;
@@ -971,18 +1055,45 @@
       if (!rows.length) return [];
       const paras = docText.split(/\n+/).map((p) => p.trim()).filter(Boolean);
       const out = [];
+      const used = new Set();
       for (const issue of flows) {
         const S = nrm(issue.passage);
         if (S.length < 8) continue;
         const para = paras.find((p) => nrm(p).includes(S)) ?? issue.passage;
         const P = nrm(para);
-        const start = rows.findIndex((r) => r.joined && (P.includes(r.joined) || r.joined.includes(S.slice(0, 24))));
+        /* Anchor on the PASSAGE, not on "any row that happens to appear inside
+           the paragraph". The looser test matched the first SHORT row whose
+           text coincided with something in the paragraph — a title fragment, a
+           table cell like "1492" — which put the bracket at the top of the
+           document and, because a short row's right edge is far left, stranded
+           the chip out in the margin with no bracket beside it. */
+        /* Match the anchor on letters and digits only. `nrm` strips whitespace
+           but KEEPS punctuation, and the text Docs exports does not always
+           punctuate identically to the text it renders — a straight quote for
+           a curly one, an en dash for a hyphen — so a key carrying a comma or
+           a quote can fail to match a line that is plainly the right one. The
+           underline matcher keeps `nrm`, which has earned its keep on
+           sentences; only this anchor needs to be forgiving. */
+        const loose = (t) => t.replace(/[^a-z0-9]/g, "");
+        const key = loose(S).slice(0, 24);
+        const start = key.length < 12 ? -1
+          : rows.findIndex((r) => !r.segmented && loose(r.joined).includes(key));
+        // No confident anchor: draw NOTHING. The looser fallbacks that used to
+        // sit here are what put a bracket on a title and a pair of chips on a
+        // table header. The issue still counts in the widget, where it needs
+        // no position to be useful — a flag in the wrong place is worse than
+        // one the reader has to open the panel to see.
         if (start === -1) continue;
+        // Two issues resolving to one line drew their chips on top of each
+        // other, which reads as corrupted text rather than as two findings.
+        if (used.has(start)) continue;
+        used.add(start);
         // Extend while rows still belong to this paragraph and the same tile:
         // a bracket is one shape, so it can't straddle two annotation layers.
         let end = start;
         for (let i = start + 1; i < rows.length; i++) {
           if (rows[i].svg !== rows[start].svg) break;
+          if (rows[i].segmented) break; // a table below the paragraph ends it
           if (!rows[i].joined || !P.includes(rows[i].joined)) break;
           if (rows[i].y > rows[end].bottom + rows[end].bottom - rows[end].y) break; // paragraph gap
           end = i;
@@ -2059,12 +2170,9 @@
     const { shadow, root } = makeWidget();
     tierListeners.push(() => {
       // On downgrade, clamp the STORED choice too — a stale opus setting must
-      // not sit in localStorage looking active (API calls already clamp).
-      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
-        settings.model = SPEED_STOPS[0].model;
-        settings.effort = SPEED_STOPS[0].effort;
-        lsSet(SETTINGS_KEY, JSON.stringify(settings));
-      }
+      // not sit in localStorage looking active (API calls already clamp, and
+      // the server clamps again regardless of what we send).
+      if (clampSettingsToPlan(settings)) lsSet(SETTINGS_KEY, JSON.stringify(settings));
       render();
     });
 
@@ -2307,11 +2415,7 @@
     }
     tierListeners.push(() => {
       // Same downgrade clamp as docs mode; only repaint if the panel exists.
-      if (!tierPro && settings.model !== SPEED_STOPS[0].model) {
-        settings.model = SPEED_STOPS[0].model;
-        settings.effort = SPEED_STOPS[0].effort;
-        lsSet(SETTINGS_KEY, JSON.stringify(settings));
-      }
+      if (clampSettingsToPlan(settings)) lsSet(SETTINGS_KEY, JSON.stringify(settings));
       if (widget) render();
     });
 
